@@ -1,0 +1,3 @@
+- Doppelte Funktion emergency_save am Dateiende (Konflikt-Risiko).
+- dateRestrict wird nicht überall sauber durchgereicht.
+- Retry/429: zweite Welle & Budget pro URL fehlt.

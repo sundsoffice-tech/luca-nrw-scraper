@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.patch
+scraper.db
+.venv/
+*.xlsx
+*.csv
+# Secrets
+.env
+

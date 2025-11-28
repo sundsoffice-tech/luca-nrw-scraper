@@ -1,0 +1,4 @@
+- +50% Qualifiziertere Leads im Bezug auf Potenzielle Vertriebsmitarbeiter welche wir abwerben oder anstellen können
+- +30% verwertbare Leads/Run
+- <2% Abbrüche durch Netzwerkfehler
+- Durchsatz stabil, keine Event-Loop-Blockade
