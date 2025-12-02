@@ -836,8 +836,8 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 RECRUITER_QUERIES = {
     'recruiter': [
         # Jobsuchende / Karrierewechsler
-        'site:kleinanzeigen.de/s-jobs/ "ich suche" vertrieb NRW',
-        'site:kleinanzeigen.de/s-dienstleistungen/ "biete" vertrieb',
+        'site:kleinanzeigen.de/s-jobs/ "vertrieb" -"amazon" -"fahrer" -"lager" NRW',
+        'site:kleinanzeigen.de/s-dienstleistungen/ "vertrieb" "biete" -amazon NRW',
         'site:markt.de "stellengesuche" vertrieb',
         'site:linkedin.com/in/ "open to work" vertrieb NRW',
         '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
@@ -1939,9 +1939,14 @@ def extract_kleinanzeigen_links(html: str, base_url: str = "") -> List[str]:
     except Exception:
         return []
     links: List[str] = []
+    blacklist = ("fahrer","kurier","lager","amazon","zusteller","lieferant","reinigung","pflege","stapler")
     for a in soup.find_all("a", href=True):
         href = (a.get("href") or "").strip()
         if "/s-anzeige/" not in href:
+            continue
+        text = (a.get_text(" ", strip=True) or "").lower()
+        href_lower = href.lower()
+        if any(word in href_lower or word in text for word in blacklist):
             continue
         full = urllib.parse.urljoin(base_url or "https://www.kleinanzeigen.de", href)
         links.append(full)
