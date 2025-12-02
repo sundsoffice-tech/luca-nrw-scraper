@@ -852,22 +852,10 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 # NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
 RECRUITER_QUERIES = {
     'recruiter': [
-        # Jobsuchende / Karrierewechsler
-        'site:kleinanzeigen.de/s-jobs/ "vertrieb" -"amazon" -"fahrer" -"lager" NRW',
-        'site:kleinanzeigen.de/s-dienstleistungen/ "vertrieb" "biete" -amazon NRW',
-        'site:markt.de "stellengesuche" vertrieb',
-        # LinkedIn-Queries werden nun dynamisch pro Stadt generiert (siehe build_queries)
-        '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
-        'site:de Quereinsteiger Vertrieb NRW provision OR kommission',
-        'site:de arbeitslos Vertrieb sucht stelle NRW',
-        
-        # Kleinanzeigen
-        'site:ebay-kleinanzeigen.de biete Vertrieb NRW provision',
-        'site:quoka.de Vertrieb freiberuflich NRW',
-        
-        # Branchenumsteiger
-        'site:de Gastronomie Einzelhandel umschulung Vertrieb NRW',
-        'site:de call center mitarbeiter heimarbeit NRW provision',
+        'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "verkäufer" NRW',
+        'site:kleinanzeigen.de "suche arbeit" "vertrieb" NRW',
+        'site:markt.de/stellengesuche/ "vertrieb" NRW',
     ]
 }
 
@@ -895,24 +883,8 @@ def build_queries(
         Liste von Query-Strings für diesen Run
     """
     out: List[str] = []
-<<<<<<< HEAD
+    limit = max(1, per_industry_limit)
 
-    recruiter_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', []))
-    for city in NRW_CITIES:
-        recruiter_qs.append(f'site:linkedin.com/in/ "vertrieb" "open to work" {city}')
-        recruiter_qs.append(f'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de") {city}')
-
-    # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
-    if selected_industry and selected_industry.lower() == 'recruiter':
-        recruiter_limit = max(1, per_industry_limit)
-        if per_industry_limit <= 2:
-            recruiter_limit = len(recruiter_qs)
-            log('info', f"Recruiter-Mode: Limit auf {recruiter_limit} erhöht (Geo-Fencing für {len(NRW_CITIES)} Städte).")
-        log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {recruiter_limit}")
-        return recruiter_qs[:recruiter_limit]
-
-=======
-    
     def _generate_linkedin_city_queries() -> List[str]:
         """
         Generiert dynamisch LinkedIn-Queries für jede Stadt in NRW_CITIES.
@@ -920,62 +892,38 @@ def build_queries(
           a) "open to work" + "vertrieb" + Stadt
           b) "vertrieb" + E-Mail-Provider + Stadt
         """
-        linkedin_queries = []
+        linkedin_queries: List[str] = []
         for city in NRW_CITIES:
-            # Variante a: "open to work" mit Stadt
             linkedin_queries.append(f'site:linkedin.com/in/ "open to work" "vertrieb" {city}')
-            # Variante b: vertrieb mit gängigen E-Mail-Providern und Stadt
             linkedin_queries.append(f'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de" OR "@web.de") {city}')
         return linkedin_queries
-    
+
+    linkedin_city_qs = _generate_linkedin_city_queries()
+    recruiter_all_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', [])) + linkedin_city_qs
+
     # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
     if selected_industry and selected_industry.lower() == 'recruiter':
-        recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
-        # Dynamische LinkedIn-Queries für alle Städte hinzufügen
-        linkedin_city_qs = _generate_linkedin_city_queries()
-        
-        # Kombiniere alle Queries
-        all_recruiter_qs = recruiter_qs + linkedin_city_qs
-        
-        log('info', f"Recruiter-Mode: {len(recruiter_qs)} statische Queries + {len(linkedin_city_qs)} LinkedIn-Stadt-Queries = {len(all_recruiter_qs)} total")
-        
-        # Respektiere per_industry_limit und gib die ersten N Queries zurück
-        # (zuerst statische, dann LinkedIn-Stadt-Queries)
-        limit = max(1, per_industry_limit)
-        return all_recruiter_qs[:limit]
-    
->>>>>>> 8d58f6863fa96041032f769b5b9ae29c8fd2f72a
+        recruiter_limit = limit
+        if per_industry_limit <= 2:
+            recruiter_limit = len(recruiter_all_qs)
+            log('info', f"Recruiter-Mode: Limit auf {recruiter_limit} erhoeht (Geo-Fencing fuer {len(NRW_CITIES)} Staedte).")
+        log('info', f"Recruiter-Mode: lade {len(recruiter_all_qs)} Queries, Limit: {recruiter_limit}")
+        return recruiter_all_qs[:recruiter_limit]
+
     # FALL 2: Standard Industrie (solar, telekom, etc.)
     if selected_industry and selected_industry.lower() != 'all':
         qs = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
         if qs:
-            limit = max(1, per_industry_limit)
             log('info', f"Branche '{selected_industry}': lade {len(qs)} Queries, Limit: {limit}")
             return qs[:limit]
         else:
             log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
             selected_industry = 'all'
-<<<<<<< HEAD
-
-    # FALL 3: 'all' = Recruiter ZUERST (höchste Priorität), dann alle Branchen
-    if selected_industry == 'all' or selected_industry is None:
-        # Recruiter-Queries immer zuerst laden
-        recruiter_count = len(recruiter_qs[:max(1, per_industry_limit)])
-        out.extend(recruiter_qs[:max(1, per_industry_limit)])
-=======
     
     # FALL 3: 'all' = Recruiter ZUERST (inkl. LinkedIn-Stadt-Queries), dann alle Branchen
     if selected_industry == 'all' or selected_industry is None:
-        # Recruiter-Queries mit LinkedIn-Stadt-Queries
-        recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
-        linkedin_city_qs = _generate_linkedin_city_queries()
-        all_recruiter_qs = recruiter_qs + linkedin_city_qs
-        
-        # Im 'all'-Modus nehmen wir die Recruiter-Queries entsprechend dem Limit
-        limit = max(1, per_industry_limit)
-        recruiter_count = min(len(all_recruiter_qs), limit)
-        out.extend(all_recruiter_qs[:recruiter_count])
->>>>>>> 8d58f6863fa96041032f769b5b9ae29c8fd2f72a
+        recruiter_count = min(len(recruiter_all_qs), limit)
+        out.extend(recruiter_all_qs[:recruiter_count])
         
         # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
         industry_count = 0
@@ -2501,26 +2449,6 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             comp_name = extract_company_name(title_tag.get_text() if title_tag else "")
             company_size = detect_company_size(text)
             company_domain = resolve_company_domain(comp_name) if comp_name else ""
-            if comp_name and not any(x in url.lower() for x in [comp_name.lower().replace(" ","")]):
-                try:
-                    dom = resolve_company_domain(comp_name)
-                except Exception:
-                    dom = ""
-                if dom:
-                    pivot_qs = [
-                        f"site:{dom} kontakt",
-                        f"site:{dom} impressum",
-                        f"site:{dom} ansprechpartner"
-                    ]
-                    for pq in pivot_qs:
-                        try:
-                            extra_links, _ = await google_cse_search_async(pq, max_results=10)
-                            for it in extra_links:
-                                u_extra = it["url"] if isinstance(it, dict) else it
-                                if u_extra:
-                                    extra_followups.append(u_extra)
-                        except Exception:
-                            pass
             industry = detect_industry(text)
             recency = detect_recency(html)
             hiring_volume = estimate_hiring_volume(text)
@@ -2701,26 +2629,6 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     comp_name = extract_company_name(title_tag.get_text() if title_tag else "")
     company_size = detect_company_size(text)
     company_domain = resolve_company_domain(comp_name) if comp_name else ""
-    if comp_name and not any(x in url.lower() for x in [comp_name.lower().replace(" ","")]):
-        try:
-            dom = resolve_company_domain(comp_name)
-        except Exception:
-            dom = ""
-        if dom:
-            pivot_qs = [
-                f"site:{dom} kontakt",
-                f"site:{dom} impressum",
-                f"site:{dom} ansprechpartner"
-            ]
-            for pq in pivot_qs:
-                try:
-                    extra_links, _ = await google_cse_search_async(pq, max_results=10)
-                    for it in extra_links:
-                        u_extra = it["url"] if isinstance(it, dict) else it
-                        if u_extra:
-                            extra_followups.append(u_extra)
-                except Exception:
-                    pass
     industry = detect_industry(text)
     recency = detect_recency(html)
     hiring_volume = estimate_hiring_volume(text)
@@ -3439,6 +3347,9 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 MIN_SCORE_TARGET=MIN_SCORE_ENV-20
 
             def _is_offtarget_lead(r: Dict[str, Any]) -> bool:
+                lead_type = (r.get("lead_type") or "").lower()
+                if lead_type == "employer":
+                    return True
                 role = (r.get("rolle") or r.get("role_guess") or "").lower()
                 company = (r.get("company_name") or "").lower()
                 src_url = (r.get("quelle") or "").lower()
