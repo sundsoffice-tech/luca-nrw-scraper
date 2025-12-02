@@ -898,7 +898,8 @@ def build_queries(
     if selected_industry and selected_industry.lower() == 'recruiter':
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
         # Extend with Facebook search terms
-        recruiter_qs = recruiter_qs + FB_SEARCH_TERMS
+        recruiter_qs = list(recruiter_qs)  # Create a copy first
+        recruiter_qs.extend(FB_SEARCH_TERMS)
         log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {per_industry_limit}")
         return recruiter_qs[:max(1, per_industry_limit)]
     
@@ -917,7 +918,8 @@ def build_queries(
         # Recruiter-Queries immer zuerst laden
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
         # Extend with Facebook search terms
-        recruiter_qs = recruiter_qs + FB_SEARCH_TERMS
+        recruiter_qs = list(recruiter_qs)  # Create a copy first
+        recruiter_qs.extend(FB_SEARCH_TERMS)
         recruiter_count = len(recruiter_qs[:max(1, per_industry_limit)])
         out.extend(recruiter_qs[:max(1, per_industry_limit)])
         
