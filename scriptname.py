@@ -836,7 +836,11 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 RECRUITER_QUERIES = {
     'recruiter': [
         # Jobsuchende / Karrierewechsler
-        'site:de Vertrieb Jobs NRW OR Düsseldorf OR Köln OR Essen',
+        'site:kleinanzeigen.de "ich suche" vertrieb NRW',
+        'site:kleinanzeigen.de "stellengesuch" vertrieb',
+        'site:markt.de "stellengesuche" vertrieb',
+        'site:linkedin.com/in/ "open to work" vertrieb NRW',
+        '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
         'site:de Quereinsteiger Vertrieb NRW provision OR kommission',
         'site:de arbeitslos Vertrieb sucht stelle NRW',
         
