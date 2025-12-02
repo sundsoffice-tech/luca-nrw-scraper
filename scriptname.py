@@ -2233,6 +2233,32 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         mark_url_seen(url, run_id)
         return (1 + extra_checked, collected if extra_followups else [])
 
+    # Titel-basierter Guard (früher Exit, bevor teure Extraktion)
+    title_text = ""
+    try:
+        soup_title = BeautifulSoup(html, "html.parser")
+        ttag = soup_title.find("title")
+        if ttag:
+            title_text = ttag.get_text(" ", strip=True)
+    except Exception:
+        title_text = ""
+    title_src = (title_text or url or "").lower()
+    pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
+                "handelsvertreter","makler","akquise","agent","berater","geschäftsführer",
+                "repräsentant","b2b","b2c")
+    neg_keys = ("reinigung","putz","hilfe","helfer","lager","fahrer","zusteller","kommissionierer",
+                "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
+                "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
+                "aushilfe","minijob","winterdienst","security","sicherheits")
+    if any(k in title_src for k in neg_keys):
+        log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
+        mark_url_seen(url, run_id)
+        return (1, [])
+    if not any(k in title_src for k in pos_keys):
+        log("debug", "Titel-Guard: Keine positiven Keywords, skip", url=url, title=title_text)
+        mark_url_seen(url, run_id)
+        return (1, [])
+
     ssl_insecure = getattr(resp, "insecure_ssl", False)
     invite_link = ("chat.whatsapp.com" in url.lower()) or ("t.me" in url.lower())
 
