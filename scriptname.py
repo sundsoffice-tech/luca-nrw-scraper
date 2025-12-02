@@ -39,12 +39,16 @@ from flask import Response, render_template_string
 
 
 # Third-party
-import httpx
-import httpcore
+from curl_cffi.requests import AsyncSession
 import tldextract
 import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Comment
+try:
+    from duckduckgo_search import DDGS
+    HAVE_DDG = True
+except ImportError:
+    HAVE_DDG = False
 from dotenv import load_dotenv
 from urllib.robotparser import RobotFileParser
 from stream2_extraction_layer.open_data_resolver import resolve_company_domain
@@ -107,6 +111,7 @@ ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "50"))          # globale max. gleichzeitige Requests
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
+USE_TOR = False
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
@@ -546,47 +551,48 @@ def _host_allowed(host: str) -> bool:
     return False
 
 # Globale Async-Client-Fabrik + Rate-Limiter
-_CLIENT_SECURE: Optional[httpx.AsyncClient] = None
-_CLIENT_INSECURE: Optional[httpx.AsyncClient] = None
+_CLIENT_SECURE: Optional[AsyncSession] = None
+_CLIENT_INSECURE: Optional[AsyncSession] = None
 
-async def get_client(secure: bool = True) -> httpx.AsyncClient:
+async def get_client(secure: bool = True) -> AsyncSession:
     global _CLIENT_SECURE, _CLIENT_INSECURE
+    proxy_cfg = {"http://": "socks5://127.0.0.1:9050", "https://": "socks5://127.0.0.1:9050"} if USE_TOR else None
     if secure:
         if _CLIENT_SECURE is None:
-            _CLIENT_SECURE = httpx.AsyncClient(
-                http2=HTTP2_ENABLED,
+            _CLIENT_SECURE = AsyncSession(
+                impersonate="chrome120",
                 headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
                 verify=True,
-                timeout=httpx.Timeout(HTTP_TIMEOUT),
-                trust_env=False,
+                timeout=HTTP_TIMEOUT,
+                proxies=proxy_cfg,
             )
         return _CLIENT_SECURE
     else:
         if _CLIENT_INSECURE is None:
-            _CLIENT_INSECURE = httpx.AsyncClient(
-                http2=HTTP2_ENABLED,
+            _CLIENT_INSECURE = AsyncSession(
+                impersonate="chrome120",
                 headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
                 verify=False,
-                timeout=httpx.Timeout(HTTP_TIMEOUT),
-                trust_env=False,
+                timeout=HTTP_TIMEOUT,
+                proxies=proxy_cfg,
             )
         return _CLIENT_INSECURE
     
 def _make_client(secure: bool, ua: str, proxy_url: Optional[str], force_http1: bool, timeout_s: int):
+    if USE_TOR:
+        proxy_url = "socks5://127.0.0.1:9050"
     headers = {
         "User-Agent": ua or USER_AGENT,
         "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
     }
-    kwargs = dict(
-        http2=(HTTP2_ENABLED and not force_http1),
+    proxies = {"http://": proxy_url, "https://": proxy_url} if proxy_url else None
+    return AsyncSession(
+        impersonate="chrome120",
         headers=headers,
         verify=True if secure else False,
-        timeout=httpx.Timeout(timeout_s),
-        trust_env=False,
+        timeout=timeout_s,
+        proxies=proxies,
     )
-    if proxy_url:
-        kwargs["proxies"] = {"http://": proxy_url, "https://": proxy_url}
-    return httpx.AsyncClient(**kwargs)
 
 
 
@@ -638,7 +644,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
     r_head = None
     try:
         async with _make_client(True, ua, proxy, force_http1=False, timeout_s=eff_timeout) as client_head:
-            r_head = await client_head.head(url, headers=headers, params=params, follow_redirects=True)
+            r_head = await client_head.head(url, headers=headers, params=params, allow_redirects=True, timeout=eff_timeout)
             if r_head is not None:
                 # Wenn HEAD 405/501 → kein erneutes HEAD versuchen (spart Roundtrips).
                 # Zusätzlich: bei 405 sanfte Host-Penalty (viele Sites blocken HEAD hart).
@@ -657,9 +663,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
         # Preflight ist optional – still & silent
         r_head = None
 
-    async def _do_get(secure: bool, force_http1: bool) -> Optional[httpx.Response]:
+    async def _do_get(secure: bool, force_http1: bool) -> Optional[Any]:
         async with _make_client(secure, ua, proxy, force_http1, eff_timeout) as cl:
-            return await cl.get(url, headers=headers, params=params, timeout=eff_timeout, follow_redirects=True)
+            return await cl.get(url, headers=headers, params=params, timeout=eff_timeout, allow_redirects=True)
 
     # 2) Primär GET (secure, HTTP/2 erlaubt)
     try:
@@ -677,7 +683,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 _RETRY_URLS.append(url)
             log("warn", f"{r.status_code} received", url=url)
             return r
-    except (httpx.HTTPError, httpcore.ProtocolError, Exception):
+    except Exception:
         # 2a) Retry als HTTP/1.1
         try:
             r = await _do_get(secure=True, force_http1=True)
@@ -840,7 +846,7 @@ RECRUITER_QUERIES = {
         'site:kleinanzeigen.de/s-dienstleistungen/ "vertrieb" "biete" -amazon NRW',
         'site:markt.de "stellengesuche" vertrieb',
         'site:linkedin.com/in/ "open to work" vertrieb NRW',
-        'site:linkedin.com/in/ "vertrieb" "@gmail.com" OR "@gmx.de" OR "@web.de" NRW',
+        'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de")',
         'site:linkedin.com/in/ "vertrieb" "015" OR "016" OR "017" NRW',
         '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
         'site:de Quereinsteiger Vertrieb NRW provision OR kommission',
@@ -1230,48 +1236,47 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     return uniq_items, had_429
 
 
-async def bing_search_async(q: str, count: int = 30, pages:int=3) -> Tuple[List[str], bool]:
-    if not BING_API_KEY:
-        log("debug","Bing nicht konfiguriert – übersprungen"); return [], False
+async def duckduckgo_search_async(q: str, max_results: int = 30) -> List[Dict[str, str]]:
+    if not HAVE_DDG:
+        log("warn", "duckduckgo_search nicht installiert – Fallback übersprungen", q=q)
+        return []
 
-    def _preview(txt: Optional[str]) -> str:
-        if not txt: return ""
-        txt = re.sub(r"<[^>]+>", " ", txt)
-        txt = re.sub(r"\s+", " ", txt).strip()
-        return txt[:200]
+    def _search_sync():
+        with DDGS() as ddgs:
+            return list(ddgs.text(q, region="de-de", safesearch="off", max_results=max_results))
 
-    url = "https://api.bing.microsoft.com/v7.0/search"
-    headers = {"Ocp-Apim-Subscription-Key": BING_API_KEY, "User-Agent": USER_AGENT}
-    out = []
-    for p in range(pages):
-        params = {"q":q, "count":count, "offset": p*count, "mkt":"de-DE", "responseFilter":"Webpages", "safeSearch":"Off"}
-        r = await http_get_async(url, headers=headers, params=params, timeout=HTTP_TIMEOUT)
-        if not r:
-            continue
-        if r.status_code != 200:
-            log("error","Bing Status != 200", status=r.status_code, body=_preview(r.text))
-            continue
-        try:
-            data = r.json()
-        except Exception:
-            log("error","Bing JSON-Parsing fehlgeschlagen", text=_preview(r.text))
-            continue
-        web = data.get("webPages",{}).get("value",[]) if data else []
-        raw_links = [item.get("url") for item in web if item.get("url")]
-        out.extend(raw_links)
-        await asyncio.sleep(0.4 + _jitter(0.0,0.6))
+    try:
+        results = await asyncio.to_thread(_search_sync)
+    except Exception as e:
+        log("warn", "DuckDuckGo-Suche fehlgeschlagen", q=q, error=str(e))
+        return []
 
-    uniq, seen = [], set()
-    for u in out:
-        nu = _normalize_for_dedupe(u)
-        if nu in seen: continue
+    items: List[Dict[str, str]] = []
+    seen = set()
+    for entry in results or []:
+        href = entry.get("href")
+        if not href:
+            continue
+        nu = _normalize_for_dedupe(href)
+        if nu in seen:
+            continue
         seen.add(nu)
-        if is_denied(nu): continue
-        if not path_ok(nu): continue
-        uniq.append(nu)
-    uniq = prioritize_urls(uniq)
-    log("info","Bing Treffer (gefiltert)", q=q, count=len(uniq))
-    return uniq, False
+        if is_denied(nu):
+            continue
+        if not path_ok(nu):
+            continue
+        items.append({
+            "url": nu,
+            "title": entry.get("title", "") or "",
+            "snippet": entry.get("body", "") or "",
+        })
+
+    if items:
+        ordered = prioritize_urls([item["url"] for item in items])
+        order_map = {u: i for i, u in enumerate(ordered)}
+        items.sort(key=lambda item: order_map.get(item["url"], len(order_map)))
+    log("info", "DuckDuckGo Treffer", q=q, count=len(items))
+    return items
 
 
 def _ka_keywords_from_query(q: str) -> str:
@@ -2204,7 +2209,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         return (1, [])
 
     # HTTP holen
-    resp: Optional[httpx.Response] = None
+    resp: Optional[Any] = None
     html = ""
     ct = ""
     using_linkedin_snippet = False
@@ -2215,14 +2220,8 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         login_wall = False
         ua_choice = _random_desktop_ua()
         try:
-            async with httpx.AsyncClient(
-                headers={"User-Agent": ua_choice, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
-                follow_redirects=True,
-                timeout=httpx.Timeout(HTTP_TIMEOUT),
-                verify=True,
-                trust_env=False,
-            ) as client:
-                resp = await client.get(url)
+            async with _make_client(True, ua_choice, proxy_url=None, force_http1=False, timeout_s=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, allow_redirects=True, timeout=HTTP_TIMEOUT)
             li_status = getattr(resp, "status_code", 0) if resp else -1
             _LAST_STATUS[url] = li_status
             final_path = urllib.parse.urlparse(str(getattr(resp, "url", url))).path.lower() if resp else ""
@@ -3243,10 +3242,10 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
             if not links:
                 try:
-                    b_links, _ = await bing_search_async(q, count=30, pages=3)
-                    links.extend(b_links)
+                    ddg_links = await duckduckgo_search_async(q, max_results=30)
+                    links.extend(ddg_links)
                 except Exception as e:
-                    log("error", "Bing-Suche explodiert", q=q, error=str(e))
+                    log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
 
             try:
                 ka_links = await kleinanzeigen_search_async(q, max_results=KLEINANZEIGEN_MAX_RESULTS)
@@ -3601,6 +3600,7 @@ def parse_args():
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
+    ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
     ap.add_argument("--industry", choices=["all","recruiter"] + list(INDUSTRY_ORDER),
                 default=os.getenv("INDUSTRY","all"),
@@ -3616,6 +3616,17 @@ def parse_args():
 if __name__ == "__main__":
     try:
         args = parse_args()
+        USE_TOR = bool(getattr(args, "tor", False))
+        if USE_TOR:
+            log("info", "ANONYMITY MODE: Running over TOR Network")
+            try:
+                tor_resp = asyncio.run(http_get_async("https://check.torproject.org/api/ip", timeout=15))
+                if tor_resp and getattr(tor_resp, "status_code", 0) == 200:
+                    log("info", "TOR check ok", status=tor_resp.status_code, body=(getattr(tor_resp, "text", "") or "")[:200])
+                else:
+                    log("warn", "TOR check failed", status=getattr(tor_resp, "status_code", None))
+            except Exception as e:
+                log("warn", "TOR check failed", error=str(e))
         validate_config()
         init_db()
         migrate_db_unique_indexes()
