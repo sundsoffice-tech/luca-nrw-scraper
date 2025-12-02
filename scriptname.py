@@ -862,6 +862,13 @@ RECRUITER_QUERIES = {
     ]
 }
 
+# Facebook-spezifische Queries für Vertriebler (Jobsuche via soziale Medien)
+FB_SEARCH_TERMS = [
+    'site:facebook.com/people "Vertrieb" AND ("suche Job" OR "neue Herausforderung") NRW',
+    'site:facebook.com "Sales Manager" AND "open to work" NRW',
+    'site:facebook.com/groups "Vertrieb" AND "Jobsuche" NRW',
+]
+
 
 # Fallback für "alle" Branchen – Reihenfolge
 INDUSTRY_ORDER = ["nrw","social","solar","telekom","versicherung","bau","ecom","household"]
@@ -890,6 +897,8 @@ def build_queries(
     # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
     if selected_industry and selected_industry.lower() == 'recruiter':
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
+        # Extend with Facebook search terms
+        recruiter_qs = recruiter_qs + FB_SEARCH_TERMS
         log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {per_industry_limit}")
         return recruiter_qs[:max(1, per_industry_limit)]
     
@@ -907,6 +916,8 @@ def build_queries(
     if selected_industry == 'all' or selected_industry is None:
         # Recruiter-Queries immer zuerst laden
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
+        # Extend with Facebook search terms
+        recruiter_qs = recruiter_qs + FB_SEARCH_TERMS
         recruiter_count = len(recruiter_qs[:max(1, per_industry_limit)])
         out.extend(recruiter_qs[:max(1, per_industry_limit)])
         

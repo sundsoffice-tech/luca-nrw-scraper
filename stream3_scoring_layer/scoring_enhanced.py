@@ -90,7 +90,19 @@ def compute_score_v2(
     if sales_hits > 0:
         score += min(sales_hits * 3, config["sales_keywords_bonus"])
 
-    job_keywords = ["jobsuche", "stellensuche", "arbeitslos", "bewerbung", "lebenslauf", "cv"]
+    job_keywords = [
+        "jobsuche",
+        "stellensuche",
+        "arbeitslos",
+        "bewerbung",
+        "lebenslauf",
+        "cv",
+        "neue herausforderung",
+        "suche neuen wirkungskreis",
+        "open to work",
+        "looking for opportunities",
+        "verfügbar ab",
+    ]
     job_hits = sum(text_low.count(k) for k in job_keywords)
     if job_hits > 0:
         score += min(job_hits * 2, config["jobseeker_bonus"])
