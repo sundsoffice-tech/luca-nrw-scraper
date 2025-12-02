@@ -920,23 +920,18 @@ def build_queries(
         
         log('info', f"Recruiter-Mode: {len(recruiter_qs)} statische Queries + {len(linkedin_city_qs)} LinkedIn-Stadt-Queries = {len(all_recruiter_qs)} total")
         
-        # Wir respektieren per_industry_limit, aber da LinkedIn-Queries sehr wertvoll sind,
-        # nehmen wir mindestens die statischen Queries und fügen LinkedIn-Queries hinzu
-        # bis zum erweiterten Limit
-        if per_industry_limit >= len(recruiter_qs):
-            # Genug Limit, um alle statischen + einige LinkedIn-Queries zu nehmen
-            return all_recruiter_qs[:max(len(recruiter_qs), per_industry_limit)]
-        else:
-            # Niedriges Limit: Priorisiere eine Mischung
-            # Nehme alle statischen bis zum Limit und fülle mit LinkedIn auf
-            return all_recruiter_qs[:max(1, per_industry_limit)]
+        # Respektiere per_industry_limit und gib die ersten N Queries zurück
+        # (zuerst statische, dann LinkedIn-Stadt-Queries)
+        limit = max(1, per_industry_limit)
+        return all_recruiter_qs[:limit]
     
     # FALL 2: Standard Industrie (solar, telekom, etc.)
     if selected_industry and selected_industry.lower() != 'all':
         qs = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
         if qs:
-            log('info', f"Branche '{selected_industry}': lade {len(qs)} Queries, Limit: {per_industry_limit}")
-            return qs[:max(1, per_industry_limit)]
+            limit = max(1, per_industry_limit)
+            log('info', f"Branche '{selected_industry}': lade {len(qs)} Queries, Limit: {limit}")
+            return qs[:limit]
         else:
             log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
             selected_industry = 'all'
@@ -949,7 +944,8 @@ def build_queries(
         all_recruiter_qs = recruiter_qs + linkedin_city_qs
         
         # Im 'all'-Modus nehmen wir die Recruiter-Queries entsprechend dem Limit
-        recruiter_count = min(len(all_recruiter_qs), max(1, per_industry_limit))
+        limit = max(1, per_industry_limit)
+        recruiter_count = min(len(all_recruiter_qs), limit)
         out.extend(all_recruiter_qs[:recruiter_count])
         
         # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
@@ -957,8 +953,8 @@ def build_queries(
         for key in INDUSTRY_ORDER:
             qs = INDUSTRY_QUERIES.get(key, [])
             if qs:
-                out.extend(qs[:max(1, per_industry_limit)])
-                industry_count += len(qs[:max(1, per_industry_limit)])
+                out.extend(qs[:limit])
+                industry_count += len(qs[:limit])
         
         log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count} inkl. {len(linkedin_city_qs)} LinkedIn-Stadt-Queries, Branchen: {industry_count})")
     
