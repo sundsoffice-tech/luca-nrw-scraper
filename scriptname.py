@@ -841,6 +841,11 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:linkedin.com/in/ "open to work" "sales" "nrw" -intitle:Login',
         'site:facebook.com/groups "stellengesuche" "vertrieb" "handynummer"',
         'site:instagram.com "suche job" "vertrieb" "dm me"',
+        
+        # Facebook-specific queries for sales job seekers in NRW
+        'site:facebook.com/people "Vertrieb" AND ("suche Job" OR "neue Herausforderung" OR "offen für Angebote") NRW',
+        'site:facebook.com "Sales Manager" AND ("looking for new opportunities" OR "open to work") NRW',
+        'site:facebook.com/groups "Vertrieb" AND "Jobsuche" NRW',
 
         # Lebensläufe / Portfolios
         'filetype:pdf "lebenslauf" "vertrieb" "nrw" -site:xing.com -site:linkedin.com',
