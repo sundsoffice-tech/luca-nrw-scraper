@@ -57,6 +57,15 @@ from stream2_extraction_layer.extraction_enhanced import (
     extract_role_with_context,
 )
 
+# =========================
+# NRW Städte für städtebasierte Suche
+# =========================
+NRW_CITIES = [
+    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", 
+    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster", 
+    "Gelsenkirchen", "Aachen", "Mönchengladbach"
+]
+
 # --- Globales Query-Set (wird in __main__ gesetzt) ---
 QUERIES: List[str] = []
 
@@ -845,9 +854,7 @@ RECRUITER_QUERIES = {
         'site:kleinanzeigen.de/s-jobs/ "vertrieb" -"amazon" -"fahrer" -"lager" NRW',
         'site:kleinanzeigen.de/s-dienstleistungen/ "vertrieb" "biete" -amazon NRW',
         'site:markt.de "stellengesuche" vertrieb',
-        'site:linkedin.com/in/ "open to work" vertrieb NRW',
-        'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de")',
-        'site:linkedin.com/in/ "vertrieb" "015" OR "016" OR "017" NRW',
+        # LinkedIn-Queries werden nun dynamisch pro Stadt generiert (siehe build_queries)
         '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
         'site:de Quereinsteiger Vertrieb NRW provision OR kommission',
         'site:de arbeitslos Vertrieb sucht stelle NRW',
@@ -871,11 +878,11 @@ def build_queries(
     per_industry_limit: int = 2
 ) -> List[str]:
     """
-    Erweiterte Query-Builder mit Recruiter-Support.
+    Erweiterte Query-Builder mit Recruiter-Support und städtebasierter LinkedIn-Suche.
     
     Logik:
-    1. Falls selected_industry == 'recruiter': Nur RECRUITER_QUERIES laden
-    2. Falls selected_industry == 'all': Recruiter ZUERST, dann alle Branchen
+    1. Falls selected_industry == 'recruiter': RECRUITER_QUERIES + dynamische LinkedIn-Queries pro Stadt
+    2. Falls selected_industry == 'all': Recruiter ZUERST (inkl. LinkedIn-Queries), dann alle Branchen
     3. Falls normale Branche: Nur diese Branche
     
     Args:
@@ -887,11 +894,42 @@ def build_queries(
     """
     out: List[str] = []
     
+    def _generate_linkedin_city_queries() -> List[str]:
+        """
+        Generiert dynamisch LinkedIn-Queries für jede Stadt in NRW_CITIES.
+        Zwei Varianten pro Stadt:
+          a) "open to work" + "vertrieb" + Stadt
+          b) "vertrieb" + E-Mail-Provider + Stadt
+        """
+        linkedin_queries = []
+        for city in NRW_CITIES:
+            # Variante a: "open to work" mit Stadt
+            linkedin_queries.append(f'site:linkedin.com/in/ "open to work" "vertrieb" {city}')
+            # Variante b: vertrieb mit gängigen E-Mail-Providern und Stadt
+            linkedin_queries.append(f'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de" OR "@web.de") {city}')
+        return linkedin_queries
+    
     # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
     if selected_industry and selected_industry.lower() == 'recruiter':
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
-        log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {per_industry_limit}")
-        return recruiter_qs[:max(1, per_industry_limit)]
+        # Dynamische LinkedIn-Queries für alle Städte hinzufügen
+        linkedin_city_qs = _generate_linkedin_city_queries()
+        
+        # Kombiniere alle Queries
+        all_recruiter_qs = recruiter_qs + linkedin_city_qs
+        
+        log('info', f"Recruiter-Mode: {len(recruiter_qs)} statische Queries + {len(linkedin_city_qs)} LinkedIn-Stadt-Queries = {len(all_recruiter_qs)} total")
+        
+        # Wir respektieren per_industry_limit, aber da LinkedIn-Queries sehr wertvoll sind,
+        # nehmen wir mindestens die statischen Queries und fügen LinkedIn-Queries hinzu
+        # bis zum erweiterten Limit
+        if per_industry_limit >= len(recruiter_qs):
+            # Genug Limit, um alle statischen + einige LinkedIn-Queries zu nehmen
+            return all_recruiter_qs[:max(len(recruiter_qs), per_industry_limit)]
+        else:
+            # Niedriges Limit: Priorisiere eine Mischung
+            # Nehme alle statischen bis zum Limit und fülle mit LinkedIn auf
+            return all_recruiter_qs[:max(1, per_industry_limit)]
     
     # FALL 2: Standard Industrie (solar, telekom, etc.)
     if selected_industry and selected_industry.lower() != 'all':
@@ -903,12 +941,16 @@ def build_queries(
             log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
             selected_industry = 'all'
     
-    # FALL 3: 'all' = Recruiter ZUERST (höchste Priorität), dann alle Branchen
+    # FALL 3: 'all' = Recruiter ZUERST (inkl. LinkedIn-Stadt-Queries), dann alle Branchen
     if selected_industry == 'all' or selected_industry is None:
-        # Recruiter-Queries immer zuerst laden
+        # Recruiter-Queries mit LinkedIn-Stadt-Queries
         recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
-        recruiter_count = len(recruiter_qs[:max(1, per_industry_limit)])
-        out.extend(recruiter_qs[:max(1, per_industry_limit)])
+        linkedin_city_qs = _generate_linkedin_city_queries()
+        all_recruiter_qs = recruiter_qs + linkedin_city_qs
+        
+        # Im 'all'-Modus nehmen wir die Recruiter-Queries entsprechend dem Limit
+        recruiter_count = min(len(all_recruiter_qs), max(1, per_industry_limit))
+        out.extend(all_recruiter_qs[:recruiter_count])
         
         # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
         industry_count = 0
@@ -918,7 +960,7 @@ def build_queries(
                 out.extend(qs[:max(1, per_industry_limit)])
                 industry_count += len(qs[:max(1, per_industry_limit)])
         
-        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count}, Branchen: {industry_count})")
+        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count} inkl. {len(linkedin_city_qs)} LinkedIn-Stadt-Queries, Branchen: {industry_count})")
     
     return out
 
