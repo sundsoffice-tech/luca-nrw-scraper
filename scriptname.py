@@ -1930,6 +1930,23 @@ def extract_kleinanzeigen(html:str, url:str):
         rows.append({"name":"","rolle":"", "email":"", "telefon":tel, "quelle":url})
     return rows
 
+def extract_kleinanzeigen_links(html: str, base_url: str = "") -> List[str]:
+    """
+    Extrahiert Anzeigen-Links aus einer Kleinanzeigen-Hub-Seite.
+    """
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return []
+    links: List[str] = []
+    for a in soup.find_all("a", href=True):
+        href = (a.get("href") or "").strip()
+        if "/s-anzeige/" not in href:
+            continue
+        full = urllib.parse.urljoin(base_url or "https://www.kleinanzeigen.de", href)
+        links.append(full)
+    return list(dict.fromkeys(links))
+
 # =========================
 # Scoring
 # =========================
@@ -2187,6 +2204,29 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         log("error", "Response fehlerhaft", url=url, error=str(e))
         mark_url_seen(url, run_id)
         return (1, [])
+
+    lu = url.lower()
+    is_kleinanzeigen = ("kleinanzeigen.de" in lu) or ("ebay-kleinanzeigen.de" in lu)
+    is_list_page = ("/k0" in lu or "/s-" in lu) and ("/s-anzeige/" not in lu)
+    if is_kleinanzeigen and is_list_page:
+        ka_links = extract_kleinanzeigen_links(html, url)
+        collected: List[Dict[str, Any]] = []
+        if ka_links:
+            for link in ka_links:
+                if link not in extra_followups:
+                    extra_followups.append(link)
+        if extra_followups:
+            log("debug", "Kleinanzeigen-Hub erkannt, folge Anzeigenlinks", url=url, count=len(extra_followups))
+            for fu in extra_followups:
+                try:
+                    inc2, items2 = await process_link_async(fu, run_id, force=force)
+                    extra_checked += inc2
+                    if items2:
+                        collected.extend(items2)
+                except Exception:
+                    pass
+        mark_url_seen(url, run_id)
+        return (1 + extra_checked, collected if extra_followups else [])
 
     ssl_insecure = getattr(resp, "insecure_ssl", False)
     invite_link = ("chat.whatsapp.com" in url.lower()) or ("t.me" in url.lower())
