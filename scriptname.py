@@ -840,6 +840,8 @@ RECRUITER_QUERIES = {
         'site:kleinanzeigen.de/s-dienstleistungen/ "vertrieb" "biete" -amazon NRW',
         'site:markt.de "stellengesuche" vertrieb',
         'site:linkedin.com/in/ "open to work" vertrieb NRW',
+        'site:linkedin.com/in/ "vertrieb" "@gmail.com" OR "@gmx.de" OR "@web.de" NRW',
+        'site:linkedin.com/in/ "vertrieb" "015" OR "016" OR "017" NRW',
         '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
         'site:de Quereinsteiger Vertrieb NRW provision OR kommission',
         'site:de arbeitslos Vertrieb sucht stelle NRW',
@@ -2169,16 +2171,30 @@ def validate_content(html: str, url: str) -> bool:
     return True
 
 async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) -> Tuple[int, List[Dict[str, Any]]]:
+    meta = url if isinstance(url, dict) else {}
+    snippet_hint = (meta.get("snippet", "") or "")
+    title_hint = (meta.get("title", "") or "")
     url = _extract_url(url)
     if not url:
         return (0, [])
     extra_followups: List[str] = []
     extra_checked = 0
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.netloc.lower()
+    path_lower = (parsed.path or "").lower()
+    is_linkedin = host.endswith("linkedin.com")
+    linkedin_profile = is_linkedin and path_lower.startswith("/in/")
+    linkedin_snippet_text = " ".join([title_hint, snippet_hint]).strip()
+
+    def _random_desktop_ua() -> str:
+        pool = [ua for ua in UA_POOL if "mobile" not in ua.lower() and "android" not in ua.lower()]
+        return random.choice(pool or UA_POOL or [USER_AGENT])
+
     # History / Vorab-Checks
     if (not force) and url_seen(url):
         log("debug", "URL bereits gesehen (skip)", url=url)
         return (0, [])
-    if is_denied(url) or not path_ok(url):
+    if (is_denied(url) or not path_ok(url)) and not linkedin_profile:
         log("debug", "Vorprüfung blockt URL", url=url)
         mark_url_seen(url, run_id)
         return (1, [])
@@ -2188,27 +2204,66 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         return (1, [])
 
     # HTTP holen
-    resp = await fetch_response_async(url)
-    if not resp:
-        st = _LAST_STATUS.get(url, -1)
+    resp: Optional[httpx.Response] = None
+    html = ""
+    ct = ""
+    using_linkedin_snippet = False
+    li_status = None
+
+    if linkedin_profile:
+        li_status = -1
+        login_wall = False
+        ua_choice = _random_desktop_ua()
+        try:
+            async with httpx.AsyncClient(
+                headers={"User-Agent": ua_choice, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
+                follow_redirects=True,
+                timeout=httpx.Timeout(HTTP_TIMEOUT),
+                verify=True,
+                trust_env=False,
+            ) as client:
+                resp = await client.get(url)
+            li_status = getattr(resp, "status_code", 0) if resp else -1
+            _LAST_STATUS[url] = li_status
+            final_path = urllib.parse.urlparse(str(getattr(resp, "url", url))).path.lower() if resp else ""
+            login_wall = (li_status == 999) or ("/login" in final_path)
+            if login_wall and linkedin_snippet_text:
+                log("info", "LinkedIn Login-Wall – nutze Snippet", url=url, status=li_status)
+                using_linkedin_snippet = True
+                html = linkedin_snippet_text
+                resp = None
+            elif resp and li_status == 200:
+                setattr(resp, "insecure_ssl", False)
+            else:
+                resp = None
+        except Exception as e:
+            log("warn", "LinkedIn Fetch fehlgeschlagen", url=url, error=str(e))
+            resp = None
+            li_status = -1
+            _LAST_STATUS[url] = li_status
+    else:
+        resp = await fetch_response_async(url)
+
+    if (resp is None) and (not using_linkedin_snippet):
+        st = _LAST_STATUS.get(url, li_status if li_status is not None else -1)
         if st in (429, 403, -1):
             log("warn", "Kein Content – Retry später (nicht markiert)", url=url, status=st)
             return (1, [])
         mark_url_seen(url, run_id)
         return (1, [])
 
-    ct = (resp.headers.get("Content-Type", "") or "").lower()
-    if "application/pdf" in ct and not CFG.allow_pdf:
-        log("info", "PDF übersprungen (ALLOW_PDF=0)", url=url)
-        mark_url_seen(url, run_id)
-        return (1, [])
-
-    try:
-        html = resp.text
-    except Exception as e:
-        log("error", "Response fehlerhaft", url=url, error=str(e))
-        mark_url_seen(url, run_id)
-        return (1, [])
+    if resp is not None:
+        ct = (resp.headers.get("Content-Type", "") or "").lower()
+        if "application/pdf" in ct and not CFG.allow_pdf:
+            log("info", "PDF übersprungen (ALLOW_PDF=0)", url=url)
+            mark_url_seen(url, run_id)
+            return (1, [])
+        try:
+            html = resp.text
+        except Exception as e:
+            log("error", "Response fehlerhaft", url=url, error=str(e))
+            mark_url_seen(url, run_id)
+            return (1, [])
 
     lu = url.lower()
     is_kleinanzeigen = ("kleinanzeigen.de" in lu) or ("ebay-kleinanzeigen.de" in lu)
@@ -2242,7 +2297,9 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             title_text = ttag.get_text(" ", strip=True)
     except Exception:
         title_text = ""
-    title_src = (title_text or url or "").lower()
+    if using_linkedin_snippet and not title_text:
+        title_text = title_hint or snippet_hint
+    title_src = (title_text or linkedin_snippet_text or url or "").lower()
     pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
                 "handelsvertreter","makler","akquise","agent","berater","beraterin","geschäftsführer",
                 "repräsentant","b2b","b2c","verkäufer","verkaeufer","vertriebler",
@@ -2270,7 +2327,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         return (1, [])
 
     # Content validieren (Invite-Links überspringen strenge Prüfung)
-    if (not invite_link) and (not validate_content(html, url)):
+    if (not invite_link) and (not using_linkedin_snippet) and (not validate_content(html, url)):
         mark_url_seen(url, run_id)
         return (1, [])
 
@@ -2348,6 +2405,8 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
     private_address = extract_private_address(text)
     social_profile_url = extract_social_profile_url(soup, text)
+    if linkedin_profile and not social_profile_url:
+        social_profile_url = url
 
     # --- Job/Karriere/Jobs/stellen: nur weiter, wenn direkter Kontaktanker existiert ---
     lu = url.lower()
@@ -2540,7 +2599,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     if social_profile_url:
         lead_score += 15
     lead_score = min(100, lead_score)
-    if lead_score < CFG.min_score:
+    if (lead_score < CFG.min_score) and (not using_linkedin_snippet):
         log("debug", "Lead zu schwach", url=url, score=lead_score)
         mark_url_seen(url, run_id)
         return (1, [])
