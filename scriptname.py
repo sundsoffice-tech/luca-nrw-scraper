@@ -113,6 +113,8 @@ ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
+NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"]
+
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
@@ -886,13 +888,21 @@ def build_queries(
         Liste von Query-Strings für diesen Run
     """
     out: List[str] = []
-    
+
+    recruiter_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', []))
+    for city in NRW_CITIES:
+        recruiter_qs.append(f'site:linkedin.com/in/ "vertrieb" "open to work" {city}')
+        recruiter_qs.append(f'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de") {city}')
+
     # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
     if selected_industry and selected_industry.lower() == 'recruiter':
-        recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
-        log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {per_industry_limit}")
-        return recruiter_qs[:max(1, per_industry_limit)]
-    
+        recruiter_limit = max(1, per_industry_limit)
+        if per_industry_limit <= 2:
+            recruiter_limit = len(recruiter_qs)
+            log('info', f"Recruiter-Mode: Limit auf {recruiter_limit} erhöht (Geo-Fencing für {len(NRW_CITIES)} Städte).")
+        log('info', f"Recruiter-Mode: lade {len(recruiter_qs)} Queries, Limit: {recruiter_limit}")
+        return recruiter_qs[:recruiter_limit]
+
     # FALL 2: Standard Industrie (solar, telekom, etc.)
     if selected_industry and selected_industry.lower() != 'all':
         qs = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
@@ -902,11 +912,10 @@ def build_queries(
         else:
             log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
             selected_industry = 'all'
-    
+
     # FALL 3: 'all' = Recruiter ZUERST (höchste Priorität), dann alle Branchen
     if selected_industry == 'all' or selected_industry is None:
         # Recruiter-Queries immer zuerst laden
-        recruiter_qs = RECRUITER_QUERIES.get('recruiter', [])
         recruiter_count = len(recruiter_qs[:max(1, per_industry_limit)])
         out.extend(recruiter_qs[:max(1, per_industry_limit)])
         
