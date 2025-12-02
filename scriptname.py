@@ -2244,8 +2244,9 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         title_text = ""
     title_src = (title_text or url or "").lower()
     pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
-                "handelsvertreter","makler","akquise","agent","berater","geschäftsführer",
-                "repräsentant","b2b","b2c")
+                "handelsvertreter","makler","akquise","agent","berater","beraterin","geschäftsführer",
+                "repräsentant","b2b","b2c","verkäufer","verkaeufer","vertriebler",
+                "vertriebspartner","promoter","promotion","fundraiser","aushilfe verkauf")
     neg_keys = ("reinigung","putz","hilfe","helfer","lager","fahrer","zusteller","kommissionierer",
                 "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
                 "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
