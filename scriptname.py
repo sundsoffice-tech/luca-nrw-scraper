@@ -836,8 +836,8 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 RECRUITER_QUERIES = {
     'recruiter': [
         # Jobsuchende / Karrierewechsler
-        'site:kleinanzeigen.de "ich suche" vertrieb NRW',
-        'site:kleinanzeigen.de "stellengesuch" vertrieb',
+        'site:kleinanzeigen.de/s-jobs/ "ich suche" vertrieb NRW',
+        'site:kleinanzeigen.de/s-dienstleistungen/ "biete" vertrieb',
         'site:markt.de "stellengesuche" vertrieb',
         'site:linkedin.com/in/ "open to work" vertrieb NRW',
         '"lebenslauf" "vertrieb" "nrw" filetype:pdf',
@@ -2704,6 +2704,8 @@ def find_internal_links(html: str, base_url: str) -> List[str]:
 
 
 async def try_sitemaps_async(base: str) -> List[str]:
+    if "kleinanzeigen.de" in base or "ebay-kleinanzeigen.de" in base:
+        return []
     candidates = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"]
     out: List[str] = []
     for c in candidates:
