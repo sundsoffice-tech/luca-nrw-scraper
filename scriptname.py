@@ -59,7 +59,7 @@ QUERIES: List[str] = []
 # === Export-Felder (CSV/XLSX) ===
 ENH_FIELDS = [
     "name","rolle","email","telefon","quelle","score","tags","region",
-    "role_guess","salary_hint","commission_hint","opening_line",
+    "role_guess","lead_type","salary_hint","commission_hint","opening_line",
     "ssl_insecure","company_name","company_size","hiring_volume",
     "industry","recency_indicator","location_specific",
     "confidence_score","last_updated","data_quality",
@@ -178,7 +178,7 @@ _DB_READY = False  # einmaliges Schema-Setup pro Prozess
 
 LEAD_FIELDS = [
     "name","rolle","email","telefon","quelle","score","tags","region",
-    "role_guess","salary_hint","commission_hint","opening_line","ssl_insecure",
+    "role_guess","lead_type","salary_hint","commission_hint","opening_line","ssl_insecure",
     "company_name","company_size","hiring_volume","industry",
     "recency_indicator","location_specific","confidence_score","last_updated",
     "data_quality","phone_type","whatsapp_link","private_address","social_profile_url"
@@ -205,6 +205,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       tags TEXT,
       region TEXT,
       role_guess TEXT,
+      lead_type TEXT,
       salary_hint TEXT,
       commission_hint TEXT,
       opening_line TEXT,
@@ -257,6 +258,10 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN phone_type TEXT")
     if "whatsapp_link" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN whatsapp_link TEXT")
+    try:
+        cur.execute("ALTER TABLE leads ADD COLUMN lead_type TEXT")
+    except Exception:
+        pass
     if "private_address" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN private_address TEXT")
     if "social_profile_url" not in existing_cols:
@@ -310,6 +315,7 @@ def migrate_db_unique_indexes():
           recency_indicator TEXT, location_specific TEXT, confidence_score INT,
           last_updated TEXT, data_quality INT,
           phone_type TEXT, whatsapp_link TEXT,
+          lead_type TEXT,
           private_address TEXT, social_profile_url TEXT
         );
 
@@ -317,13 +323,13 @@ def migrate_db_unique_indexes():
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          phone_type,whatsapp_link,private_address,social_profile_url
+          phone_type,whatsapp_link,lead_type,private_address,social_profile_url
         )
         SELECT
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          '' AS phone_type, '' AS whatsapp_link,
+          '' AS phone_type, '' AS whatsapp_link, '' AS lead_type,
           '' AS private_address, '' AS social_profile_url
         FROM leads;
 
@@ -401,6 +407,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("tags",""),
                 r.get("region",""),
                 r.get("role_guess",""),
+                r.get("lead_type",""),
                 r.get("salary_hint",""),
                 r.get("commission_hint",""),
                 r.get("opening_line",""),
@@ -439,6 +446,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("tags",""),
                 r.get("region",""),
                 r.get("role_guess",""),
+                r.get("lead_type",""),
                 r.get("salary_hint",""),
                 r.get("commission_hint",""),
                 r.get("opening_line",""),
@@ -1348,6 +1356,8 @@ B2C_HINT       = re.compile(
     re.I,
 )
 JOBSEEKER_RE  = re.compile(r'\b(jobsuche|stellensuche|arbeitslos|lebenslauf|bewerb(ung)?|cv|portfolio|offen\s*f(?:ür|uer)\s*neues)\b', re.I)
+CANDIDATE_TEXT_RE = re.compile(r'(?is)\b(ich\s+suche|suche\s+job|biete\s+mich|arbeitslos|stellengesuch|open\s+to\s+work)\b')
+EMPLOYER_TEXT_RE  = re.compile(r'(?is)\b(wir\s+suchen|wir\s+stellen\s+ein|deine\s+aufgaben|unser\s+angebot|jetzt\s+bewerben)\b')
 RECRUITER_RE  = re.compile(r'\b(recruit(er|ing)?|hr|human\s*resources|personalvermittlung|headhunter|wir\s*suchen|join\s*our\s*team)\b', re.I)
 
 
@@ -2395,12 +2405,22 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                         parts.append(dom_tag)
                     tag_local = ",".join(parts)
 
+                # Lead-Type Logik
+                lt = "other"
+                if "group_invite" in (base_tags or ""):
+                    lt = "group_invite"
+                elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
+                    lt = "candidate"
+                elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
+                    lt = "employer"
+
                 enriched = {
                     **r,
                     "score": min(100, base_score + boost),
                     "tags": tag_local,
                     "region": region,
                     "role_guess": role_guess,
+                    "lead_type": lt,
                     "salary_hint": salary_hint,
                     "commission_hint": commission_hint,
                     "opening_line": opening_line({"tags": tag_local}),
@@ -2596,6 +2616,15 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 parts.append(dom_tag)
             tag_local = ",".join(parts)
 
+        # Lead-Type Logik
+        lt = "other"
+        if "group_invite" in (base_tags or ""):
+            lt = "group_invite"
+        elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
+            lt = "candidate"
+        elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
+            lt = "employer"
+
         r["_phone_type"] = extras.get("phone_type", "")
         r["_whatsapp_link"] = "yes" if extras.get("whatsapp_link") else "no"
         r["company_domain"] = company_domain
@@ -2606,6 +2635,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             "tags": tag_local,
             "region": region,
             "role_guess": role_guess,
+            "lead_type": lt,
             "salary_hint": salary_hint,
             "commission_hint": commission_hint,
             "opening_line": opening_line({"tags": tag_local}),
@@ -3247,6 +3277,11 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 url_hit = any(tok in src_url for tok in public_tokens)
 
                 return role_hit or company_hit or url_hit
+
+            # NUR Kandidaten exportieren, wenn wir im Recruiter-Modus sind
+            if "recruiter" in str(QUERIES).lower() or os.getenv("INDUSTRY") == "recruiter":
+                collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
+                log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
 
             filtered = _dedup_run(
                 [
