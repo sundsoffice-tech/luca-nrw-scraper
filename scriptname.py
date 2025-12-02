@@ -34,7 +34,7 @@ import pandas
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from flask import Response, render_template_string
 
 
@@ -47,6 +47,11 @@ from bs4 import BeautifulSoup
 from bs4.element import Comment
 from dotenv import load_dotenv
 from urllib.robotparser import RobotFileParser
+from stream2_extraction_layer.open_data_resolver import resolve_company_domain
+from stream2_extraction_layer.extraction_enhanced import (
+    extract_name_enhanced,
+    extract_role_with_context,
+)
 
 # --- Globales Query-Set (wird in __main__ gesetzt) ---
 QUERIES: List[str] = []
@@ -58,7 +63,7 @@ ENH_FIELDS = [
     "ssl_insecure","company_name","company_size","hiring_volume",
     "industry","recency_indicator","location_specific",
     "confidence_score","last_updated","data_quality",
-    "phone_type","whatsapp_link"
+    "phone_type","whatsapp_link","private_address","social_profile_url"
 ]
 
 def export_xlsx(filename: str, rows=None):
@@ -102,6 +107,9 @@ ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "50"))          # globale max. gleichzeitige Requests
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
+
+ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
+KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
 # === Rotation: Proxies & User-Agents ===
 def _env_list(val: str, sep: str) -> list[str]:
@@ -173,7 +181,7 @@ LEAD_FIELDS = [
     "role_guess","salary_hint","commission_hint","opening_line","ssl_insecure",
     "company_name","company_size","hiring_volume","industry",
     "recency_indicator","location_specific","confidence_score","last_updated",
-    "data_quality","phone_type","whatsapp_link"
+    "data_quality","phone_type","whatsapp_link","private_address","social_profile_url"
 ]
 
 def _ensure_schema(con: sqlite3.Connection) -> None:
@@ -209,7 +217,11 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       location_specific TEXT,
       confidence_score INT,
       last_updated TEXT,
-      data_quality INT
+      data_quality INT,
+      phone_type TEXT,
+      whatsapp_link TEXT,
+      private_address TEXT,
+      social_profile_url TEXT
       -- neue Spalten werden unten per ALTER TABLE nachgezogen
     );
 
@@ -245,6 +257,10 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN phone_type TEXT")
     if "whatsapp_link" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN whatsapp_link TEXT")
+    if "private_address" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN private_address TEXT")
+    if "social_profile_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN social_profile_url TEXT")
     con.commit()
 
     # Indizes (partielle UNIQUE nur wenn Werte vorhanden)
@@ -293,20 +309,22 @@ def migrate_db_unique_indexes():
           company_name TEXT, company_size TEXT, hiring_volume TEXT, industry TEXT,
           recency_indicator TEXT, location_specific TEXT, confidence_score INT,
           last_updated TEXT, data_quality INT,
-          phone_type TEXT, whatsapp_link TEXT
+          phone_type TEXT, whatsapp_link TEXT,
+          private_address TEXT, social_profile_url TEXT
         );
 
         INSERT INTO leads_new (
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          phone_type,whatsapp_link
+          phone_type,whatsapp_link,private_address,social_profile_url
         )
         SELECT
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          '' AS phone_type, '' AS whatsapp_link
+          '' AS phone_type, '' AS whatsapp_link,
+          '' AS private_address, '' AS social_profile_url
         FROM leads;
 
         DROP TABLE leads;
@@ -397,7 +415,9 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("last_updated",""),
                 r.get("data_quality",0),
                 r.get("phone_type",""),
-                r.get("whatsapp_link","")
+                r.get("whatsapp_link",""),
+                r.get("private_address",""),
+                r.get("social_profile_url","")
             ]
             cur.execute(sql, vals)
             if cur.rowcount > 0:
@@ -433,7 +453,9 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("last_updated",""),
                 r.get("data_quality",0),
                 r.get("phone_type",""),
-                r.get("whatsapp_link","")
+                r.get("whatsapp_link",""),
+                r.get("private_address",""),
+                r.get("social_profile_url","")
             ]
             cur.execute(sql, vals)
             if cur.rowcount > 0:
@@ -781,56 +803,25 @@ SALES   = '(vertrieb OR d2d OR "call center" OR telesales OR outbound OR verkauf
 
 # Kurze, treffsichere Query-Sets je Branche
 INDUSTRY_QUERIES: dict[str, list[str]] = {
-    "solar": [
-        f'site:.de (photovoltaik OR PV OR solar OR wärmepumpe) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (photovoltaik OR PV OR solar) {REGION}',
-        f'site:.de (energieberatung OR strom OR gas) {SALES} (ansprechpartner OR team) {REGION}',
+    "candidates": [
+        # Kleinanzeigen (Privatpersonen)
+        'site:kleinanzeigen.de/s-gesuche "vertrieb" "NRW" -gewerblich',
+        'site:kleinanzeigen.de "ich suche job" "vertrieb" "NRW"',
+        'site:markt.de "stellengesuche" "vertrieb"',
+
+        # Messenger Gruppen (Offene Einladungslinks)
+        'site:t.me/joinchat "vertrieb" "gruppe"',
+        'site:chat.whatsapp.com "jobs" "nrw"',
+        'site:chat.whatsapp.com "vertriebler"',
+
+        # Social Media (Public Profiles via Search)
+        'site:linkedin.com/in/ "open to work" "sales" "nrw" -intitle:Login',
+        'site:facebook.com/groups "stellengesuche" "vertrieb" "handynummer"',
+        'site:instagram.com "suche job" "vertrieb" "dm me"',
+
+        # Lebensläufe / Portfolios
+        'filetype:pdf "lebenslauf" "vertrieb" "nrw" -site:xing.com -site:linkedin.com',
     ],
-    "telekom": [
-        f'site:.de (glasfaser OR telekom OR dsl OR mobilfunk) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (glasfaser OR telekom) {REGION}',
-        f'site:.de (internetanschluss OR kundenakquise) (telesales OR outbound) (ansprechpartner OR team) {REGION}',
-    ],
-    "versicherung": [
-        f'site:.de (versicherung OR versicherungen OR bausparen) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (versicherung) {REGION}',
-        f'site:.de (makler OR vermittler) (telesales OR outbound) (ansprechpartner OR team) {REGION}',
-    ],
-    "bau": [
-        f'site:.de (fenster OR türen OR daemm* OR dämm* OR energieberatung) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (fenster OR türen) {REGION}',
-        f'site:.de (handwerk OR sanierung) (telesales OR outbound) (ansprechpartner OR team) {REGION}',
-    ],
-    "ecom": [
-        f'site:.de (onlineshop OR e-commerce) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (onlineshop OR hotline) {REGION}',
-        f'site:.de (kundengewinnung OR bestellhotline) (telesales OR outbound) (ansprechpartner OR team) {REGION}',
-    ],
-    "household": [
-        f'site:.de (vorwerk OR kobold OR staubsauger) {SALES} {CONTACT} {REGION}',
-        f'site:.de ("per WhatsApp bewerben" OR "WhatsApp Bewerbung") (vorwerk OR kobold) {REGION}',
-        f'site:.de (haushaltswaren) (telesales OR outbound) (ansprechpartner OR team) {REGION}',
-    ],
-    'recruiter': [
-        # Jobsuchende und Karrierewechsler
-        f"site:de vertrieb jobs NRW OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum",
-        f"site:de quereinsteiger vertrieb NRW {REGION} provision OR kommission",
-        f"site:de arbeitslos vertrieb sucht stelle {REGION}",
-        f"site:de nebenjob vertrieb homeoffice {REGION} provision",
-        
-        # Kleinanzeigen (neue Quellen!)
-        f"site:ebay-kleinanzeigen.de biete vertrieb NRW {SALES} provision",
-        f"site:quoka.de vertrieb freiberuflich {REGION} provision",
-        
-        # Branchenumsteiger
-        f"site:de gastronomie einzelhandel umschulung vertrieb {REGION}",
-        f"site:de call center mitarbeiter heimarbeit {REGION} provision OR kommission",
-        f"site:de {CONTACT} vertrieb quereinsteiger {REGION}",
-        
-        # WhatsApp-Gruppen und Communities
-        f"site:de WhatsApp gruppe vertrieb {REGION} beitreten",
-        f"site:de telegram gruppe sales jobs {REGION}",
-    ]
 }
 
 # NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
@@ -853,7 +844,7 @@ RECRUITER_QUERIES = {
 
 
 # Fallback für "alle" Branchen – Reihenfolge
-INDUSTRY_ORDER = ["solar","telekom","versicherung","bau","ecom","household"]
+INDUSTRY_ORDER = ["nrw","social","solar","telekom","versicherung","bau","ecom","household"]
 
 def build_queries(
     selected_industry: Optional[str] = None,
@@ -915,20 +906,15 @@ def build_queries(
 
 # ---- Domain-/Pfad-Filter (erweitert) ----
 DENY_DOMAINS = {
-  # Jobbörsen / Aggregatoren
-  #"linkedin.com","de.linkedin.com","glassdoor.com","indeed.com","stepstone.de","monster.de",
-  #"arbeitsagentur.de","jobboerse.arbeitsagentur.de","meinestadt.de","jobrapido.com","kimeta.de",
-  #"hays.de","randstad.de","adecco.de","xing.com","join.com","get-in-it.de",
-  # Medien / News
-  "tagesschau.de","wdr.de","ndr.de","spiegel.de","rp-online.de","waz.de","zeit.de","faz.net","welt.de",
-  # Behörden / Verbände
-  "bund.de","nrw.de","land.nrw","finanzverwaltung.nrw.de","bghw.de","justiz.nrw.de",
-  # Sonstiges ungeeignet
-  "dzbank.de","miele.de","airchina.de","gehalt.de","salesjob.de","regiomanager.de","kununu.com",
-  # Social / Plattformen
-  "facebook.com","m.facebook.com"#,"instagram.com","twitter.com","x.com","tiktok.com","youtube.com","youtu.be",
-  # Karten / Google
-  "google.com","maps.google.com","mapy.google.com","business.site"
+  "google.com","maps.google.com","mapy.google.com","business.site",
+  "twitter.com","x.com","tiktok.com","youtube.com","youtu.be"
+}
+
+SOCIAL_HOSTS = {
+    "facebook.com","m.facebook.com",
+    "instagram.com","www.instagram.com",
+    "t.me","telegram.me",
+    "whatsapp.com","chat.whatsapp.com",
 }
 
 ALLOW_PATH_HINTS = (
@@ -939,7 +925,16 @@ ALLOW_PATH_HINTS = (
 NEG_PATH_HINTS = (
   "/datenschutz", "/privacy", "/agb", "/terms", "/bedingungen",
   "/login", "/signin", "/signup", "/account", "/cart", "/warenkorb", "/checkout", "/search",
-  "/newsletter"
+  "/newsletter",
+  "/gleichstellungsstelle",
+  "/grundsicherung",
+  "/rathaus/",
+  "/verwaltung/",
+  "/soziales-gesundheit-wohnen-und-recht",
+  "/seminare",
+  "/seminarprogramm",
+  "/events",
+  "/veranstaltungen",
 )
 
 def is_denied(url: str) -> bool:
@@ -950,6 +945,9 @@ def is_denied(url: str) -> bool:
         host = host[4:]
     if host.startswith("m."):
         host = host[2:]
+
+    if host in SOCIAL_HOSTS:
+        return False
 
     # Harte Domain-Blockliste (bestehend)
     for d in DENY_DOMAINS:
@@ -989,6 +987,13 @@ def path_ok(url: str) -> bool:
     path = (p.path or "").lower()
     q    = (p.query or "").lower()
     frag = (p.fragment or "").lower()
+    host = (p.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host in SOCIAL_HOSTS:
+        return True
+    if host.endswith("kleinanzeigen.de") or host.endswith("ebay-kleinanzeigen.de"):
+        return True
     if any(bad in path for bad in NEG_PATH_HINTS):
         return False
     positive = any(h in path for h in ALLOW_PATH_HINTS) \
@@ -1021,6 +1026,17 @@ def _normalize_for_dedupe(u: str) -> str:
         return urllib.parse.urlunparse(pu)
     except Exception:
         return u
+
+
+UrlLike = Union[str, Dict[str, Any]]
+
+
+def _extract_url(item: UrlLike) -> str:
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        return item.get("url", "")
+    return ""
 
 
 from typing import List
@@ -1108,7 +1124,7 @@ def prioritize_urls(urls: List[str]) -> List[str]:
     return [u for u, _ in scored]
 
 
-async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: Optional[str] = None) -> Tuple[List[str], bool]:
+async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: Optional[str] = None) -> Tuple[List[Dict[str, str]], bool]:
     if not (GCS_KEYS and GCS_CXS):
         log("debug","Google CSE nicht konfiguriert – übersprungen"); return [], False
 
@@ -1120,13 +1136,14 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
         return txt[:200]
 
     url = "https://www.googleapis.com/customsearch/v1"
-    links, page_no, key_i, cx_i = [], 0, 0, 0
+    results: List[Dict[str, str]] = []
+    page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
     page_cap = int(os.getenv("MAX_GOOGLE_PAGES","12"))
-    while len(links) < max_results and page_no < page_cap:
+    while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,
-            "num": min(10, max_results - len(links)),
+            "num": min(10, max_results - len(results)),
             "start": 1 + page_no*10, "lr":"lang_de", "safe":"off",
         }
         if date_restrict:
@@ -1160,23 +1177,43 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
             break
 
         items = data.get("items", []) or []
-        batch = [it.get("link") for it in items if it.get("link")]
-        links.extend(batch)
-        log("info","Google CSE Batch", q=q, batch=len(batch), total=len(links), page_no=page_no)
+        batch = [
+            {
+                "url": it.get("link"),
+                "title": it.get("title", "") or "",
+                "snippet": it.get("snippet", "") or "",
+            }
+            for it in items
+            if it.get("link")
+        ]
+        results.extend(batch)
+        log("info","Google CSE Batch", q=q, batch=len(batch), total=len(results), page_no=page_no)
 
         if not batch: break
         page_no += 1
         await asyncio.sleep(0.5 + _jitter(0,0.6))
 
-    uniq, seen = [], set()
-    for u in links:
-        nu = _normalize_for_dedupe(u)
+    uniq_items: List[Dict[str, str]] = []
+    seen = set()
+    for entry in results:
+        raw_url = entry.get("url", "")
+        if not raw_url:
+            continue
+        nu = _normalize_for_dedupe(raw_url)
         if nu in seen: continue
         seen.add(nu)
         if is_denied(nu): continue
         if not path_ok(nu): continue
-        uniq.append(nu)
-    return prioritize_urls(uniq), had_429
+        uniq_items.append({
+            "url": nu,
+            "title": entry.get("title", "") or "",
+            "snippet": entry.get("snippet", "") or "",
+        })
+    if uniq_items:
+        ordered = prioritize_urls([item["url"] for item in uniq_items])
+        order_map = {u: i for i, u in enumerate(ordered)}
+        uniq_items.sort(key=lambda item: order_map.get(item["url"], len(order_map)))
+    return uniq_items, had_429
 
 
 async def bing_search_async(q: str, count: int = 30, pages:int=3) -> Tuple[List[str], bool]:
@@ -1223,25 +1260,104 @@ async def bing_search_async(q: str, count: int = 30, pages:int=3) -> Tuple[List[
     return uniq, False
 
 
+def _ka_keywords_from_query(q: str) -> str:
+    if not q:
+        return ""
+    cleaned = re.sub(r"site:[^\s]+", " ", q, flags=re.I)
+    cleaned = re.sub(r"[()\"']", " ", cleaned)
+    cleaned = re.sub(r"\b(OR|AND)\b", " ", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:120]
+
+
+async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MAX_RESULTS) -> List[Dict[str, str]]:
+    if (not ENABLE_KLEINANZEIGEN) or max_results <= 0:
+        return []
+
+    keywords = _ka_keywords_from_query(q)
+    if not keywords:
+        return []
+
+    url = "https://www.kleinanzeigen.de/s-suchanfrage.html"
+    try:
+        r = await http_get_async(url, params={"keywords": keywords}, timeout=HTTP_TIMEOUT)
+    except Exception as e:
+        log("warn", "Kleinanzeigen-Suche fehlgeschlagen", q=keywords, err=str(e))
+        return []
+    if not r:
+        return []
+    if r.status_code != 200:
+        log("warn", "Kleinanzeigen Status != 200", status=r.status_code, q=keywords)
+        return []
+
+    html = r.text or ""
+    soup = BeautifulSoup(html, "html.parser")
+    items: List[Dict[str, str]] = []
+    for art in soup.select("li.ad-listitem article.aditem"):
+        href = art.get("data-href") or ""
+        if not href:
+            a_tag = art.find("a", href=True)
+            if a_tag:
+                href = a_tag.get("href", "")
+        if not href:
+            continue
+        full = urllib.parse.urljoin("https://www.kleinanzeigen.de", href)
+        title_el = art.select_one("h2 a")
+        desc_el = art.select_one(".aditem-main--middle--description")
+        title = title_el.get_text(" ", strip=True) if title_el else ""
+        snippet = desc_el.get_text(" ", strip=True) if desc_el else ""
+        items.append({"url": full, "title": title, "snippet": snippet})
+        if len(items) >= max_results:
+            break
+
+    uniq: List[Dict[str, str]] = []
+    seen = set()
+    for entry in items:
+        u = _extract_url(entry)
+        if not u:
+            continue
+        nu = _normalize_for_dedupe(u)
+        if nu in seen:
+            continue
+        seen.add(nu)
+        if is_denied(nu):
+            continue
+        uniq.append({**entry, "url": nu})
+
+    if uniq:
+        log("info", "Kleinanzeigen Treffer", q=keywords, count=len(uniq))
+    return uniq
+
+
 # =========================
 # Regex/Scoring/Enrichment
 # =========================
 
 EMAIL_RE   = re.compile(r'\b(?!noreply|no-reply|donotreply)[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b', re.I)
 PHONE_RE   = re.compile(r'(?:\+49|0049|0)\s?(?:\(?\d{2,5}\)?[\s\/\-]?)?\d(?:[\s\/\-]?\d){5,10}')
-SALES_RE   = re.compile(r'\b(vertrieb|vertriebs|sales|account\s*manager|key\s*account|business\s*development|außendienst|aussendienst|handelsvertreter|telesales|call\s*center|outbound|haustür|d2d)\b', re.I)
+MOBILE_RE  = re.compile(r'(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,10}')
+SALES_RE   = re.compile(r'\b(vertrieb|vertriebs|sales|account\s*manager|key\s*account|business\s*development|au?endienst|aussendienst|handelsvertreter|telesales|call\s*center|outbound|haust?r|d2d)\b', re.I)
 LOW_PAY_HINT   = re.compile(r'\b(12[,\.]?\d{0,2}|13[,\.]?\d{0,2})\s*€\s*/?\s*h|\b(Mindestlohn|Fixum\s+ab\s+\d{1,2}\s*€)\b', re.I)
 PROVISION_HINT = re.compile(r'\b(Provisionsbasis|nur\s*Provision|hohe\s*Provision(en)?|Leistungsprovision)\b', re.I)
 D2D_HINT       = re.compile(r'\b(Door[-\s]?to[-\s]?door|Haustür|Kaltakquise|D2D)\b', re.I)
 CALLCENTER_HINT= re.compile(r'\b(Call\s*Center|Telesales|Outbound|Inhouse-?Sales)\b', re.I)
-B2C_HINT       = re.compile(r'\b(B2C|Privatkunden|Haushalte|Endkunden)\b', re.I)
+B2C_HINT       = re.compile(
+    r'\b(?:B2C|Privatkunden|Haushalte|Endkunden|Privatperson(?:en)?|'
+    r'verschuld\w*|schuldenhilfe|schuldnerberatung|schuldner|'
+    r'inkasso(?:[-\s]?f(?:ä|ae)lle?)?)\b',
+    re.I,
+)
 JOBSEEKER_RE  = re.compile(r'\b(jobsuche|stellensuche|arbeitslos|lebenslauf|bewerb(ung)?|cv|portfolio|offen\s*f(?:ür|uer)\s*neues)\b', re.I)
 RECRUITER_RE  = re.compile(r'\b(recruit(er|ing)?|hr|human\s*resources|personalvermittlung|headhunter|wir\s*suchen|join\s*our\s*team)\b', re.I)
 
 
 WHATSAPP_RE    = re.compile(r'(?i)\b(WhatsApp|Whats\s*App)[:\s]*\+?\d[\d \-()]{6,}\b')
-WA_LINK_RE     = re.compile(r'(?:https?://)?(?:wa\.me/\d+|api\.whatsapp\.com/send\?phone=\d+)', re.I)
+WA_LINK_RE     = re.compile(r'(?:https?://)?(?:wa\.me/\d+|api\.whatsapp\.com/send\?phone=\d+|chat\.whatsapp\.com/[A-Za-z0-9]+)', re.I)
 WHATS_RE       = re.compile(r'(?:\+?\d{2,3}\s?)?(?:\(?0\)?\s?)?\d{2,4}[\s\-]?\d{3,}.*?(?:whatsapp|wa\.me|api\.whatsapp)', re.I)
+WHATSAPP_PHRASE_RE = re.compile(
+    r'(?i)(meldet\s+euch\s+per\s+whatsapp|schreib(?:t)?\s+mir\s+(?:per|bei)\s+whatsapp|per\s+whatsapp\s+melden)'
+)
+TELEGRAM_LINK_RE = re.compile(r'(?:https?://)?(?:t\.me|telegram\.me)/[A-Za-z0-9_/-]+', re.I)
 
 CITY_RE        = re.compile(r'\b(NRW|Nordrhein[-\s]?Westfalen|Düsseldorf|Köln|Essen|Dortmund|Mönchengladbach|Bochum|Wuppertal|Bonn)\b', re.I)
 NAME_RE        = re.compile(r'\b([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß\-]+){0,2})\b')
@@ -1257,6 +1373,23 @@ JOBSEEKER_WINDOW = re.compile(
     r'(?is).{0,400}(jobsuche|stellensuche|arbeitslos|bewerb(?:ung)?|lebenslauf|'
     r'cv|portfolio|offen\s*f(?:ür|uer)\s*neues|profil).{0,400}'
 )
+
+CANDIDATE_KEYWORDS = [
+    "suche job",
+    "biete mich an",
+    "open to work",
+    "neue herausforderung",
+    "gesuch",
+    "lebenslauf",
+]
+
+IGNORE_KEYWORDS = [
+    "wir suchen",
+    "stellenanzeige",
+    "gmbh",
+    "hr manager",
+    "karriere bei uns",
+]
 
 
 NEGATIVE_HINT  = re.compile(r'\b(Behörde|Amt|Universität|Karriereportal|Blog|Ratgeber|Software|SaaS|Bank|Versicherung)\b', re.I)
@@ -1276,7 +1409,7 @@ INDUSTRY_PATTERNS = {
 
 CONTACT_HINTS = [
     "kontakt", "ansprechpartner", "e-mail", "email", "mail",
-    "telefon", "tel", "tel.", "whatsapp", "anruf", "hotline"
+    "telefon", "tel", "tel.", "whatsapp", "telegram", "anruf", "hotline"
 ]
 
 INDUSTRY_HINTS = [
@@ -1413,6 +1546,69 @@ def estimate_hiring_volume(text:str)->str:
     if len(re.findall(r'\b(Stelle|Stellen|Job)\b', text, re.I)) > 1: return "mittel"
     return "niedrig"
 
+ADDRESS_RE = re.compile(
+    r'\b([A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}?(?:straße|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?(?:\s*,\s*)?(?:\d{5}\s+[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40})?)',
+    re.I
+)
+ADDRESS_RE_ALT = re.compile(
+    r'\b(\d{5}\s+[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}\s*,?\s*[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}?(?:straße|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?)',
+    re.I
+)
+
+SOCIAL_URL_RE = re.compile(
+    r'(https?://(?:www\.)?(?:linkedin\.com/(?:in|company)/[^\s"\'<>]+|xing\.com/profile/[^\s"\'<>]+|facebook\.com/[^\s"\'<>]+|instagram\.com/[^\s"\'<>]+|x\.com/[^\s"\'<>]+|twitter\.com/[^\s"\'<>]+|tiktok\.com/@[^\s"\'<>]+))',
+    re.I
+)
+SOCIAL_DOMAINS = ("linkedin.com", "xing.com", "x.com", "twitter.com", "facebook.com", "instagram.com", "tiktok.com")
+
+def extract_private_address(text: str) -> str:
+    """
+    Greift die erste wahrscheinliche Anschrift aus dem Text heraus (Straße + Hausnummer, optional PLZ/Ort).
+    """
+    if not text:
+        return ""
+    snippet = text[:5000]
+    for pat in (ADDRESS_RE, ADDRESS_RE_ALT):
+        m = pat.search(snippet)
+        if m:
+            addr = re.sub(r"\s+", " ", m.group(1)).strip(" ,;")
+            return addr
+    return ""
+
+def extract_social_profile_url(soup: Optional[BeautifulSoup], text: str) -> str:
+    """
+    Sucht nach Social-Links (LinkedIn/Xing/etc.) und liefert den ersten priorisierten Treffer.
+    """
+    candidates: list[str] = []
+
+    def _add(url: str):
+        if not url:
+            return
+        url = url.strip()
+        if url.startswith("//"):
+            url = "https:" + url
+        low = url.lower()
+        if not any(d in low for d in SOCIAL_DOMAINS):
+            return
+        clean = url.split("#", 1)[0].split("?", 1)[0]
+        if clean not in candidates:
+            candidates.append(clean)
+
+    if soup:
+        for a in soup.find_all("a", href=True):
+            _add(a.get("href", ""))
+
+    if not candidates and text:
+        for m in SOCIAL_URL_RE.finditer(text):
+            _add(m.group(1))
+
+    if not candidates:
+        return ""
+
+    priority = ["linkedin.com", "xing.com", "x.com", "twitter.com", "facebook.com", "instagram.com", "tiktok.com"]
+    candidates.sort(key=lambda u: min((priority.index(p) if p in u.lower() else len(priority) for p in priority)))
+    return candidates[0]
+
 def extract_locations(text:str)->str:
     cities = re.findall(r'\b(Düsseldorf|Köln|Essen|Dortmund|Mönchengladbach|Bochum|Wuppertal|Bonn|NRW|Nordrhein[-\s]?Westfalen)\b', text, re.I)
     out, seen=[], set()
@@ -1432,7 +1628,11 @@ def tags_from(text:str)->str:
     if PROVISION_HINT.search(text): t.append("provision")
     if B2C_HINT.search(text): t.append("b2c")
     if CITY_RE.search(text): t.append("nrw")
-    if WHATSAPP_RE.search(text) or WHATSAPP_INLINE.search(text) or WHATS_RE.search(text): t.append("whatsapp")
+    if WHATSAPP_RE.search(text) or WHATSAPP_INLINE.search(text) or WHATS_RE.search(text) \
+       or WHATSAPP_PHRASE_RE.search(text) or WA_LINK_RE.search(text):
+        t.append("whatsapp")
+    if TELEGRAM_LINK_RE.search(text) or re.search(r'\btelegram\b', text, re.I):
+        t.append("telegram")
     for k, pat in INDUSTRY_PATTERNS.items():
         if re.search(pat, text, re.I): t.append(k)
     return ",".join(dict.fromkeys(t))
@@ -1539,10 +1739,14 @@ def regex_extract_contacts(text: str, src_url: str):
     for _ in range(2):
         text = deobfuscate_text_for_emails(text)
 
-    # Gate: Sales/Jobseeker ODER offensichtliche Kontakt-URL zulassen
+    # Gate: Sales/Jobseeker ODER offensichtliche Kontakt-/Messenger-URL zulassen
     is_contact_like = any(x in (src_url or "").lower() for x in ("/kontakt","/kontaktformular","/impressum","/team","/ansprechpartner"))
-    if not (SALES_WINDOW.search(text) or JOBSEEKER_WINDOW.search(text) or is_contact_like):
-        log("info", "Regex-Fallback: kein Sales/Jobseeker-Kontext", url=src_url)
+    messenger_hit = bool(
+        WHATSAPP_RE.search(text) or WHATS_RE.search(text) or WA_LINK_RE.search(text) or
+        WHATSAPP_PHRASE_RE.search(text) or TELEGRAM_LINK_RE.search(text) or re.search(r'\btelegram\b', text, re.I)
+    )
+    if not (SALES_WINDOW.search(text) or JOBSEEKER_WINDOW.search(text) or is_contact_like or messenger_hit):
+        log("info", "Regex-Fallback: kein Sales/Jobseeker/Messenger-Kontext", url=src_url)
         return []
 
 
@@ -1553,7 +1757,16 @@ def regex_extract_contacts(text: str, src_url: str):
 
     # Treffer sammeln
     email_hits = [(m.group(0), m.start(), m.end()) for m in EMAIL_RE.finditer(text)]
-    phone_hits = [(m.group(0), m.start(), m.end()) for m in PHONE_RE.finditer(text)]
+    mobile_hits = [(m.group(0), m.start(), m.end(), True) for m in MOBILE_RE.finditer(text)]
+    phone_hits_generic = [(m.group(0), m.start(), m.end(), False) for m in PHONE_RE.finditer(text)]
+    phone_hits = []
+    seen_spans = set()
+    for hit in mobile_hits + phone_hits_generic:
+        key = (hit[1], hit[2])
+        if key in seen_spans:
+            continue
+        seen_spans.add(key)
+        phone_hits.append(hit)
     wa_hits    = [(m.group(0), m.start(), m.end()) for m in WHATSAPP_RE.finditer(text)]
     wa_hits2   = [(m.group(0), m.start(), m.end()) for m in WHATS_RE.finditer(text)]
 
@@ -1566,14 +1779,14 @@ def regex_extract_contacts(text: str, src_url: str):
     for e, es, ee in email_hits:
         if not _sales_near(es, ee):
             continue
-        best_p, best_ppos = "", None
+        best_p, best_ppos, best_mobile = "", None, False
         best_dist = 10**9
-        for p, ps, pe in phone_hits:
+        for p, ps, pe, is_mobile in phone_hits:
             if not _sales_near(ps, pe):
                 continue
             d = min(abs(ps - es), abs(pe - ee))
-            if d < best_dist:
-                best_dist, best_ppos, best_p = d, ps, p
+            if d < best_dist or (d == best_dist and is_mobile and not best_mobile):
+                best_dist, best_ppos, best_p, best_mobile = d, ps, p, is_mobile
         name = guess_name_around(es, text) or (guess_name_around(best_ppos, text) if best_ppos is not None else "")
         rows.append({
             "name": name,
@@ -1585,7 +1798,7 @@ def regex_extract_contacts(text: str, src_url: str):
 
     # Telefonnummern ergänzen, die noch nicht genutzt wurden
     used_tel = set(r["telefon"] for r in rows if r.get("telefon"))
-    for p, ps, pe in phone_hits:
+    for p, ps, pe, _is_mobile in phone_hits:
         if not _sales_near(ps, pe):
             continue
         np = normalize_phone(p)
@@ -1681,13 +1894,16 @@ def _has_contact_anchor(soup: BeautifulSoup) -> bool:
         return False
     for a in soup.find_all("a", href=True):
         h = a.get("href","").lower().strip()
-        if h.startswith("mailto:") or h.startswith("tel:") or ("wa.me/" in h) or ("api.whatsapp.com" in h):
+        if h.startswith("mailto:") or h.startswith("tel:") or ("wa.me/" in h) or ("api.whatsapp.com" in h) \
+           or ("chat.whatsapp.com" in h) or ("t.me/" in h) or ("telegram.me/" in h):
             return True
     return False
 
 
 def extract_kleinanzeigen(html:str, url:str):
-    if "kleinanzeigen.de" not in url: return []
+    lu = (url or "").lower()
+    if ("kleinanzeigen.de" not in lu) and ("ebay-kleinanzeigen.de" not in lu):
+        return []
     soup = BeautifulSoup(html, "html.parser")
     rows=[]
     wa = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
@@ -1707,11 +1923,61 @@ def extract_kleinanzeigen(html:str, url:str):
 def compute_score(text: str, url: str, html: str = "") -> int:
     t = (text or "").lower()
     u = (url or "").lower()
+    # Zusatzflags für Off-Target-Quellen
+    job_host_hints = (
+        "ebay-kleinanzeigen.de",
+        "kleinanzeigen.de",
+        "/s-jobs/",
+        "/stellenangebote",
+        "/stellenangebot",
+        "/job/",
+        "/jobs/"
+    )
+    is_job_board = any(h in u for h in job_host_hints)
+
+    public_hints = (
+        "bundestag.de",
+        "/rathaus/",
+        "/verwaltung/",
+        "/gleichstellungsstelle",
+        "/grundsicherung",
+        "/soziales-gesundheit-wohnen-und-recht",
+        "/partei",
+        "/landtag",
+        "/ministerium"
+    )
+    is_public_context = any(h in u for h in public_hints)
+
+    hr_role_hints = (
+        "personalabteilung",
+        "personalreferent",
+        "personalreferentin",
+        "sachbearbeiter personal",
+        "sachbearbeiterin personal",
+        "hr-manager",
+        "hr manager",
+        "human resources",
+        "bewerbungen richten sie an",
+        "bewerbung richten sie an",
+        "pressesprecher",
+        "pressesprecherin",
+        "unternehmenskommunikation",
+        "pressekontakt",
+        "events-team",
+        "veranstaltungen",
+        "seminarprogramm"
+    )
+    is_hr_or_press = any(h in t for h in hr_role_hints)
     score = 0
-    has_mobile = bool(re.search(r'(?<!\d)(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,}(?!\d)', t))
-    has_tel = ("tel:" in t) or ("telefon" in t) or ("tel." in t) or bool(re.search(r'\btelefon\b|\btel\.', t))
-    has_wa_word = ("whatsapp" in t)
+    has_mobile = bool(MOBILE_RE.search(t))
+    has_tel_number = bool(PHONE_RE.search(t))
+    has_tel_word = ("tel:" in t) or ("telefon" in t) or ("tel." in t) or bool(re.search(r'\btelefon\b|\btel\.', t))
+    has_tel = has_mobile or has_tel_number or has_tel_word
+    has_wa_phrase = bool(WHATSAPP_PHRASE_RE.search(t))
+    has_wa_word = ("whatsapp" in t) or has_wa_phrase
     has_wa_link = bool(WA_LINK_RE.search(html or "")) or bool(WA_LINK_RE.search(t))
+    has_tg_link = bool(TELEGRAM_LINK_RE.search(html or "")) or bool(TELEGRAM_LINK_RE.search(t))
+    has_telegram = has_tg_link or ("telegram" in t)
     has_whatsapp = has_wa_word or has_wa_link
     has_email = ("mailto:" in t) or ("e-mail" in t) or ("email" in t) or bool(re.search(r'\bmail\b', t))
     generic_mail_fragments = ("noreply@", "no-reply@", "donotreply@", "do-not-reply@", "info@", "kontakt@", "contact@", "office@", "support@", "service@")
@@ -1721,6 +1987,8 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         "keine erfahrung nötig", "ohne erfahrung", "jetzt bewerben",
         "heute noch bewerben", "direkt bewerben"
     ])
+    has_candidate_kw = any(k in t for k in CANDIDATE_KEYWORDS)
+    has_ignore_kw = any(k in t for k in IGNORE_KEYWORDS)
     has_lowpay_or_prov = bool(PROVISION_HINT.search(t)) or any(k in t for k in [
         "nur provision", "provisionsbasis", "fixum + provision",
         "freelancer", "selbstständig", "selbststaendig", "werkvertrag"
@@ -1740,15 +2008,19 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         score += 28
         if has_wa_link:
             score += 6
+    if has_telegram:
+        score += 8
+        if has_tg_link:
+            score += 4
     if has_mobile:
-        score += 22
+        score += 50
     elif has_tel:
         score += 14
     if has_personal_email:
         score += 12
     elif has_email:
         score += 6
-    channel_count = int(has_whatsapp) + int(has_mobile or has_tel) + int(has_email)
+    channel_count = int(has_whatsapp) + int(has_mobile or has_tel) + int(has_email) + int(has_telegram)
     if channel_count >= 2:
         score += 10   # angehoben
     if channel_count >= 3:
@@ -1765,6 +2037,10 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         score += 7
     if has_b2c:
         score += 4
+    if has_candidate_kw:
+        score += 20
+    if has_ignore_kw:
+        score -= 100
     if industry_hits:
         score += min(industry_hits * 4, 16)
     if in_nrw:
@@ -1774,20 +2050,29 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     if on_sales_path:
         score += 6
     if job_like:
-        score -= 16
+        score -= 32
     if portal_like:
-        score -= 14
+        score -= 24
     if negative_pages:
         score -= 10
-    if (job_like or portal_like) and (has_whatsapp or has_mobile or has_tel):
-        score += 12   # angehoben
     if any(k in t for k in [
-        "per whatsapp bewerben", "bewerbung via whatsapp", "per telefon bewerben", "ruf uns an", "anrufen und starten"
+        "per whatsapp bewerben", "bewerbung via whatsapp", "per telefon bewerben", "ruf uns an", "anrufen und starten",
+        "meldet euch per whatsapp", "schreib mir per whatsapp", "meldet euch bei whatsapp"
     ]):
         score += 12
+    if ("chat.whatsapp.com" in u) or ("t.me" in u):
+        score += 100
     rec = detect_recency(html or "")
     if rec in ("aktuell", "sofort"):
         score += 8
+
+    # Harte Abwertungen für Off-Target-Kontexte
+    if is_job_board:
+        score -= 40
+    if is_public_context:
+        score -= 40
+    if is_hr_or_press:
+        score -= 30
 
     return max(0, min(int(score), 100))
 
@@ -1847,7 +2132,12 @@ def validate_content(html: str, url: str) -> bool:
         return False
     return True
 
-async def process_link_async(url: str, run_id: int, *, force: bool = False) -> Tuple[int, List[Dict[str, Any]]]:
+async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) -> Tuple[int, List[Dict[str, Any]]]:
+    url = _extract_url(url)
+    if not url:
+        return (0, [])
+    extra_followups: List[str] = []
+    extra_checked = 0
     # History / Vorab-Checks
     if (not force) and url_seen(url):
         log("debug", "URL bereits gesehen (skip)", url=url)
@@ -1884,18 +2174,61 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
         mark_url_seen(url, run_id)
         return (1, [])
 
-    # XML/Sitemap ausfiltern
-    if ("xml" in ct) or html.lstrip().startswith("<?xml") or "<urlset" in html[:200].lower() or "<sitemapindex" in html[:200].lower():
+    ssl_insecure = getattr(resp, "insecure_ssl", False)
+    invite_link = ("chat.whatsapp.com" in url.lower()) or ("t.me" in url.lower())
+
+    # XML/Sitemap ausfiltern (Invite-Links dürfen durch)
+    if (("xml" in ct) or html.lstrip().startswith("<?xml") or "<urlset" in html[:200].lower() or "<sitemapindex" in html[:200].lower()) and not invite_link:
         log("debug", "XML/Sitemap erkannt (kein Lead-Content)", url=url)
         mark_url_seen(url, run_id)
         return (1, [])
 
-    # Content validieren
-    if not validate_content(html, url):
+    # Content validieren (Invite-Links überspringen strenge Prüfung)
+    if (not invite_link) and (not validate_content(html, url)):
         mark_url_seen(url, run_id)
         return (1, [])
 
-    ssl_insecure = getattr(resp, "insecure_ssl", False)
+    if invite_link:
+        soup_inv = BeautifulSoup(html, "html.parser")
+        title_tag = soup_inv.find("title")
+        og_title = soup_inv.find("meta", attrs={"property": "og:title"})
+        group_title = ""
+        if og_title and og_title.get("content"):
+            group_title = og_title.get("content").strip()
+        if (not group_title) and title_tag:
+            group_title = title_tag.get_text(strip=True)
+
+        record = {
+            "name": group_title or "",
+            "rolle": "Messenger Gruppe",
+            "email": "",
+            "telefon": "",
+            "quelle": url,
+            "score": 100,
+            "tags": "group_invite",
+            "region": "",
+            "role_guess": "Messenger",
+            "salary_hint": "",
+            "commission_hint": "",
+            "opening_line": "",
+            "ssl_insecure": "yes" if ssl_insecure else "no",
+            "company_name": "",
+            "company_size": "",
+            "hiring_volume": "",
+            "industry": "",
+            "recency_indicator": "",
+            "location_specific": "",
+            "confidence_score": 100,
+            "last_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "data_quality": 50,
+            "phone_type": "",
+            "whatsapp_link": "yes" if "chat.whatsapp.com" in url.lower() else "",
+            "private_address": "",
+            "social_profile_url": "",
+            "lead_type": "group_invite",
+        }
+        mark_url_seen(url, run_id)
+        return (1, [record])
 
     # Robust parsen
     def _parse_html(doc: str) -> Tuple[BeautifulSoup, str]:
@@ -1927,6 +2260,9 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
     if soup is None:
         soup = BeautifulSoup(html, "html.parser")
 
+    private_address = extract_private_address(text)
+    social_profile_url = extract_social_profile_url(soup, text)
+
     # --- Job/Karriere/Jobs/stellen: nur weiter, wenn direkter Kontaktanker existiert ---
     lu = url.lower()
     if any(p in lu for p in ("/jobs", "/karriere", "/stellen")):
@@ -1936,18 +2272,44 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
             return (1, [])
 
     # >>> FAST-PATH: Kontakt/Impressum/Team/Ansprechpartner – Anker-Scan & Early-Return
-    if any(key in lu for key in ("/kontakt", "/kontaktformular", "/impressum", "/team", "/ansprechpartner")):
+    if any(key in lu for key in ("/kontakt", "/impressum", "/team", "/ansprechpartner")):
         fast_items = _anchor_contacts_fast(soup, url)
         if fast_items:
-            log("info", "Fast-Path Kontaktseite", url=url, count=len(fast_items))
-            # Kontaktseiten haben oft wenig Sales-Text → künstlich anheben
-            base_score = compute_score(text, url, html=html)
-            base_score = max(CFG.min_score, base_score) + 20
+            # Erst normalen Score berechnen
+            base_score = compute_score(text, url)
+            # Wenn der Score unter der Mindest-Schwelle liegt, Fast-Path komplett verwerfen
+            if base_score < CFG.min_score:
+                log("debug", "Fast-Path Kontaktseite, aber Score unter Mindestwert", url=url, score=base_score)
+                mark_url_seen(url, run_id)
+                return (1, [])
+            # Nur noch moderater Kontakt-Bonus, kein hartes Hochziehen mehr
+            base_score = base_score + 10
 
             # Enrichment
             title_tag = soup.find('title') if soup else None
             comp_name = extract_company_name(title_tag.get_text() if title_tag else "")
             company_size = detect_company_size(text)
+            company_domain = resolve_company_domain(comp_name) if comp_name else ""
+            if comp_name and not any(x in url.lower() for x in [comp_name.lower().replace(" ","")]):
+                try:
+                    dom = resolve_company_domain(comp_name)
+                except Exception:
+                    dom = ""
+                if dom:
+                    pivot_qs = [
+                        f"site:{dom} kontakt",
+                        f"site:{dom} impressum",
+                        f"site:{dom} ansprechpartner"
+                    ]
+                    for pq in pivot_qs:
+                        try:
+                            extra_links, _ = await google_cse_search_async(pq, max_results=10)
+                            for it in extra_links:
+                                u_extra = it["url"] if isinstance(it, dict) else it
+                                if u_extra:
+                                    extra_followups.append(u_extra)
+                        except Exception:
+                            pass
             industry = detect_industry(text)
             recency = detect_recency(html)
             hiring_volume = estimate_hiring_volume(text)
@@ -1987,12 +2349,16 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
                 h = (page_html or "").lower()
                 tel = (record.get("telefon") or "").strip()
                 boost = 0; extras={}
-                has_wa_word = ("whatsapp" in t)
+                has_wa_word = ("whatsapp" in t) or bool(WHATSAPP_PHRASE_RE.search(t))
                 has_wa_link = bool(WA_LINK_RE.search(h)) or bool(WA_LINK_RE.search(t))
                 if has_wa_word or has_wa_link:
                     boost += 12
                     extras["tags_add_whatsapp"] = True
                     extras["whatsapp_link"] = bool(has_wa_link)
+                has_tg_link = bool(TELEGRAM_LINK_RE.search(h)) or bool(TELEGRAM_LINK_RE.search(t))
+                if has_tg_link:
+                    boost += 6
+                    extras["tags_add_telegram"] = True
                 is_mobile = bool(re.search(r'(?<!\d)(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,}(?!\d)', tel)) if tel else False
                 if is_mobile:
                     boost += 10; extras["phone_type"] = "mobile"
@@ -2017,6 +2383,17 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
                     if "whatsapp" not in parts:
                         parts.append("whatsapp")
                     tag_local = ",".join(parts)
+                if extras.get("tags_add_telegram"):
+                    parts = [p for p in tag_local.split(",") if p]
+                    if "telegram" not in parts:
+                        parts.append("telegram")
+                    tag_local = ",".join(parts)
+                if company_domain:
+                    parts = [p for p in tag_local.split(",") if p]
+                    dom_tag = f"domain:{company_domain}"
+                    if dom_tag not in parts:
+                        parts.append(dom_tag)
+                    tag_local = ",".join(parts)
 
                 enriched = {
                     **r,
@@ -2029,6 +2406,7 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
                     "opening_line": opening_line({"tags": tag_local}),
                     "ssl_insecure": "yes" if ssl_insecure else "no",
                     "company_name": comp_name,
+                    "company_domain": company_domain,
                     "company_size": company_size,
                     "hiring_volume": hiring_volume,
                     "industry": industry,
@@ -2039,16 +2417,33 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
                     "data_quality": 0,
                     "phone_type": extras.get("phone_type",""),
                     "whatsapp_link": "yes" if extras.get("whatsapp_link") else "no",
+                    "private_address": private_address,
+                    "social_profile_url": social_profile_url,
                 }
                 enriched["confidence_score"] = _confidence(enriched)
                 enriched["data_quality"] = _quality(enriched)
                 out.append(enriched)
 
+            if extra_followups:
+                for fu in extra_followups:
+                    try:
+                        inc2, items2 = await process_link_async(fu, run_id, force=force)
+                        extra_checked += inc2
+                        if items2:
+                            out.extend(items2)
+                    except Exception:
+                        pass
+
             mark_url_seen(url, run_id)
-            return (1, out)
+            return (1 + extra_checked, out)
 
     # Grundscore
     lead_score = compute_score(text, url, html=html)
+    if private_address:
+        lead_score += 15
+    if social_profile_url:
+        lead_score += 15
+    lead_score = min(100, lead_score)
     if lead_score < CFG.min_score:
         log("debug", "Lead zu schwach", url=url, score=lead_score)
         mark_url_seen(url, run_id)
@@ -2078,12 +2473,33 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
 
     if not items:
         mark_url_seen(url, run_id)
-        return (1, [])
+        return (1 + extra_checked, [])
 
     # Enrichment
     title_tag = soup.find('title') if soup else None
     comp_name = extract_company_name(title_tag.get_text() if title_tag else "")
     company_size = detect_company_size(text)
+    company_domain = resolve_company_domain(comp_name) if comp_name else ""
+    if comp_name and not any(x in url.lower() for x in [comp_name.lower().replace(" ","")]):
+        try:
+            dom = resolve_company_domain(comp_name)
+        except Exception:
+            dom = ""
+        if dom:
+            pivot_qs = [
+                f"site:{dom} kontakt",
+                f"site:{dom} impressum",
+                f"site:{dom} ansprechpartner"
+            ]
+            for pq in pivot_qs:
+                try:
+                    extra_links, _ = await google_cse_search_async(pq, max_results=10)
+                    for it in extra_links:
+                        u_extra = it["url"] if isinstance(it, dict) else it
+                        if u_extra:
+                            extra_followups.append(u_extra)
+                except Exception:
+                    pass
     industry = detect_industry(text)
     recency = detect_recency(html)
     hiring_volume = estimate_hiring_volume(text)
@@ -2124,12 +2540,16 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
         tel = (record.get("telefon") or "").strip()
         boost = 0
         extras = {}
-        has_wa_word = ("whatsapp" in t)
+        has_wa_word = ("whatsapp" in t) or bool(WHATSAPP_PHRASE_RE.search(t))
         has_wa_link = bool(WA_LINK_RE.search(h)) or bool(WA_LINK_RE.search(t))
         if has_wa_word or has_wa_link:
             boost += 12
             extras["tags_add_whatsapp"] = True
             extras["whatsapp_link"] = bool(has_wa_link)
+        has_tg_link = bool(TELEGRAM_LINK_RE.search(h)) or bool(TELEGRAM_LINK_RE.search(t))
+        if has_tg_link:
+            boost += 6
+            extras["tags_add_telegram"] = True
         is_mobile = bool(re.search(r'(?<!\d)(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,}(?!\d)', tel)) if tel else False
         if is_mobile:
             boost += 20
@@ -2164,9 +2584,21 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
             if "whatsapp" not in parts:
                 parts.append("whatsapp")
             tag_local = ",".join(parts)
+        if extras.get("tags_add_telegram"):
+            parts = [p for p in tag_local.split(",") if p]
+            if "telegram" not in parts:
+                parts.append("telegram")
+            tag_local = ",".join(parts)
+        if company_domain:
+            parts = [p for p in tag_local.split(",") if p]
+            dom_tag = f"domain:{company_domain}"
+            if dom_tag not in parts:
+                parts.append(dom_tag)
+            tag_local = ",".join(parts)
 
         r["_phone_type"] = extras.get("phone_type", "")
         r["_whatsapp_link"] = "yes" if extras.get("whatsapp_link") else "no"
+        r["company_domain"] = company_domain
 
         enriched = {
             **r,
@@ -2189,13 +2621,25 @@ async def process_link_async(url: str, run_id: int, *, force: bool = False) -> T
             "data_quality": 0,
             "phone_type": r.get("_phone_type", ""),
             "whatsapp_link": r.get("_whatsapp_link", ""),
+            "private_address": private_address,
+            "social_profile_url": social_profile_url,
         }
         enriched["confidence_score"] = _confidence(enriched)
         enriched["data_quality"] = _quality(enriched)
         out.append(enriched)
 
+    if extra_followups:
+        for fu in extra_followups:
+            try:
+                inc2, items2 = await process_link_async(fu, run_id, force=force)
+                extra_checked += inc2
+                if items2:
+                    out.extend(items2)
+            except Exception:
+                pass
+
     mark_url_seen(url, run_id)
-    return (1, out)
+    return (1 + extra_checked, out)
 
 
 
@@ -2369,17 +2813,34 @@ def append_csv(path: str, rows: List[Dict[str, Any]], fieldnames: List[str]):
     if not rows:
         return
     import csv, os
-    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0)
+    rewrite_existing = False
+    existing_rows: List[Dict[str, Any]] = []
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        try:
+            with open(path, "r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                header = reader.fieldnames or []
+                if header != fieldnames:
+                    rewrite_existing = True
+                    for row in reader:
+                        existing_rows.append({k: row.get(k, "") for k in fieldnames})
+        except Exception:
+            pass
+    write_header = (not os.path.exists(path)) or (os.path.getsize(path) == 0) or rewrite_existing
+    mode = "w" if rewrite_existing else "a"
     def _coerce(row: Dict[str, Any]) -> Dict[str, Any]:
         safe = {k: ("" if row.get(k) is None else row.get(k)) for k in fieldnames}
         if "whatsapp_link" in safe:
             safe["whatsapp_link"] = int(bool(safe["whatsapp_link"]))
         return safe
     try:
-        with open(path, "a", newline="", encoding="utf-8") as f:
+        with open(path, mode, newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             if write_header:
                 w.writeheader()
+            if rewrite_existing and existing_rows:
+                for r in existing_rows:
+                    w.writerow(_coerce(r))
             for r in rows:
                 w.writerow(_coerce(r))
     except PermissionError:
@@ -2462,25 +2923,61 @@ class _Rate:
         except Exception:
             pass
 
-async def _bounded_process(urls: List[str], run_id:int, *, rate:_Rate, force:bool=False):
+async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force:bool=False):
     """Prozessiert URLs mit globalem/per-Host-Limit. Liefert (links_checked, leads)."""
     links_checked = 0
     collected: List[Dict[str, Any]] = []
 
-    async def _one(u:str):
+    async def _one(item: UrlLike, url: str):
         nonlocal links_checked, collected
-        host = await rate.acquire(u)
+        host = await rate.acquire(url)
         try:
-            inc, items = await process_link_async(u, run_id, force=force)
+            inc, items = await process_link_async(item, run_id, force=force)
             links_checked += int(inc)
             if items:
                 collected.extend(items)
         finally:
             rate.release(host)
 
-    # stabile Reihenfolge + Priorisierung
-    prio = prioritize_urls([_normalize_for_dedupe(u) for u in urls])
-    await asyncio.gather(*[ _one(u) for u in prio ])
+    candidates = []
+    for entry in urls:
+        raw_url = _extract_url(entry)
+        if not raw_url:
+            continue
+        norm_url = _normalize_for_dedupe(raw_url)
+        candidates.append((entry, raw_url, norm_url))
+
+    if not candidates:
+        return links_checked, collected
+
+    ordered = prioritize_urls([c[2] for c in candidates])
+    # Verarbeitung von Google-Snippets
+    seed_leads = []
+    for item in urls:
+        if isinstance(item, dict):
+            u = item.get("url", "")
+            title = item.get("title", "")
+            snip = item.get("snippet", "")
+            name = extract_name_enhanced(f"{title} {snip}")
+            rolle, _ = extract_role_with_context(f"{title} {snip}", u)
+            company = extract_company_name(title)
+            if name or rolle or company:
+                seed_leads.append({
+                    "name": name or "",
+                    "rolle": rolle or "",
+                    "company_guess": company or "",
+                    "quelle": u,
+                    "score": 0,
+                    "telefon": "",
+                    "email": ""
+                })
+    # Seed-Leads direkt in 'collected' einspeisen (nur wenn sinnvoll)
+    if seed_leads:
+        collected.extend(seed_leads)
+    order_map = {u: i for i, u in enumerate(ordered)}
+    candidates.sort(key=lambda tpl: order_map.get(tpl[2], len(order_map)))
+
+    await asyncio.gather(*[_one(item, raw) for item, raw, _ in candidates])
     return links_checked, collected
 
 def emergency_save(run_id, links_checked=None, leads_new_total=None):
@@ -2568,44 +3065,72 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("info", "Starte Query", q=q)
             had_429_flag = False
             collected_rows = []
-            links = []
+            links: List[UrlLike] = []
 
             try:
                 g_links, had_429 = await google_cse_search_async(q, max_results=60, date_restrict=date_restrict)
-                links = g_links; had_429_flag |= had_429
+                links.extend(g_links)
+                had_429_flag |= had_429
             except Exception as e:
                 log("error", "Google-Suche explodiert", q=q, error=str(e))
 
             if not links:
                 try:
                     b_links, _ = await bing_search_async(q, count=30, pages=3)
-                    links = b_links
+                    links.extend(b_links)
                 except Exception as e:
                     log("error", "Bing-Suche explodiert", q=q, error=str(e))
 
+            try:
+                ka_links = await kleinanzeigen_search_async(q, max_results=KLEINANZEIGEN_MAX_RESULTS)
+                if ka_links:
+                    links.extend(ka_links)
+            except Exception as e:
+                log("warn", "Kleinanzeigen-Suche explodiert", q=q, error=str(e))
+
+            if links:
+                uniq_links: List[UrlLike] = []
+                seen_links = set()
+                for item in links:
+                    raw_url = _extract_url(item)
+                    if not raw_url:
+                        continue
+                    nu = _normalize_for_dedupe(raw_url)
+                    if nu in seen_links:
+                        continue
+                    seen_links.add(nu)
+                    if isinstance(item, dict):
+                        uniq_links.append({**item, "url": nu})
+                    else:
+                        uniq_links.append(nu)
+                links = uniq_links
+
             if not links:
                 if had_429_flag:
-                    log("warn", "Keine Links (429) – Query NICHT als erledigt markieren", q=q)
+                    log("warn", "Keine Links (429) - Query NICHT als erledigt markieren", q=q)
                 await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4,1.2))
                 continue
 
             per_domain_count = {}
-            prim = []
+            prim: List[UrlLike] = []
             for link in links:
-                dom = urllib.parse.urlparse(link).netloc.lower()
-                extra = any(k in link.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
+                url = _extract_url(link)
+                if not url:
+                    continue
+                dom = urllib.parse.urlparse(url).netloc.lower()
+                extra = any(k in url.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
                 limit = CFG.max_results_per_domain + (1 if extra else 0)
                 if per_domain_count.get(dom,0) >= limit:
                     continue
                 per_domain_count[dom] = per_domain_count.get(dom,0)+1
-                if not url_seen(link):
+                if not url_seen(url):
                     prim.append(link)
 
             chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
             total_links_checked += chk
             collected_rows.extend(rows)
 
-            pivot_seeds = []
+            pivot_seeds: List[UrlLike] = []
             for dom in per_domain_count.keys():
                 for dq in domain_pivot_queries(dom):
                     try:
@@ -2614,10 +3139,25 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     except:
                         pass
             if pivot_seeds:
-                pivot_seeds = prioritize_urls(list(dict.fromkeys(pivot_seeds)))
-                chk_p, rows_p = await _bounded_process(pivot_seeds[:CFG.internal_depth_per_domain], run_id, rate=rate, force=False)
-                total_links_checked += chk_p
-                collected_rows.extend(rows_p)
+                uniq_pivots = []
+                seen_p = set()
+                for item in pivot_seeds:
+                    p_url = _extract_url(item)
+                    if not p_url:
+                        continue
+                    norm = _normalize_for_dedupe(p_url)
+                    if norm in seen_p:
+                        continue
+                    seen_p.add(norm)
+                    uniq_pivots.append((norm, item))
+                ordered_p = prioritize_urls([u for u, _ in uniq_pivots]) if uniq_pivots else []
+                order_map_p = {u: i for i, u in enumerate(ordered_p)}
+                uniq_pivots.sort(key=lambda tpl: order_map_p.get(tpl[0], len(order_map_p)))
+                pivot_batch = [it for _, it in uniq_pivots][:CFG.internal_depth_per_domain]
+                if pivot_batch:
+                    chk_p, rows_p = await _bounded_process(pivot_batch, run_id, rate=rate, force=False)
+                    total_links_checked += chk_p
+                    collected_rows.extend(rows_p)
 
             for dom in list(per_domain_count.keys()):
                 base = f"https://{dom}"
@@ -2630,12 +3170,15 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     internal.extend(sm[:CFG.internal_depth_per_domain])
                 if not internal:
                     for pl in prim:
-                        if urllib.parse.urlparse(pl).netloc.lower() != dom:
+                        pl_url = _extract_url(pl)
+                        if not pl_url:
                             continue
-                        r = await http_get_async(pl, timeout=10)
+                        if urllib.parse.urlparse(pl_url).netloc.lower() != dom:
+                            continue
+                        r = await http_get_async(pl_url, timeout=10)
                         if not r or r.status_code != 200:
                             continue
-                        more = find_internal_links(r.text, pl)
+                        more = find_internal_links(r.text, pl_url)
                         for u in more:
                             if url_seen(u): continue
                             if not path_ok(u): continue
@@ -2662,7 +3205,55 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             elif found <5 and MIN_SCORE_ENV>=35:
                 MIN_SCORE_TARGET=MIN_SCORE_ENV-20
 
-            filtered = _dedup_run([r for r in collected_rows if r.get("score",0)>=MIN_SCORE_TARGET])
+            def _is_offtarget_lead(r: Dict[str, Any]) -> bool:
+                role = (r.get("rolle") or r.get("role_guess") or "").lower()
+                company = (r.get("company_name") or "").lower()
+                src_url = (r.get("quelle") or "").lower()
+
+                hr_tokens = (
+                    "personalreferent",
+                    "personalreferentin",
+                    "sachbearbeiter personal",
+                    "sachbearbeiterin personal",
+                    "hr-manager",
+                    "hr manager",
+                    "human resources",
+                    "bewerbungen richten",
+                    "bewerbung richten"
+                )
+                press_tokens = (
+                    "pressesprecher",
+                    "pressesprecherin",
+                    "unternehmenskommunikation",
+                    "pressekontakt",
+                    "events",
+                    "veranstaltungen",
+                    "seminar",
+                    "seminare"
+                )
+                public_tokens = (
+                    "rathaus",
+                    "verwaltung",
+                    "gleichstellungsstelle",
+                    "grundsicherung",
+                    "bundestag",
+                    "/stadtwerke",
+                    "die-partei.de",
+                    "oberhausen.de"
+                )
+
+                role_hit = any(tok in role for tok in hr_tokens + press_tokens)
+                company_hit = any(tok in company for tok in ("stadtwerke", "bundestag", "die partei"))
+                url_hit = any(tok in src_url for tok in public_tokens)
+
+                return role_hit or company_hit or url_hit
+
+            filtered = _dedup_run(
+                [
+                    r for r in collected_rows
+                    if r.get("score", 0) >= MIN_SCORE_TARGET and not _is_offtarget_lead(r)
+                ]
+            )
             if filtered:
                 inserted = insert_leads(filtered)
                 if inserted:
