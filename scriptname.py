@@ -80,6 +80,20 @@ NRW_CITIES_EXTENDED = [
     "Neuss", "Paderborn", "Recklinghausen", "Remscheid", "Moers",
     "Siegen", "Witten", "Iserlohn", "Bergisch Gladbach", "Herne"
 ]
+# Top 40 Städte in NRW für massive Abdeckung
+NRW_BIG_CITIES = [
+    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
+    "Gelsenkirchen", "Mönchengladbach", "Aachen", "Chemnitz", "Krefeld", "Oberhausen", "Hagen", "Hamm", "Mülheim",
+    "Leverkusen", "Solingen", "Herne", "Neuss", "Paderborn", "Bottrop", "Recklinghausen", "Bergisch Gladbach",
+    "Remscheid", "Moers", "Siegen", "Gütersloh", "Witten", "Iserlohn", "Düren", "Ratingen", "Lünen", "Marl",
+    "Velbert", "Minden", "Viersen"
+]
+
+# Professionelle Job-Titel für LinkedIn/Xing
+SALES_TITLES = [
+    "Vertrieb", "Sales Manager", "Account Manager", "Außendienst", "Telesales",
+    "Verkäufer", "Handelsvertreter", "Key Account Manager", "Area Sales Manager"
+]
 
 # --- Globales Query-Set (wird in __main__ gesetzt) ---
 QUERIES: List[str] = []
@@ -890,13 +904,13 @@ def build_queries(
     per_industry_limit: int = 2
 ) -> List[str]:
     """
-    Erweiterte Query-Builder mit Recruiter-Support und städtebasierter LinkedIn-Suche.
-    
+    Erweiterte Query-Builder mit Recruiter-Support und städtebasierter LinkedIn/Xing/Kleinanzeigen/Facebook-Suche.
+
     Logik:
-    1. Falls selected_industry == 'recruiter': RECRUITER_QUERIES + dynamische LinkedIn-Queries pro Stadt
-    2. Falls selected_industry == 'all': Recruiter ZUERST (inkl. LinkedIn-Queries), dann alle Branchen
+    1. Falls selected_industry == 'recruiter': Omni-Channel (LinkedIn/Xing/Kleinanzeigen/FB/Reddit/Telegram) für alle Städte/Titel
+    2. Falls selected_industry == 'all': Recruiter ZUERST, dann alle Branchen
     3. Falls normale Branche: Nur diese Branche
-    
+
     Args:
         selected_industry: 'recruiter' | 'all' | 'solar' | 'telekom' | etc.
         per_industry_limit: Queries pro Branche/Set (Default: 2)
@@ -906,48 +920,47 @@ def build_queries(
     """
     out: List[str] = []
     limit = max(1, per_industry_limit)
-    cities = NRW_CITIES_EXTENDED or NRW_CITIES
+    cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
-    def _generate_linkedin_city_queries() -> List[str]:
-        """
-        Generiert dynamisch LinkedIn-Queries für jede Stadt in NRW_CITIES.
-        Variante pro Stadt:
-          a) "open to work" + "vertrieb" + Stadt
-        """
-        linkedin_queries: List[str] = []
+    def _recruiter_queries() -> List[str]:
+        queries: List[str] = []
+
+        # LinkedIn & Xing: alle Städte x alle Titel
         for city in cities:
-            linkedin_queries.append(f'site:linkedin.com/in/ "open to work" "vertrieb" {city}')
-        return linkedin_queries
-    
-    def _generate_xing_city_queries() -> List[str]:
-        xing_queries: List[str] = []
+            for title in SALES_TITLES:
+                queries.append(f'site:linkedin.com/in/ "open to work" "{title}" "{city}"')
+                queries.append(f'site:xing.com/profile "suche" "{title}" "{city}"')
+
+        # Kleinanzeigen je Stadt
         for city in cities:
-            xing_queries.append(f'site:xing.com/profile "vertrieb" "suche" {city}')
-        return xing_queries
+            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "suche" "vertrieb" {city}')
 
-    def _generate_kleinanzeigen_city_queries() -> List[str]:
-        ka_queries: List[str] = []
-        for city in cities:
-            ka_queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" {city}')
-        return ka_queries
+        # Facebook High-Quality (Nummern-Zwang)
+        queries.extend([
+            'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
+            'site:facebook.com "stellengesuche" "vertrieb" ("017" OR "016" OR "015")',
+        ])
 
-    linkedin_city_qs = _generate_linkedin_city_queries()
-    xing_city_qs = _generate_xing_city_queries()
-    klein_city_qs = _generate_kleinanzeigen_city_queries()
-    facebook_hq_qs = [
-        'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
-        'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
-    ]
-    email_nrw_q = 'site:linkedin.com/in/ ("sales manager" OR "key account" OR "außendienst") ("@gmail.com" OR "@gmx.de")'
-    recruiter_all_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', []))
-    recruiter_all_qs += linkedin_city_qs + xing_city_qs + klein_city_qs + facebook_hq_qs + [email_nrw_q]
-    recruiter_all_qs = list(dict.fromkeys(recruiter_all_qs))
-    recruiter_limit = min(len(recruiter_all_qs), max(limit, 500))
+        # Nischen-Kanäle
+        queries.extend([
+            'site:reddit.com/r/ "suche job" "vertrieb"',
+            'site:t.me "suche job" "vertrieb"',
+            'site:tgstat.com "vertrieb" "suche"',
+        ])
 
-    # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
+        # Dedupe & shuffle für Anti-Block
+        unique_queries = list(dict.fromkeys(queries))
+        random.shuffle(unique_queries)
+        return unique_queries
+
     if selected_industry and selected_industry.lower() == 'recruiter':
-        log('info', f"Recruiter-Mode: lade {len(recruiter_all_qs)} Queries (LinkedIn:{len(linkedin_city_qs)} | Xing:{len(xing_city_qs)} | Kleinanzeigen:{len(klein_city_qs)} | FB:{len(facebook_hq_qs)} | Mail:1), Limit: {recruiter_limit}")
-        return recruiter_all_qs[:recruiter_limit]
+        rq = _recruiter_queries()
+        log('info', "Recruiter-Mode: Omni-Channel Queries gebaut", total=len(rq), cities=len(cities), titles=len(SALES_TITLES))
+        return rq
+
+    # FALL 1: Recruiter-Mode (reine Vertriebler-Suche) – (legacy guard, erreicht hier nicht)
+    if selected_industry and selected_industry.lower() == 'recruiter':
+        return []
 
     # FALL 2: Standard Industrie (solar, telekom, etc.)
     if selected_industry and selected_industry.lower() != 'all':
@@ -961,8 +974,9 @@ def build_queries(
 
     # FALL 3: 'all' = Recruiter ZUERST (inkl. LinkedIn-Stadt-Queries), dann alle Branchen
     if selected_industry == 'all' or selected_industry is None:
-        recruiter_count = min(len(recruiter_all_qs), recruiter_limit)
-        out.extend(recruiter_all_qs[:recruiter_count])
+        recruiter_all = _recruiter_queries()
+        out.extend(recruiter_all)
+        recruiter_count = len(recruiter_all)
 
         # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
         industry_count = 0
@@ -971,8 +985,8 @@ def build_queries(
             if qs:
                 out.extend(qs[:limit])
                 industry_count += len(qs[:limit])
-        
-        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count} inkl. {len(linkedin_city_qs)} LinkedIn-Stadt-Queries + 1 NRW-Mail, Branchen: {industry_count})")
+
+        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count}, Branchen: {industry_count})")
     
     return out
 
@@ -2391,7 +2405,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
                 "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
                 "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
-                "museum","theater","verein")
+                "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt")
     if any(k in title_src for k in neg_keys):
         log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
