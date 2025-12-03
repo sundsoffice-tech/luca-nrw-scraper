@@ -15,6 +15,9 @@ Features:
 - UI: Flask (Start/Stop/Force/Reset/Seen-Reset/Queries-Reset + Live-Logs via SSE)
 """
 
+import warnings
+warnings.filterwarnings("ignore", message="This package.*renamed to.*ddgs")
+
 # Stdlib
 import argparse
 import asyncio
@@ -45,10 +48,14 @@ import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS  # Neues Paket
     HAVE_DDG = True
 except ImportError:
-    HAVE_DDG = False
+    try:
+        from duckduckgo_search import DDGS  # Altes Paket
+        HAVE_DDG = True
+    except ImportError:
+        HAVE_DDG = False
 from dotenv import load_dotenv
 from urllib.robotparser import RobotFileParser
 from stream2_extraction_layer.open_data_resolver import resolve_company_domain
@@ -61,9 +68,17 @@ from stream2_extraction_layer.extraction_enhanced import (
 # NRW Städte für städtebasierte Suche
 # =========================
 NRW_CITIES = [
-    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", 
-    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster", 
+    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg",
+    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
     "Gelsenkirchen", "Aachen", "Mönchengladbach"
+]
+NRW_CITIES_EXTENDED = [
+    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg",
+    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
+    "Gelsenkirchen", "Mönchengladbach", "Aachen", "Krefeld", "Oberhausen",
+    "Hagen", "Hamm", "Mülheim an der Ruhr", "Leverkusen", "Solingen",
+    "Neuss", "Paderborn", "Recklinghausen", "Remscheid", "Moers",
+    "Siegen", "Witten", "Iserlohn", "Bergisch Gladbach", "Herne"
 ]
 
 # --- Globales Query-Set (wird in __main__ gesetzt) ---
@@ -852,10 +867,17 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 # NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
 RECRUITER_QUERIES = {
     'recruiter': [
-        'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "verkäufer" NRW',
-        'site:kleinanzeigen.de "suche arbeit" "vertrieb" NRW',
-        'site:markt.de/stellengesuche/ "vertrieb" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "außendienst" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "handelsvertreter" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "kundenberater" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "suche job" "vertrieb" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "arbeit" "verkauf" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche/ "quereinsteiger" "vertrieb" NRW',
+        # Facebook Gruppen & Profile
+        'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
+        'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
+        'site:facebook.com "jobsuche" "verkauf" ("017" OR "016" OR "015")',
     ]
 }
 
@@ -884,30 +906,47 @@ def build_queries(
     """
     out: List[str] = []
     limit = max(1, per_industry_limit)
+    cities = NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _generate_linkedin_city_queries() -> List[str]:
         """
         Generiert dynamisch LinkedIn-Queries für jede Stadt in NRW_CITIES.
-        Zwei Varianten pro Stadt:
+        Variante pro Stadt:
           a) "open to work" + "vertrieb" + Stadt
-          b) "vertrieb" + E-Mail-Provider + Stadt
         """
         linkedin_queries: List[str] = []
-        for city in NRW_CITIES:
+        for city in cities:
             linkedin_queries.append(f'site:linkedin.com/in/ "open to work" "vertrieb" {city}')
-            linkedin_queries.append(f'site:linkedin.com/in/ "vertrieb" ("@gmail.com" OR "@gmx.de" OR "@web.de") {city}')
         return linkedin_queries
+    
+    def _generate_xing_city_queries() -> List[str]:
+        xing_queries: List[str] = []
+        for city in cities:
+            xing_queries.append(f'site:xing.com/profile "vertrieb" "suche" {city}')
+        return xing_queries
+
+    def _generate_kleinanzeigen_city_queries() -> List[str]:
+        ka_queries: List[str] = []
+        for city in cities:
+            ka_queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" {city}')
+        return ka_queries
 
     linkedin_city_qs = _generate_linkedin_city_queries()
-    recruiter_all_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', [])) + linkedin_city_qs
+    xing_city_qs = _generate_xing_city_queries()
+    klein_city_qs = _generate_kleinanzeigen_city_queries()
+    facebook_hq_qs = [
+        'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
+        'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
+    ]
+    email_nrw_q = 'site:linkedin.com/in/ ("sales manager" OR "key account" OR "außendienst") ("@gmail.com" OR "@gmx.de")'
+    recruiter_all_qs: List[str] = list(RECRUITER_QUERIES.get('recruiter', []))
+    recruiter_all_qs += linkedin_city_qs + xing_city_qs + klein_city_qs + facebook_hq_qs + [email_nrw_q]
+    recruiter_all_qs = list(dict.fromkeys(recruiter_all_qs))
+    recruiter_limit = min(len(recruiter_all_qs), max(limit, 500))
 
     # FALL 1: Recruiter-Mode (reine Vertriebler-Suche)
     if selected_industry and selected_industry.lower() == 'recruiter':
-        recruiter_limit = limit
-        if per_industry_limit <= 2:
-            recruiter_limit = len(recruiter_all_qs)
-            log('info', f"Recruiter-Mode: Limit auf {recruiter_limit} erhoeht (Geo-Fencing fuer {len(NRW_CITIES)} Staedte).")
-        log('info', f"Recruiter-Mode: lade {len(recruiter_all_qs)} Queries, Limit: {recruiter_limit}")
+        log('info', f"Recruiter-Mode: lade {len(recruiter_all_qs)} Queries (LinkedIn:{len(linkedin_city_qs)} | Xing:{len(xing_city_qs)} | Kleinanzeigen:{len(klein_city_qs)} | FB:{len(facebook_hq_qs)} | Mail:1), Limit: {recruiter_limit}")
         return recruiter_all_qs[:recruiter_limit]
 
     # FALL 2: Standard Industrie (solar, telekom, etc.)
@@ -919,12 +958,12 @@ def build_queries(
         else:
             log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
             selected_industry = 'all'
-    
+
     # FALL 3: 'all' = Recruiter ZUERST (inkl. LinkedIn-Stadt-Queries), dann alle Branchen
     if selected_industry == 'all' or selected_industry is None:
-        recruiter_count = min(len(recruiter_all_qs), limit)
+        recruiter_count = min(len(recruiter_all_qs), recruiter_limit)
         out.extend(recruiter_all_qs[:recruiter_count])
-        
+
         # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
         industry_count = 0
         for key in INDUSTRY_ORDER:
@@ -933,7 +972,7 @@ def build_queries(
                 out.extend(qs[:limit])
                 industry_count += len(qs[:limit])
         
-        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count} inkl. {len(linkedin_city_qs)} LinkedIn-Stadt-Queries, Branchen: {industry_count})")
+        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count} inkl. {len(linkedin_city_qs)} LinkedIn-Stadt-Queries + 1 NRW-Mail, Branchen: {industry_count})")
     
     return out
 
@@ -1312,9 +1351,16 @@ async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MA
     if not keywords:
         return []
 
-    url = "https://www.kleinanzeigen.de/s-suchanfrage.html"
+    url = "https://www.kleinanzeigen.de/s-stellengesuche/k0"
     try:
-        r = await http_get_async(url, params={"keywords": keywords}, timeout=HTTP_TIMEOUT)
+        r = await http_get_async(
+            url,
+            params={
+                "keywords": keywords,
+                "locationStr": "NRW",
+            },
+            timeout=HTTP_TIMEOUT
+        )
     except Exception as e:
         log("warn", "Kleinanzeigen-Suche fehlgeschlagen", q=keywords, err=str(e))
         return []
@@ -1981,6 +2027,16 @@ def extract_kleinanzeigen_links(html: str, base_url: str = "") -> List[str]:
 def compute_score(text: str, url: str, html: str = "") -> int:
     t = (text or "").lower()
     u = (url or "").lower()
+    title_text = ""
+    if html:
+        try:
+            soup_title = BeautifulSoup(html, "html.parser")
+            ttag = soup_title.find("title")
+            if ttag:
+                title_text = ttag.get_text(" ", strip=True)
+        except Exception:
+            title_text = ""
+    title_lower = title_text.lower()
     # Zusatzflags für Off-Target-Quellen
     job_host_hints = (
         "ebay-kleinanzeigen.de",
@@ -2061,6 +2117,19 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     job_like = any(h in u for h in ["jobs.", "/jobs", "/karriere", "/stellen", "/bewerb"])
     portal_like = any(b in u for b in ["google.com", "indeed", "stepstone", "monster.", "xing.", "linkedin.", "glassdoor."])
     negative_pages = any(k in u for k in ["/datenschutz", "/privacy", "/agb", "/terms", "/bedingungen", "/newsletter", "/search", "/login", "/account", "/warenkorb", "/checkout", "/blog/", "/news/"])
+
+    if "kleinanzeigen.de" in u:
+        if "/s-stellengesuche/" in u:
+            score += 30
+        elif ("gesuch" in title_lower) or ("suche" in title_lower):
+            score += 30
+        elif ("gesuch" in t) or ("suche" in t):
+            score += 30
+        if "/s-stellengesuche/" in u and not has_ignore_kw:
+            score = max(score, 50)
+
+    if ("facebook.com" in u) and ("/groups" in u):
+        score += 10  # leichte Bevorzugung für Facebook-Gruppen
 
     if has_whatsapp:
         score += 28
@@ -2317,11 +2386,12 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
                 "handelsvertreter","makler","akquise","agent","berater","beraterin","geschäftsführer",
                 "repräsentant","b2b","b2c","verkäufer","verkaeufer","vertriebler",
-                "vertriebspartner","promoter","promotion","fundraiser","aushilfe verkauf")
+                "vertriebspartner","aushilfe verkauf")
     neg_keys = ("reinigung","putz","hilfe","helfer","lager","fahrer","zusteller","kommissionierer",
                 "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
                 "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
-                "aushilfe","minijob","winterdienst","security","sicherheits")
+                "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
+                "museum","theater","verein")
     if any(k in title_src for k in neg_keys):
         log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
@@ -2538,6 +2608,8 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 lt = "other"
                 if "group_invite" in (base_tags or ""):
                     lt = "group_invite"
+                elif "/s-stellengesuche/" in url.lower():
+                    lt = "candidate"
                 elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
                     lt = "candidate"
                 elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
@@ -2729,6 +2801,8 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         lt = "other"
         if "group_invite" in (base_tags or ""):
             lt = "group_invite"
+        elif "/s-stellengesuche/" in url.lower():
+            lt = "candidate"
         elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
             lt = "candidate"
         elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
@@ -3068,6 +3142,8 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
     """Prozessiert URLs mit globalem/per-Host-Limit. Liefert (links_checked, leads)."""
     links_checked = 0
     collected: List[Dict[str, Any]] = []
+    SNIPPET_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", re.I)
+    SNIPPET_PHONE_RE = re.compile(r"(?:\+49|0)[1-9][0-9 \-/]{6,}")
 
     async def _one(item: UrlLike, url: str):
         nonlocal links_checked, collected
@@ -3092,15 +3168,17 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
         return links_checked, collected
 
     ordered = prioritize_urls([c[2] for c in candidates])
-    # Verarbeitung von Google-Snippets
+    # Verarbeitung von Google-Snippets (Snippet-Harvesting, z.B. Facebook blockt robots)
     seed_leads = []
+    snippet_leads: List[Dict[str, Any]] = []
     for item in urls:
         if isinstance(item, dict):
             u = item.get("url", "")
-            title = item.get("title", "")
-            snip = item.get("snippet", "")
-            name = extract_name_enhanced(f"{title} {snip}")
-            rolle, _ = extract_role_with_context(f"{title} {snip}", u)
+            title = item.get("title", "") or ""
+            snip = item.get("snippet", "") or ""
+            snippet_text = f"{title} {snip}"
+            name = extract_name_enhanced(snippet_text)
+            rolle, _ = extract_role_with_context(snippet_text, u)
             company = extract_company_name(title)
             if name or rolle or company:
                 seed_leads.append({
@@ -3112,9 +3190,59 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
                     "telefon": "",
                     "email": ""
                 })
+            emails = [m.group(0) for m in SNIPPET_EMAIL_RE.finditer(snippet_text)]
+            phones_raw = [normalize_phone(m.group(0)) for m in SNIPPET_PHONE_RE.finditer(snippet_text)]
+            emails = list(dict.fromkeys([e for e in emails if e]))
+            phones = list(dict.fromkeys([p for p in phones_raw if p]))
+            if emails or phones:
+                try:
+                    log("info", f"💰 SNIPPET-JACKPOT: {u} -> Mail: {len(emails)}, Tel: {len(phones)}")
+                except Exception:
+                    pass
+                tags_list = [t for t in (tags_from(snippet_text) or "").split(",") if t]
+                tags_list.append("snippet")
+                tags_local = ",".join(dict.fromkeys(tags_list))
+                tel = phones[0] if phones else ""
+                phone_type = ""
+                tel_clean = tel.replace("+", "")
+                if tel and (tel_clean.startswith("4915") or tel_clean.startswith("4916") or tel_clean.startswith("4917") or tel_clean.startswith("015") or tel_clean.startswith("016") or tel_clean.startswith("017")):
+                    phone_type = "mobile"
+                score = 90 if tel else 80
+                snippet_leads.append({
+                    "name": name or "",
+                    "rolle": rolle or "",
+                    "email": emails[0] if emails else "",
+                    "telefon": tel,
+                    "quelle": u,
+                    "score": score,
+                    "tags": tags_local,
+                    "region": "",
+                    "role_guess": rolle or "Snippet",
+                    "lead_type": "candidate",
+                    "salary_hint": "",
+                    "commission_hint": "",
+                    "opening_line": opening_line({"tags": tags_local}),
+                    "ssl_insecure": "no",
+                    "company_name": company or "",
+                    "company_size": "unbekannt",
+                    "hiring_volume": "niedrig",
+                    "industry": "unbekannt",
+                    "recency_indicator": "unbekannt",
+                    "location_specific": "",
+                    "confidence_score": 80 if (tel or emails) else 50,
+                    "last_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "data_quality": 50,
+                    "phone_type": phone_type,
+                    "whatsapp_link": "no",
+                    "private_address": "",
+                    "social_profile_url": "",
+                    "source": "snippet"
+                })
     # Seed-Leads direkt in 'collected' einspeisen (nur wenn sinnvoll)
     if seed_leads:
         collected.extend(seed_leads)
+    if snippet_leads:
+        collected.extend(snippet_leads)
     order_map = {u: i for i, u in enumerate(ordered)}
     candidates.sort(key=lambda tpl: order_map.get(tpl[2], len(order_map)))
 
@@ -3577,6 +3705,7 @@ def parse_args():
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")
+    ap.add_argument("--interval", type=int, default=0, help="Pause in Sekunden zwischen den Durchläufen im Loop-Modus")
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
     ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
@@ -3609,24 +3738,18 @@ if __name__ == "__main__":
         init_db()
         migrate_db_unique_indexes()
 
-        # Auswahl der Queries für diesen Run
-        selected_industry = getattr(args, "industry", "all")
-        per_industry_limit = max(1, getattr(args, "qpi", 2))
-        QUERIES = build_queries(selected_industry, per_industry_limit)
-        log("info", "Query-Set gebaut", industry=selected_industry,
-            per_industry_limit=per_industry_limit, count=len(QUERIES))
-
         if args.reset:
             a,b = reset_history()
             log("info","Reset durchgeführt", queries_done=a, urls_seen=b)
 
-        if args.ui:
-            from flask import Flask
-            UILOGQ = queue.Queue(maxsize=1000)
-            RUN_FLAG["running"]=False
-            RUN_FLAG["force"]=False
-            start_ui()
-        else:
+        def _run_cycle():
+            global QUERIES
+            selected_industry = getattr(args, "industry", "all")
+            per_industry_limit = max(1, getattr(args, "qpi", 2))
+            QUERIES = build_queries(selected_industry, per_industry_limit)
+            log("info", "Query-Set gebaut", industry=selected_industry,
+                per_industry_limit=per_industry_limit, count=len(QUERIES))
+
             RUN_FLAG["running"]=True
             RUN_FLAG["force"]=bool(args.force)
             asyncio.run(
@@ -3636,6 +3759,26 @@ if __name__ == "__main__":
                     date_restrict=(args.daterestrict or None)
                 )
             )
+
+        if args.ui:
+            from flask import Flask
+            UILOGQ = queue.Queue(maxsize=1000)
+            RUN_FLAG["running"]=False
+            RUN_FLAG["force"]=False
+            start_ui()
+        elif args.once:
+            _run_cycle()
+        else:
+            while True:
+                try:
+                    _run_cycle()
+                    if args.interval > 0:
+                        log("info", f"Schlafe {args.interval} Sekunden...")
+                        time.sleep(args.interval)
+                except Exception as e:
+                    log("error", "Crash im Loop, warte 60 Sekunden und starte neu...", error=str(e), tb=traceback.format_exc())
+                    time.sleep(60)
+                    continue
 
     except KeyboardInterrupt:
         die("Abgebrochen (Strg+C)")
