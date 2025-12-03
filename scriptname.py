@@ -88,6 +88,8 @@ NRW_BIG_CITIES = [
     "Remscheid", "Moers", "Siegen", "Gütersloh", "Witten", "Iserlohn", "Düren", "Ratingen", "Lünen", "Marl",
     "Velbert", "Minden", "Viersen"
 ]
+# Großstädte mit stärkerer Titel-Streuung
+METROPOLIS = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Bonn", "Münster"]
 
 # Professionelle Job-Titel für LinkedIn/Xing
 SALES_TITLES = [
@@ -924,29 +926,14 @@ def build_queries(
 
     def _recruiter_queries() -> List[str]:
         queries: List[str] = []
+        for title in SALES_TITLES:
+            queries.append(f'site:linkedin.com/in/ "{title}" "NRW" ("017" OR "016" OR "015")')
+            queries.append(f'site:linkedin.com/in/ "{title}" "NRW" ("@gmail.com" OR "@gmx.de" OR "@web.de")')
+            queries.append(f'site:xing.com/profile "{title}" "NRW" ("017" OR "016" OR "015")')
+            queries.append(f'site:xing.com/profile "{title}" "NRW" ("@gmail.com" OR "@gmx.de")')
 
-        # LinkedIn & Xing: alle Städte x alle Titel
-        for city in cities:
-            for title in SALES_TITLES:
-                queries.append(f'site:linkedin.com/in/ "open to work" "{title}" "{city}"')
-                queries.append(f'site:xing.com/profile "suche" "{title}" "{city}"')
-
-        # Kleinanzeigen je Stadt
-        for city in cities:
-            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "suche" "vertrieb" {city}')
-
-        # Facebook High-Quality (Nummern-Zwang)
-        queries.extend([
-            'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
-            'site:facebook.com "stellengesuche" "vertrieb" ("017" OR "016" OR "015")',
-        ])
-
-        # Nischen-Kanäle
-        queries.extend([
-            'site:reddit.com/r/ "suche job" "vertrieb"',
-            'site:t.me "suche job" "vertrieb"',
-            'site:tgstat.com "vertrieb" "suche"',
-        ])
+        # Facebook (nur Handy, Profile statt Firmen-Jobposts)
+        queries.append('site:facebook.com "vertrieb" "NRW" ("017" OR "016" OR "015" OR "+491") -intitle:"job"')
 
         # Dedupe & shuffle für Anti-Block
         unique_queries = list(dict.fromkeys(queries))
@@ -3159,6 +3146,18 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
     SNIPPET_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", re.I)
     SNIPPET_PHONE_RE = re.compile(r"(?:\+49|0)[1-9][0-9 \-/]{6,}")
 
+    def _name_from_title(title: str) -> str:
+        if not title:
+            return ""
+        part = title.split("|", 1)[0]
+        part = part.split(" - ", 1)[0]
+        part = part.strip(" -|")
+        part = re.sub(r"\s+", " ", part).strip()
+        # Mindestlänge: Vor- + Nachname
+        if len(part.split()) >= 2:
+            return part
+        return ""
+
     async def _one(item: UrlLike, url: str):
         nonlocal links_checked, collected
         host = await rate.acquire(url)
@@ -3192,6 +3191,9 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
             snip = item.get("snippet", "") or ""
             snippet_text = f"{title} {snip}"
             name = extract_name_enhanced(snippet_text)
+            title_name = _name_from_title(title)
+            if title_name:
+                name = title_name
             rolle, _ = extract_role_with_context(snippet_text, u)
             company = extract_company_name(title)
             if name or rolle or company:
@@ -3218,8 +3220,12 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
                 tags_local = ",".join(dict.fromkeys(tags_list))
                 tel = phones[0] if phones else ""
                 phone_type = ""
+                snippet_lower = snippet_text.lower()
                 tel_clean = tel.replace("+", "")
-                if tel and (tel_clean.startswith("4915") or tel_clean.startswith("4916") or tel_clean.startswith("4917") or tel_clean.startswith("015") or tel_clean.startswith("016") or tel_clean.startswith("017")):
+                mobile_hint = any(h in snippet_lower for h in ["mobil", "mobile", "handy", "cell", "tel:", "telefon"])
+                if tel and (tel_clean.startswith("4915") or tel_clean.startswith("4916") or tel_clean.startswith("4917") or tel_clean.startswith("015") or tel_clean.startswith("016") or tel_clean.startswith("017") or mobile_hint):
+                    phone_type = "mobile"
+                elif tel:
                     phone_type = "mobile"
                 score = 90 if tel else 80
                 snippet_leads.append({
