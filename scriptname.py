@@ -948,42 +948,45 @@ def build_queries(
     def _recruiter_queries() -> List[str]:
         queries: List[str] = []
 
-        # 1. Voll-Kontakt-Jäger (LinkedIn & Xing) – ohne "open to work"
+        # Business Networks (LinkedIn/Xing) mit Mobile-Fokus
         for region in NRW_REGIONS:
             for title in SALES_TITLES:
-                queries.append(f'site:linkedin.com/in/ "{title}" "{region}" {PRIVATE_MAILS}')
-                queries.append(f'site:xing.com/profile "{title}" "{region}" {PRIVATE_MAILS}')
                 queries.append(f'site:linkedin.com/in/ "{title}" "{region}" {MOBILE_PATTERNS}')
                 queries.append(f'site:xing.com/profile "{title}" "{region}" {MOBILE_PATTERNS}')
 
-        # 2. Kleinanzeigen (Top 20)
+        # Spezial-Portale mit hoher Trefferquote für Nummern
+        queries.extend([
+            f'site:handelsvertreter.de "vertretung gesucht" {MOBILE_PATTERNS}',
+            f'site:handelsvertreter.de "vertrieb" {MOBILE_PATTERNS}',
+            f'site:auftragsbank.de "biete" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:auftragsbank.de "call center" {MOBILE_PATTERNS}',
+            f'site:dasauge.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:freelancermap.de "profil" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:backinjob.de/stellengesuche "vertrieb" {MOBILE_PATTERNS}',
+        ])
+
+        # Kleinanzeigen & Markt (Top 20 Städte)
         for city in NRW_BIG_CITIES[:20]:
             queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "{city}"')
-            # Quoka Stellengesuche
-            queries.append(f'site:quoka.de/stellenmarkt/stellengesuche/ "vertrieb" "{city}"')
             queries.append(f'site:quoka.de/stellenmarkt/stellengesuche/ "vertrieb" "{city}" {MOBILE_PATTERNS}')
+        queries.extend([
+            f'site:markt.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:kalaydo.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
+        ])
 
-        # 2b. Auftragsbank – Selbstständige Vertriebler
-        auftragsbank_keywords = ["vertrieb", "call center", "akquise", "terminierung"]
-        queries.append('site:auftragsbank.de "biete" "vertrieb" "NRW"')
-        queries.append(f'site:auftragsbank.de "vertrieb" "NRW" {PRIVATE_MAILS}')
-        for kw in auftragsbank_keywords:
-            queries.append(f'site:auftragsbank.de "biete" "{kw}" "NRW"')
-            queries.append(f'site:auftragsbank.de "{kw}" "NRW" {PRIVATE_MAILS}')
+        # CV-Leaks & Dokumente
+        queries.extend([
+            f'site:yumpu.com "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:issuu.com "lebenslauf" "sales" {MOBILE_PATTERNS}',
+            f'site:docplayer.org "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
+        ])
 
-        # 2c. Handelsvertreter.de (CDH) – Profi-Leads
-        queries.append('site:handelsvertreter.de "vertretung gesucht" "vertrieb"')
-        queries.append(f'site:handelsvertreter.de "vertrieb" {MOBILE_PATTERNS}')
+        # Social & Foren
+        queries.extend([
+            f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:twitter.com "suche job" "vertrieb" {MOBILE_PATTERNS}',
+        ])
 
-        # 3. Facebook (Nur Handy - High Quality, Jobposts raus)
-        queries.append(f'site:facebook.com "vertrieb" "NRW" {MOBILE_PATTERNS} -intitle:"job"')
-        queries.append(f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}')
-
-        # 4. Telegram/Reddit (Nische)
-        queries.append(f'site:t.me "suche job" "vertrieb" {PRIVATE_MAILS}')
-        queries.append(f'site:reddit.com/r/ "suche job" "vertrieb" {PRIVATE_MAILS}')
-
-        # Dedupe & shuffle
         unique = list(dict.fromkeys(queries))
         random.shuffle(unique)
         return unique
@@ -1158,7 +1161,7 @@ def _extract_url(item: UrlLike) -> str:
     if isinstance(item, str):
         return item
     if isinstance(item, dict):
-        return item.get("url", "")
+        return item.get("url") or item.get("link", "")
     return ""
 
 
@@ -1348,67 +1351,81 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     return uniq_items, had_429
 
 
-async def duckduckgo_search_async(q: str, max_results: int = 30) -> List[Dict[str, str]]:
+async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dict[str, str]]:
+    """
+    Führt eine DuckDuckGo-Suche durch – mit extrem aggressivem Timeout-Schutz für Tor.
+    """
+    results = []
     if not HAVE_DDG:
-        log("warn", "duckduckgo_search nicht installiert – Fallback übersprungen", q=q)
+        log("warn", "DuckDuckGo-Modul fehlt.")
         return []
 
-    def _search_sync():
-        with DDGS(timeout=45) as ddgs:
-            return list(ddgs.text(q, region="de-de", safesearch="off", max_results=max_results, timeout=45))
+    # Wenn KEIN Tor-Mode aktiv ist (erkennbar an fehlenden Env-Vars oder Argumenten),
+    # dann zwinge das System in den Direct-Mode.
+    if not os.environ.get("HTTP_PROXY"):
+        os.environ["no_proxy"] = "*"
 
-    async def _run_with_retry():
-        attempt = 0
-        while attempt < 3:
-            try:
-                return await asyncio.to_thread(_search_sync)
-            except (ConnectTimeout, ReadError) as e:
-                attempt += 1
-                log("warn", "DuckDuckGo Timeout, retry", q=q, attempt=attempt, error=str(e))
-                if attempt >= 3:
-                    break
-                await asyncio.sleep(5)
-                continue
-            except Exception:
-                raise
-        return None
+    if not USE_TOR:
+        # Proxy-Zwang entfernen
+        os.environ.pop("HTTP_PROXY", None)
+        os.environ.pop("HTTPS_PROXY", None)
+        os.environ.pop("http_proxy", None)
+        os.environ.pop("https_proxy", None)
 
-    try:
-        results = await _run_with_retry()
-    except Exception as e:
-        log("warn", "DuckDuckGo-Suche fehlgeschlagen", q=q, error=str(e))
-        return []
-    if results is None:
-        log("warn", "DuckDuckGo-Suche fehlgeschlagen (Retries erschöpft)", q=q)
-        return []
+    # RETRY-SCHLEIFE: 3 Versuche, falls Tor zickt
+    for attempt in range(1, 4):
+        try:
+            # WICHTIG: timeout=60 erzwingen!
+            # Proxy nur setzen, wenn global gewünscht (z.B. via Env), sonst explizit None
+            my_proxies = None
+            if os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY"):
+                # DDGS nimmt Proxies automatisch aus Env, aber wir wollen sichergehen
+                pass
+            else:
+                # Zwinge DDGS in den Direct-Mode
+                my_proxies = {}
 
-    items: List[Dict[str, str]] = []
-    seen = set()
-    for entry in results or []:
-        href = entry.get("href")
-        if not href:
-            continue
-        nu = _normalize_for_dedupe(href)
-        if nu in seen:
-            continue
-        seen.add(nu)
-        if is_denied(nu):
-            continue
-        if not path_ok(nu):
-            continue
-        items.append({
-            "url": nu,
-            "title": entry.get("title", "") or "",
-            "snippet": entry.get("body", "") or "",
-        })
+            with DDGS(timeout=60, proxies=my_proxies) as ddgs:
+                # 3 Versuche innerhalb der Lib (interner Retry)
+                gen = ddgs.text(
+                    query,
+                    region="de-de",
+                    safesearch="off",
+                    timelimit="y",  # Letztes Jahr (frische Leads!)
+                    max_results=max_results
+                )
+                # Ergebnisse einsammeln
+                count = 0
+                for r in gen:
+                    if count >= max_results: break
+                    link = r.get("href")
+                    title = r.get("title", "")
+                    snippet = r.get("body", "")
+                    if link:
+                        results.append({
+                            "link": link,
+                            "title": title,
+                            "snippet": snippet
+                        })
+                        count += 1
+                
+                # Wenn wir hier sind, hat es geklappt -> Raus aus der Retry-Schleife
+                if results:
+                    log("info", "DuckDuckGo Treffer", q=query, count=len(results))
+                else:
+                    log("info", "DuckDuckGo: Keine Treffer (Seite leer)", q=query)
+                return results
 
-    if items:
-        ordered = prioritize_urls([item["url"] for item in items])
-        order_map = {u: i for i, u in enumerate(ordered)}
-        items.sort(key=lambda item: order_map.get(item["url"], len(order_map)))
-    log("info", "DuckDuckGo Treffer", q=q, count=len(items))
-    return items
-
+        except Exception as e:
+            err_msg = str(e)
+            # Nur loggen, wenn es der letzte Versuch war
+            if attempt < 3:
+                log("warn", f"DuckDuckGo Retry {attempt}/3 wegen Fehler", error=err_msg, q=query)
+                await asyncio.sleep(10)  # 10 Sekunden warten vor Neustart!
+            else:
+                log("warn", "DuckDuckGo endgültig gescheitert", error=err_msg, q=query)
+    
+    return []
 
 def _ka_keywords_from_query(q: str) -> str:
     if not q:
@@ -2469,7 +2486,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
                 "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
                 "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt",
-                "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklärung")
+                "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklärung","agb")
     if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
         log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
