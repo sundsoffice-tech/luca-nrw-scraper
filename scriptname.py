@@ -56,6 +56,16 @@ except ImportError:
         HAVE_DDG = True
     except ImportError:
         HAVE_DDG = False
+try:
+    from httpx import ReadError, ConnectTimeout
+except Exception:
+    class _DDGTimeout(Exception): ...
+    ReadError = ConnectTimeout = _DDGTimeout
+try:
+    from aiohttp.client_exceptions import ClientConnectorError, ServerDisconnectedError
+except Exception:
+    class _NetErr(Exception): ...
+    ClientConnectorError = ServerDisconnectedError = _NetErr
 from dotenv import load_dotenv
 from urllib.robotparser import RobotFileParser
 from stream2_extraction_layer.open_data_resolver import resolve_company_domain
@@ -96,6 +106,17 @@ SALES_TITLES = [
     "Vertrieb", "Sales Manager", "Account Manager", "Außendienst", "Telesales",
     "Verkäufer", "Handelsvertreter", "Key Account Manager", "Area Sales Manager"
 ]
+# Regionen statt nur Städte (für breite Suche)
+NRW_REGIONS = [
+    "NRW", "Nordrhein-Westfalen", "Ruhrgebiet", "Rheinland", "Sauerland", "Münsterland", "OWL",
+    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"
+]
+
+# Private Mail-Provider (keine Firmen!)
+PRIVATE_MAILS = '("@gmail.com" OR "@gmx.de" OR "@web.de" OR "@t-online.de" OR "@yahoo.de" OR "@outlook.com" OR "@icloud.com")'
+
+# Handy-Nummern Muster (Masse!)
+MOBILE_PATTERNS = '("017" OR "016" OR "015" OR "+49 17" OR "+49 16" OR "+49 15" OR "+4917" OR "+4916" OR "+4915")'
 
 # --- Globales Query-Set (wird in __main__ gesetzt) ---
 QUERIES: List[str] = []
@@ -903,7 +924,7 @@ INDUSTRY_ORDER = ["nrw","social","solar","telekom","versicherung","bau","ecom","
 
 def build_queries(
     selected_industry: Optional[str] = None,
-    per_industry_limit: int = 2
+    per_industry_limit: int = 20000
 ) -> List[str]:
     """
     Erweiterte Query-Builder mit Recruiter-Support und städtebasierter LinkedIn/Xing/Kleinanzeigen/Facebook-Suche.
@@ -926,19 +947,46 @@ def build_queries(
 
     def _recruiter_queries() -> List[str]:
         queries: List[str] = []
-        for title in SALES_TITLES:
-            queries.append(f'site:linkedin.com/in/ "{title}" "NRW" ("017" OR "016" OR "015")')
-            queries.append(f'site:linkedin.com/in/ "{title}" "NRW" ("@gmail.com" OR "@gmx.de" OR "@web.de")')
-            queries.append(f'site:xing.com/profile "{title}" "NRW" ("017" OR "016" OR "015")')
-            queries.append(f'site:xing.com/profile "{title}" "NRW" ("@gmail.com" OR "@gmx.de")')
 
-        # Facebook (nur Handy, Profile statt Firmen-Jobposts)
-        queries.append('site:facebook.com "vertrieb" "NRW" ("017" OR "016" OR "015" OR "+491") -intitle:"job"')
+        # 1. Voll-Kontakt-Jäger (LinkedIn & Xing) – ohne "open to work"
+        for region in NRW_REGIONS:
+            for title in SALES_TITLES:
+                queries.append(f'site:linkedin.com/in/ "{title}" "{region}" {PRIVATE_MAILS}')
+                queries.append(f'site:xing.com/profile "{title}" "{region}" {PRIVATE_MAILS}')
+                queries.append(f'site:linkedin.com/in/ "{title}" "{region}" {MOBILE_PATTERNS}')
+                queries.append(f'site:xing.com/profile "{title}" "{region}" {MOBILE_PATTERNS}')
 
-        # Dedupe & shuffle für Anti-Block
-        unique_queries = list(dict.fromkeys(queries))
-        random.shuffle(unique_queries)
-        return unique_queries
+        # 2. Kleinanzeigen (Top 20)
+        for city in NRW_BIG_CITIES[:20]:
+            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "{city}"')
+            # Quoka Stellengesuche
+            queries.append(f'site:quoka.de/stellenmarkt/stellengesuche/ "vertrieb" "{city}"')
+            queries.append(f'site:quoka.de/stellenmarkt/stellengesuche/ "vertrieb" "{city}" {MOBILE_PATTERNS}')
+
+        # 2b. Auftragsbank – Selbstständige Vertriebler
+        auftragsbank_keywords = ["vertrieb", "call center", "akquise", "terminierung"]
+        queries.append('site:auftragsbank.de "biete" "vertrieb" "NRW"')
+        queries.append(f'site:auftragsbank.de "vertrieb" "NRW" {PRIVATE_MAILS}')
+        for kw in auftragsbank_keywords:
+            queries.append(f'site:auftragsbank.de "biete" "{kw}" "NRW"')
+            queries.append(f'site:auftragsbank.de "{kw}" "NRW" {PRIVATE_MAILS}')
+
+        # 2c. Handelsvertreter.de (CDH) – Profi-Leads
+        queries.append('site:handelsvertreter.de "vertretung gesucht" "vertrieb"')
+        queries.append(f'site:handelsvertreter.de "vertrieb" {MOBILE_PATTERNS}')
+
+        # 3. Facebook (Nur Handy - High Quality, Jobposts raus)
+        queries.append(f'site:facebook.com "vertrieb" "NRW" {MOBILE_PATTERNS} -intitle:"job"')
+        queries.append(f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}')
+
+        # 4. Telegram/Reddit (Nische)
+        queries.append(f'site:t.me "suche job" "vertrieb" {PRIVATE_MAILS}')
+        queries.append(f'site:reddit.com/r/ "suche job" "vertrieb" {PRIVATE_MAILS}')
+
+        # Dedupe & shuffle
+        unique = list(dict.fromkeys(queries))
+        random.shuffle(unique)
+        return unique
 
     if selected_industry and selected_industry.lower() == 'recruiter':
         rq = _recruiter_queries()
@@ -1224,7 +1272,16 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
         if date_restrict:
             params["dateRestrict"] = date_restrict
 
-        r = await http_get_async(url, headers=None, params=params, timeout=HTTP_TIMEOUT)
+        try:
+            r = await http_get_async(url, headers=None, params=params, timeout=HTTP_TIMEOUT)
+        except (ReadError, ClientConnectorError, ServerDisconnectedError) as e:
+            log("warn", "Google CSE Netzfehler, retry", error=str(e))
+            await asyncio.sleep(3)
+            continue
+        except Exception as e:
+            log("warn", "Google CSE Fehler", error=str(e))
+            await asyncio.sleep(3)
+            continue
         if not r:
             key_i = (key_i + 1) % max(1,len(GCS_KEYS))
             cx_i  = (cx_i  + 1) % max(1,len(GCS_CXS))
@@ -1297,13 +1354,32 @@ async def duckduckgo_search_async(q: str, max_results: int = 30) -> List[Dict[st
         return []
 
     def _search_sync():
-        with DDGS() as ddgs:
-            return list(ddgs.text(q, region="de-de", safesearch="off", max_results=max_results))
+        with DDGS(timeout=45) as ddgs:
+            return list(ddgs.text(q, region="de-de", safesearch="off", max_results=max_results, timeout=45))
+
+    async def _run_with_retry():
+        attempt = 0
+        while attempt < 3:
+            try:
+                return await asyncio.to_thread(_search_sync)
+            except (ConnectTimeout, ReadError) as e:
+                attempt += 1
+                log("warn", "DuckDuckGo Timeout, retry", q=q, attempt=attempt, error=str(e))
+                if attempt >= 3:
+                    break
+                await asyncio.sleep(5)
+                continue
+            except Exception:
+                raise
+        return None
 
     try:
-        results = await asyncio.to_thread(_search_sync)
+        results = await _run_with_retry()
     except Exception as e:
         log("warn", "DuckDuckGo-Suche fehlgeschlagen", q=q, error=str(e))
+        return []
+    if results is None:
+        log("warn", "DuckDuckGo-Suche fehlgeschlagen (Retries erschöpft)", q=q)
         return []
 
     items: List[Dict[str, str]] = []
@@ -2385,15 +2461,16 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         title_text = title_hint or snippet_hint
     title_src = (title_text or linkedin_snippet_text or url or "").lower()
     pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
-                "handelsvertreter","makler","akquise","agent","berater","beraterin","geschäftsführer",
+                "handelsvertreter","handelsvertretung","makler","akquise","agent","berater","beraterin","geschäftsführer",
                 "repräsentant","b2b","b2c","verkäufer","verkaeufer","vertriebler",
                 "vertriebspartner","aushilfe verkauf")
     neg_keys = ("reinigung","putz","hilfe","helfer","lager","fahrer","zusteller","kommissionierer",
                 "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
                 "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
                 "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
-                "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt")
-    if any(k in title_src for k in neg_keys):
+                "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt",
+                "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklärung")
+    if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
         log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
         return (1, [])
