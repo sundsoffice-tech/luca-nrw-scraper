@@ -946,59 +946,41 @@ def build_queries(
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _recruiter_queries() -> List[str]:
+        EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -intitle:jobs -intitle:stellenangebot'
         queries: List[str] = []
 
-        # File-Hunting zuerst, damit Bulk-Leads priorisiert werden
-        queries.extend([
-            f'filetype:pdf "teilnehmerliste" "vertrieb" {MOBILE_PATTERNS}',
-            f'filetype:xls OR filetype:xlsx "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}',
-            f'(filetype:pdf OR filetype:doc OR filetype:docx) (inurl:lebenslauf OR intitle:lebenslauf OR inurl:cv) "vertrieb" {MOBILE_PATTERNS}',
-            f'site:amazonaws.com "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
-            f'"mitgliederverzeichnis" "vertrieb" {MOBILE_PATTERNS} -site:xing.com -site:linkedin.com',
-        ])
+        # CLUSTER 1: Dev-Leaks & Cloud-Buckets
+        queries.append(f'site:docs.google.com/spreadsheets "vertrieb" {MOBILE_PATTERNS} {EXCLUDES}')
+        queries.append(f'site:drive.google.com/file "cv" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:trello.com "kandidaten" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:notion.site "lebenslauf" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:airtable.com "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'(site:herokuapp.com OR site:netlify.app OR site:vercel.app) "vertrieb" "017" -intitle:"app"')
 
-        jobsuche_keywords = [
-            '"suche neue herausforderung"',
-            '"verfügbar ab"',
-            '"open to work"',
-            '"suche job"',
-        ]
-        cta_keywords = [
-            '"lassen sie uns sprechen"',
-            '"gerne per handy"',
-            '"ruf mich an"',
-            '"whatsapp"',
-        ]
+        # CLUSTER 2: Messenger & Direct-Contact
+        queries.append(f'"wa.me/491" "vertrieb" -site:whatsapp.com')
+        queries.append(f'"api.whatsapp.com/send" "vertrieb" "NRW"')
+        queries.append(f'"t.me/" "vertrieb" "kontakt" -site:telegram.org')
+        queries.append(f'site:calendly.com "vertrieb" ("mobil" OR "017" OR "016")')
+        queries.append(f'site:linktr.ee "vertrieb" "whatsapp"')
 
-        # 1) Jobsuche-Filter (LinkedIn & Xing) – nur wechselwillige Profile mit Nummern
-        for title in SALES_TITLES:
-            for kw in jobsuche_keywords:
-                queries.append(f'site:linkedin.com/in/ "{title}" {kw} {MOBILE_PATTERNS}')
-                queries.append(f'site:xing.com/profile "{title}" {kw} {MOBILE_PATTERNS}')
+        # CLUSTER 3: The Forgotten Files
+        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste") "vertrieb" {MOBILE_PATTERNS} {EXCLUDES}')
+        queries.append(f'(filetype:xls OR filetype:xlsx OR filetype:csv) "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}')
+        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv) "vertrieb" {MOBILE_PATTERNS} -site:xing.com -site:linkedin.com')
+        queries.append(f'site:pastebin.com "vertrieb" "017" "@gmail.com"')
 
-        # 2) Call-to-Action-Filter (Kontaktbereite Vertriebler)
-        for title in SALES_TITLES:
-            for kw in cta_keywords:
-                queries.append(f'site:linkedin.com/in/ "{title}" {kw} {MOBILE_PATTERNS}')
-                queries.append(f'site:xing.com/profile "{title}" {kw} {MOBILE_PATTERNS}')
+        # CLUSTER 4: Private Websites & Impressum-Hacks
+        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} -site:gmbh -site:ag')
+        queries.append(f'inurl:impressum "freiberuflich" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'intitle:"index of" "vcard" "vertrieb"')
 
-        # 3) LinkedIn Posts statt Profile (Geheimtipp)
-        for title in SALES_TITLES:
-            queries.append(f'site:linkedin.com/posts/ "{title}" "suche job" {MOBILE_PATTERNS}')
-            queries.append(f'site:linkedin.com/posts/ "{title}" "open to work" {MOBILE_PATTERNS}')
-
-        # 4) Quereinsteiger (Kleinanzeigen & Facebook) – Fokus Stellengesuche
-        for city in NRW_BIG_CITIES[:20]:
-            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "{city}"')
-            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" "{city}"')
-        queries.extend([
-            f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:facebook.com/groups/ "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:facebook.com "suche job" "vertrieb" {MOBILE_PATTERNS}',
-        ])
+        # CLUSTER 5: High-Intent Social
+        queries.append(f'site:linkedin.com/posts/ "suche job" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "NRW"')
 
         unique = list(dict.fromkeys(queries))
-        random.shuffle(unique)
         return unique
 
     if selected_industry and selected_industry.lower() == 'recruiter':
