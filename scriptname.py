@@ -1368,10 +1368,10 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
                 os.environ.pop("NO_PROXY", None)
                 log("debug", "DuckDuckGo: TOR proxy configured", proxy="socks5://127.0.0.1:9050")
             else:
-                # Force direct connection by clearing all proxy variables and setting no_proxy
-                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY"):
+                # Force direct connection by clearing all proxy variables
+                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                     os.environ.pop(key, None)
-                # Explicitly set no_proxy to bypass any system-level proxy settings
+                # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
                 os.environ["no_proxy"] = "*"
                 os.environ["NO_PROXY"] = "*"
                 log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*')")
