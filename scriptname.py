@@ -946,36 +946,36 @@ def build_queries(
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _recruiter_queries() -> List[str]:
-        EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -intitle:jobs -intitle:stellenangebot'
+        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -site:wikipedia.org'
+        CONTENT_EXCLUDES = '-intitle:jobs -intitle:stellenangebot -intitle:datenschutz -intitle:agb -intext:"gesucht wird" -intext:"wir suchen"'
         queries: List[str] = []
 
-        # CLUSTER 1: Dev-Leaks & Cloud-Buckets
-        queries.append(f'site:docs.google.com/spreadsheets "vertrieb" {MOBILE_PATTERNS} {EXCLUDES}')
-        queries.append(f'site:drive.google.com/file "cv" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:trello.com "kandidaten" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:notion.site "lebenslauf" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:airtable.com "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'(site:herokuapp.com OR site:netlify.app OR site:vercel.app) "vertrieb" "017" -intitle:"app"')
-
-        # CLUSTER 2: Messenger & Direct-Contact
+        # 1. MESSENGER & DIRECT (High Precision)
         queries.append(f'"wa.me/491" "vertrieb" -site:whatsapp.com')
         queries.append(f'"api.whatsapp.com/send" "vertrieb" "NRW"')
         queries.append(f'"t.me/" "vertrieb" "kontakt" -site:telegram.org')
-        queries.append(f'site:calendly.com "vertrieb" ("mobil" OR "017" OR "016")')
-        queries.append(f'site:linktr.ee "vertrieb" "whatsapp"')
 
-        # CLUSTER 3: The Forgotten Files
-        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste") "vertrieb" {MOBILE_PATTERNS} {EXCLUDES}')
+        # 2. FILE HUNTING (Documents)
+        # Exclude generic company documents (AGB/Privacy) to find real lists/CVs
+        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste" OR "mitglieder") "vertrieb" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES} {CONTENT_EXCLUDES}')
         queries.append(f'(filetype:xls OR filetype:xlsx OR filetype:csv) "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}')
-        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv) "vertrieb" {MOBILE_PATTERNS} -site:xing.com -site:linkedin.com')
-        queries.append(f'site:pastebin.com "vertrieb" "017" "@gmail.com"')
+        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv OR bewerbung) "vertrieb" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES}')
 
-        # CLUSTER 4: Private Websites & Impressum-Hacks
-        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} -site:gmbh -site:ag')
+        # 3. CLOUD & DEV LEAKS
+        queries.append(f'site:docs.google.com/spreadsheets "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:trello.com ("kandidaten" OR "bewerber") "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:notion.site "lebenslauf" "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:airtable.com "vertrieb" {MOBILE_PATTERNS}')
+
+        # 4. MEETING & CALENDAR LINKS (New!)
+        queries.append(f'site:calendly.com "vertrieb" ("mobil" OR "handy")')
+        queries.append(f'"zoom.us/j/" "vertrieb" "kontakt" "+49"')
+
+        # 5. PRIVATE SITES & IMPRESSUM HACKS
+        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} -site:gmbh -site:ag {DOMAIN_EXCLUDES}')
         queries.append(f'inurl:impressum "freiberuflich" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'intitle:"index of" "vcard" "vertrieb"')
 
-        # CLUSTER 5: High-Intent Social
+        # 6. SOCIAL & PORTALS (Targeted)
         queries.append(f'site:linkedin.com/posts/ "suche job" "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "NRW"')
@@ -1345,42 +1345,37 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
 
 async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dict[str, str]]:
     """
-    Führt eine DuckDuckGo-Suche durch – mit extrem aggressivem Timeout-Schutz für Tor.
+    DuckDuckGo-Suche mit strenger Proxy-Steuerung, um ConnectTimeouts zu vermeiden.
     """
-    results = []
     if not HAVE_DDG:
         log("warn", "DuckDuckGo-Modul fehlt.")
         return []
 
-    if not USE_TOR:
-        # Proxy-Zwang entfernen
-        os.environ.pop("HTTP_PROXY", None)
-        os.environ.pop("HTTPS_PROXY", None)
-        os.environ.pop("http_proxy", None)
-        os.environ.pop("https_proxy", None)
+    results: List[Dict[str, str]] = []
 
-    # RETRY-SCHLEIFE: 3 Versuche, falls Tor zickt
+    if USE_TOR:
+        os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
+        os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
+        os.environ.pop("no_proxy", None)
+    else:
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            os.environ.pop(key, None)
+        os.environ["no_proxy"] = "*"
+
     for attempt in range(1, 4):
         try:
-            # WICHTIG: timeout=60 erzwingen!
-            # Proxy-Steuerung über Environment (Kompatibel mit allen DDGS-Versionen)
-            # Wenn keine Tor-Env-Vars gesetzt sind, erzwinge Direct-Mode
-            if not os.environ.get("HTTP_PROXY") and not os.environ.get("HTTPS_PROXY"):
-                os.environ["no_proxy"] = "*"
-
             with DDGS(timeout=60) as ddgs:
-                # 3 Versuche innerhalb der Lib (interner Retry)
                 gen = ddgs.text(
                     query,
                     region="de-de",
                     safesearch="off",
-                    timelimit="y",  # Letztes Jahr (frische Leads!)
+                    timelimit="y",
                     max_results=max_results
                 )
-                # Ergebnisse einsammeln
                 count = 0
                 for r in gen:
-                    if count >= max_results: break
+                    if count >= max_results:
+                        break
                     link = r.get("href")
                     title = r.get("title", "")
                     snippet = r.get("body", "")
@@ -1391,8 +1386,7 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
                             "snippet": snippet
                         })
                         count += 1
-                
-                # Wenn wir hier sind, hat es geklappt -> Raus aus der Retry-Schleife
+
                 if results:
                     log("info", "DuckDuckGo Treffer", q=query, count=len(results))
                 else:
@@ -1401,13 +1395,12 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
 
         except Exception as e:
             err_msg = str(e)
-            # Nur loggen, wenn es der letzte Versuch war
             if attempt < 3:
                 log("warn", f"DuckDuckGo Retry {attempt}/3 wegen Fehler", error=err_msg, q=query)
-                await asyncio.sleep(10)  # 10 Sekunden warten vor Neustart!
+                await asyncio.sleep(10)
             else:
                 log("warn", "DuckDuckGo endgültig gescheitert", error=err_msg, q=query)
-    
+
     return []
 
 def _ka_keywords_from_query(q: str) -> str:
