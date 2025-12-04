@@ -1346,6 +1346,9 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
 async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dict[str, str]]:
     """
     DuckDuckGo-Suche mit strenger Proxy-Steuerung, um ConnectTimeouts zu vermeiden.
+    
+    Explicitly manages environment variables to force direct connection (USE_TOR=False)
+    or TOR routing (USE_TOR=True) before DDGS initialization.
     """
     if not HAVE_DDG:
         log("warn", "DuckDuckGo-Modul fehlt.")
@@ -1353,17 +1356,27 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
 
     results: List[Dict[str, str]] = []
 
-    if USE_TOR:
-        os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
-        os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
-        os.environ.pop("no_proxy", None)
-    else:
-        for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
-            os.environ.pop(key, None)
-        os.environ["no_proxy"] = "*"
-
     for attempt in range(1, 4):
         try:
+            # Set environment variables *inside* the try block, immediately before DDGS init
+            if USE_TOR:
+                # Force TOR routing via SOCKS5 proxy
+                os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
+                os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
+                # Remove no_proxy to ensure proxy is used
+                os.environ.pop("no_proxy", None)
+                os.environ.pop("NO_PROXY", None)
+                log("debug", "DuckDuckGo: TOR proxy configured", proxy="socks5://127.0.0.1:9050")
+            else:
+                # Force direct connection by clearing all proxy variables
+                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                    os.environ.pop(key, None)
+                # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
+                os.environ["no_proxy"] = "*"
+                os.environ["NO_PROXY"] = "*"
+                log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*')")
+            
+            # Initialize DDGS without proxies argument, relying on environment variables
             with DDGS(timeout=60) as ddgs:
                 gen = ddgs.text(
                     query,
