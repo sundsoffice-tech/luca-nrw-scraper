@@ -948,43 +948,53 @@ def build_queries(
     def _recruiter_queries() -> List[str]:
         queries: List[str] = []
 
-        # Business Networks (LinkedIn/Xing) mit Mobile-Fokus
-        for region in NRW_REGIONS:
-            for title in SALES_TITLES:
-                queries.append(f'site:linkedin.com/in/ "{title}" "{region}" {MOBILE_PATTERNS}')
-                queries.append(f'site:xing.com/profile "{title}" "{region}" {MOBILE_PATTERNS}')
-
-        # Spezial-Portale mit hoher Trefferquote für Nummern
+        # File-Hunting zuerst, damit Bulk-Leads priorisiert werden
         queries.extend([
-            f'site:handelsvertreter.de "vertretung gesucht" {MOBILE_PATTERNS}',
-            f'site:handelsvertreter.de "vertrieb" {MOBILE_PATTERNS}',
-            f'site:auftragsbank.de "biete" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:auftragsbank.de "call center" {MOBILE_PATTERNS}',
-            f'site:dasauge.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:freelancermap.de "profil" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:backinjob.de/stellengesuche "vertrieb" {MOBILE_PATTERNS}',
+            f'filetype:pdf "teilnehmerliste" "vertrieb" {MOBILE_PATTERNS}',
+            f'filetype:xls OR filetype:xlsx "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}',
+            f'(filetype:pdf OR filetype:doc OR filetype:docx) (inurl:lebenslauf OR intitle:lebenslauf OR inurl:cv) "vertrieb" {MOBILE_PATTERNS}',
+            f'site:amazonaws.com "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
+            f'"mitgliederverzeichnis" "vertrieb" {MOBILE_PATTERNS} -site:xing.com -site:linkedin.com',
         ])
 
-        # Kleinanzeigen & Markt (Top 20 Städte)
+        jobsuche_keywords = [
+            '"suche neue herausforderung"',
+            '"verfügbar ab"',
+            '"open to work"',
+            '"suche job"',
+        ]
+        cta_keywords = [
+            '"lassen sie uns sprechen"',
+            '"gerne per handy"',
+            '"ruf mich an"',
+            '"whatsapp"',
+        ]
+
+        # 1) Jobsuche-Filter (LinkedIn & Xing) – nur wechselwillige Profile mit Nummern
+        for title in SALES_TITLES:
+            for kw in jobsuche_keywords:
+                queries.append(f'site:linkedin.com/in/ "{title}" {kw} {MOBILE_PATTERNS}')
+                queries.append(f'site:xing.com/profile "{title}" {kw} {MOBILE_PATTERNS}')
+
+        # 2) Call-to-Action-Filter (Kontaktbereite Vertriebler)
+        for title in SALES_TITLES:
+            for kw in cta_keywords:
+                queries.append(f'site:linkedin.com/in/ "{title}" {kw} {MOBILE_PATTERNS}')
+                queries.append(f'site:xing.com/profile "{title}" {kw} {MOBILE_PATTERNS}')
+
+        # 3) LinkedIn Posts statt Profile (Geheimtipp)
+        for title in SALES_TITLES:
+            queries.append(f'site:linkedin.com/posts/ "{title}" "suche job" {MOBILE_PATTERNS}')
+            queries.append(f'site:linkedin.com/posts/ "{title}" "open to work" {MOBILE_PATTERNS}')
+
+        # 4) Quereinsteiger (Kleinanzeigen & Facebook) – Fokus Stellengesuche
         for city in NRW_BIG_CITIES[:20]:
             queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "{city}"')
-            queries.append(f'site:quoka.de/stellenmarkt/stellengesuche/ "vertrieb" "{city}" {MOBILE_PATTERNS}')
-        queries.extend([
-            f'site:markt.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:kalaydo.de "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-        ])
-
-        # CV-Leaks & Dokumente
-        queries.extend([
-            f'site:yumpu.com "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:issuu.com "lebenslauf" "sales" {MOBILE_PATTERNS}',
-            f'site:docplayer.org "lebenslauf" "vertrieb" {MOBILE_PATTERNS}',
-        ])
-
-        # Social & Foren
+            queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" "{city}"')
         queries.extend([
             f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
-            f'site:twitter.com "suche job" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:facebook.com/groups/ "stellengesuche" "vertrieb" {MOBILE_PATTERNS}',
+            f'site:facebook.com "suche job" "vertrieb" {MOBILE_PATTERNS}',
         ])
 
         unique = list(dict.fromkeys(queries))
@@ -1360,11 +1370,6 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
         log("warn", "DuckDuckGo-Modul fehlt.")
         return []
 
-    # Wenn KEIN Tor-Mode aktiv ist (erkennbar an fehlenden Env-Vars oder Argumenten),
-    # dann zwinge das System in den Direct-Mode.
-    if not os.environ.get("HTTP_PROXY"):
-        os.environ["no_proxy"] = "*"
-
     if not USE_TOR:
         # Proxy-Zwang entfernen
         os.environ.pop("HTTP_PROXY", None)
@@ -1376,16 +1381,12 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
     for attempt in range(1, 4):
         try:
             # WICHTIG: timeout=60 erzwingen!
-            # Proxy nur setzen, wenn global gewünscht (z.B. via Env), sonst explizit None
-            my_proxies = None
-            if os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY"):
-                # DDGS nimmt Proxies automatisch aus Env, aber wir wollen sichergehen
-                pass
-            else:
-                # Zwinge DDGS in den Direct-Mode
-                my_proxies = {}
+            # Proxy-Steuerung über Environment (Kompatibel mit allen DDGS-Versionen)
+            # Wenn keine Tor-Env-Vars gesetzt sind, erzwinge Direct-Mode
+            if not os.environ.get("HTTP_PROXY") and not os.environ.get("HTTPS_PROXY"):
+                os.environ["no_proxy"] = "*"
 
-            with DDGS(timeout=60, proxies=my_proxies) as ddgs:
+            with DDGS(timeout=60) as ddgs:
                 # 3 Versuche innerhalb der Lib (interner Retry)
                 gen = ddgs.text(
                     query,
