@@ -76,8 +76,13 @@ def test_recruiter_queries_structure():
     assert "DOMAIN_EXCLUDES = " in func_content, "DOMAIN_EXCLUDES not defined"
     # CONTENT_EXCLUDES should be simplified (not include -intitle:jobs anymore)
     assert "CONTENT_EXCLUDES = " in func_content, "CONTENT_EXCLUDES not defined"
-    # Verify -intitle:jobs is NOT present (it was removed for optimization)
-    assert "-intitle:jobs" not in func_content or "# Old:" in func_content, "Old -intitle:jobs should be removed or commented"
+    
+    # Verify -intitle:jobs is NOT present in CONTENT_EXCLUDES definition
+    # (it may appear in comments explaining what was removed)
+    content_excludes_start = func_content.find("CONTENT_EXCLUDES = ")
+    content_excludes_end = func_content.find("\n", content_excludes_start)
+    content_excludes_line = func_content[content_excludes_start:content_excludes_end]
+    assert "-intitle:jobs" not in content_excludes_line, "-intitle:jobs should be removed from CONTENT_EXCLUDES"
     
     # Verify all 6 clusters are present
     clusters = [

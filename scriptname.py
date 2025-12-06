@@ -174,6 +174,13 @@ ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
+# Proxy environment variables to clear for nuclear cleanup
+PROXY_ENV_VARS = [
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "all_proxy",
+    "FTP_PROXY", "ftp_proxy", "SOCKS_PROXY", "socks_proxy"
+]
+
 NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"]
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
@@ -1390,9 +1397,7 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
             else:
                 # === Force direct connection by nuclear cleanup ===
                 # Clear ALL proxy variables to prevent ConnectTimeout (WinError 10060)
-                for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", 
-                           "http_proxy", "https_proxy", "all_proxy",
-                           "SOCKS_PROXY", "socks_proxy", "FTP_PROXY", "ftp_proxy"):
+                for key in PROXY_ENV_VARS:
                     os.environ.pop(key, None)
                 
                 # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
@@ -3857,12 +3862,7 @@ if __name__ == "__main__":
         # When NOT using Tor, aggressively clear all proxy environment variables
         # to prevent WinError 10060 ConnectTimeout issues from inherited proxy settings
         if not USE_TOR:
-            proxy_vars = [
-                "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy",
-                "FTP_PROXY", "ftp_proxy", "SOCKS_PROXY", "socks_proxy"
-            ]
-            for var in proxy_vars:
+            for var in PROXY_ENV_VARS:
                 if var in os.environ:
                     del os.environ[var]
                     log("debug", f"Cleared proxy environment variable: {var}")
