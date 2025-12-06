@@ -977,7 +977,8 @@ def build_queries(
 
         # 2. FILE HUNTING (Documents)
         # === OPTIMIZATION: Split PDF queries - search first without heavy excludes ===
-        # This increases hit rate with Google; we can filter in code later
+        # This increases hit rate with Google; filtering happens via validate_contact()
+        # and _is_offtarget_lead() functions in post-processing (see line ~3580)
         queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste" OR "mitglieder") "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'(filetype:xls OR filetype:xlsx OR filetype:csv) "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}')
         # Lebenslauf/CV queries - lighter filtering

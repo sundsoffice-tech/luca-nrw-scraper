@@ -80,9 +80,15 @@ def test_recruiter_queries_structure():
     # Verify -intitle:jobs is NOT present in CONTENT_EXCLUDES definition
     # (it may appear in comments explaining what was removed)
     content_excludes_start = func_content.find("CONTENT_EXCLUDES = ")
-    content_excludes_end = func_content.find("\n", content_excludes_start)
-    content_excludes_line = func_content[content_excludes_start:content_excludes_end]
-    assert "-intitle:jobs" not in content_excludes_line, "-intitle:jobs should be removed from CONTENT_EXCLUDES"
+    if content_excludes_start != -1:
+        content_excludes_end = func_content.find("\n", content_excludes_start)
+        if content_excludes_end != -1:
+            content_excludes_line = func_content[content_excludes_start:content_excludes_end]
+            assert "-intitle:jobs" not in content_excludes_line, "-intitle:jobs should be removed from CONTENT_EXCLUDES"
+        else:
+            # EOF case
+            content_excludes_line = func_content[content_excludes_start:]
+            assert "-intitle:jobs" not in content_excludes_line, "-intitle:jobs should be removed from CONTENT_EXCLUDES"
     
     # Verify all 6 clusters are present
     clusters = [
