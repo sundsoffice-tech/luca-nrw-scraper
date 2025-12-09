@@ -977,54 +977,39 @@ def build_queries(
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _recruiter_queries() -> List[str]:
-<<<<<<< HEAD
-        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de'
-        CONTENT_EXCLUDES = '-intitle:jobs -intitle:stellenangebot -intitle:datenschutz -intitle:agb -intext:"gesucht wird" -intext:"wir suchen"'
-=======
-        # === TASK 4: Query Optimization - Simplified excludes for better hit rate ===
-        # Removed overly strict exclusions that were counterproductive
-        # Old: '-intitle:jobs -intitle:stellenangebot' removed (blocks job seeker content!)
-        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -site:wikipedia.org'
-        # Simplified CONTENT_EXCLUDES - removed -intitle:jobs and job-related terms
-        # as they filter out actual candidates looking for jobs
-        CONTENT_EXCLUDES = '-intitle:datenschutz -intitle:agb'
->>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
+        # Candidate-focused queries only (explicit negations for employer ads)
+        BASE_EXCLUDES = '-intitle:jobs -intitle:karriere -intext:"wir suchen" -intext:"stellenangebot" -site:arbeitsagentur.de'
+        NEG_DOMAINS = '-site:stepstone.de -site:indeed.com -site:monster.de'
         queries: List[str] = []
 
-        # 1. MESSENGER & DIRECT (High Precision)
-        queries.append(f'(inurl:wa.me OR intext:"wa.me") "vertrieb" "017" -site:whatsapp.com')
-        queries.append(f'inurl:"api.whatsapp.com/send" "vertrieb"')
-        queries.append(f'"t.me/" "vertrieb" "kontakt" -site:telegram.org')
+        # Intent phrases
+        queries.append(f'\"suche neue herausforderung\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
+        queries.append(f'\"open to work\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
+        queries.append(f'\"stellengesuch\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
+        queries.append(f'\"lebenslauf\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
 
-        # 2. FILE HUNTING (Documents)
-        # === OPTIMIZATION: Split PDF queries - search first without heavy excludes ===
-        # This increases hit rate with Google; filtering happens via validate_contact()
-        # and _is_offtarget_lead() functions in post-processing (see line ~3580)
-        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste" OR "mitglieder") "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'(filetype:xls OR filetype:xlsx OR filetype:csv) "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}')
-        # Lebenslauf/CV queries - lighter filtering
-        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv OR bewerbung) "vertrieb" {MOBILE_PATTERNS}')
+        # Files / documents
+        queries.append(f'filetype:pdf \"Lebenslauf\" \"Vertrieb\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
+        queries.append(f'filetype:pdf \"CV\" \"Sales\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
 
-        # 3. CLOUD & DEV LEAKS
-        queries.append(f'site:docs.google.com/spreadsheets ("vertrieb" OR "kundenliste") {MOBILE_PATTERNS}')
-        queries.append(f'site:trello.com ("kandidaten" OR "bewerber") "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:notion.site "lebenslauf" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:airtable.com "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:drive.google.com ("cv" OR "kundenliste") "vertrieb" {MOBILE_PATTERNS}')
+        # Cloud directories
+        queries.append(f'site:drive.google.com \"Lebenslauf\" \"Vertrieb\" {BASE_EXCLUDES}')
+        queries.append(f'site:dropbox.com \"CV\" {BASE_EXCLUDES}')
 
-        # 4. MEETING & CALENDAR LINKS (New!)
-        queries.append(f'site:calendly.com "vertrieb" ("mobil" OR "handy")')
-        queries.append(f'"zoom.us/j/" "vertrieb" "kontakt" "+49"')
+        # Handelsvertreter / Freelancer Plattformen
+        queries.append('site:handelsvertreter.de \"Gesuch\" \"Vertrieb\" (\"017\" OR \"016\" OR \"015\")')
+        queries.append('site:freelancermap.de \"Vertrieb\" \"Verfügbar\" -inurl:projekte')
+        queries.append('site:dasauge.de \"kundenakquise\" \"freelancer\"')
+        queries.append('inurl:impressum \"Handelsvertreter\" \"Vertrieb\" -site:gmbh -site:ag')
 
-        # 5. PRIVATE SITES & IMPRESSUM HACKS
-        # Removed -site:gmbh -site:ag as they're too broad and filter legitimate results
-        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES}')
-        queries.append(f'inurl:impressum "freiberuflich" "vertrieb" {MOBILE_PATTERNS}')
+        # CV in Cloud (Canva / Docs)
+        queries.append('site:canva.com \"Lebenslauf\" \"Sales\" \"Kontakt\"')
+        queries.append('site:docs.google.com \"CV\" \"Sales Manager\" (\"017\" OR \"016\" OR \"015\")')
+        queries.append(f'filetype:pdf \"Lebenslauf\" \"Vertriebserfahrung\" \"Führerschein\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
 
-        # 6. SOCIAL & PORTALS (Targeted)
-        queries.append(f'site:linkedin.com/posts/ "suche job" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:facebook.com "stellengesuche" "vertrieb" {MOBILE_PATTERNS}')
-        queries.append(f'site:kleinanzeigen.de/s-stellengesuche/ "vertrieb" "NRW"')
+        # Open to Work Social Posts
+        queries.append('site:linkedin.com/posts/ \"suche neue herausforderung\" \"vertrieb\" \"@gmail.com\"')
+        queries.append('site:facebook.com \"suche job\" \"vertrieb\" \"NRW\" (\"017\" OR \"016\" OR \"015\")')
 
         unique = list(dict.fromkeys(queries))
         return unique
@@ -1071,7 +1056,10 @@ def build_queries(
 # ---- Domain-/Pfad-Filter (erweitert) ----
 DENY_DOMAINS = {
   "google.com","maps.google.com","mapy.google.com","business.site",
-  "twitter.com","x.com","tiktok.com","youtube.com","youtu.be"
+  "twitter.com","x.com","tiktok.com","youtube.com","youtu.be",
+  "pornhub.com","xvideos.com","xhamster.com","xnxx.com","redtube.com",
+  "youjizz.com","youporn.com","spankbang.com","cam4.com",
+  "bild.de","welt.de","focus.de","pinterest.com"
 }
 
 SOCIAL_HOSTS = {
@@ -2021,6 +2009,8 @@ def regex_extract_contacts(text: str, src_url: str):
         for p, ps, pe, is_mobile in phone_hits:
             if not _sales_near(ps, pe):
                 continue
+            if not _phone_context_ok(text, ps, pe):
+                continue
             d = min(abs(ps - es), abs(pe - ee))
             if d < best_dist or (d == best_dist and is_mobile and not best_mobile):
                 best_dist, best_ppos, best_p, best_mobile = d, ps, p, is_mobile
@@ -2038,6 +2028,8 @@ def regex_extract_contacts(text: str, src_url: str):
     for p, ps, pe, _is_mobile in phone_hits:
         if not _sales_near(ps, pe):
             continue
+        if not _phone_context_ok(text, ps, pe):
+            continue
         np = normalize_phone(p)
         if np and np in used_tel:
             continue
@@ -2053,6 +2045,8 @@ def regex_extract_contacts(text: str, src_url: str):
     for (w, ws, we) in (wa_hits + wa_hits2):
         if not _sales_near(ws, we):
             continue
+        if not _phone_context_ok(text, ws, we):
+            continue
         tel_candidates = re.findall(r'\+?\d[\d \-()]{6,}', w)
         tel = normalize_phone(tel_candidates[0]) if tel_candidates else ""
         if tel:
@@ -2066,6 +2060,8 @@ def regex_extract_contacts(text: str, src_url: str):
 
     # WhatsApp-Links (wa.me / api.whatsapp.com)
     for m in WA_LINK_RE.finditer(text):
+        if not _phone_context_ok(text, m.start(), m.end()):
+            continue
         tel = re.sub(r'\D', '', m.group(0))
         if tel:
             tel_fmt = "+" + tel if not tel.startswith("+") else tel
@@ -2082,6 +2078,104 @@ def regex_extract_contacts(text: str, src_url: str):
         emails=len(email_hits), phones=len(phone_hits),
         whatsapp=len(wa_hits) + len(wa_hits2), rows=len(rows))
     return rows
+
+
+# Kandidaten-Heuristiken
+CANDIDATE_NEG_MARKERS = (
+    "wir suchen", "team sucht", "bewirb dich", "bewirb-dich", "gmbh", " ag ", "aktuell suchen",
+)
+CANDIDATE_POS_MARKERS = (
+    "ich suche", "ich bin", "mein lebenslauf", "lebenslauf", "stellengesuch",
+    "open to work", "freelancer", "freiberuf", "selbstständig", "selbststaendig",
+    "suche neue herausforderung", "meine erfahrung", "qualifikation", "profil",
+)
+CANDIDATE_PHONE_CONTEXT = (
+    "lebenslauf", "cv", "profil", "erfahrung", "qualifikation", "vita",
+    "bewerbung", "stellengesuch", "ich suche", "ich bin", "open to work", "freelancer", "freiberuf",
+)
+
+def _extract_name_from_text_block(txt: str) -> str:
+    if not txt:
+        return ""
+    m = PERSON_PREFIX.search(txt) or NAME_RE.search(txt)
+    if not m:
+        return ""
+    cand = (m.group(0) or "").strip()
+    if cand.lower() in {"wir", "team"}:
+        return ""
+    return cand
+
+def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[BeautifulSoup], url: str, title_hint: str = "", h1_hint: str = "") -> Dict[str, Any]:
+    name = (record.get("name") or "").strip()
+    email = (record.get("email") or "").strip()
+    phone = (record.get("telefon") or "").strip()
+    lower_url = (url or "").lower()
+
+    if name.lower() == "wir":
+        name = ""
+
+    # 1) E-Mail-Local-Part -> Name
+    if (not name) and email and "@" in email:
+        local = email.split("@", 1)[0]
+        parts = re.split(r"[._\\-]+", local)
+        if len(parts) >= 2:
+            guess = " ".join(p.capitalize() for p in parts if p)
+            if len(guess.split()) >= 2:
+                name = guess
+
+    # 2) Impressum-Pattern
+    if (not name) and ("/impressum" in lower_url or "legal" in lower_url):
+        m = re.search(r"angaben gemäß §\s*5\s*tmg[\s:]*\n?\r?\s*([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+        if m:
+            name = _extract_name_from_text_block(m.group(1))
+        if not name:
+            m2 = re.search(r"Inhaltlich Verantwortlicher:?\s*([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+            if m2:
+                name = _extract_name_from_text_block(m2.group(1))
+
+    # 3) PDF/CV Header-Heuristik
+    if not name:
+        m = re.search(r"Lebenslauf von\s+([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+        if m:
+            name = _extract_name_from_text_block(m.group(1))
+    if not name:
+        for line in text.splitlines():
+            ln = line.strip()
+            if not ln:
+                continue
+            maybe = _extract_name_from_text_block(ln)
+            if maybe and len(maybe.split()) >= 2:
+                name = maybe
+                break
+
+    # 4) Phone owner via Title/H1 (nur wenn Nummer vorhanden)
+    if (not name) and phone:
+        digits = re.sub(r"\\D", "", phone)
+        for hint in (title_hint, h1_hint):
+            if not hint:
+                continue
+            if digits and digits not in re.sub(r"\\D", "", hint):
+                continue
+            maybe = _extract_name_from_text_block(hint)
+            if maybe:
+                name = maybe
+                break
+
+    if (not name) and (phone or email):
+        name = "Unknown Candidate"
+
+    record["name"] = name
+    return record
+
+def is_candidate_profile_text(text: str) -> bool:
+    t = (text or "").lower()
+    if any(tok in t for tok in CANDIDATE_NEG_MARKERS):
+        return False
+    return any(tok in t for tok in CANDIDATE_POS_MARKERS)
+
+def _phone_context_ok(text: str, start: int, end: int) -> bool:
+    window = text[max(0, start - 120): min(len(text), end + 120)].lower()
+    return any(k in window for k in CANDIDATE_PHONE_CONTEXT)
 
 
 def _anchor_contacts_fast(soup: BeautifulSoup, url: str) -> List[Dict[str, Any]]:
@@ -2643,6 +2737,24 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     if soup is None:
         soup = BeautifulSoup(html, "html.parser")
 
+    if (not invite_link) and (not is_candidate_profile_text(text)):
+        log("debug", "Kein Kandidatenprofil – skip", url=url)
+        mark_url_seen(url, run_id)
+        return (1, [])
+
+    title_hint = ""
+    h1_hint = ""
+    if soup:
+        try:
+            title_hint = soup.title.get_text(" ", strip=True) if soup.title else ""
+        except Exception:
+            title_hint = ""
+        try:
+            h1 = soup.find("h1")
+            h1_hint = h1.get_text(" ", strip=True) if h1 else ""
+        except Exception:
+            h1_hint = ""
+
     private_address = extract_private_address(text)
     social_profile_url = extract_social_profile_url(soup, text)
     if linkedin_profile and not social_profile_url:
@@ -2733,6 +2845,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
             out: List[Dict[str, Any]] = []
             for r in fast_items:
+                r = _ensure_candidate_name(r, text, soup, url, title_hint, h1_hint)
                 boost = 0
                 if r.get("email"):
                     b = _mail_boost_and_label(r.get("email"))
@@ -2847,6 +2960,9 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     # 3) Kleinanzeigen-Extractor als letzter Fallback (nur bei Domain)
     if not items and "kleinanzeigen.de" in url:
         items = extract_kleinanzeigen(html, url)
+
+    if items:
+        items = [_ensure_candidate_name(r, text, soup, url, title_hint, h1_hint) for r in items]
 
     if not items:
         mark_url_seen(url, run_id)
