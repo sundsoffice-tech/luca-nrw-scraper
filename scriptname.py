@@ -434,20 +434,32 @@ def mark_query_done(q: str, run_id: int):
     )
     con.commit(); con.close()
 
+_seen_urls_cache: set[str] = set()
+
 def mark_url_seen(url: str, run_id: int):
+    global _seen_urls_cache
     con = db(); cur = con.cursor()
     cur.execute(
         "INSERT OR IGNORE INTO urls_seen(url,first_run_id,ts) VALUES(?,?,datetime('now'))",
         (url, run_id)
     )
     con.commit(); con.close()
+    _seen_urls_cache.add(_normalize_for_dedupe(url))
 
 def url_seen(url: str) -> bool:
+    norm = _normalize_for_dedupe(url)
+    if norm in _seen_urls_cache:
+        return True
     con = db(); cur = con.cursor()
     cur.execute("SELECT 1 FROM urls_seen WHERE url=?", (url,))
     hit = cur.fetchone()
     con.close()
+    if hit:
+        _seen_urls_cache.add(norm)
     return bool(hit)
+
+def _url_seen_fast(url: str) -> bool:
+    return _normalize_for_dedupe(url) in _seen_urls_cache
 
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -589,6 +601,7 @@ CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "90"))  # Sekunden
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
 
 _RETRY_URLS: list[str] = []
+_SITEMAP_FAILED_HOSTS: set[str] = set()
 
 def _host_from(url: str) -> str:
     try:
@@ -801,7 +814,10 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
             except Exception:
                 pass
 
-    log("error", "HTTP GET endgültig gescheitert", url=url)
+    if "sitemap" in (url or "").lower():
+        log("debug", "Sitemap nicht verfügbar", url=url)
+    else:
+        log("error", "HTTP GET endgültig gescheitert", url=url)
     return None
 
 
@@ -946,13 +962,13 @@ def build_queries(
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _recruiter_queries() -> List[str]:
-        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -site:wikipedia.org'
+        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de'
         CONTENT_EXCLUDES = '-intitle:jobs -intitle:stellenangebot -intitle:datenschutz -intitle:agb -intext:"gesucht wird" -intext:"wir suchen"'
         queries: List[str] = []
 
         # 1. MESSENGER & DIRECT (High Precision)
-        queries.append(f'"wa.me/491" "vertrieb" -site:whatsapp.com')
-        queries.append(f'"api.whatsapp.com/send" "vertrieb" "NRW"')
+        queries.append(f'(inurl:wa.me OR intext:"wa.me") "vertrieb" "017" -site:whatsapp.com')
+        queries.append(f'inurl:"api.whatsapp.com/send" "vertrieb"')
         queries.append(f'"t.me/" "vertrieb" "kontakt" -site:telegram.org')
 
         # 2. FILE HUNTING (Documents)
@@ -962,10 +978,11 @@ def build_queries(
         queries.append(f'filetype:pdf inurl:(lebenslauf OR cv OR bewerbung) "vertrieb" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES}')
 
         # 3. CLOUD & DEV LEAKS
-        queries.append(f'site:docs.google.com/spreadsheets "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:docs.google.com/spreadsheets ("vertrieb" OR "kundenliste") {MOBILE_PATTERNS}')
         queries.append(f'site:trello.com ("kandidaten" OR "bewerber") "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'site:notion.site "lebenslauf" "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'site:airtable.com "vertrieb" {MOBILE_PATTERNS}')
+        queries.append(f'site:drive.google.com ("cv" OR "kundenliste") "vertrieb" {MOBILE_PATTERNS}')
 
         # 4. MEETING & CALENDAR LINKS (New!)
         queries.append(f'site:calendly.com "vertrieb" ("mobil" OR "handy")')
@@ -1363,20 +1380,24 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
                 # Force TOR routing via SOCKS5 proxy
                 os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
                 os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
+                os.environ["ALL_PROXY"] = "socks5://127.0.0.1:9050"
                 # Remove no_proxy to ensure proxy is used
                 os.environ.pop("no_proxy", None)
                 os.environ.pop("NO_PROXY", None)
                 log("debug", "DuckDuckGo: TOR proxy configured", proxy="socks5://127.0.0.1:9050")
             else:
-                # Force direct connection by clearing all proxy variables
-                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                # Force direct connection by clearing all possible proxy variables
+                for key in (
+                    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+                    "http_proxy", "https_proxy", "all_proxy",
+                ):
                     os.environ.pop(key, None)
                 # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
                 os.environ["no_proxy"] = "*"
                 os.environ["NO_PROXY"] = "*"
-                log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*')")
+                log("debug", "DuckDuckGo: Direct connection configured (proxies cleared)")
             
-            # Initialize DDGS without proxies argument, relying on environment variables
+            # Initialize DDGS (proxy via env if configured)
             with DDGS(timeout=60) as ddgs:
                 gen = ddgs.text(
                     query,
@@ -1408,9 +1429,12 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
 
         except Exception as e:
             err_msg = str(e)
+            if "ConnectTimeout" in err_msg or "WinError 10060" in err_msg:
+                log("warn", "DuckDuckGo: Netzwerkproblem, überspringe", q=query)
+                return []
             if attempt < 3:
                 log("warn", f"DuckDuckGo Retry {attempt}/3 wegen Fehler", error=err_msg, q=query)
-                await asyncio.sleep(10)
+                await asyncio.sleep(3)
             else:
                 log("warn", "DuckDuckGo endgültig gescheitert", error=err_msg, q=query)
 
@@ -2967,7 +2991,17 @@ def find_internal_links(html: str, base_url: str) -> List[str]:
 
 
 async def try_sitemaps_async(base: str) -> List[str]:
-    if "kleinanzeigen.de" in base or "ebay-kleinanzeigen.de" in base:
+    global _SITEMAP_FAILED_HOSTS
+    host = urllib.parse.urlparse(base).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    SITEMAP_SKIP_HOSTS = {
+        "kleinanzeigen.de", "ebay-kleinanzeigen.de",
+        "t.me", "telegram.me", "facebook.com", "m.facebook.com",
+        "instagram.com", "www.instagram.com", "staseve.eu",
+        "locanto.at", "www.locanto.at", "twitter.com", "x.com"
+    }
+    if (not host) or host in SITEMAP_SKIP_HOSTS or host in _SITEMAP_FAILED_HOSTS:
         return []
     candidates = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"]
     out: List[str] = []
@@ -2994,7 +3028,10 @@ async def try_sitemaps_async(base: str) -> List[str]:
         if out:
             break
     # Dedupe
-    return list(dict.fromkeys(out))
+    out = list(dict.fromkeys(out))
+    if not out:
+        _SITEMAP_FAILED_HOSTS.add(host)
+    return out
 
 # =========================
 # Domain-Pivot Seeds
@@ -3416,6 +3453,21 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("info", msg, **k)
 
     init_db()
+    global _seen_urls_cache
+    _seen_urls_cache = set()
+    con = None
+    try:
+        con = db(); cur = con.cursor()
+        cur.execute("SELECT url FROM urls_seen")
+        _seen_urls_cache = {_normalize_for_dedupe(row[0]) for row in cur.fetchall()}
+    except Exception as e:
+        log("warn", "Konnte URL-Cache nicht laden", error=str(e))
+    else:
+        log("info", "URL-Cache geladen", count=len(_seen_urls_cache))
+    finally:
+        if con:
+            con.close()
+
     rate = _Rate(max_global=ASYNC_LIMIT, max_per_host=ASYNC_PER_HOST)
 
     total_links_checked = 0
@@ -3495,6 +3547,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 if per_domain_count.get(dom,0) >= limit:
                     continue
                 per_domain_count[dom] = per_domain_count.get(dom,0)+1
+                if _url_seen_fast(url):
+                    continue
                 if not url_seen(url):
                     prim.append(link)
 
@@ -3503,13 +3557,17 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             collected_rows.extend(rows)
 
             pivot_seeds: List[UrlLike] = []
+            pivot_tasks = []
             for dom in per_domain_count.keys():
                 for dq in domain_pivot_queries(dom):
-                    try:
-                        ps,_ = await google_cse_search_async(dq, max_results=10, date_restrict=date_restrict)
-                        pivot_seeds.extend(ps)
-                    except:
-                        pass
+                    pivot_tasks.append(google_cse_search_async(dq, max_results=10, date_restrict=date_restrict))
+            if pivot_tasks:
+                pivot_results = await asyncio.gather(*pivot_tasks, return_exceptions=True)
+                for result in pivot_results:
+                    if isinstance(result, Exception):
+                        continue
+                    if isinstance(result, tuple) and result[0]:
+                        pivot_seeds.extend(result[0])
             if pivot_seeds:
                 uniq_pivots = []
                 seen_p = set()
@@ -3552,8 +3610,10 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                             continue
                         more = find_internal_links(r.text, pl_url)
                         for u in more:
-                            if url_seen(u): continue
+                            if _url_seen_fast(u) or url_seen(u): continue
+                            if is_denied(u): continue
                             if not path_ok(u): continue
+                            if urllib.parse.urlparse(u).netloc.lower() != dom: continue
                             internal.append(u)
                             if len(internal)>=CFG.internal_depth_per_domain:
                                 break
