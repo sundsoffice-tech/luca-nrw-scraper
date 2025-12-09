@@ -1399,39 +1399,24 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
                 # Force TOR routing via SOCKS5 proxy
                 os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
                 os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
-<<<<<<< HEAD
                 os.environ["ALL_PROXY"] = "socks5://127.0.0.1:9050"
-=======
                 os.environ["http_proxy"] = "socks5://127.0.0.1:9050"
                 os.environ["https_proxy"] = "socks5://127.0.0.1:9050"
->>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
                 # Remove no_proxy to ensure proxy is used
                 os.environ.pop("no_proxy", None)
                 os.environ.pop("NO_PROXY", None)
                 log("debug", "DuckDuckGo: TOR proxy configured", proxy="socks5://127.0.0.1:9050")
             else:
-<<<<<<< HEAD
-                # Force direct connection by clearing all possible proxy variables
-                for key in (
-                    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                    "http_proxy", "https_proxy", "all_proxy",
-                ):
-=======
                 # === Force direct connection by nuclear cleanup ===
                 # Clear ALL proxy variables to prevent ConnectTimeout (WinError 10060)
                 for key in PROXY_ENV_VARS:
->>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
                     os.environ.pop(key, None)
                 
                 # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
                 # This is the "nuclear option" to ensure ddgs/httpx/curl_cffi don't use any proxy
                 os.environ["no_proxy"] = "*"
                 os.environ["NO_PROXY"] = "*"
-<<<<<<< HEAD
-                log("debug", "DuckDuckGo: Direct connection configured (proxies cleared)")
-=======
                 log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*', all proxies cleared)")
->>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
             
             # Initialize DDGS (proxy via env if configured)
             with DDGS(timeout=60) as ddgs:
