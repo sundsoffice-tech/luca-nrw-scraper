@@ -174,6 +174,13 @@ ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
+# Proxy environment variables to clear for nuclear cleanup
+PROXY_ENV_VARS = [
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "all_proxy",
+    "FTP_PROXY", "ftp_proxy", "SOCKS_PROXY", "socks_proxy"
+]
+
 NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"]
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
@@ -655,13 +662,21 @@ async def get_client(secure: bool = True) -> AsyncSession:
         return _CLIENT_INSECURE
     
 def _make_client(secure: bool, ua: str, proxy_url: Optional[str], force_http1: bool, timeout_s: int):
+    # === TASK 2: Harden proxy handling for normal HTTP requests ===
     if USE_TOR:
         proxy_url = "socks5://127.0.0.1:9050"
     headers = {
         "User-Agent": ua or USER_AGENT,
         "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
     }
-    proxies = {"http://": proxy_url, "https://": proxy_url} if proxy_url else None
+    
+    # When secure=True and NOT using Tor, explicitly disable proxies
+    # to prevent environment variable lookup that causes ConnectTimeout
+    if secure and not USE_TOR and not proxy_url:
+        proxies = None  # Explicitly None to bypass all proxy lookups
+    else:
+        proxies = {"http://": proxy_url, "https://": proxy_url} if proxy_url else None
+    
     return AsyncSession(
         impersonate="chrome120",
         headers=headers,
@@ -962,8 +977,18 @@ def build_queries(
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
 
     def _recruiter_queries() -> List[str]:
+<<<<<<< HEAD
         DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de'
         CONTENT_EXCLUDES = '-intitle:jobs -intitle:stellenangebot -intitle:datenschutz -intitle:agb -intext:"gesucht wird" -intext:"wir suchen"'
+=======
+        # === TASK 4: Query Optimization - Simplified excludes for better hit rate ===
+        # Removed overly strict exclusions that were counterproductive
+        # Old: '-intitle:jobs -intitle:stellenangebot' removed (blocks job seeker content!)
+        DOMAIN_EXCLUDES = '-site:stepstone.de -site:indeed.com -site:monster.de -site:arbeitsagentur.de -site:wikipedia.org'
+        # Simplified CONTENT_EXCLUDES - removed -intitle:jobs and job-related terms
+        # as they filter out actual candidates looking for jobs
+        CONTENT_EXCLUDES = '-intitle:datenschutz -intitle:agb'
+>>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
         queries: List[str] = []
 
         # 1. MESSENGER & DIRECT (High Precision)
@@ -972,10 +997,13 @@ def build_queries(
         queries.append(f'"t.me/" "vertrieb" "kontakt" -site:telegram.org')
 
         # 2. FILE HUNTING (Documents)
-        # Exclude generic company documents (AGB/Privacy) to find real lists/CVs
-        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste" OR "mitglieder") "vertrieb" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES} {CONTENT_EXCLUDES}')
+        # === OPTIMIZATION: Split PDF queries - search first without heavy excludes ===
+        # This increases hit rate with Google; filtering happens via validate_contact()
+        # and _is_offtarget_lead() functions in post-processing (see line ~3580)
+        queries.append(f'filetype:pdf ("teilnehmerliste" OR "telefonliste" OR "mitglieder") "vertrieb" {MOBILE_PATTERNS}')
         queries.append(f'(filetype:xls OR filetype:xlsx OR filetype:csv) "firmenliste" "ansprechpartner" {MOBILE_PATTERNS}')
-        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv OR bewerbung) "vertrieb" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES}')
+        # Lebenslauf/CV queries - lighter filtering
+        queries.append(f'filetype:pdf inurl:(lebenslauf OR cv OR bewerbung) "vertrieb" {MOBILE_PATTERNS}')
 
         # 3. CLOUD & DEV LEAKS
         queries.append(f'site:docs.google.com/spreadsheets ("vertrieb" OR "kundenliste") {MOBILE_PATTERNS}')
@@ -989,7 +1017,8 @@ def build_queries(
         queries.append(f'"zoom.us/j/" "vertrieb" "kontakt" "+49"')
 
         # 5. PRIVATE SITES & IMPRESSUM HACKS
-        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} -site:gmbh -site:ag {DOMAIN_EXCLUDES}')
+        # Removed -site:gmbh -site:ag as they're too broad and filter legitimate results
+        queries.append(f'"Inhaltlich Verantwortlicher" "Sales Manager" {MOBILE_PATTERNS} {DOMAIN_EXCLUDES}')
         queries.append(f'inurl:impressum "freiberuflich" "vertrieb" {MOBILE_PATTERNS}')
 
         # 6. SOCIAL & PORTALS (Targeted)
@@ -1364,6 +1393,7 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
     """
     DuckDuckGo-Suche mit strenger Proxy-Steuerung, um ConnectTimeouts zu vermeiden.
     
+    === TASK 3: Hardened proxy control ===
     Explicitly manages environment variables to force direct connection (USE_TOR=False)
     or TOR routing (USE_TOR=True) before DDGS initialization.
     """
@@ -1375,27 +1405,45 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
 
     for attempt in range(1, 4):
         try:
-            # Set environment variables *inside* the try block, immediately before DDGS init
+            # === CRITICAL: Set environment variables *inside* the try block ===
+            # This ensures clean state on each retry attempt
             if USE_TOR:
                 # Force TOR routing via SOCKS5 proxy
                 os.environ["HTTP_PROXY"] = "socks5://127.0.0.1:9050"
                 os.environ["HTTPS_PROXY"] = "socks5://127.0.0.1:9050"
+<<<<<<< HEAD
                 os.environ["ALL_PROXY"] = "socks5://127.0.0.1:9050"
+=======
+                os.environ["http_proxy"] = "socks5://127.0.0.1:9050"
+                os.environ["https_proxy"] = "socks5://127.0.0.1:9050"
+>>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
                 # Remove no_proxy to ensure proxy is used
                 os.environ.pop("no_proxy", None)
                 os.environ.pop("NO_PROXY", None)
                 log("debug", "DuckDuckGo: TOR proxy configured", proxy="socks5://127.0.0.1:9050")
             else:
+<<<<<<< HEAD
                 # Force direct connection by clearing all possible proxy variables
                 for key in (
                     "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
                     "http_proxy", "https_proxy", "all_proxy",
                 ):
+=======
+                # === Force direct connection by nuclear cleanup ===
+                # Clear ALL proxy variables to prevent ConnectTimeout (WinError 10060)
+                for key in PROXY_ENV_VARS:
+>>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
                     os.environ.pop(key, None)
+                
                 # Explicitly set no_proxy (both case variants) to bypass any system-level proxy settings
+                # This is the "nuclear option" to ensure ddgs/httpx/curl_cffi don't use any proxy
                 os.environ["no_proxy"] = "*"
                 os.environ["NO_PROXY"] = "*"
+<<<<<<< HEAD
                 log("debug", "DuckDuckGo: Direct connection configured (proxies cleared)")
+=======
+                log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*', all proxies cleared)")
+>>>>>>> e0dadca79add1ba4a6cbc2225051f6a00c276f46
             
             # Initialize DDGS (proxy via env if configured)
             with DDGS(timeout=60) as ddgs:
@@ -3887,6 +3935,20 @@ if __name__ == "__main__":
     try:
         args = parse_args()
         USE_TOR = bool(getattr(args, "tor", False))
+        
+        # === TASK 1: Global Proxy Reset (Nuclear Option) ===
+        # When NOT using Tor, aggressively clear all proxy environment variables
+        # to prevent WinError 10060 ConnectTimeout issues from inherited proxy settings
+        if not USE_TOR:
+            for var in PROXY_ENV_VARS:
+                if var in os.environ:
+                    del os.environ[var]
+                    log("debug", f"Cleared proxy environment variable: {var}")
+            # Set no_proxy to wildcard to bypass any remaining system defaults
+            os.environ["no_proxy"] = "*"
+            os.environ["NO_PROXY"] = "*"
+            log("info", "Proxy environment cleaned: Direct connection mode enforced")
+        
         if USE_TOR:
             log("info", "ANONYMITY MODE: Running over TOR Network")
             try:
