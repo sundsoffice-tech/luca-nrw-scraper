@@ -849,8 +849,24 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
     _LAST_STATUS[url] = 200
     return r
 
+def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
+    # FORCE ALLOW for target sites (bypass protection)
+    lower_url = (url or "").lower()
+    if ("linkedin.com" in lower_url) or ("xing.com" in lower_url) or ("facebook.com" in lower_url):
+        return True
+    if rp is None:
+        return True
+    try:
+        return rp.can_fetch(USER_AGENT, url)
+    except Exception:
+        return True
+
 async def robots_allowed_async(url: str) -> bool:
     try:
+        lower_url = (url or "").lower()
+        if ("linkedin.com" in lower_url) or ("xing.com" in lower_url) or ("facebook.com" in lower_url):
+            return True
+
         p = urllib.parse.urlparse(url)
         base = f"{p.scheme}://{p.netloc}"
         rp_ts = _ROBOTS_CACHE.get(base)
@@ -873,7 +889,7 @@ async def robots_allowed_async(url: str) -> bool:
                 return True
             _ROBOTS_CACHE[base] = (rp, time.time())
 
-        allowed = _ROBOTS_CACHE[base][0].can_fetch(USER_AGENT, url)
+        allowed = check_robots_txt(url, _ROBOTS_CACHE[base][0])
         log("debug", "robots.txt geprüft", url=url, allowed=allowed)
         return allowed
     except Exception as e:
@@ -958,137 +974,43 @@ def build_queries(
     per_industry_limit: int = 20000
 ) -> List[str]:
     """
-    Erweiterte Query-Builder mit Recruiter-Support und städtebasierter LinkedIn/Xing/Kleinanzeigen/Facebook-Suche.
-
-    Logik:
-    1. Falls selected_industry == 'recruiter': Omni-Channel (LinkedIn/Xing/Kleinanzeigen/FB/Reddit/Telegram) für alle Städte/Titel
-    2. Falls selected_industry == 'all': Recruiter ZUERST, dann alle Branchen
-    3. Falls normale Branche: Nur diese Branche
-
-    Args:
-        selected_industry: 'recruiter' | 'all' | 'solar' | 'telekom' | etc.
-        per_industry_limit: Queries pro Branche/Set (Default: 2)
-    
-    Returns:
-        Liste von Query-Strings für diesen Run
+    Dynamischer Query-Generator: kombiniert NRW-Staedte, Kern-Vertriebstitel und Plattformen,
+    mischt die Reihenfolge und begrenzt die Gesamtmenge.
+    - Cluster A (Big Platforms): linkedin/xing/facebook + konkrete Staedte
+    - Cluster B (Nischen-Plattformen): kleinanzeigen/markt/quoka nur mit Region (NRW/Ruhrgebiet)
+    - Cluster C (Open Web): Stellengesuch + Titel + Stadt
     """
-    out: List[str] = []
-    limit = max(1, per_industry_limit)
     cities = NRW_BIG_CITIES or NRW_CITIES_EXTENDED or NRW_CITIES
+    regions = ["NRW", "Ruhrgebiet"]
+    base_titles = ["Vertrieb", "Verkauf", "Call Center", "Aussendienst", "Account Manager", "Handelsvertreter"]
+    titles = [t.replace("ß", "ss").replace("Groß", "Gross").replace("Außen", "Aussen") for t in base_titles]
 
-    def _recruiter_queries() -> List[str]:
-        # Candidate-focused queries only (explicit negations for employer ads)
-        BASE_EXCLUDES = '-intitle:jobs -intitle:karriere -intext:"wir suchen" -intext:"stellenangebot" -site:arbeitsagentur.de'
-        NEG_DOMAINS = '-site:stepstone.de -site:indeed.com -site:monster.de'
-        queries: List[str] = []
+    queries: List[str] = []
 
-        # Intent phrases
-        queries.append(f'\"suche neue herausforderung\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
-        queries.append(f'\"open to work\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
-        queries.append(f'\"stellengesuch\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
-        queries.append(f'\"lebenslauf\" \"vertrieb\" {BASE_EXCLUDES} {NEG_DOMAINS}')
+    # Cluster A: Big Platforms (stadt-spezifisch)
+    for city in cities:
+        for title in titles:
+            queries.append(f'site:linkedin.com "{title}" "{city}"')
+            queries.append(f'site:xing.com "{title}" "{city}"')
+            queries.append(f'site:facebook.com "{title}" "{city}"')
 
-        # Files / documents
-        queries.append(f'filetype:pdf \"Lebenslauf\" \"Vertrieb\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
-        queries.append(f'filetype:pdf \"CV\" \"Sales\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
+    # Cluster B: Nischen-Plattformen (nur Region)
+    for region in regions:
+        for title in titles:
+            queries.append(f'site:kleinanzeigen.de/s-gesuche/ "{title}" "{region}"')
+            queries.append(f'site:markt.de/stellengesuche/ "{title}" "{region}"')
+            queries.append(f'site:quoka.de/stellengesuche/ "{title}" "{region}"')
+            queries.append(f'filetype:pdf "Lebenslauf" "{title}" "{region}" -jobs')
 
-        # Cloud directories
-        queries.append(f'site:drive.google.com \"Lebenslauf\" \"Vertrieb\" {BASE_EXCLUDES}')
-        queries.append(f'site:dropbox.com \"CV\" {BASE_EXCLUDES}')
+    # Cluster C: Open Web (Stellengesuch + Stadt)
+    for city in cities:
+        for title in titles:
+            queries.append(f'"Stellengesuch" "{title}" "{city}" -jobs -intitle:jobs')
 
-        # Handelsvertreter / Freelancer Plattformen
-        queries.append('site:handelsvertreter.de \"Gesuch\" \"Vertrieb\" (\"017\" OR \"016\" OR \"015\")')
-        queries.append('site:freelancermap.de \"Vertrieb\" \"Verfügbar\" -inurl:projekte')
-        queries.append('site:dasauge.de \"kundenakquise\" \"freelancer\"')
-        queries.append('inurl:impressum \"Handelsvertreter\" \"Vertrieb\" -site:gmbh -site:ag')
+    random.shuffle(queries)
 
-        # CV in Cloud (Canva / Docs)
-        queries.append('site:canva.com \"Lebenslauf\" \"Sales\" \"Kontakt\"')
-        queries.append('site:docs.google.com \"CV\" \"Sales Manager\" (\"017\" OR \"016\" OR \"015\")')
-        queries.append(f'filetype:pdf \"Lebenslauf\" \"Vertriebserfahrung\" \"Führerschein\" {BASE_EXCLUDES} -site:stepstone.de -site:indeed.com')
-
-        # Open to Work Social Posts
-        queries.append('site:linkedin.com/posts/ \"suche neue herausforderung\" \"vertrieb\" \"@gmail.com\"')
-        queries.append('site:facebook.com \"suche job\" \"vertrieb\" \"NRW\" (\"017\" OR \"016\" OR \"015\")')
-
-        unique = list(dict.fromkeys(queries))
-        return unique
-
-    if selected_industry and selected_industry.lower() == 'recruiter':
-        rq = _recruiter_queries()
-        log('info', "Recruiter-Mode: Omni-Channel Queries gebaut", total=len(rq), cities=len(cities), titles=len(SALES_TITLES))
-        return rq
-
-    # FALL 1: Recruiter-Mode (reine Vertriebler-Suche) – (legacy guard, erreicht hier nicht)
-    if selected_industry and selected_industry.lower() == 'recruiter':
-        return []
-
-    # FALL 2: Standard Industrie (solar, telekom, etc.)
-    if selected_industry and selected_industry.lower() != 'all':
-        qs = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
-        if qs:
-            log('info', f"Branche '{selected_industry}': lade {len(qs)} Queries, Limit: {limit}")
-            return qs[:limit]
-        else:
-            log('warn', f"Branche '{selected_industry}' nicht gefunden, verwende 'all'")
-            selected_industry = 'all'
-
-    # FALL 3: 'all' = Recruiter ZUERST (inkl. LinkedIn-Stadt-Queries), dann alle Branchen
-    if selected_industry == 'all' or selected_industry is None:
-        recruiter_all = _recruiter_queries()
-        out.extend(recruiter_all)
-        recruiter_count = len(recruiter_all)
-
-        # Dann nacheinander alle Standard-Branchen nach INDUSTRY_ORDER
-        industry_count = 0
-        for key in INDUSTRY_ORDER:
-            qs = INDUSTRY_QUERIES.get(key, [])
-            if qs:
-                out.extend(qs[:limit])
-                industry_count += len(qs[:limit])
-
-        log('info', f"All-Mode: {len(out)} Queries geladen (Recruiter: {recruiter_count}, Branchen: {industry_count})")
-    
-    return out
-
-
-
-# ---- Domain-/Pfad-Filter (erweitert) ----
-DENY_DOMAINS = {
-  "google.com","maps.google.com","mapy.google.com","business.site",
-  "twitter.com","x.com","tiktok.com","youtube.com","youtu.be",
-  "pornhub.com","xvideos.com","xhamster.com","xnxx.com","redtube.com",
-  "youjizz.com","youporn.com","spankbang.com","cam4.com",
-  "bild.de","welt.de","focus.de","pinterest.com"
-}
-
-SOCIAL_HOSTS = {
-    "facebook.com","m.facebook.com",
-    "instagram.com","www.instagram.com",
-    "t.me","telegram.me",
-    "whatsapp.com","chat.whatsapp.com",
-}
-
-ALLOW_PATH_HINTS = (
-  "kontakt","impressum","karriere","jobs","stellen","bewerben","team","ansprechpartner",
-  "callcenter","telesales","outbound","vertrieb","verkauf","sales","d2d","door-to-door","haustuer","haustür"
-)
-
-NEG_PATH_HINTS = (
-  "/datenschutz", "/privacy", "/agb", "/terms", "/bedingungen",
-  "/login", "/signin", "/signup", "/account", "/cart", "/warenkorb", "/checkout", "/search",
-  "/newsletter",
-  "/gleichstellungsstelle",
-  "/grundsicherung",
-  "/rathaus/",
-  "/verwaltung/",
-  "/soziales-gesundheit-wohnen-und-recht",
-  "/seminare",
-  "/seminarprogramm",
-  "/events",
-  "/veranstaltungen",
-)
-
+    cap = min(max(1, per_industry_limit), 5000)
+    return queries[:cap]
 def is_denied(url: str) -> bool:
     p = urllib.parse.urlparse(url)
     host = (p.netloc or "").lower()
@@ -1418,8 +1340,8 @@ async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dic
                 os.environ["NO_PROXY"] = "*"
                 log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*', all proxies cleared)")
             
-            # Initialize DDGS (proxy via env if configured)
-            with DDGS(timeout=60) as ddgs:
+            # Initialize DDGS (Kurzes Timeout für "Fail Fast")
+            with DDGS(timeout=10) as ddgs:
                 gen = ddgs.text(
                     query,
                     region="de-de",
@@ -1544,8 +1466,7 @@ async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MA
 EMAIL_RE   = re.compile(r'\b(?!noreply|no-reply|donotreply)[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b', re.I)
 PHONE_RE   = re.compile(r'(?:\+49|0049|0)\s?(?:\(?\d{2,5}\)?[\s\/\-]?)?\d(?:[\s\/\-]?\d){5,10}')
 MOBILE_RE  = re.compile(r'(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,10}')
-SALES_RE   = re.compile(r'\b(vertrieb|vertriebs|sales|account\s*manager|key\s*account|business\s*development|au?endienst|aussendienst|handelsvertreter|telesales|call\s*center|outbound|haust?r|d2d)\b', re.I)
-LOW_PAY_HINT   = re.compile(r'\b(12[,\.]?\d{0,2}|13[,\.]?\d{0,2})\s*€\s*/?\s*h|\b(Mindestlohn|Fixum\s+ab\s+\d{1,2}\s*€)\b', re.I)
+SALES_RE   = re.compile(r'\b(vertrieb|vertriebs|sales|account\s*manager|key\s*account|business\s*development|aussendienst|aussendienst|handelsvertreter|telesales|call\s*center|outbound|haust?r|d2d)\b', re.I)
 PROVISION_HINT = re.compile(r'\b(Provisionsbasis|nur\s*Provision|hohe\s*Provision(en)?|Leistungsprovision)\b', re.I)
 D2D_HINT       = re.compile(r'\b(Door[-\s]?to[-\s]?door|Haustür|Kaltakquise|D2D)\b', re.I)
 CALLCENTER_HINT= re.compile(r'\b(Call\s*Center|Telesales|Outbound|Inhouse-?Sales)\b', re.I)
@@ -1601,6 +1522,176 @@ IGNORE_KEYWORDS = [
     "karriere bei uns",
 ]
 
+JOB_AD_MARKERS = [
+    "(m/w/d)", "(w/m/d)", "(d/m/w)", "(m/f/d)", "(f/m/d)",
+    "wir suchen", "we are hiring", "stellenangebot", "jobangebot",
+    "ausbildungsplatz", "azubi", "ausbildung zum",
+    "teamleiter", "sales manager", "mitarbeiter",
+    "gesucht", "join us", "karriere bei", "vacancies",
+    "wir bieten", "deine aufgaben", "ihr profil", "your profile", "benefits", "corporate benefits",
+    "obstkorb", "flache hierarchien", "bewerben sie sich", "apply now",
+]
+
+STRICT_JOB_AD_MARKERS = [
+    "(m/w/d)", "(w/m/d)", "(d/m/w)", "(m/f/d)", "(f/m/d)", "(gn)",
+    "wir suchen", "we are hiring", "wir stellen ein", "join our team",
+    "ausbildungsplatz", "azubi gesucht", "ab sofort gesucht",
+    "ihre aufgaben", "wir bieten", "dein profil", "your profile", "benefits:",
+    "stellenanzeige", "jobangebot", "vacancy", "karriere bei",
+    "teamleiter gesucht", "sales manager gesucht", "benefits", "corporate benefits",
+]
+
+HIRING_INDICATORS = (
+    "wir suchen", "suchen wir", "wir stellen ein", "join our team",
+    "deine aufgaben", "ihr profil", "your profile", "wir bieten", "benefits",
+    "bewerben sie sich", "jetzt bewerben", "apply now",
+    "stellenanzeige", "jobangebot", "vacancy", "karriere bei",
+    "(m/w/d)", "(m/f/d)", "(gn)", "einstiegsgehalt", "festanstellung",
+)
+
+SOLO_BIZ_INDICATORS = (
+    "handelsvertretung", "handelsvertreter", "selbststaendiger vertriebspartner",
+    "industrievertretung", "agentur fuer", "vertriebsbuero",
+    "ueber mich", "mein angebot", "dienstleistungen", "portfolio",
+    "impressum", "inhaber", "geschaeftsfuehrer",
+)
+
+RETAIL_ROLES = [
+    "kuechen", "kueche", "moebel", "einzelhandel", "verkaeufer", "verkaeuferin",
+    "kassierer", "servicekraft", "filialleiter", "shop manager", "baecker",
+    "metzger", "floor manager", "call center", "telefonist", "promoter",
+]
+
+def is_likely_human_name(text: str) -> bool:
+    """Heuristic: 2-3 words, no digits, no company/ad markers."""
+    if not text:
+        return False
+    s = re.sub(r"\s+", " ", text).strip(" ,;|")
+    if not s:
+        return False
+    lower = s.lower()
+    corporate_tokens = (
+        "gmbh", "ag", "kg", "ug", "co. kg", "inc", "ltd", "gbr",
+        "unternehmen", "firma", "company", "holding",
+    )
+    ad_tokens = (
+        "team", "karriere", "job", "stellenanzeige", "gesucht", "wir suchen",
+        "abteilung",
+    )
+    if any(tok in lower for tok in corporate_tokens + ad_tokens):
+        return False
+    if re.search(r"\d", s):
+        return False
+    words = [w for w in re.split(r"[\s\-\|_]+", s) if w]
+    if not (2 <= len(words) <= 3):
+        return False
+    if any(len(w) == 1 for w in words):
+        return False
+    return True
+
+def looks_like_company(text: str) -> bool:
+    if not text:
+        return False
+    tl = text.lower()
+    company_tokens = [
+        "gmbh", "ag", "kg", "ug", "ltd", "inc", "team", "firma", "unternehmen",
+        "holding", "group", "gbr", "gesucht"
+    ]
+    return any(tok in tl for tok in company_tokens)
+
+EMPLOYER_EMAIL_PREFIXES = {
+    "jobs", "job", "karriere", "career", "recruiting", "recruit",
+    "bewerbung", "application", "hr", "humanresources", "personal",
+    "info", "kontakt", "contact", "service", "support", "office",
+    "gf", "geschaeftsfuehrung", "management", "hello", "mail",
+    "team", "admin", "datenschutz",
+}
+
+ROLE_DEFINITIONS = {
+    "high_value": ["account manager", "key account", "vertriebsleiter", "head of sales", "aussendienst", "handelsvertreter", "sales manager"],
+    "retail_craft": ["verkaeufer", "verkaeuferin", "kuechen", "kuechenfachberater", "einzelhandel", "baeckerei", "kassierer", "servicekraft", "promoter", "call center", "telefonist", "moebel"],
+    "junior": ["trainee", "praktikant", "werkstudent", "azubi", "junior", "einstieg"],
+}
+
+INTENT_TITLE_KEYWORDS = (
+    "gesuch",
+    "suche",
+    "biete",
+    "bewerbung",
+    "lebenslauf",
+    "profil",
+    "cv",
+    "curriculum vitae",
+    "kenntnisse",
+    "qualifikation",
+    "verfuegbar",
+    "freelancer",
+    "stellengesuch",
+    "bewerber",
+    "open to work",
+    "mich vor",
+    "ueber mich",
+    "kurzprofil",
+)
+
+# --- COMPLETING THE MISSING CONSTANTS ---
+
+# Positive signals in URL path (if present, we scan it even if it looks weird)
+ALLOW_PATH_HINTS = (
+    "/profil", "/profile", "/cv", "/lebenslauf", "/resume",
+    "/user", "/nutzer", "/candidate", "/bewerber",
+    "/in/", "/pub/", "/p/"  # Social media profile markers
+)
+
+# Hints that suggest a low-paying or irrelevant job (used for scoring)
+LOW_PAY_HINT = (
+    "mindestlohn", "minijob", "aushilfe", "student", "praktikum",
+    "ferienjob", "saison", "helfer", "azubi", "ausbildung",
+    "promoter", "kommission"
+)
+
+# Hints that suggest high commission or sales focus (used for scoring)
+COMMISSION_HINT = (
+    "provision", "bonus", "uncapped", "hohe verdienstmoeglichkeiten",
+    "abschlussstark", "hunter", "akquise", "vertriebsstark"
+)
+
+# Initialize missing filter lists if they don't exist yet (Safety fallback)
+if 'BAD_DOMAINS' not in globals():
+    BAD_DOMAINS = {"example.com", "localhost"}
+if 'IGNORE_EXTENSIONS' not in globals():
+    IGNORE_EXTENSIONS = (".jpg", ".png", ".css", ".js")
+
+NEG_PATH_HINTS = (
+    "/jobs/", "/job/", "/stellenangebot/", "/company/", "/companies/",
+    "/unternehmen/", "/business/", "/school/", "/university/",
+    "/pulse/", "/article/", "/learning/", "/groups/", "/feed/",
+    "/events/", "/search/", "/salary/", "/gehalt/",
+)
+
+IGNORE_EXTENSIONS = (
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp",
+    ".css", ".js", ".json", ".xml", ".ico", ".mp4", ".mp3",
+    ".woff", ".woff2", ".ttf", ".eot", ".zip", ".rar", ".7z",
+    ".tar", ".gz", ".exe", ".msi", ".apk", ".dmg", ".iso",
+)
+
+BAD_TITLE_KEYWORDS = (
+    "jobs", "stellenangebote", "karriere", "career", "vacancies",
+    "wir suchen", "gesucht", "hiring", "jobbörse", "company",
+    "unternehmen", "über uns", "about us", "impressum", "kontakt",
+    "datenschutz", "login", "register", "anmelden", "sign up",
+    "ag", "gmbh", "k.g.", "limited", "inc.",
+)
+
+DENY_DOMAINS = {
+    "stepstone.de", "indeed.com", "monster.de", "arbeitsagentur.de",
+    "xing.com/jobs", "linkedin.com/jobs", "meinestadt.de", "kimeta.de",
+    "jobware.de", "stellenanzeigen.de", "absolventa.de", "glassdoor.de",
+    "kununu.com", "azubiyo.de", "ausbildung.de", "gehalt.de",
+    "wikipedia.org", "youtube.com", "amazon.de", "ebay.de",
+}
+
 
 NEGATIVE_HINT  = re.compile(r'\b(Behörde|Amt|Universität|Karriereportal|Blog|Ratgeber|Software|SaaS|Bank|Versicherung)\b', re.I)
 WHATSAPP_INLINE= re.compile(r'\+?\d[\d ()\-]{6,}\s*(?:WhatsApp|WA)', re.I)
@@ -1622,6 +1713,15 @@ CONTACT_HINTS = [
     "telefon", "tel", "tel.", "whatsapp", "telegram", "anruf", "hotline"
 ]
 
+SOCIAL_HOSTS = {
+    "linkedin.com", "www.linkedin.com", "de.linkedin.com",
+    "xing.com", "www.xing.com",
+    "facebook.com", "www.facebook.com",
+    "instagram.com", "www.instagram.com",
+    "twitter.com", "x.com",
+    "tiktok.com",
+}
+
 INDUSTRY_HINTS = [
     "solar", "photovoltaik", "pv", "energie", "energieberatung", "strom", "gas",
     "glasfaser", "telekom", "telekommunikation", "dsl", "mobilfunk", "internet",
@@ -1633,15 +1733,32 @@ INDUSTRY_HINTS = [
 
 BAD_MAILBOXES = {
     "noreply", "no-reply", "donotreply", "do-not-reply",
-    "info", "kontakt", "contact", "office", "service", "support",
+    "info", "kontakt", "contact", "office", "service", "support", "news", "presse",
     "bewerbung", "recruiting", "karriere", "jobs", "hr", "humanresources",
     "talent", "people", "personal", "datenschutz", "privacy"
 }
 
 PORTAL_DOMAINS = {
-    "heyjobs.co", "heyjobs.de", "stepstone.de", "indeed.com", "monster.de",
-    "arbeitsagentur.de", "softgarden.io", "talents.studysmarter.de",
-    "join.com", "jobware.de", "hays.de", "randstad.de", "adecco.de"
+    "adecco.de",
+    "arbeitsagentur.de",
+    "glassdoor.de",
+    "hays.de",
+    "heyjobs.co",
+    "heyjobs.de",
+    "indeed.com",
+    "jobware.de",
+    "join.com",
+    "kimeta.de",
+    "kununu.com",
+    "linkedin.com",
+    "meinestadt.de",
+    "monster.de",
+    "randstad.de",
+    "softgarden.io",
+    "stellenanzeigen.de",
+    "stepstone.de",
+    "talents.studysmarter.de",
+    "xing.com",
 }
 
 GENERIC_BOXES = {"sales", "vertrieb", "verkauf", "marketing", "kundenservice", "hotline"}
@@ -1700,6 +1817,8 @@ def email_quality(email: str, page_url: str) -> str:
         return "reject"
     low = email.strip().lower()
     local, _, domain = low.partition("@")
+    if local in EMPLOYER_EMAIL_PREFIXES:
+        return "reject"
     if any(domain.endswith(p) for p in PORTAL_DOMAINS):
         return "reject"
     if local in BAD_MAILBOXES:
@@ -1713,6 +1832,97 @@ def email_quality(email: str, page_url: str) -> str:
     if local in GENERIC_BOXES:
         return "team"
     return "generic"
+
+def is_employer_email(email: str) -> bool:
+    """Detect recruiter/company mailboxes by local-part prefixes."""
+    if not email or "@" not in email:
+        return False
+    local = email.split("@", 1)[0].lower()
+    normalized_local = re.sub(r"[._\\-]+", "", local)
+    return any(normalized_local.startswith(pref) for pref in EMPLOYER_EMAIL_PREFIXES)
+
+def is_job_advertisement(text: str = "", title: str = "", snippet: str = "") -> bool:
+    """Return True if content/title/snippet contains strict job-ad markers (company hiring)."""
+    combined = " ".join([(text or ""), (title or ""), (snippet or "")]).lower()
+    # Candidate self-intent should bypass unless explicit company wording is present
+    if any(k in combined for k in ["ich suche", "suche job", "suche stelle", "bewerbung", "lebenslauf", "stellengesuch"]):
+        if "wir suchen" not in combined:
+            return False
+    return any(m in combined for m in STRICT_JOB_AD_MARKERS)
+
+def classify_role(text: str = "", title: str = "") -> str:
+    """Classify lead into role category for tagging."""
+    combined = " ".join([(title or ""), (text or "")]).lower()
+    def _match(keywords):
+        return any(k in combined for k in keywords)
+    if _match(ROLE_DEFINITIONS.get("high_value", [])):
+        return "pro_sales"
+    if _match(ROLE_DEFINITIONS.get("retail_craft", [])):
+        return "retail_sales"
+    if _match(ROLE_DEFINITIONS.get("junior", [])):
+        return "junior_sales"
+    return "general_sales"
+
+def analyze_page_intent(text_lower: str, title_lower: str) -> Tuple[bool, str]:
+    """Distinguish hiring/job ads from self-presentations of reps/agents."""
+    hiring_score = sum(1 for phrase in HIRING_INDICATORS if phrase in text_lower)
+    offering_score = sum(1 for phrase in SOLO_BIZ_INDICATORS if phrase in text_lower)
+
+    if hiring_score >= 2:
+        return False, "Detected Job Advertisement"
+
+    if "handelsvertreter gesucht" in text_lower or "suche handelsvertreter" in text_lower:
+        return False, "Detected 'Rep Wanted' Ad"
+
+    if offering_score >= 1:
+        return True, "Identified as Sales Rep/Solo Biz"
+
+    if ("profil" in title_lower) or ("profile" in title_lower) or ("/in/" in text_lower):
+        return True, "Likely a Profile"
+
+    return False, "Content too generic / No clear intent"
+
+def classify_lead(lead: Dict[str, Any], title: str = "", text: str = "") -> str:
+    """Classify lead/persona type for lead_type column."""
+    name = (lead.get("name") or "").strip()
+    combined = " ".join([(title or ""), (text or ""), name]).lower()
+    name_lower = name.lower()
+    title_lower = (title or "").lower()
+    text_lower = (text or "").lower()
+
+    job_triggers = set(STRICT_JOB_AD_MARKERS + [
+        "your profile",
+        "wir bieten",
+        "gesucht",
+    ])
+
+    # Hard job-ad signals
+    if any(m in combined for m in job_triggers):
+        return "job_ad"
+
+    company_markers = (
+        "gmbh", "ag", "kg", "ug", "co. kg", "inc", "ltd", "holding", "group",
+        "unternehmen", "firma", "company",
+    )
+    if any(tok in name_lower for tok in company_markers) or any(tok in title_lower for tok in company_markers):
+        return "company"
+    if looks_like_company(name) or looks_like_company(title):
+        return "company"
+
+    sales_tokens = [
+        "vertrieb", "verkauf", "sales", "handelsvertreter", "aussendienst",
+        "account manager", "key account", "call center", "telefonverkauf",
+        "sales representative", "commercial agent", "account executive",
+    ]
+    is_human = is_likely_human_name(name)
+    has_sales = any(tok in combined for tok in sales_tokens)
+    if is_human and has_sales:
+        return "individual"
+    if is_human:
+        return "candidate"
+    if has_sales:
+        return "candidate"
+    return "candidate"
 
 def normalize_email(e: str) -> str:
     if not e:
@@ -1913,15 +2123,22 @@ def guess_name_around(pos:int, text:str, window=120):
     if not m: return ""
     return m.group(0).replace("Hr.","Herr").replace("Fr.","Frau")
 
-def validate_contact(contact: dict, page_url: str = "") -> bool:
+def validate_contact(contact: dict, page_url: str = "", page_text: str = "") -> bool:
     email = (contact.get("email") or "").strip()
     phone = (contact.get("telefon") or "").strip()
+    text_lower = (page_text or "").lower()
+    info_like_localparts = {"info", "kontakt", "service", "office", "news", "presse"}
+    candidate_context = any(tok in text_lower for tok in CANDIDATE_POS_MARKERS)
     if email:
         low = email.lower()
         if not EMAIL_RE.search(email):
             return False
         local, _, domain = low.partition("@")
-        if local in BAD_MAILBOXES:
+        if local in EMPLOYER_EMAIL_PREFIXES:
+            return False
+        if local in info_like_localparts and not candidate_context:
+            return False
+        if local in BAD_MAILBOXES and local not in info_like_localparts:
             return False
         if any(domain.endswith(p) for p in PORTAL_DOMAINS):
             return False
@@ -2070,14 +2287,46 @@ CANDIDATE_NEG_MARKERS = (
     "wir suchen", "team sucht", "bewirb dich", "bewirb-dich", "gmbh", " ag ", "aktuell suchen",
 )
 CANDIDATE_POS_MARKERS = (
-    "ich suche", "ich bin", "mein lebenslauf", "lebenslauf", "stellengesuch",
-    "open to work", "freelancer", "freiberuf", "selbstständig", "selbststaendig",
-    "suche neue herausforderung", "meine erfahrung", "qualifikation", "profil",
+    "suche job", "suche arbeit", "suche stelle", "suche neue herausforderung",
+    "biete mich an", "zu sofort", "arbeitslos", "arbeitssuchend",
+    "lebenslauf", "cv", "curriculum vitae", "profil", "qualifikation",
+    "kenntnisse", "fuehrerschein", "fuehrerschein", "erfahrung im vertrieb",
+    "stellengesuch", "bewerberprofil",
 )
 CANDIDATE_PHONE_CONTEXT = (
     "lebenslauf", "cv", "profil", "erfahrung", "qualifikation", "vita",
     "bewerbung", "stellengesuch", "ich suche", "ich bin", "open to work", "freelancer", "freiberuf",
 )
+
+
+def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") -> Tuple[bool, str]:
+    """Detect obvious non-candidate contexts (blogs, shops, company imprint, job ads)."""
+    t = (text or "").lower()
+    t_lower = t
+    ttl = (title or "").lower()
+    h1l = (h1 or "").lower()
+
+    news_tokens = (
+        "news", "artikel", "bericht", "tipps", "trends", "black friday",
+        "angebot", "webinar", "termine", "veranstaltung",
+    )
+    if any(tok in ttl for tok in news_tokens) or any(tok in h1l for tok in news_tokens):
+        return True, "news_blog"
+
+    shop_tokens = ("warenkorb", "kasse", "preis inkl", "preis inkl. mwst", "versandkosten", "lieferzeit", "bestellen")
+    if any(tok in t for tok in shop_tokens):
+        return True, "shop_product"
+
+    company_tokens = (" gmbh", "gmbh", " ag", " kg")
+    profile_tokens = ("profil", "lebenslauf", "gesuch")
+    if any(tok in ttl for tok in company_tokens) and not any(pk in ttl for pk in profile_tokens):
+        return True, "company_imprint"
+
+    job_ad_tokens = ("wir suchen", "wir bieten", "deine aufgaben", "bewirb dich jetzt", "stellenanzeige", "jobangebot") + tuple(STRICT_JOB_AD_MARKERS)
+    if any(tok in t for tok in job_ad_tokens):
+        return True, "job_ad"
+
+    return False, ""
 
 def _extract_name_from_text_block(txt: str) -> str:
     if not txt:
@@ -2090,14 +2339,47 @@ def _extract_name_from_text_block(txt: str) -> str:
         return ""
     return cand
 
-def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[BeautifulSoup], url: str, title_hint: str = "", h1_hint: str = "") -> Dict[str, Any]:
+def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[BeautifulSoup], url: str, title_hint: str = "", h1_hint: str = "", *, linkedin_profile: bool = False) -> Dict[str, Any]:
     name = (record.get("name") or "").strip()
     email = (record.get("email") or "").strip()
     phone = (record.get("telefon") or "").strip()
     lower_url = (url or "").lower()
+    is_linkedin_profile = linkedin_profile or ("linkedin.com/in/" in lower_url)
+
+    def _clean_fragment(val: str) -> str:
+        if not val:
+            return ""
+        cleaned = re.sub(r"\s*\|\s*(linkedin|xing).*?$", "", val, flags=re.I)
+        cleaned = re.sub(r"\s*-\s*(linkedin|xing).*?$", "", cleaned, flags=re.I)
+        return cleaned.strip()
+
+    title_hint_clean = _clean_fragment(title_hint)
+    h1_hint_clean = _clean_fragment(h1_hint)
+    name = _clean_fragment(name)
 
     if name.lower() == "wir":
         name = ""
+
+    # 0) LinkedIn-Slug -> Name
+    slug_name = ""
+    if is_linkedin_profile and "/in/" in lower_url:
+        slug = lower_url.split("/in/", 1)[1]
+        slug = slug.split("?", 1)[0].split("#", 1)[0].strip("/")
+        parts = [p for p in re.split(r"[-_]+", slug) if p and not p.isdigit()]
+        if len(parts) >= 2:
+            slug_name = " ".join(p.capitalize() for p in parts[:3])
+    if slug_name and (not name or not is_likely_human_name(name)):
+        name = slug_name
+
+    # 0b) Title/H1 cleanup-based guess
+    if not name and title_hint_clean:
+        maybe = _extract_name_from_text_block(title_hint_clean)
+        if maybe:
+            name = maybe
+    if not name and h1_hint_clean:
+        maybe = _extract_name_from_text_block(h1_hint_clean)
+        if maybe:
+            name = maybe
 
     # 1) E-Mail-Local-Part -> Name
     if (not name) and email and "@" in email:
@@ -2136,7 +2418,7 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
     # 4) Phone owner via Title/H1 (nur wenn Nummer vorhanden)
     if (not name) and phone:
         digits = re.sub(r"\\D", "", phone)
-        for hint in (title_hint, h1_hint):
+        for hint in (title_hint_clean, h1_hint_clean):
             if not hint:
                 continue
             if digits and digits not in re.sub(r"\\D", "", hint):
@@ -2149,14 +2431,18 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
     if (not name) and (phone or email):
         name = "Unknown Candidate"
 
+    name = _clean_fragment(name)
     record["name"] = name
     return record
 
 def is_candidate_profile_text(text: str) -> bool:
     t = (text or "").lower()
-    if any(tok in t for tok in CANDIDATE_NEG_MARKERS):
+    has_pos = any(tok in t for tok in CANDIDATE_POS_MARKERS)
+    if not has_pos:
         return False
-    return any(tok in t for tok in CANDIDATE_POS_MARKERS)
+    if EMPLOYER_TEXT_RE.search(t) or any(tok in t for tok in CANDIDATE_NEG_MARKERS):
+        return False
+    return True
 
 def _phone_context_ok(text: str, start: int, end: int) -> bool:
     window = text[max(0, start - 120): min(len(text), end + 120)].lower()
@@ -2259,7 +2545,13 @@ def extract_kleinanzeigen_links(html: str, base_url: str = "") -> List[str]:
 # =========================
 
 def compute_score(text: str, url: str, html: str = "") -> int:
-    t = (text or "").lower()
+    # --- FIX START ---
+    # Define t_lower immediately so it is available for all checks
+    t = text or ""
+    t_lower = t.lower()
+    # Preserve previous lowercased behavior for downstream checks
+    t = t_lower
+    # --- FIX END ---
     u = (url or "").lower()
     title_text = ""
     if html:
@@ -2317,6 +2609,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     )
     is_hr_or_press = any(h in t for h in hr_role_hints)
     score = 0
+    reasons: List[str] = []
     has_mobile = bool(MOBILE_RE.search(t))
     has_tel_number = bool(PHONE_RE.search(t))
     has_tel_word = ("tel:" in t) or ("telefon" in t) or ("tel." in t) or bool(re.search(r'\btelefon\b|\btel\.', t))
@@ -2332,18 +2625,23 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     has_personal_email = has_email and not any(g in t for g in generic_mail_fragments)
     has_switch_now = any(k in t for k in [
         "quereinsteiger", "ab sofort", "sofort starten", "sofort start",
-        "keine erfahrung nötig", "ohne erfahrung", "jetzt bewerben",
+        "keine erfahrung noetig", "ohne erfahrung", "jetzt bewerben",
         "heute noch bewerben", "direkt bewerben"
     ])
     has_candidate_kw = any(k in t for k in CANDIDATE_KEYWORDS)
     has_ignore_kw = any(k in t for k in IGNORE_KEYWORDS)
-    has_lowpay_or_prov = bool(PROVISION_HINT.search(t)) or any(k in t for k in [
+    # Check for low pay / provision hints
+    has_lowpay_or_prov = any(h in t_lower for h in LOW_PAY_HINT) or any(k in t_lower for k in [
         "nur provision", "provisionsbasis", "fixum + provision",
-        "freelancer", "selbstständig", "selbststaendig", "werkvertrag"
+        "freelancer", "selbststaendig", "werkvertrag",
     ])
     has_d2d = bool(D2D_HINT.search(t)) or any(k in t for k in ["door to door", "haustür", "haustuer", "kaltakquise"])
     has_callcenter = bool(CALLCENTER_HINT.search(t))
     has_b2c = bool(B2C_HINT.search(t))
+    # Commission / high-value signals
+    if any(h in t_lower for h in COMMISSION_HINT):
+        score += 15
+        reasons.append("commission_terms")
     industry_hits = sum(1 for k in INDUSTRY_HINTS if k in t)
     in_nrw = bool(CITY_RE.search(t)) or any(k in t for k in [" nrw ", " nordrhein-westfalen "])
     on_contact_like = any(h in u for h in ["kontakt", "impressum"])
@@ -2387,11 +2685,10 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     if channel_count >= 3:
         score += 16   # deutlich angehoben
     if has_lowpay_or_prov:
-        score += 18
+        score -= 20
+        reasons.append("low_pay_terms")
     if has_switch_now:
         score += 12
-    if LOW_PAY_HINT.search(t):
-        score += 10   # angehoben
     if has_d2d:
         score += 9
     if has_callcenter:
@@ -2494,9 +2791,10 @@ def validate_content(html: str, url: str) -> bool:
     return True
 
 async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) -> Tuple[int, List[Dict[str, Any]]]:
+    is_pdf = False  # Track PDF status early
     meta = url if isinstance(url, dict) else {}
     snippet_hint = (meta.get("snippet", "") or "")
-    title_hint = (meta.get("title", "") or "")
+    search_title_hint = (meta.get("title", "") or "")
     url = _extract_url(url)
     if not url:
         return (0, [])
@@ -2507,7 +2805,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     path_lower = (parsed.path or "").lower()
     is_linkedin = host.endswith("linkedin.com")
     linkedin_profile = is_linkedin and path_lower.startswith("/in/")
-    linkedin_snippet_text = " ".join([title_hint, snippet_hint]).strip()
+    linkedin_snippet_text = " ".join([search_title_hint, snippet_hint]).strip()
 
     def _random_desktop_ua() -> str:
         pool = [ua for ua in UA_POOL if "mobile" not in ua.lower() and "android" not in ua.lower()]
@@ -2571,7 +2869,9 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
     if resp is not None:
         ct = (resp.headers.get("Content-Type", "") or "").lower()
-        if "application/pdf" in ct and not CFG.allow_pdf:
+        if "application/pdf" in ct or url.lower().endswith(".pdf"):
+            is_pdf = True  # PDF erkannt
+        if is_pdf and not CFG.allow_pdf:
             log("info", "PDF übersprungen (ALLOW_PDF=0)", url=url)
             mark_url_seen(url, run_id)
             return (1, [])
@@ -2614,8 +2914,25 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             title_text = ttag.get_text(" ", strip=True)
     except Exception:
         title_text = ""
-    if using_linkedin_snippet and not title_text:
-        title_text = title_hint or snippet_hint
+    if (using_linkedin_snippet or is_pdf) and not title_text:
+        title_text = search_title_hint or snippet_hint
+
+    pdf_cv_hint = False
+    if is_pdf:
+        pdf_window = (html or "")[:1000].lower()
+        hint_blob = " ".join([
+            (url or "").lower(),
+            (title_text or "").lower(),
+            (search_title_hint or "").lower(),
+        ])
+        pdf_cv_hint = any(k in pdf_window for k in ("lebenslauf", "cv", "curriculum vitae")) or any(
+            k in hint_blob for k in ("lebenslauf", "cv", "curriculum vitae")
+        )
+        if (url.lower().endswith(".pdf") or not CFG.allow_pdf) and not pdf_cv_hint:
+            log("debug", "PDF ohne CV/Lebenslauf skip", url=url)
+            mark_url_seen(url, run_id)
+            return (1, [])
+
     title_src = (title_text or linkedin_snippet_text or url or "").lower()
     pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
                 "handelsvertreter","handelsvertretung","makler","akquise","agent","berater","beraterin","geschäftsführer",
@@ -2627,11 +2944,19 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
                 "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt",
                 "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklärung","agb")
+    has_pos_key = any(k in title_src for k in pos_keys) or pdf_cv_hint
+    intent_hit = any(k in title_src for k in INTENT_TITLE_KEYWORDS)
+    suche_biete_hit = (("suche" in title_src) or ("biete" in title_src)) and (has_pos_key or intent_hit)
+    job_ad_hit = any(k in title_src for k in STRICT_JOB_AD_MARKERS)
     if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
         log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
         return (1, [])
-    if not any(k in title_src for k in pos_keys):
+    if job_ad_hit:
+        log("debug", "Titel-Guard: Job-Ad Marker erkannt, skip", url=url, title=title_text)
+        mark_url_seen(url, run_id)
+        return (1, [])
+    if not (has_pos_key or intent_hit or suche_biete_hit):
         log("debug", "Titel-Guard: Keine positiven Keywords, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
         return (1, [])
@@ -2646,7 +2971,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         return (1, [])
 
     # Content validieren (Invite-Links überspringen strenge Prüfung)
-    if (not invite_link) and (not using_linkedin_snippet) and (not validate_content(html, url)):
+    if (not invite_link) and (not using_linkedin_snippet) and (not is_pdf) and (not validate_content(html, url)):
         mark_url_seen(url, run_id)
         return (1, [])
 
@@ -2722,28 +3047,40 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     if soup is None:
         soup = BeautifulSoup(html, "html.parser")
 
-    if (not invite_link) and (not is_candidate_profile_text(text)):
-        log("debug", "Kein Kandidatenprofil – skip", url=url)
-        mark_url_seen(url, run_id)
-        return (1, [])
-
-    title_hint = ""
+    page_title = ""
     h1_hint = ""
     if soup:
         try:
-            title_hint = soup.title.get_text(" ", strip=True) if soup.title else ""
+            page_title = soup.title.get_text(" ", strip=True) if soup.title else ""
         except Exception:
-            title_hint = ""
+            page_title = ""
         try:
             h1 = soup.find("h1")
             h1_hint = h1.get_text(" ", strip=True) if h1 else ""
         except Exception:
             h1_hint = ""
 
+    if not invite_link:
+        garbage, reason = is_garbage_context(text, url, page_title, h1_hint)
+        if garbage:
+            log("debug", "Garbage Context detected", url=url, reason=reason)
+            mark_url_seen(url, run_id)
+            return (1, [])
+        if not is_candidate_profile_text(text):
+            log("debug", "Kein Kandidatenprofil - skip", url=url)
+            mark_url_seen(url, run_id)
+            return (1, [])
+        if is_job_advertisement(text, page_title or title_text, snippet_hint):
+            log("debug", "Job-Ad detected (hard block)", url=url)
+            mark_url_seen(url, run_id)
+            return (1, [])
+
+    text_lower_global = (text or "").lower()
     private_address = extract_private_address(text)
     social_profile_url = extract_social_profile_url(soup, text)
     if linkedin_profile and not social_profile_url:
         social_profile_url = url
+    role_category = classify_role(text, page_title or title_text)
 
     # --- Job/Karriere/Jobs/stellen: nur weiter, wenn direkter Kontaktanker existiert ---
     lu = url.lower()
@@ -2780,7 +3117,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             role_guess = ("Jobseeker" if JOBSEEKER_RE.search(text) else
                           ("Callcenter" if CALLCENTER_HINT.search(text) else
                            ("D2D" if D2D_HINT.search(text) else "Vertrieb")))
-            salary_hint = "low" if LOW_PAY_HINT.search(text) else ""
+            salary_hint = "low" if any(h in (text or "").lower() for h in LOW_PAY_HINT) else ""
             commission_hint = "yes" if PROVISION_HINT.search(text) else ("maybe" if SALES_RE.search(text) else "")
             region = "NRW" if CITY_RE.search(text) else ""
             last_updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -2795,7 +3132,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
             def _quality(r: Dict[str, Any]) -> int:
                 q = 0
-                if validate_contact(r, page_url=url): q += 50
+                if validate_contact(r, page_url=url, page_text=text): q += 50
                 if hiring_volume != "niedrig": q += 10
                 if recency != "unbekannt": q += 20
                 if not ssl_insecure: q += 10
@@ -2829,8 +3166,45 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 return boost, extras
 
             out: List[Dict[str, Any]] = []
+            snippet_lower = (snippet_hint or "").lower()
             for r in fast_items:
-                r = _ensure_candidate_name(r, text, soup, url, title_hint, h1_hint)
+                check_title = (title_text or search_title_hint or page_title or snippet_hint or "").lower()
+                combined_check = f"{check_title} {snippet_lower}"
+                strict_hit = next((m for m in STRICT_JOB_AD_MARKERS if m in combined_check), None)
+                if strict_hit:
+                    log("debug", "Dropped: Detected Strict Job Ad", marker=strict_hit, url=url)
+                    continue
+                keep_intent, intent_reason = analyze_page_intent(text_lower_global, check_title)
+                if not keep_intent:
+                    log("debug", "Dropped: Intent filter", reason=intent_reason, url=url)
+                    continue
+                r = _ensure_candidate_name(r, text, soup, url, page_title, h1_hint, linkedin_profile=linkedin_profile)
+                lead_type_guess = classify_lead(r, check_title, text)
+                if lead_type_guess == "job_ad":
+                    log("debug", "Dropped: Lead classified as Job Ad", url=url)
+                    continue
+                if "Sales Rep" in intent_reason and not r.get("role_guess"):
+                    r["role_guess"] = "Handelsvertreter/Agency"
+                # FILTER 1: Employer/Generic E-Mail aussortieren
+                lead_email = (r.get("email") or "").lower()
+                if lead_email and is_employer_email(lead_email):
+                    log("debug", "Dropped: Employer/Generic Email", email=lead_email, url=url)
+                    continue
+                # FILTER 2: Strikte Kandidaten-Intention + Retail Allow
+                is_gesuche_path = "/s-gesuche/" in url.lower()
+                has_candidate_intent = any(k in combined_check or k in text.lower() for k in ["suche", "gesuch", "biete", "lebenslauf", "cv", "profil", "mich vor", "verfuegbar", "experience"])
+                is_retail = any(rtok in combined_check for rtok in RETAIL_ROLES)
+                if not (is_gesuche_path or has_candidate_intent):
+                    log("debug", "Dropped: No Candidate Intent in Title", title=check_title, url=url)
+                    continue
+                if is_retail:
+                    r_tags = (r.get("tags") or "")
+                    parts = [p for p in r_tags.split(",") if p]
+                    if "retail_candidate" not in parts:
+                        parts.append("retail_candidate")
+                    r["tags"] = ",".join(parts)
+                    r["role_guess"] = "Retail/Kitchen Sales"
+                    r["score"] = max(r.get("score", 0), 70)
                 boost = 0
                 if r.get("email"):
                     b = _mail_boost_and_label(r.get("email"))
@@ -2851,6 +3225,11 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                     if "telegram" not in parts:
                         parts.append("telegram")
                     tag_local = ",".join(parts)
+                if role_category:
+                    parts = [p for p in tag_local.split(",") if p]
+                    if role_category not in parts:
+                        parts.append(role_category)
+                    tag_local = ",".join(parts)
                 if company_domain:
                     parts = [p for p in tag_local.split(",") if p]
                     dom_tag = f"domain:{company_domain}"
@@ -2862,16 +3241,28 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                 lt = "other"
                 if "group_invite" in (base_tags or ""):
                     lt = "group_invite"
+                elif lead_type_guess:
+                    lt = lead_type_guess
                 elif "/s-stellengesuche/" in url.lower():
                     lt = "candidate"
                 elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
                     lt = "candidate"
                 elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
                     lt = "employer"
+                if lt in ("candidate", "individual") and role_category:
+                    lt = role_category
+                if lead_type_guess == "company":
+                    lt = "company"
+
+                score_final = min(100, base_score + boost)
+                if looks_like_company(r.get("name", "")) or looks_like_company(comp_name):
+                    score_final = max(0, score_final - 30)
+                if is_likely_human_name(r.get("name", "")):
+                    score_final = min(100, score_final + 20)
 
                 enriched = {
                     **r,
-                    "score": min(100, base_score + boost),
+                    "score": score_final,
                     "tags": tag_local,
                     "region": region,
                     "role_guess": role_guess,
@@ -2924,7 +3315,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         mark_url_seen(url, run_id)
         return (1, [])
 
-    # --- Kontakte extrahieren: Regex zuerst, LLM nur wenn nötig ---
+    # --- Kontakte extrahieren: Regex zuerst, LLM nur wenn noetig ---
     items: List[Dict[str, Any]] = []
 
     # 1) Regex first (schnell & kostenlos)
@@ -2947,7 +3338,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         items = extract_kleinanzeigen(html, url)
 
     if items:
-        items = [_ensure_candidate_name(r, text, soup, url, title_hint, h1_hint) for r in items]
+        items = [_ensure_candidate_name(r, text, soup, url, page_title, h1_hint, linkedin_profile=linkedin_profile) for r in items]
 
     if not items:
         mark_url_seen(url, run_id)
@@ -2964,7 +3355,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     locations = extract_locations(text)
     base_tags = tags_from(text)
     role_guess = "Callcenter" if CALLCENTER_HINT.search(text) else ("D2D" if D2D_HINT.search(text) else "Vertrieb")
-    salary_hint = "low" if LOW_PAY_HINT.search(text) else ""
+    salary_hint = "low" if any(h in (text or "").lower() for h in LOW_PAY_HINT) else ""
     commission_hint = "yes" if PROVISION_HINT.search(text) else ("maybe" if SALES_RE.search(text) else "")
     region = "NRW" if CITY_RE.search(text) else ""
     last_updated = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -2979,7 +3370,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
     def _quality(r: Dict[str, Any]) -> int:
         q = 0
-        if validate_contact(r, page_url=url): q += 50
+        if validate_contact(r, page_url=url, page_text=text): q += 50
         if hiring_volume != "niedrig": q += 10
         if recency != "unbekannt": q += 20
         if not ssl_insecure: q += 10
@@ -3018,11 +3409,46 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         return boost, extras
 
     out: List[Dict[str, Any]] = []
+    snippet_lower = (snippet_hint or "").lower()
     for r in items:
         # Reject früh, damit kein Müll reinkommt
         if not (r.get("email") or r.get("telefon")):
             continue
-        if not validate_contact(r, page_url=url):
+        lead_email = (r.get("email") or "").lower()
+        if lead_email and is_employer_email(lead_email):
+            log("debug", "Dropped: Employer/Generic Email", email=lead_email, url=url)
+            continue
+        check_title = (title_text or search_title_hint or page_title or snippet_hint or "").lower()
+        combined_check = f"{check_title} {snippet_lower}"
+        strict_hit = next((m for m in STRICT_JOB_AD_MARKERS if m in combined_check), None)
+        if strict_hit:
+            log("debug", "Dropped: Detected Strict Job Ad", marker=strict_hit, url=url)
+            continue
+        keep_intent, intent_reason = analyze_page_intent(text_lower_global, check_title)
+        if not keep_intent:
+            log("debug", "Dropped: Intent filter", reason=intent_reason, url=url)
+            continue
+        lead_type_guess = classify_lead(r, check_title, text)
+        if lead_type_guess == "job_ad":
+            log("debug", "Dropped: Lead classified as Job Ad", url=url)
+            continue
+        if "Sales Rep" in intent_reason and not r.get("role_guess"):
+            r["role_guess"] = "Handelsvertreter/Agency"
+        is_gesuche_path = "/s-gesuche/" in url.lower()
+        has_candidate_intent = any(k in combined_check or k in text.lower() for k in ["suche", "gesuch", "biete", "lebenslauf", "cv", "profil", "mich vor", "verfuegbar", "experience"])
+        is_retail = any(rtok in combined_check for rtok in RETAIL_ROLES)
+        if not (is_gesuche_path or has_candidate_intent or linkedin_profile):
+            log("debug", "Dropped: No Candidate Intent in Title", title=check_title, url=url)
+            continue
+        if is_retail:
+            r_tags = (r.get("tags") or "")
+            parts = [p for p in r_tags.split(",") if p]
+            if "retail_candidate" not in parts:
+                parts.append("retail_candidate")
+            r["tags"] = ",".join(parts)
+            r["role_guess"] = "Retail/Kitchen Sales"
+            r["score"] = max(r.get("score", 0), 70)
+        if not validate_contact(r, page_url=url, page_text=text):
             continue
 
         boost = 0
@@ -3047,6 +3473,11 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             if "telegram" not in parts:
                 parts.append("telegram")
             tag_local = ",".join(parts)
+        if role_category:
+            parts = [p for p in tag_local.split(",") if p]
+            if role_category not in parts:
+                parts.append(role_category)
+            tag_local = ",".join(parts)
         if company_domain:
             parts = [p for p in tag_local.split(",") if p]
             dom_tag = f"domain:{company_domain}"
@@ -3058,12 +3489,24 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         lt = "other"
         if "group_invite" in (base_tags or ""):
             lt = "group_invite"
+        elif lead_type_guess:
+            lt = lead_type_guess
         elif "/s-stellengesuche/" in url.lower():
             lt = "candidate"
         elif CANDIDATE_TEXT_RE.search(text) or any(k in text.lower() for k in CANDIDATE_KEYWORDS):
             lt = "candidate"
         elif EMPLOYER_TEXT_RE.search(text) or RECRUITER_RE.search(text):
             lt = "employer"
+        if lt in ("candidate", "individual") and role_category:
+            lt = role_category
+        if lead_type_guess == "company":
+            lt = "company"
+
+        score_final = min(100, lead_score + boost)
+        if looks_like_company(r.get("name", "")) or looks_like_company(comp_name):
+            score_final = max(0, score_final - 30)
+        if is_likely_human_name(r.get("name", "")):
+            score_final = min(100, score_final + 20)
 
         r["_phone_type"] = extras.get("phone_type", "")
         r["_whatsapp_link"] = "yes" if extras.get("whatsapp_link") else "no"
@@ -3071,7 +3514,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
 
         enriched = {
             **r,
-            "score": min(100, lead_score + boost),
+            "score": score_final,
             "tags": tag_local,
             "region": region,
             "role_guess": role_guess,
@@ -3263,7 +3706,7 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
                         "quelle": src_url,
                     }
                     if rec.get("email") or rec.get("telefon"):
-                        if validate_contact(rec, page_url=src_url):
+                        if validate_contact(rec, page_url=src_url, page_text=raw_text):
                             cleaned.append(rec)
                 # dedupe
                 dedup, seen_e, seen_t = [], set(), set()
@@ -4110,3 +4553,17 @@ if __name__ == "__main__":
         die("Abgebrochen (Strg+C)")
     except Exception as e:
         die("Unerwarteter Fehler", error=str(e), tb=traceback.format_exc())
+
+# --- NOTFALL-PATCH fuer fehlende Konstanten ---
+DENY_DOMAINS = {
+    'stepstone.de', 'indeed.com', 'monster.de', 'arbeitsagentur.de',
+    'xing.com/jobs', 'linkedin.com/jobs', 'meinestadt.de', 'kimeta.de',
+    'jobware.de', 'stellenanzeigen.de', 'absolventa.de', 'glassdoor.de',
+    'kununu.com', 'azubiyo.de', 'ausbildung.de', 'gehalt.de',
+    'wikipedia.org', 'youtube.com', 'amazon.de', 'ebay.de'
+}
+
+PORTAL_DOMAINS = {
+    't-online.de', 'gmx.net', 'web.de', 'yahoo.com', 'msn.com',
+    'freenet.de', '1und1.de', 'vodafone.de', 'telekom.de', 'o2online.de'
+}
