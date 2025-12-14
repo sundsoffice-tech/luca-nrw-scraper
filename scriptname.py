@@ -265,7 +265,7 @@ ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 
 # Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "50"))          # globale max. gleichzeitige Requests
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (lowered from 50 to avoid rate limits)
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
@@ -281,6 +281,7 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
+ENABLE_GOOGLE_CSE = (os.getenv("ENABLE_GOOGLE_CSE", "1") == "1")
 
 # === Rotation: Proxies & User-Agents ===
 def _env_list(val: str, sep: str) -> list[str]:
@@ -308,7 +309,7 @@ MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
 MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "1.6"))
+SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.5"))  # Increased from 1.6 to reduce 429 errors
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 # -------------- Logging --------------
@@ -711,8 +712,10 @@ PDF_CT = "application/pdf"
 # Circuit-Breaker pro Host
 _HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "failures": int}}
 # URLs, die wegen 429/403 in die zweite Welle sollen
-CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "90"))  # Sekunden
+CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))  # Sekunden (reduced from 90 to recover faster)
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
+# Special handling for API endpoints that should have shorter penalties
+CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))  # Shorter penalty for googleapis.com and other APIs
 
 _RETRY_URLS: list[str] = []
 _SITEMAP_FAILED_HOSTS: set[str] = set()
@@ -726,9 +729,12 @@ def _host_from(url: str) -> str:
 def _penalize_host(host: str):
     st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
     st["failures"] = min(st["failures"] + 1, 10)
-    penalty = min(CB_BASE_PENALTY * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
+    # Use shorter penalty for API endpoints (googleapis.com, etc)
+    is_api_host = "googleapis.com" in host or "api." in host
+    base_penalty = CB_API_PENALTY if is_api_host else CB_BASE_PENALTY
+    penalty = min(base_penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
     st["penalty_until"] = time.time() + penalty
-    log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
+    log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty, is_api=is_api_host)
 
 def _host_allowed(host: str) -> bool:
     st = _HOST_STATE.get(host)
@@ -1025,7 +1031,7 @@ GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
 GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
 GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","12"))  # höherer Default
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","4"))  # Reduced from 12 to avoid rate limits
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
@@ -1312,6 +1318,8 @@ async def search_perplexity_async(query: str) -> List[Dict[str, str]]:
         return []
 
 async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: Optional[str] = None) -> Tuple[List[Dict[str, str]], bool]:
+    if not ENABLE_GOOGLE_CSE:
+        log("debug","Google CSE deaktiviert (ENABLE_GOOGLE_CSE=0)"); return [], False
     if not (GCS_KEYS and GCS_CXS):
         log("debug","Google CSE nicht konfiguriert – übersprungen"); return [], False
 
@@ -1326,7 +1334,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     results: List[Dict[str, str]] = []
     page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
-    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","12"))
+    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))  # Use same default as MAX_GOOGLE_PAGES global
     while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,
@@ -4614,38 +4622,49 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             collected_rows = []
             links: List[UrlLike] = []
 
+            # Try Google CSE first (if enabled)
             try:
                 g_links, had_429 = await google_cse_search_async(q, max_results=60, date_restrict=date_restrict)
                 links.extend(g_links)
                 had_429_flag |= had_429
+                if had_429:
+                    log("warn", "Google CSE returned 429 - activating fallbacks immediately", q=q)
             except Exception as e:
                 log("error", "Google-Suche explodiert", q=q, error=str(e))
 
-            if len(links) < 3:
+            # Activate fallbacks if Google failed (429) or returned too few results
+            use_fallbacks = had_429_flag or len(links) < 3
+            
+            if use_fallbacks:
+                # Try Perplexity
                 try:
-                    log("info", "Nutze Perplexity (sonar)...", q=q)
+                    log("info", "Nutze Perplexity (sonar)...", q=q, reason="429" if had_429_flag else "insufficient_results")
                     pplx_links = await search_perplexity_async(q)
                     links.extend(pplx_links)
                 except Exception as e:
                     log("error", "Perplexity-Suche explodiert", q=q, error=str(e))
 
+            # If still no links, try DuckDuckGo
             if not links:
                 try:
+                    log("info", "Nutze DuckDuckGo...", q=q)
                     ddg_links = await duckduckgo_search_async(q, max_results=30)
                     links.extend(ddg_links)
                 except Exception as e:
                     log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
 
-            if not links:
-                log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG). Mache eine längere Pause.", q=q)
-                await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(1.5,2.5))
-
+            # Always try Kleinanzeigen as an additional source (not just fallback)
             try:
                 ka_links = await kleinanzeigen_search_async(q, max_results=KLEINANZEIGEN_MAX_RESULTS)
                 if ka_links:
                     links.extend(ka_links)
             except Exception as e:
                 log("warn", "Kleinanzeigen-Suche explodiert", q=q, error=str(e))
+
+            # If still no links after all sources, pause longer
+            if not links:
+                log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG, Kleinanzeigen). Mache eine längere Pause.", q=q)
+                await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(1.5,2.5))
 
             if links:
                 uniq_links: List[UrlLike] = []
