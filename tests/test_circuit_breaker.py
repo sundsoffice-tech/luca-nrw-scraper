@@ -29,8 +29,8 @@ def test_circuit_breaker_config():
         "CB_API_PENALTY should be defined for API hosts"
     
     # Verify _penalize_host uses shorter penalty for API hosts
-    assert 'is_api_host = "googleapis.com" in host or "api." in host' in content, \
-        "_penalize_host should detect API hosts"
+    assert 'is_api_host = host.endswith("googleapis.com")' in content, \
+        "_penalize_host should properly detect API hosts using endswith()"
     
     assert 'base_penalty = CB_API_PENALTY if is_api_host else CB_BASE_PENALTY' in content, \
         "_penalize_host should use CB_API_PENALTY for API hosts"

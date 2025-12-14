@@ -727,10 +727,20 @@ def _host_from(url: str) -> str:
         return ""
 
 def _penalize_host(host: str):
+    """
+    Apply circuit breaker penalty to a host.
+    
+    Args:
+        host: Hostname (from urllib.parse.urlparse(url).netloc), already sanitized
+    
+    Note: host parameter comes from _host_from() which uses urllib.parse.urlparse().netloc,
+    so it's already a sanitized hostname. The endswith() check is safe here.
+    """
     st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
     st["failures"] = min(st["failures"] + 1, 10)
     # Use shorter penalty for API endpoints (googleapis.com, etc)
-    is_api_host = "googleapis.com" in host or "api." in host
+    # Use endswith to properly check domain suffix and avoid false positives
+    is_api_host = host.endswith("googleapis.com") or host.startswith("api.") or ".api." in host
     base_penalty = CB_API_PENALTY if is_api_host else CB_BASE_PENALTY
     penalty = min(base_penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
     st["penalty_until"] = time.time() + penalty
