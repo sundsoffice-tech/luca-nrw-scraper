@@ -1334,7 +1334,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     results: List[Dict[str, str]] = []
     page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
-    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))  # Use same default as MAX_GOOGLE_PAGES global
+    page_cap = MAX_GOOGLE_PAGES  # Use global constant to avoid duplication
     while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,

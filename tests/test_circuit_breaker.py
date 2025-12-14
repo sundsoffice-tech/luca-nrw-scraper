@@ -84,15 +84,15 @@ def test_conservative_defaults():
     assert 'ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))' in content, \
         "ASYNC_LIMIT should default to 35"
     
-    # Verify google_cse_search_async also uses the new default
+    # Verify google_cse_search_async uses the global constant
     google_func_start = content.find("async def google_cse_search_async")
     google_func_end = content.find("\nasync def", google_func_start + 1)
     if google_func_end == -1:
         google_func_end = content.find("\ndef ", google_func_start + 1)
     
     google_func = content[google_func_start:google_func_end]
-    assert 'page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))' in google_func, \
-        "google_cse_search_async should use same default as global MAX_GOOGLE_PAGES"
+    assert 'page_cap = MAX_GOOGLE_PAGES' in google_func, \
+        "google_cse_search_async should use global MAX_GOOGLE_PAGES constant"
     
     print("✓ Conservative defaults checks passed")
 
