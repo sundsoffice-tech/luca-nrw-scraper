@@ -91,6 +91,7 @@ def compute_score_v2(
 
     score = 0
 
+    # No phone: strong negative penalty
     if not telefon:
         score -= 100
 
@@ -102,6 +103,7 @@ def compute_score_v2(
         domain_is_free = domain in FREE_MAILS
         local_is_generic = local in GENERIC_MAILBOXES
 
+        # Email tier scoring: portal -15, generic -5, free +5, corporate +10
         if domain_is_portal:
             score -= 15
         elif local_is_generic:
@@ -109,7 +111,7 @@ def compute_score_v2(
         elif domain_is_free:
             score += 5
         elif domain and not domain_is_free:
-            score += 10
+            score += 10  # Corporate email bonus
 
     if telefon:
         score += config["phone_bonus"]
@@ -191,21 +193,27 @@ def apply_dynamic_threshold(
     """
     Entfernt z.B. das schlechteste Quartil nach Score.
     Gibt (gefilterte_leads, info_dict) zurück.
+    
+    For n<8, uses Median instead of Q1+5 for dynamic threshold.
     """
     if not leads:
-        return [], {"threshold": 0, "passed": 0, "removed": 0, "pass_rate": "0.0%"}
+        return [], {"threshold": 0, "passed": 0, "removed": 0, "pass_rate": "0.0%", "removed_reason": ""}
 
     scores = [max(0, min(100, int(l.get("score", 0)))) for l in leads]
 
     if sum(scores) == 0:
         threshold = 0
         filtered = list(leads)
+        removed_reason = ""
     else:
+        # Use Median for n<8, Q1+5 for n>=8
         if len(scores) < 8:
             threshold = statistics.median(scores)
+            removed_reason = "below_dynamic"
         else:
             q = statistics.quantiles(scores, n=4)
             threshold = int(round(q[0] + 5))
+            removed_reason = "below_dynamic"
 
         threshold = max(0, min(100, threshold))
         filtered = [l for l in leads if int(l.get("score", 0)) >= threshold]
@@ -220,6 +228,7 @@ def apply_dynamic_threshold(
         "passed": passed,
         "removed": removed,
         "pass_rate": pass_rate,
+        "removed_reason": removed_reason if removed > 0 else "",
     }
     return filtered, info
 
@@ -281,11 +290,13 @@ def score_and_filter_leads(
     except Exception:
         pass_rate_val = 0.0
 
-    removed_reason = None
-    if len(filtered) < len(eligible):
-        removed_reason = "below_dynamic"
-    elif len(eligible) < len(all_leads):
-        removed_reason = "below_floor"
+    # Determine removed_reason from thresh_info or fallback
+    removed_reason = thresh_info.get("removed_reason", "")
+    if not removed_reason:
+        if len(filtered) < len(eligible):
+            removed_reason = "below_dynamic"
+        elif len(eligible) < len(all_leads):
+            removed_reason = "below_floor"
 
     meta = {
         "threshold_info": thresh_info,

@@ -10,12 +10,33 @@ def reset_pdf_flag(monkeypatch):
 
 
 def test_drop_without_phone():
+    """Test that leads without phone are dropped."""
     lead = {"email": "someone@example.com", "telefon": ""}
 
     drop, reason = scriptname.should_drop_lead(lead, "https://example.com/profile", "Kontakt per E-Mail")
 
     assert drop is True
     assert reason == "no_phone"
+
+
+def test_drop_with_invalid_phone():
+    """Test that leads with invalid phone are dropped."""
+    lead = {"email": "someone@example.com", "telefon": "123"}  # Too short
+
+    drop, reason = scriptname.should_drop_lead(lead, "https://example.com/profile", "Kontakt")
+
+    assert drop is True
+    assert reason == "no_phone"
+
+
+def test_keep_with_valid_phone():
+    """Test that leads with valid phone are not dropped for phone reason."""
+    lead = {"email": "someone@example.com", "telefon": "+491761234567"}
+
+    drop, reason = scriptname.should_drop_lead(lead, "https://example.com/profile", "Kontakt")
+
+    # Should not drop for no_phone reason
+    assert not (drop is True and reason == "no_phone")
 
 
 def test_drop_on_portal_email_domain():
