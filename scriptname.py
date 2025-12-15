@@ -575,6 +575,7 @@ def _url_seen_fast(url: str) -> bool:
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
+    Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
     """
     if not leads:
         return []
@@ -588,6 +589,20 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     new_rows = []
     try:
         for r in leads:
+            # Phone hardfilter: Re-check phone validity before insert
+            phone = (r.get("telefon") or "").strip()
+            if phone:
+                is_valid, phone_type = validate_phone(phone)
+                if not is_valid:
+                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=r.get("quelle", ""))
+                    continue
+                # Update phone_type if not already set (intentional in-place modification)
+                if not r.get("phone_type"):
+                    r["phone_type"] = phone_type
+            else:
+                # No phone - skip lead (phone is mandatory)
+                log("debug", "Lead dropped at insert (no phone)", url=r.get("quelle", ""))
+                continue
             vals = [
                 r.get("name",""),
                 r.get("rolle",""),
@@ -1086,7 +1101,7 @@ GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
 GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
 GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","4"))  # höherer Default
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduced to 1-2 for cost control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
@@ -1387,7 +1402,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     results: List[Dict[str, str]] = []
     page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
-    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))
+    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduced to 1-2 for cost control
     while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,
@@ -1483,7 +1498,7 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
 
     results: List[Dict[str, str]] = []
 
-    for attempt in range(1, 4):
+    for attempt in range(1, 3):  # Max 1 retry (2 attempts total)
         try:
             # === CRITICAL: Set environment variables *inside* the try block ===
             # This ensures clean state on each retry attempt
@@ -1538,6 +1553,10 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
                     log("info", "DuckDuckGo Treffer", q=query, count=len(results))
                 else:
                     log("info", "DuckDuckGo: Keine Treffer (Seite leer)", q=query)
+                    # Log query as weak after "No results" on first attempt
+                    # Metrics system tracks this for adaptive dork selection
+                    if attempt == 1:
+                        log("debug", "DuckDuckGo: Query weak (no results)", q=query)
                 return results
 
         except Exception as e:
@@ -1545,11 +1564,13 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
             if "ConnectTimeout" in err_msg or "WinError 10060" in err_msg:
                 log("warn", "DuckDuckGo: Netzwerkproblem, überspringe", q=query)
                 return []
-            if attempt < 3:
-                log("warn", f"DuckDuckGo Retry {attempt}/3 wegen Fehler", error=err_msg, q=query)
+            if attempt < 2:  # Only 1 retry allowed
+                log("warn", f"DuckDuckGo Retry {attempt}/2 wegen Fehler", error=err_msg, q=query)
                 await asyncio.sleep(3)
             else:
-                log("warn", "DuckDuckGo endgültig gescheitert", error=err_msg, q=query)
+                log("warn", "DuckDuckGo endgültig gescheitert nach 1 Retry", error=err_msg, q=query)
+                # Log query as weak after failure - metrics system tracks this
+                log("debug", "DuckDuckGo: Query weak (failed)", q=query)
 
     return []
 
@@ -2000,6 +2021,8 @@ DROP_PORTAL_DOMAINS = {
     "bewerbung.net",
     "freelancermap.de",
     "reddit.com",
+    "jobboard-deutschland.de",
+    "kleinanzeigen.de",
     "praca.egospodarka.pl",
     "tabellarischer-lebenslauf.net",
     "lexware.de",
@@ -2009,6 +2032,8 @@ DROP_PORTAL_DOMAINS = {
     "accountable.de",
     "sevdesk.de",
     "mlp.de",
+    "netspor-tv.com",
+    "trendyol.com",
 }
 DROP_PORTAL_PATH_FRAGMENTS = ("linkedin.com/jobs", "xing.com/jobs")
 IMPRINT_PATH_RE = re.compile(r"/(impressum|datenschutz|privacy|agb)(?:/|\\?|#|$)", re.I)
@@ -4744,7 +4769,14 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
             emails = [m.group(0) for m in SNIPPET_EMAIL_RE.finditer(snippet_text)]
             phones_raw = [normalize_phone(m.group(0)) for m in SNIPPET_PHONE_RE.finditer(snippet_text)]
             emails = list(dict.fromkeys([e for e in emails if e]))
-            phones = list(dict.fromkeys([p for p in phones_raw if p]))
+            # Phone hardfilter: validate phones early (fast-path)
+            phones_validated = []
+            for p in phones_raw:
+                if p:
+                    is_valid, _ = validate_phone(p)
+                    if is_valid:
+                        phones_validated.append(p)
+            phones = list(dict.fromkeys(phones_validated))
             if emails or phones:
                 try:
                     log("info", f"💰 SNIPPET-JACKPOT: {u} -> Mail: {len(emails)}, Tel: {len(phones)}")
@@ -5351,8 +5383,8 @@ def parse_args():
     ap.add_argument("--industry", choices=["all","recruiter"] + list(INDUSTRY_ORDER),
                 default=os.getenv("INDUSTRY","all"),
                 help="Branche für diesen Run (Standard: all)")
-    ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","2")),
-                    help="Queries pro Branche in diesem Run (Standard: 2)")
+    ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
+                    help="Queries pro Branche in diesem Run (Standard: 6)")
     ap.add_argument("--daterestrict", type=str, default=os.getenv("DATE_RESTRICT",""),
                     help="Google CSE dateRestrict, z.B. d30, w8, m3")
     ap.add_argument("--smart", action="store_true", help="AI-generierte Dorks (selbstlernend) aktivieren")
