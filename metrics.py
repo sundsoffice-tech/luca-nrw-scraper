@@ -180,30 +180,61 @@ class MetricsStore:
         cur = conn.cursor()
         now = time.time()
         
-        # Persist dork metrics
-        for dork, metrics in self.dork_cache.items():
-            cur.execute("""
-                INSERT OR REPLACE INTO dork_metrics 
-                (dork, queries_total, serp_hits, urls_fetched, leads_found, 
-                 leads_kept, accepted_leads, last_used, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                dork, metrics.queries_total, metrics.serp_hits,
-                metrics.urls_fetched, metrics.leads_found, metrics.leads_kept,
-                metrics.accepted_leads, metrics.last_used, now
-            ))
-        
-        # Persist host metrics
-        for host, metrics in self.host_cache.items():
-            drops_json = json.dumps(dict(metrics.drops_by_reason))
-            cur.execute("""
-                INSERT OR REPLACE INTO host_metrics 
-                (host, hits_total, drops_by_reason, backoff_until, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (host, metrics.hits_total, drops_json, metrics.backoff_until, now))
-        
-        conn.commit()
-        conn.close()
+        try:
+            # Persist dork metrics
+            for dork, metrics in self.dork_cache.items():
+                cur.execute("""
+                    INSERT OR REPLACE INTO dork_metrics 
+                    (dork, queries_total, serp_hits, urls_fetched, leads_found, 
+                     leads_kept, accepted_leads, last_used, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    dork, metrics.queries_total, metrics.serp_hits,
+                    metrics.urls_fetched, metrics.leads_found, metrics.leads_kept,
+                    metrics.accepted_leads, metrics.last_used, now
+                ))
+            
+            # Persist host metrics
+            for host, metrics in self.host_cache.items():
+                drops_json = json.dumps(dict(metrics.drops_by_reason))
+                cur.execute("""
+                    INSERT OR REPLACE INTO host_metrics 
+                    (host, hits_total, drops_by_reason, backoff_until, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (host, metrics.hits_total, drops_json, metrics.backoff_until, now))
+            
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            # If tables don't exist, reinitialize
+            if "no such table" in str(e):
+                conn.close()
+                self._init_db()
+                # Retry persist
+                conn = sqlite3.connect(self.db_path)
+                cur = conn.cursor()
+                for dork, metrics in self.dork_cache.items():
+                    cur.execute("""
+                        INSERT OR REPLACE INTO dork_metrics 
+                        (dork, queries_total, serp_hits, urls_fetched, leads_found, 
+                         leads_kept, accepted_leads, last_used, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        dork, metrics.queries_total, metrics.serp_hits,
+                        metrics.urls_fetched, metrics.leads_found, metrics.leads_kept,
+                        metrics.accepted_leads, metrics.last_used, now
+                    ))
+                for host, metrics in self.host_cache.items():
+                    drops_json = json.dumps(dict(metrics.drops_by_reason))
+                    cur.execute("""
+                        INSERT OR REPLACE INTO host_metrics 
+                        (host, hits_total, drops_by_reason, backoff_until, updated_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (host, metrics.hits_total, drops_json, metrics.backoff_until, now))
+                conn.commit()
+            else:
+                raise
+        finally:
+            conn.close()
     
     def get_dork_metrics(self, dork: str) -> DorkMetrics:
         """Get or create dork metrics."""
@@ -214,9 +245,9 @@ class MetricsStore:
     def get_host_metrics(self, host: str) -> HostMetrics:
         """Get or create host metrics."""
         if not host:
-            return HostMetrics(host="")
+            return HostMetrics(host="", drops_by_reason=defaultdict(int))
         if host not in self.host_cache:
-            self.host_cache[host] = HostMetrics(host=host)
+            self.host_cache[host] = HostMetrics(host=host, drops_by_reason=defaultdict(int))
         return self.host_cache[host]
     
     def record_query(self, dork: str):
