@@ -575,6 +575,7 @@ def _url_seen_fast(url: str) -> bool:
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
+    Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
     """
     if not leads:
         return []
@@ -588,6 +589,20 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     new_rows = []
     try:
         for r in leads:
+            # Phone hardfilter: Re-check phone validity before insert
+            phone = (r.get("telefon") or "").strip()
+            if phone:
+                is_valid, phone_type = validate_phone(phone)
+                if not is_valid:
+                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=r.get("quelle", ""))
+                    continue
+                # Update phone_type if not already set
+                if not r.get("phone_type"):
+                    r["phone_type"] = phone_type
+            else:
+                # No phone - skip lead (phone is mandatory)
+                log("debug", "Lead dropped at insert (no phone)", url=r.get("quelle", ""))
+                continue
             vals = [
                 r.get("name",""),
                 r.get("rolle",""),
