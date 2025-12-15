@@ -2009,6 +2009,10 @@ DROP_PORTAL_DOMAINS = {
     "accountable.de",
     "sevdesk.de",
     "mlp.de",
+    # Additional hosts from requirements
+    "trendyol.com",
+    "netspor-tv.com",
+    "netspor.tv",
 }
 DROP_PORTAL_PATH_FRAGMENTS = ("linkedin.com/jobs", "xing.com/jobs")
 IMPRINT_PATH_RE = re.compile(r"/(impressum|datenschutz|privacy|agb)(?:/|\\?|#|$)", re.I)

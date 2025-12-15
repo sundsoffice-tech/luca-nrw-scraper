@@ -139,36 +139,40 @@ class MetricsStore:
     
     def _load_metrics(self):
         """Load metrics from database into cache."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        
-        # Load dork metrics
-        cur.execute("SELECT * FROM dork_metrics")
-        for row in cur.fetchall():
-            self.dork_cache[row["dork"]] = DorkMetrics(
-                dork=row["dork"],
-                queries_total=row["queries_total"],
-                serp_hits=row["serp_hits"],
-                urls_fetched=row["urls_fetched"],
-                leads_found=row["leads_found"],
-                leads_kept=row["leads_kept"],
-                accepted_leads=row["accepted_leads"],
-                last_used=row["last_used"],
-            )
-        
-        # Load host metrics
-        cur.execute("SELECT * FROM host_metrics")
-        for row in cur.fetchall():
-            drops = json.loads(row["drops_by_reason"])
-            self.host_cache[row["host"]] = HostMetrics(
-                host=row["host"],
-                hits_total=row["hits_total"],
-                drops_by_reason=defaultdict(int, drops),
-                backoff_until=row["backoff_until"],
-            )
-        
-        conn.close()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            
+            # Load dork metrics
+            cur.execute("SELECT * FROM dork_metrics")
+            for row in cur.fetchall():
+                self.dork_cache[row["dork"]] = DorkMetrics(
+                    dork=row["dork"],
+                    queries_total=row["queries_total"],
+                    serp_hits=row["serp_hits"],
+                    urls_fetched=row["urls_fetched"],
+                    leads_found=row["leads_found"],
+                    leads_kept=row["leads_kept"],
+                    accepted_leads=row["accepted_leads"],
+                    last_used=row["last_used"],
+                )
+            
+            # Load host metrics
+            cur.execute("SELECT * FROM host_metrics")
+            for row in cur.fetchall():
+                drops = json.loads(row["drops_by_reason"])
+                self.host_cache[row["host"]] = HostMetrics(
+                    host=row["host"],
+                    hits_total=row["hits_total"],
+                    drops_by_reason=defaultdict(int, drops),
+                    backoff_until=row["backoff_until"],
+                )
+            
+            conn.close()
+        except sqlite3.OperationalError:
+            # Tables don't exist yet, skip loading
+            pass
     
     def persist(self):
         """Persist all metrics to database."""
