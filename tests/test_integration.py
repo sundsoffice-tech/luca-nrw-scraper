@@ -17,7 +17,7 @@ def temp_db():
     yield path
     try:
         os.unlink(path)
-    except:
+    except (OSError, FileNotFoundError):
         pass
 
 
@@ -261,5 +261,6 @@ class TestSystemFromEnv:
             import os
             if os.path.exists("test_metrics.db"):
                 os.unlink("test_metrics.db")
-        except:
-            pass
+        except Exception as e:
+            # Allow test to pass even if cleanup fails
+            print(f"Warning: {e}")
