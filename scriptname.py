@@ -1996,17 +1996,68 @@ DROP_PORTAL_DOMAINS = {
     "meinestadt.de",
     "kimeta.de",
     "stellenanzeigen.de",
+    "bewerbung.net",
+    "freelancermap.de",
+    "reddit.com",
+    "praca.egospodarka.pl",
+    "tabellarischer-lebenslauf.net",
+    "lexware.de",
+    "tribeworks.de",
+    "junico.de",
+    "qonto.com",
+    "accountable.de",
+    "sevdesk.de",
+    "mlp.de",
 }
 DROP_PORTAL_PATH_FRAGMENTS = ("linkedin.com/jobs", "xing.com/jobs")
 IMPRINT_PATH_RE = re.compile(r"/(impressum|datenschutz|privacy|agb)(?:/|\\?|#|$)", re.I)
 CV_HINT_RE = re.compile(r"\b(lebenslauf|curriculum vitae|cv)\b", re.I)
 ALLOW_PDF_NON_CV = (os.getenv("ALLOW_PDF_NON_CV", "0") == "1")
 
+# Blacklist path/title patterns for pre-fetch filtering (case-insensitive)
+BLACKLIST_PATH_PATTERNS = {
+    "lebenslauf", "vorlage", "muster", "sitemap", "seminar", 
+    "academy", "weiterbildung", "job", "stellenangebot", 
+    "news", "blog", "ratgeber", "portal"
+}
+
 def _matches_hostlist(host: str, blocked: set[str]) -> bool:
     h = (host or "").lower()
     if h.startswith("www."):
         h = h[4:]
     return any(h == d or h.endswith("." + d) for d in (b.lower() for b in blocked))
+
+
+def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "") -> Tuple[bool, str]:
+    """
+    Pre-fetch URL filtering: check blacklist hosts and path patterns.
+    Returns (should_skip, reason).
+    """
+    if not url:
+        return False, ""
+    
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (parsed.netloc or "").lower()
+        path = (parsed.path or "").lower()
+        url_lower = url.lower()
+        title_lower = (title or "").lower()
+        snippet_lower = (snippet or "").lower()
+        
+        # Check host blacklist
+        if _matches_hostlist(host, DROP_PORTAL_DOMAINS):
+            return True, "blacklist_host"
+        
+        # Check path/title patterns (case-insensitive)
+        combined_text = f"{url_lower} {path} {title_lower}"
+        for pattern in BLACKLIST_PATH_PATTERNS:
+            if pattern in combined_text:
+                return True, f"blacklist_pattern_{pattern}"
+        
+        return False, ""
+    except Exception:
+        return False, ""
+
 
 def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title: str = "") -> Tuple[bool, str]:
     email = (lead.get("email") or "").strip().lower()
@@ -2020,8 +2071,13 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
         log("debug", "lead dropped", reason=reason, url=page_url)
         return True, reason
 
-    # Telefonnummer Pflicht
-    if not (lead.get("telefon") or "").strip():
+    # Telefonnummer Pflicht - strict validation
+    phone = (lead.get("telefon") or "").strip()
+    if not phone:
+        return _drop("no_phone")
+    
+    is_valid, phone_type = validate_phone(phone)
+    if not is_valid:
         return _drop("no_phone")
 
     if email:
@@ -2425,6 +2481,55 @@ def normalize_phone(p: str) -> str:
         return s  # unbearbeitet zurückgeben, wenn außerhalb Range
 
     return s
+
+
+# German mobile prefixes (015x, 016x, 017x)
+MOBILE_PREFIXES_DE = {'150', '151', '152', '155', '156', '157', '159',
+                      '160', '162', '163', '170', '171', '172', '173',
+                      '174', '175', '176', '177', '178', '179'}
+
+
+def validate_phone(phone: str) -> Tuple[bool, str]:
+    """
+    Robust phone validation with strict requirements.
+    Returns (is_valid, phone_type) where phone_type is 'mobile', 'landline', or 'invalid'.
+    
+    Requirements:
+    - Must be in E.164 format or DE format
+    - Length: 10-15 digits after normalization
+    - Support DE/intl formats: +49/0049/0...
+    - Detect mobile prefixes: 015/016/017
+    """
+    if not phone or not isinstance(phone, str):
+        return False, "invalid"
+    
+    normalized = normalize_phone(phone)
+    if not normalized:
+        return False, "invalid"
+    
+    # Extract digits only
+    digits = re.sub(r'\D', '', normalized)
+    
+    # Length check: 10-15 digits
+    if len(digits) < 10 or len(digits) > 15:
+        return False, "invalid"
+    
+    # Check if it's a valid German number
+    if normalized.startswith('+49'):
+        # Extract area/mobile code (first 3 digits after country code)
+        if len(digits) >= 5:
+            prefix = digits[2:5]  # Skip '49' country code
+            if prefix in MOBILE_PREFIXES_DE:
+                return True, "mobile"
+            # Landline numbers typically start with area codes
+            elif prefix[0] in '23456789':  # Valid landline area code starts
+                return True, "landline"
+    
+    # International numbers (non-DE)
+    elif normalized.startswith('+') and len(digits) >= 10:
+        return True, "international"
+    
+    return False, "invalid"
 
 
 def guess_name_around(pos:int, text:str, window=120):
