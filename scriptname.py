@@ -596,7 +596,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 if not is_valid:
                     log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=r.get("quelle", ""))
                     continue
-                # Update phone_type if not already set
+                # Update phone_type if not already set (intentional in-place modification)
                 if not r.get("phone_type"):
                     r["phone_type"] = phone_type
             else:
@@ -1402,7 +1402,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     results: List[Dict[str, str]] = []
     page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
-    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))
+    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduced to 1-2 for cost control
     while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,
@@ -1553,9 +1553,10 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
                     log("info", "DuckDuckGo Treffer", q=query, count=len(results))
                 else:
                     log("info", "DuckDuckGo: Keine Treffer (Seite leer)", q=query)
-                    # Mark query as weak after "No results" on first attempt
+                    # Log query as weak after "No results" on first attempt
+                    # Metrics system tracks this for adaptive dork selection
                     if attempt == 1:
-                        log("debug", "DuckDuckGo: Query marked as weak (no results)", q=query)
+                        log("debug", "DuckDuckGo: Query weak (no results)", q=query)
                 return results
 
         except Exception as e:
@@ -1568,8 +1569,8 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
                 await asyncio.sleep(3)
             else:
                 log("warn", "DuckDuckGo endgültig gescheitert nach 1 Retry", error=err_msg, q=query)
-                # Mark query as weak after failure
-                log("debug", "DuckDuckGo: Query marked as weak (failed)", q=query)
+                # Log query as weak after failure - metrics system tracks this
+                log("debug", "DuckDuckGo: Query weak (failed)", q=query)
 
     return []
 
