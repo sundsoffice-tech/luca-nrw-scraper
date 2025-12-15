@@ -257,7 +257,8 @@ GCS_API_KEY    = os.getenv("GCS_API_KEY", "")
 GCS_CX_RAW     = os.getenv("GCS_CX", "")
 BING_API_KEY   = os.getenv("BING_API_KEY", "")
 
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "25"))
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))  # Reduced to 10s for cost control
+MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB default
 
 POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
 
@@ -702,7 +703,7 @@ def reset_history():
 # =========================
 
 # Content-Guards (konfigurierbar)
-MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(3 * 1024 * 1024)))  # 3 MB
+MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(MAX_FETCH_SIZE)))  # Use MAX_FETCH_SIZE (2MB default)
 BINARY_CT_PREFIXES = ("image/", "video/", "audio/")
 DENY_CT_EXACT = {
     "application/octet-stream",
