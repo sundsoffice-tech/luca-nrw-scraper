@@ -90,24 +90,39 @@ def fix_phone_formatting(phone_input: Any) -> Optional[str]:
     return phone_clean
 
 
-def deduplicate_by_email_domain(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
-    """Entfernt künftig doppelte Leads basierend auf E-Mail-Domains und zählt die entfernten Duplikate."""
+def _normalize_name(name: str) -> str:
+    return re.sub(r"\s+", " ", (name or "").strip().lower())
+
+
+def deduplicate_by_email_domain(
+    rows: List[Dict[str, Any]],
+    *,
+    with_reasons: bool = False,
+) -> Tuple[List[Dict[str, Any]], int] | Tuple[List[Dict[str, Any]], int, Dict[str, int]]:
+    """Entfernt künftig doppelte Leads basierend auf E-Mail-Domains (Fallback: Telefon/Name) und zählt die entfernten Duplikate."""
     dedup_rows: List[Dict[str, Any]] = []
     index_by_key: Dict[str, int] = {}
     removed_count = 0
+    reason_counts: Dict[str, int] = {}
 
     for row in rows:
         email_raw = row.get("email", "")
         email_norm = email_raw.strip().lower() if isinstance(email_raw, str) else str(email_raw).strip().lower()
         email_domain = email_norm.split("@", 1)[1].strip() if "@" in email_norm else ""
         phone_norm = fix_phone_formatting(row.get("telefon"))
+        name_norm = _normalize_name(row.get("name", ""))
 
+        reason = "unknown"
         if email_norm:
             key = email_norm
+            reason = "email"
         elif email_domain:
             key = email_domain
+            reason = "domain"
         else:
-            key = phone_norm or ""
+            key_tuple = (name_norm, phone_norm or "")
+            key = "|".join(key_tuple)
+            reason = "name_phone" if any(key_tuple) else "phone"
 
         new_row = dict(row)
         if phone_norm is not None:
@@ -128,12 +143,15 @@ def deduplicate_by_email_domain(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[s
             dedup_rows[existing_idx] = new_row
 
         removed_count += 1
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
 
+    if with_reasons:
+        return dedup_rows, removed_count, reason_counts
     return dedup_rows, removed_count
 
 
-def validate_lead(row: Dict[str, Any]) -> bool:
-    """Validiert später einzelne Leads gegen Mindestanforderungen (z. B. Kontaktfelder, Formate)."""
+def _validate_and_flags(row: Dict[str, Any]) -> Tuple[bool, bool, bool]:
+    """Returns tuple of (is_valid, has_valid_email, has_valid_phone) and normalizes in-place."""
     email_raw = row.get("email", "")
     email_clean = email_raw.strip() if isinstance(email_raw, str) else str(email_raw).strip()
     phone_raw = row.get("telefon")
@@ -154,36 +172,82 @@ def validate_lead(row: Dict[str, Any]) -> bool:
             has_valid_email = True
             row["email"] = email_clean
 
-    return has_valid_phone or has_valid_email
+    return has_valid_phone or has_valid_email, has_valid_email, has_valid_phone
+
+
+def validate_lead(row: Dict[str, Any]) -> bool:
+    """Validiert später einzelne Leads gegen Mindestanforderungen (z. B. Kontaktfelder, Formate)."""
+    is_valid, _, _ = _validate_and_flags(row)
+    return is_valid
 
 
 def validate_dataset(rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Validiert künftig ein ganzes Dataset, behält gültige Leads und liefert Metriken zu Fehlerarten."""
     valid_rows: List[Dict[str, Any]] = []
     total = len(rows)
+    invalid_email = 0
+    invalid_phone = 0
+    missing_contact = 0
 
     for row in rows:
-        if validate_lead(row):
+        is_valid, has_valid_email, has_valid_phone = _validate_and_flags(row)
+        has_email_raw = bool((row.get("email") or "").strip())
+        has_phone_raw = bool(str(row.get("telefon") or "").strip())
+
+        if is_valid:
             valid_rows.append(row)
+        else:
+            if has_email_raw and not has_valid_email:
+                invalid_email += 1
+            if has_phone_raw and not has_valid_phone:
+                invalid_phone += 1
+            if not has_email_raw and not has_phone_raw:
+                missing_contact += 1
 
     report = {
         "total": total,
         "valid": len(valid_rows),
         "invalid": total - len(valid_rows),
+        "invalid_email": invalid_email,
+        "invalid_phone": invalid_phone,
+        "missing_contact": missing_contact,
     }
 
     return valid_rows, report
 
 
-def clean_and_validate_leads(raw_rows: List[Dict[str, Any]], verbose: bool = True) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+def clean_and_validate_leads(
+    raw_rows: List[Dict[str, Any]],
+    verbose: bool = True,
+    *,
+    min_confidence_phone: Optional[float] = None,
+    min_confidence_email: Optional[float] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Kapselt den gesamten Reinigungs- und Validierungs-Flow für eine Raw-Lead-Liste, optional mit Logs."""
     stage1_rows, removed_junk = filter_junk_rows(raw_rows)
 
+    def _passes_conf(row: Dict[str, Any], keys: List[str], threshold: Optional[float]) -> bool:
+        if threshold is None:
+            return True
+        for k in keys:
+            if k in row:
+                try:
+                    return float(row.get(k)) >= float(threshold)
+                except Exception:
+                    continue
+        return True
+
+    filtered_conf: List[Dict[str, Any]] = []
     for r in stage1_rows:
         if "telefon" in r:
             r["telefon"] = fix_phone_formatting(r.get("telefon"))
+        if not _passes_conf(r, ["phone_confidence", "confidence_phone"], min_confidence_phone):
+            continue
+        if not _passes_conf(r, ["email_confidence", "confidence_email"], min_confidence_email):
+            continue
+        filtered_conf.append(r)
 
-    stage2_rows, removed_dupes = deduplicate_by_email_domain(stage1_rows)
+    stage2_rows, removed_dupes, dedup_reasons = deduplicate_by_email_domain(filtered_conf, with_reasons=True)
 
     final_rows, val_report = validate_dataset(stage2_rows)
 
@@ -191,6 +255,7 @@ def clean_and_validate_leads(raw_rows: List[Dict[str, Any]], verbose: bool = Tru
         "input_total": len(raw_rows),
         "removed_junk": removed_junk,
         "removed_duplicates": removed_dupes,
+        "dedup_reasons": dedup_reasons,
         **val_report,
     }
 

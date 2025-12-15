@@ -66,6 +66,52 @@ def test_clean_and_validate_leads_pipeline():
     assert report["total"] == 3
     assert report["valid"] == 2
     assert report["invalid"] == 1
+    assert report["invalid_email"] >= 0
+    assert report["invalid_phone"] >= 0
+    assert "dedup_reasons" in report
+
+
+def test_dedup_fallback_name_phone():
+    rows = [
+        {"name": "Alex Example", "rolle": "Lead", "email": "", "telefon": "+49 221 1234567"},
+        {"name": "Alex   Example", "rolle": "Lead", "email": "", "telefon": "+49 (221) 1234567"},
+    ]
+
+    deduped, removed = deduplicate_by_email_domain(rows)
+
+    assert len(deduped) == 1
+    assert removed == 1
+
+
+def test_validate_dataset_reports_categories():
+    rows = [
+        {"name": "No Contact", "rolle": "Lead", "email": "", "telefon": "  "},
+        {"name": "Bad Email", "rolle": "Lead", "email": "foo@", "telefon": ""},
+        {"name": "Bad Phone", "rolle": "Lead", "email": "", "telefon": "123"},
+    ]
+
+    _, report = validate_dataset(rows)
+
+    assert report["missing_contact"] == 1
+    assert report["invalid_email"] == 1
+    assert report["invalid_phone"] == 1
+
+
+def test_min_confidence_filters():
+    rows = [
+        {"name": "Low Phone Conf", "rolle": "Lead", "email": "a@example.com", "telefon": "0176 111111", "phone_confidence": 10},
+        {"name": "Low Email Conf", "rolle": "Lead", "email": "b@example.com", "email_confidence": 5, "telefon": "0176 222222"},
+        {"name": "Good", "rolle": "Lead", "email": "c@example.com", "telefon": "0176 333333", "phone_confidence": 90, "email_confidence": 90},
+    ]
+
+    final_rows, _ = clean_and_validate_leads(
+        rows,
+        verbose=False,
+        min_confidence_phone=20,
+        min_confidence_email=10,
+    )
+
+    assert [r["name"] for r in final_rows] == ["Good"]
 
 
 def test_validate_dataset_basic():

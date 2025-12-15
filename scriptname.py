@@ -265,8 +265,8 @@ ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 
 # Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "50"))          # globale max. gleichzeitige Requests
-ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "4"))     # pro Host
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests
+ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
@@ -308,7 +308,7 @@ MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
 MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "1.6"))
+SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 # -------------- Logging --------------
@@ -677,13 +677,15 @@ def start_run() -> int:
     con.commit(); con.close()
     return run_id
 
-def finish_run(run_id: int, links_checked: int, leads_new: int, status: str = "ok"):
+def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Optional[int] = None, status: str = "ok", metrics: Optional[Dict[str, int]] = None):
     con = db(); cur = con.cursor()
     cur.execute(
         "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
-        (status, links_checked, leads_new, run_id)
+        (status, links_checked or 0, leads_new or 0, run_id)
     )
     con.commit(); con.close()
+    if metrics:
+        log("info", "Run metrics", **metrics)
 
 def reset_history():
     con = db(); cur = con.cursor()
@@ -714,8 +716,43 @@ _HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "
 CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "90"))  # Sekunden
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
 
-_RETRY_URLS: list[str] = []
+RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
+RETRY_MAX_PER_URL = int(os.getenv("RETRY_MAX_PER_URL", "2"))
+RETRY_BACKOFF_BASE = float(os.getenv("RETRY_BACKOFF_BASE", "6.0"))
+_RETRY_URLS: Dict[str, Dict[str, Any]] = {}  # url -> {"retries": int, "status": int}
 _SITEMAP_FAILED_HOSTS: set[str] = set()
+RUN_METRICS = {
+    "removed_by_dropper": 0,
+    "portal_dropped": 0,
+    "impressum_dropped": 0,
+    "pdf_dropped": 0,
+    "retry_count": 0,
+    "status_429": 0,
+    "status_403": 0,
+    "status_5xx": 0,
+}
+
+def _reset_metrics():
+    global RUN_METRICS
+    RUN_METRICS = {k: 0 for k in RUN_METRICS}
+
+def _record_drop(reason: str):
+    RUN_METRICS["removed_by_dropper"] += 1
+    if reason in ("portal_host", "portal_domain"):
+        RUN_METRICS["portal_dropped"] += 1
+    if reason == "impressum_no_contact":
+        RUN_METRICS["impressum_dropped"] += 1
+    if reason == "pdf_without_cv_hint":
+        RUN_METRICS["pdf_dropped"] += 1
+
+def _record_retry(status: int):
+    RUN_METRICS["retry_count"] += 1
+    if status == 429:
+        RUN_METRICS["status_429"] += 1
+    elif status == 403:
+        RUN_METRICS["status_403"] += 1
+    if 500 <= status < 600:
+        RUN_METRICS["status_5xx"] += 1
 
 def _host_from(url: str) -> str:
     try:
@@ -724,6 +761,16 @@ def _host_from(url: str) -> str:
         return ""
 
 def _penalize_host(host: str):
+    if not host:
+        return
+    if host in {"www.googleapis.com", "googleapis.com"}:
+        # Google API: never hard-penalize; at most a short cool-down
+        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+        penalty = random.uniform(10, 30)
+        st["penalty_until"] = time.time() + penalty
+        st["failures"] = 0
+        log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
+        return
     st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
     st["failures"] = min(st["failures"] + 1, 10)
     penalty = min(CB_BASE_PENALTY * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
@@ -731,6 +778,8 @@ def _penalize_host(host: str):
     log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
 
 def _host_allowed(host: str) -> bool:
+    if host in {"www.googleapis.com", "googleapis.com"}:
+        return True
     st = _HOST_STATE.get(host)
     if not st:
         return True
@@ -739,6 +788,21 @@ def _host_allowed(host: str) -> bool:
         st["penalty_until"] = 0.0
         return True
     return False
+
+def _should_retry_status(status: int) -> bool:
+    if status in (429, 503, 504):
+        return True
+    if status == 403 and RETRY_INCLUDE_403:
+        return True
+    return False
+
+def _schedule_retry(url: str, status: int):
+    _record_retry(status)
+    if not url:
+        return
+    if url in _RETRY_URLS:
+        return
+    _RETRY_URLS[url] = {"retries": 0, "status": status, "last_ts": time.time()}
 
 # Globale Async-Client-Fabrik + Rate-Limiter
 _CLIENT_SECURE: Optional[AsyncSession] = None
@@ -875,10 +939,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 return None
             setattr(r, "insecure_ssl", False)
             return r
-        if r.status_code in (429, 403, 503, 504):
+        if _should_retry_status(r.status_code):
             _penalize_host(host)
-            if url not in _RETRY_URLS:
-                _RETRY_URLS.append(url)
+            _schedule_retry(url, r.status_code)
             log("warn", f"{r.status_code} received", url=url)
             return r
     except Exception:
@@ -891,10 +954,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                     return None
                 setattr(r, "insecure_ssl", False)
                 return r
-            if r.status_code in (429, 403, 503, 504):
+            if _should_retry_status(r.status_code):
                 _penalize_host(host)
-                if url not in _RETRY_URLS:
-                    _RETRY_URLS.append(url)
+                _schedule_retry(url, r.status_code)
                 log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
                 return r
         except Exception:
@@ -911,10 +973,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 setattr(r2, "insecure_ssl", True)
                 log("warn", "SSL Fallback ohne Verify genutzt", url=url)
                 return r2
-            if r2.status_code in (429, 403, 503, 504):
+            if _should_retry_status(r2.status_code):
                 _penalize_host(host)
-                if url not in _RETRY_URLS:
-                    _RETRY_URLS.append(url)
+                _schedule_retry(url, r2.status_code)
                 log("warn", f"{r2.status_code} received (insecure TLS)", url=url)
                 return r2
         except Exception:
@@ -927,10 +988,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                     setattr(r2, "insecure_ssl", True)
                     log("warn", "SSL Fallback (HTTP/1.1) genutzt", url=url)
                     return r2
-                if r2.status_code in (429, 403, 503, 504):
+                if _should_retry_status(r2.status_code):
                     _penalize_host(host)
-                    if url not in _RETRY_URLS:
-                        _RETRY_URLS.append(url)
+                    _schedule_retry(url, r2.status_code)
                     log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
                     return r2
             except Exception:
@@ -1025,7 +1085,7 @@ GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
 GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
 GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","12"))  # höherer Default
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","4"))  # höherer Default
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
@@ -1312,8 +1372,8 @@ async def search_perplexity_async(query: str) -> List[Dict[str, str]]:
         return []
 
 async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: Optional[str] = None) -> Tuple[List[Dict[str, str]], bool]:
-    if not (GCS_KEYS and GCS_CXS):
-        log("debug","Google CSE nicht konfiguriert – übersprungen"); return [], False
+    if os.getenv("DISABLE_GOOGLE") == "1" or not (GCS_KEYS and GCS_CXS):
+        log("info","Google CSE disabled; skipping"); return [], False
 
     def _preview(txt: Optional[str]) -> str:
         if not txt: return ""
@@ -1326,7 +1386,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     results: List[Dict[str, str]] = []
     page_no, key_i, cx_i = 0, 0, 0
     had_429 = False
-    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","12"))
+    page_cap = int(os.getenv("MAX_GOOGLE_PAGES","4"))
     while len(results) < max_results and page_no < page_cap:
         params = {
             "key": GCS_KEYS[key_i], "cx": GCS_CXS[cx_i], "q": q,
@@ -1355,12 +1415,8 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
 
         if r.status_code == 429:
             had_429 = True
-            key_i = (key_i + 1) % max(1,len(GCS_KEYS))
-            cx_i  = (cx_i  + 1) % max(1,len(GCS_CXS))
-            sleep_s = 6 + int(6*_jitter())
-            log("warn","Google 429 – rotiere Key/CX & backoff", sleep=sleep_s)
-            await asyncio.sleep(sleep_s)
-            continue
+            log("warn","Google 429 – skip this query without retry")
+            return [], had_429
 
         if r.status_code != 200:
             log("error","Google CSE Status != 200", status=r.status_code, body=_preview(r.text))
@@ -1412,7 +1468,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
     return uniq_items, had_429
 
 
-async def duckduckgo_search_async(query: str, max_results: int = 10) -> List[Dict[str, str]]:
+async def duckduckgo_search_async(query: str, max_results: int = 10, date_restrict: Optional[str] = None) -> List[Dict[str, str]]:
     """
     DuckDuckGo-Suche mit strenger Proxy-Steuerung, um ConnectTimeouts zu vermeiden.
     
@@ -1819,6 +1875,8 @@ DENY_DOMAINS = {
     "jobware.de", "stellenanzeigen.de", "absolventa.de", "glassdoor.de",
     "kununu.com", "azubiyo.de", "ausbildung.de", "gehalt.de", "lehrstellen-radar.de",
     "wikipedia.org", "youtube.com", "amazon.de", "ebay.de",
+    "heyjobs.de", "heyjobs.co", "softgarden.io", "jobijoba.de", "jobijoba.com",
+    "ok.ru", "tiktok.com", "patents.google.com",
 }
 
 DENY_DOMAINS.update({
@@ -1826,7 +1884,8 @@ DENY_DOMAINS.update({
     "meinestadt.de", "kimeta.de", "jobware.de", "monster.de",
     "arbeitsagentur.de", "nadann.de", "freshplaza.de", "kikxxl.de",
     "xing.com/jobs", "linkedin.com/jobs", "gehalt.de", "kununu.com",
-    "ausbildung.de", "azubiyo.de", "lehrstellen-radar.de"
+    "ausbildung.de", "azubiyo.de", "lehrstellen-radar.de",
+    "softgarden.io", "jobijoba.de", "jobijoba.com", "heyjobs.de", "heyjobs.co",
 })
 
 
@@ -1896,7 +1955,116 @@ PORTAL_DOMAINS = {
     "stepstone.de",
     "talents.studysmarter.de",
     "xing.com",
+    "jobijoba.de",
+    "jobijoba.com",
+    "ok.ru",
+    "patents.google.com",
+    "tiktok.com",
 }
+DROP_MAILBOX_PREFIXES = {
+    "info",
+    "kontakt",
+    "contact",
+    "support",
+    "service",
+    "privacy",
+    "datenschutz",
+    "noreply",
+    "no-reply",
+    "donotreply",
+    "do-not-reply",
+    "jobs",
+    "karriere",
+}
+DROP_PORTAL_DOMAINS = {
+    "stepstone.de",
+    "indeed.com",
+    "heyjobs.co",
+    "heyjobs.de",
+    "softgarden.io",
+    "jobijoba.de",
+    "jobijoba.com",
+    "jobware.de",
+    "monster.de",
+    "kununu.com",
+    "ok.ru",
+    "tiktok.com",
+    "patents.google.com",
+    "linkedin.com",
+    "xing.com",
+    "arbeitsagentur.de",
+    "meinestadt.de",
+    "kimeta.de",
+    "stellenanzeigen.de",
+}
+DROP_PORTAL_PATH_FRAGMENTS = ("linkedin.com/jobs", "xing.com/jobs")
+IMPRINT_PATH_RE = re.compile(r"/(impressum|datenschutz|privacy|agb)(?:/|\\?|#|$)", re.I)
+CV_HINT_RE = re.compile(r"\b(lebenslauf|curriculum vitae|cv)\b", re.I)
+ALLOW_PDF_NON_CV = (os.getenv("ALLOW_PDF_NON_CV", "0") == "1")
+
+def _matches_hostlist(host: str, blocked: set[str]) -> bool:
+    h = (host or "").lower()
+    if h.startswith("www."):
+        h = h[4:]
+    return any(h == d or h.endswith("." + d) for d in (b.lower() for b in blocked))
+
+def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title: str = "") -> Tuple[bool, str]:
+    email = (lead.get("email") or "").strip().lower()
+    url_lower = (page_url or "").lower()
+    text_lower = (text or "").lower()
+    title_lower = (title or "").lower()
+    host = (urllib.parse.urlparse(page_url or "").netloc or "").lower()
+    person_blob = " ".join([lead.get("name", ""), lead.get("rolle", "")]).strip()
+
+    def _drop(reason: str) -> Tuple[bool, str]:
+        log("debug", "lead dropped", reason=reason, url=page_url)
+        return True, reason
+
+    # Telefonnummer Pflicht
+    if not (lead.get("telefon") or "").strip():
+        return _drop("no_phone")
+
+    if email:
+        local, _, domain = email.partition("@")
+        if local in DROP_MAILBOX_PREFIXES:
+            return _drop("generic_mailbox")
+        if domain and _matches_hostlist(domain, DROP_PORTAL_DOMAINS):
+            return _drop("portal_domain")
+
+    host_is_portal = _matches_hostlist(host, DROP_PORTAL_DOMAINS)
+    if host_is_portal and host in {"linkedin.com", "www.linkedin.com", "xing.com", "www.xing.com"}:
+        if "/jobs" not in url_lower:
+            host_is_portal = False
+    if host_is_portal or any(frag in url_lower for frag in DROP_PORTAL_PATH_FRAGMENTS):
+        return _drop("portal_host")
+
+    if IMPRINT_PATH_RE.search(url_lower):
+        has_phone = bool(lead.get("telefon") or PHONE_RE.search(text_lower))
+        has_messenger = bool(
+            WA_LINK_RE.search(text_lower) or WHATS_RE.search(text_lower) or
+            WHATSAPP_RE.search(text_lower) or TELEGRAM_LINK_RE.search(text_lower)
+        )
+        has_email = bool(lead.get("email") or EMAIL_RE.search(text or ""))
+        has_person = (
+            is_likely_human_name(person_blob) or
+            len(person_blob.split()) >= 2 or
+            bool(NAME_RE.search(text or ""))
+        )
+        if not (has_person or has_phone or has_messenger):
+            if not has_email:
+                return _drop("impressum_no_contact")
+
+    if url_lower.endswith(".pdf"):
+        hint_blob = " ".join([url_lower, person_blob, title_lower])
+        has_cv_hint = bool(
+            CV_HINT_RE.search(text_lower) or
+            CV_HINT_RE.search(hint_blob) or
+            CV_HINT_RE.search(title_lower)
+        )
+        if not has_cv_hint and not ALLOW_PDF_NON_CV:
+            return _drop("pdf_without_cv_hint")
+
+    return False, ""
 
 GENERIC_BOXES = {"sales", "vertrieb", "verkauf", "marketing", "kundenservice", "hotline"}
 
@@ -3718,7 +3886,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                     "confidence_score": 0,
                     "last_updated": last_updated,
                     "data_quality": 0,
-                    "phone_type": extras.get("phone_type",""),
+            "phone_type": extras.get("phone_type",""),
             "whatsapp_link": "yes" if extras.get("whatsapp_link") else "no",
             "private_address": private_address,
             "social_profile_url": social_profile_url,
@@ -3728,6 +3896,15 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         }
                 enriched["confidence_score"] = _confidence(enriched)
                 enriched["data_quality"] = _quality(enriched)
+                drop, drop_reason = should_drop_lead(
+                    enriched,
+                    url,
+                    text,
+                    page_title or title_text or search_title_hint or snippet_hint,
+                )
+                if drop:
+                    _record_drop(drop_reason)
+                    continue
                 ok, reason = is_high_quality_lead(enriched, linkedin_profile=linkedin_profile, agent_hit=agent_fingerprint_hit)
                 if not ok:
                     log("debug", "Dropped: Quality filter", reason=reason, url=url)
@@ -4008,6 +4185,15 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         }
         enriched["confidence_score"] = _confidence(enriched)
         enriched["data_quality"] = _quality(enriched)
+        drop, drop_reason = should_drop_lead(
+            enriched,
+            url,
+            text,
+            page_title or title_text or search_title_hint or snippet_hint,
+        )
+        if drop:
+            _record_drop(drop_reason)
+            continue
         ok, reason = is_high_quality_lead(enriched, linkedin_profile=linkedin_profile, agent_hit=agent_fingerprint_hit)
         if not ok:
             log("debug", "Dropped: Quality filter", reason=reason, url=url)
@@ -4512,6 +4698,40 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
     await asyncio.gather(*[_one(item, raw) for item, raw, _ in candidates])
     return links_checked, collected
 
+async def process_retry_urls(run_id: int, rate: _Rate) -> Tuple[int, int]:
+    """Verarbeitet die gesammelten Retry-URLs mit Budget/Backoff."""
+    if not _RETRY_URLS:
+        return (0, 0)
+    retry_urls = list(_RETRY_URLS.keys())
+    retries_total = 0
+    retries_exhausted = 0
+    for url in retry_urls:
+        state = _RETRY_URLS.get(url) or {}
+        tries = int(state.get("retries", 0))
+        if tries >= RETRY_MAX_PER_URL:
+            _RETRY_URLS.pop(url, None)
+            retries_exhausted += 1
+            continue
+        delay = RETRY_BACKOFF_BASE * max(1, tries + 1) * _jitter(0.7, 1.3)
+        await asyncio.sleep(delay)
+        state["retries"] = tries + 1
+        state["last_ts"] = time.time()
+        _RETRY_URLS[url] = state
+        try:
+            inc, items = await _bounded_process([url], run_id, rate=rate, force=True)
+        except Exception:
+            inc, items = (0, [])
+        retries_total += 1
+        last_status = _LAST_STATUS.get(url, 0)
+        if (items and inc >= 0) or last_status == 200:
+            _RETRY_URLS.pop(url, None)
+        elif state["retries"] >= RETRY_MAX_PER_URL:
+            retries_exhausted += 1
+            _RETRY_URLS.pop(url, None)
+    if retries_total or retries_exhausted:
+        log("info", "Retry wave completed", retries_total=retries_total, retries_exhausted=retries_exhausted, pending=len(_RETRY_URLS))
+    return retries_total, retries_exhausted
+
 def emergency_save(run_id, links_checked=None, leads_new_total=None):
     """
     Not-Speicherung:
@@ -4537,10 +4757,10 @@ def emergency_save(run_id, links_checked=None, leads_new_total=None):
 
         try:
             # finish_run kann Links/Leads-Argumente optional verarbeiten
-            finish_run(run_id, links_checked, leads_new_total, status="aborted")
+            finish_run(run_id, links_checked, leads_new_total, status="aborted", metrics=dict(RUN_METRICS))
         except TypeError:
             # Fallback für alte Signaturen
-            finish_run(run_id, status="aborted")
+            finish_run(run_id, status="aborted", metrics=dict(RUN_METRICS))
         except Exception as e:
             try:
                 log("error", "finish_run fehlgeschlagen (Ignoriert)", error=str(e))
@@ -4596,6 +4816,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     total_links_checked = 0
     leads_new_total = 0
     run_id = start_run()
+    _reset_metrics()
     _uilog(f"Run #{run_id} gestartet")
 
 
@@ -4621,7 +4842,15 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             except Exception as e:
                 log("error", "Google-Suche explodiert", q=q, error=str(e))
 
-            if len(links) < 3:
+            if had_429_flag or not links:
+                try:
+                    log("info", "Nutze DuckDuckGo (Fallback)...", q=q)
+                    ddg_links = await duckduckgo_search_async(q, max_results=30, date_restrict=date_restrict)
+                    links.extend(ddg_links)
+                except Exception as e:
+                    log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
+
+            if had_429_flag or len(links) < 3:
                 try:
                     log("info", "Nutze Perplexity (sonar)...", q=q)
                     pplx_links = await search_perplexity_async(q)
@@ -4631,7 +4860,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
             if not links:
                 try:
-                    ddg_links = await duckduckgo_search_async(q, max_results=30)
+                    ddg_links = await duckduckgo_search_async(q, max_results=30, date_restrict=date_restrict)
                     links.extend(ddg_links)
                 except Exception as e:
                     log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
@@ -4837,9 +5066,15 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     _uilog(f"Export: +{len(inserted)} neue Leads")
                     leads_new_total += len(inserted)
 
+            if _RETRY_URLS:
+                try:
+                    await process_retry_urls(run_id, rate)
+                except Exception as e:
+                    log("warn", "Retry wave failed", error=str(e))
+
             await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4,1.2))
 
-        finish_run(run_id, total_links_checked, leads_new_total, "ok")
+        finish_run(run_id, total_links_checked, leads_new_total, "ok", metrics=dict(RUN_METRICS))
         _uilog(f"Run #{run_id} beendet")
 
     except Exception as e:
@@ -5015,6 +5250,7 @@ def parse_args():
     ap.add_argument("--daterestrict", type=str, default=os.getenv("DATE_RESTRICT",""),
                     help="Google CSE dateRestrict, z.B. d30, w8, m3")
     ap.add_argument("--smart", action="store_true", help="AI-generierte Dorks (selbstlernend) aktivieren")
+    ap.add_argument("--no-google", action="store_true", help="Google CSE deaktivieren")
     return ap.parse_args()
 
 
@@ -5023,6 +5259,8 @@ if __name__ == "__main__":
     try:
         args = parse_args()
         USE_TOR = bool(getattr(args, "tor", False))
+        if getattr(args, "no_google", False):
+            os.environ["DISABLE_GOOGLE"] = "1"
         
         # === TASK 1: Global Proxy Reset (Nuclear Option) ===
         # When NOT using Tor, aggressively clear all proxy environment variables
@@ -5124,7 +5362,9 @@ DENY_DOMAINS = {
     'xing.com/jobs', 'linkedin.com/jobs', 'meinestadt.de', 'kimeta.de',
     'jobware.de', 'stellenanzeigen.de', 'absolventa.de', 'glassdoor.de',
     'kununu.com', 'azubiyo.de', 'ausbildung.de', 'gehalt.de', 'lehrstellen-radar.de',
-    'wikipedia.org', 'youtube.com', 'amazon.de', 'ebay.de'
+    'wikipedia.org', 'youtube.com', 'amazon.de', 'ebay.de',
+    'heyjobs.de', 'heyjobs.co', 'softgarden.io', 'jobijoba.de', 'jobijoba.com',
+    'ok.ru', 'tiktok.com', 'patents.google.com'
 }
 
 DENY_DOMAINS.update({
@@ -5132,10 +5372,16 @@ DENY_DOMAINS.update({
     "meinestadt.de", "kimeta.de", "jobware.de", "monster.de",
     "arbeitsagentur.de", "nadann.de", "freshplaza.de", "kikxxl.de",
     "xing.com/jobs", "linkedin.com/jobs", "gehalt.de", "kununu.com",
-    "ausbildung.de", "azubiyo.de", "lehrstellen-radar.de"
+    "ausbildung.de", "azubiyo.de", "lehrstellen-radar.de",
+    "softgarden.io", "jobijoba.de", "jobijoba.com", "heyjobs.de", "heyjobs.co"
 })
 
 PORTAL_DOMAINS = {
     't-online.de', 'gmx.net', 'web.de', 'yahoo.com', 'msn.com',
-    'freenet.de', '1und1.de', 'vodafone.de', 'telekom.de', 'o2online.de'
+    'freenet.de', '1und1.de', 'vodafone.de', 'telekom.de', 'o2online.de',
+    'stepstone.de', 'indeed.com', 'monster.de', 'arbeitsagentur.de',
+    'meinestadt.de', 'kimeta.de', 'jobware.de', 'stellenanzeigen.de', 'glassdoor.de',
+    'kununu.com', 'azubiyo.de', 'ausbildung.de', 'gehalt.de', 'lehrstellen-radar.de',
+    'heyjobs.de', 'heyjobs.co', 'softgarden.io', 'jobijoba.de', 'jobijoba.com',
+    'ok.ru', 'tiktok.com', 'patents.google.com'
 }

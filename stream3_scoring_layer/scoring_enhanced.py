@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+import urllib.parse
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -22,6 +23,41 @@ DEFAULT_SCORE_CONFIG: ScoreConfig = {
     "industry_bonus": 20,
     "nrw_bonus": 10,
     "fresh_bonus": 10,
+}
+
+FREE_MAILS = {"gmail.com", "outlook.com", "hotmail.com", "gmx.de", "web.de", "yahoo.com"}
+GENERIC_MAILBOXES = {
+    "info",
+    "kontakt",
+    "contact",
+    "support",
+    "service",
+    "privacy",
+    "datenschutz",
+    "noreply",
+    "no-reply",
+    "donotreply",
+    "do-not-reply",
+    "jobs",
+    "karriere",
+    "sales",
+}
+PORTAL_DOMAINS = {
+    "stepstone.de",
+    "indeed.com",
+    "heyjobs.de",
+    "heyjobs.co",
+    "softgarden.io",
+    "jobijoba.de",
+    "jobijoba.com",
+    "jobware.de",
+    "monster.de",
+    "kununu.com",
+    "ok.ru",
+    "tiktok.com",
+    "patents.google.com",
+    "linkedin.com",
+    "xing.com",
 }
 
 
@@ -55,12 +91,25 @@ def compute_score_v2(
 
     score = 0
 
+    if not telefon:
+        score -= 100
+
     if email:
         score += config["email_bonus"]
         domain = email.split("@", 1)[1] if "@" in email else ""
-        free_mail = {"gmail.com", "outlook.com", "hotmail.com", "gmx.de", "web.de", "yahoo.com"}
-        if domain and domain not in free_mail:
-            score += config["corporate_email_bonus"]
+        local = email.split("@", 1)[0]
+        domain_is_portal = domain and any(domain == d or domain.endswith("." + d) for d in PORTAL_DOMAINS)
+        domain_is_free = domain in FREE_MAILS
+        local_is_generic = local in GENERIC_MAILBOXES
+
+        if domain_is_portal:
+            score -= 15
+        elif local_is_generic:
+            score -= 5
+        elif domain_is_free:
+            score += 5
+        elif domain and not domain_is_free:
+            score += 10
 
     if telefon:
         score += config["phone_bonus"]
@@ -69,7 +118,18 @@ def compute_score_v2(
         score += config["mobile_bonus"]
 
     text_low = (text or "").lower()
-    has_wa = ("whatsapp" in tags) or (whatsapp in {"1", "yes", "true"}) or ("wa.me" in text_low)
+    url_value = url or ""
+    parsed = urllib.parse.urlparse(url_value)
+    host = parsed.netloc.lower()
+    host_is_portal = any(host == d or host.endswith("." + d) for d in PORTAL_DOMAINS)
+
+    has_wa = (
+        ("whatsapp" in tags)
+        or (whatsapp in {"1", "yes", "true"})
+        or ("wa.me" in text_low)
+        or ("wa.me" in url_value.lower())
+        or ("api.whatsapp.com" in url_value.lower())
+    )
     if has_wa:
         score += config["whatsapp_bonus"]
 
@@ -110,15 +170,14 @@ def compute_score_v2(
     if lead.get("social_profile_url"):
         score += config["social_profile_bonus"]
 
-    if not email and not telefon and not has_wa:
-        score -= 35
-
-    url_value = url or ""
     if "jobs." in url_value or "/jobs" in url_value or "/karriere" in url_value:
-        score -= 10
+        score -= 15
 
     if any(token in url_value for token in ["/datenschutz", "/privacy", "/agb", "/impressum"]):
-        score -= 5
+        score -= 20
+
+    if host_is_portal:
+        score -= 25
 
     score_int = int(round(score))
     score_int = max(0, min(100, score_int))
@@ -142,8 +201,8 @@ def apply_dynamic_threshold(
         threshold = 0
         filtered = list(leads)
     else:
-        if len(scores) < 4:
-            threshold = min(scores)
+        if len(scores) < 8:
+            threshold = statistics.median(scores)
         else:
             q = statistics.quantiles(scores, n=4)
             threshold = int(round(q[0] + 5))
@@ -200,7 +259,7 @@ def score_and_filter_leads(
             end=0,
             threshold=min_floor,
             pass_rate=0.0,
-            meta={"reason": "below_base_min_score"},
+            meta={"reason": "below_base_min_score", "removed_reason": "below_floor"},
         )
         return [], summary
 
@@ -222,10 +281,18 @@ def score_and_filter_leads(
     except Exception:
         pass_rate_val = 0.0
 
+    removed_reason = None
+    if len(filtered) < len(eligible):
+        removed_reason = "below_dynamic"
+    elif len(eligible) < len(all_leads):
+        removed_reason = "below_floor"
+
     meta = {
         "threshold_info": thresh_info,
         "metrics": metrics,
     }
+    if removed_reason:
+        meta["removed_reason"] = removed_reason
 
     summary = ScoreSummary(
         start=start,
