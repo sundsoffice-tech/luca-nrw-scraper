@@ -77,6 +77,7 @@ from stream2_extraction_layer.extraction_enhanced import (
     extract_name_enhanced,
     extract_role_with_context,
 )
+from fallbacks import should_use_fallbacks
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -4621,15 +4622,17 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             except Exception as e:
                 log("error", "Google-Suche explodiert", q=q, error=str(e))
 
-            if len(links) < 3:
+            fallback_needed = should_use_fallbacks(len(links), had_429_flag)
+            if fallback_needed:
                 try:
                     log("info", "Nutze Perplexity (sonar)...", q=q)
                     pplx_links = await search_perplexity_async(q)
                     links.extend(pplx_links)
+                    fallback_needed = should_use_fallbacks(len(links), had_429_flag)
                 except Exception as e:
                     log("error", "Perplexity-Suche explodiert", q=q, error=str(e))
 
-            if not links:
+            if fallback_needed:
                 try:
                     ddg_links = await duckduckgo_search_async(q, max_results=30)
                     links.extend(ddg_links)
