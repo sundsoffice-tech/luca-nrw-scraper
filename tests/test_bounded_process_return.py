@@ -28,7 +28,7 @@ async def test_bounded_process_none_urls_returns_tuple(monkeypatch):
     rate = sn._Rate(max_global=1, max_per_host=1)
     
     # Mock process_link_async to avoid actual HTTP calls
-    async def fake_process_link(item, run_id, force=False):
+    async def fake_process_link(item, run_id, *, force=False):
         return 0, []
     
     monkeypatch.setattr(sn, "process_link_async", fake_process_link)
@@ -50,7 +50,7 @@ async def test_bounded_process_valid_urls_returns_tuple(monkeypatch):
     rate = sn._Rate(max_global=1, max_per_host=1)
     
     # Mock process_link_async to simulate successful processing
-    async def fake_process_link(item, run_id, force=False):
+    async def fake_process_link(item, run_id, *, force=False):
         return 1, [{"name": "Test", "email": "test@example.com"}]
     
     # Mock prioritize_urls to avoid URL processing complexity
@@ -78,7 +78,7 @@ async def test_bounded_process_exception_in_gather(monkeypatch):
     rate = sn._Rate(max_global=1, max_per_host=1)
     
     # Mock process_link_async to raise an exception
-    async def fake_process_link_error(item, run_id, force=False):
+    async def fake_process_link_error(item, run_id, *, force=False):
         raise Exception("Simulated processing error")
     
     # Mock prioritize_urls
