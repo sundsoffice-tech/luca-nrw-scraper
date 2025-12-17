@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - LUCA Control Center{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-bold mb-6">📊 Detaillierte Analysen</h2>
+
+<!-- Cost Analysis -->
+<section class="mb-6">
+    <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">💰 API-Kosten Verlauf</h3>
+            <select id="cost-chart-period" class="bg-gray-700 rounded px-3 py-1 text-sm border border-gray-600">
+                <option value="7">7 Tage</option>
+                <option value="30">30 Tage</option>
+            </select>
+        </div>
+        <canvas id="cost-chart"></canvas>
+    </div>
+</section>
+
+<!-- Cost Breakdown -->
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 class="text-lg font-semibold mb-4">📊 Kosten nach Provider</h3>
+        <div id="costs-by-provider" class="space-y-2">
+            <div class="text-gray-500 text-sm">Lade Daten...</div>
+        </div>
+    </div>
+    <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 class="text-lg font-semibold mb-4">🔌 Kosten nach Endpoint</h3>
+        <div id="costs-by-endpoint" class="space-y-2 max-h-96 overflow-y-auto">
+            <div class="text-gray-500 text-sm">Lade Daten...</div>
+        </div>
+    </div>
+</section>
+
+<!-- Export Section -->
+<section>
+    <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 class="text-lg font-semibold mb-4">📥 Daten exportieren</h3>
+        <div class="flex gap-4">
+            <a href="/api/export/csv" download class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded transition">
+                CSV herunterladen
+            </a>
+            <button onclick="alert('PDF-Export wird in Kürze verfügbar sein')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition">
+                PDF-Report erstellen
+            </button>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let costChart = null;
+    
+    async function updateCostChart(days = 7) {
+        try {
+            const response = await fetch(`/api/costs/chart?days=${days}`);
+            const data = await response.json();
+            
+            const ctx = document.getElementById('cost-chart').getContext('2d');
+            
+            if (costChart) {
+                costChart.destroy();
+            }
+            
+            costChart = new Chart(ctx, {
+                type: 'line',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: { color: '#9ca3af' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: '#9ca3af',
+                                callback: value => '€' + value.toFixed(2)
+                            },
+                            grid: { color: '#374151' }
+                        },
+                        x: {
+                            ticks: { color: '#9ca3af' },
+                            grid: { color: '#374151' }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error updating cost chart:', error);
+        }
+    }
+    
+    async function updateCostBreakdown() {
+        try {
+            const response = await fetch('/api/costs');
+            const data = await response.json();
+            
+            // Update costs by provider
+            const providerContainer = document.getElementById('costs-by-provider');
+            if (data.by_provider && data.by_provider.length > 0) {
+                providerContainer.innerHTML = data.by_provider.map(item => `
+                    <div class="flex justify-between items-center p-3 bg-gray-900 rounded">
+                        <div>
+                            <div class="font-semibold">${item.provider}</div>
+                            <div class="text-xs text-gray-400">${item.call_count} Aufrufe</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-green-400">€${item.cost.toFixed(2)}</div>
+                            <div class="text-xs text-gray-400">${item.tokens_in + item.tokens_out} Tokens</div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                providerContainer.innerHTML = '<div class="text-gray-500 text-sm">Keine Daten verfügbar</div>';
+            }
+            
+            // Update costs by endpoint
+            const endpointContainer = document.getElementById('costs-by-endpoint');
+            if (data.by_endpoint && data.by_endpoint.length > 0) {
+                endpointContainer.innerHTML = data.by_endpoint.map(item => `
+                    <div class="flex justify-between items-center p-2 bg-gray-900 rounded text-sm">
+                        <div>
+                            <div class="font-semibold">${item.endpoint || 'N/A'}</div>
+                            <div class="text-xs text-gray-400">${item.provider} • ${item.call_count} Aufrufe</div>
+                        </div>
+                        <div class="text-green-400">€${item.cost.toFixed(2)}</div>
+                    </div>
+                `).join('');
+            } else {
+                endpointContainer.innerHTML = '<div class="text-gray-500 text-sm">Keine Daten verfügbar</div>';
+            }
+        } catch (error) {
+            console.error('Error updating cost breakdown:', error);
+        }
+    }
+    
+    document.getElementById('cost-chart-period').addEventListener('change', (e) => {
+        updateCostChart(parseInt(e.target.value));
+    });
+    
+    // Initialize
+    updateCostChart(7);
+    updateCostBreakdown();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+        const days = parseInt(document.getElementById('cost-chart-period').value);
+        updateCostChart(days);
+        updateCostBreakdown();
+    }, 30000);
+</script>
+{% endblock %}
