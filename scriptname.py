@@ -470,6 +470,14 @@ def db():
     global _DB_READY, _LEARNING_ENGINE
     if not _DB_READY:
         _ensure_schema(con)
+        # Initialize dashboard schema
+        try:
+            from dashboard.db_schema import ensure_dashboard_schema, initialize_default_search_modes, initialize_default_settings
+            ensure_dashboard_schema(con)
+            initialize_default_search_modes(con)
+            initialize_default_settings(con)
+        except ImportError:
+            pass  # Dashboard module not available
         _DB_READY = True
     # Initialize learning engine on first DB access
     if _LEARNING_ENGINE is None:
@@ -4548,6 +4556,25 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
                 except Exception as je:
                     last_err = f"JSON decode error: {je}"
                     raise
+                
+                # Track API cost if usage data is available
+                try:
+                    usage = j.get("usage", {})
+                    if usage:
+                        from dashboard.db_schema import track_api_cost
+                        con = db()
+                        track_api_cost(
+                            con,
+                            provider='openai',
+                            tokens_input=usage.get('prompt_tokens', 0),
+                            tokens_output=usage.get('completion_tokens', 0),
+                            model=payload.get('model', 'gpt-4o-mini'),
+                            endpoint='chat/completions'
+                        )
+                        con.close()
+                except Exception:
+                    pass  # Don't fail if cost tracking fails
+                
                 choices = (j.get("choices") or [])
                 if not choices or "message" not in choices[0] or "content" not in choices[0]["message"]:
                     log("error", "OpenAI Format unerwartet", url=src_url, raw=str(j)[:200])

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Einstellungen - LUCA Control Center{% endblock %}
+
+{% block content %}
+<h2 class="text-2xl font-bold mb-6">⚙️ Einstellungen</h2>
+
+<div class="max-w-4xl">
+    <form id="settings-form" class="space-y-6">
+        <!-- Budget -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">Monatliches Budget (EUR)</label>
+            <input type="number" id="budget_limit_eur" name="budget_limit_eur" 
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:border-green-500 focus:outline-none"
+                   min="0" max="10000" step="10">
+            <p class="text-gray-400 text-xs mt-1">Maximales Budget für API-Kosten pro Monat</p>
+        </div>
+        
+        <!-- Region Filter -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">Region</label>
+            <select id="region_filter" name="region_filter" 
+                    class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 focus:border-green-500 focus:outline-none">
+                <option value="NRW">Nordrhein-Westfalen</option>
+                <option value="DE">Deutschland</option>
+                <option value="DACH">DACH Region</option>
+                <option value="EU">Europa</option>
+            </select>
+            <p class="text-gray-400 text-xs mt-1">Geografischer Fokus der Suche</p>
+        </div>
+        
+        <!-- Industry Filter -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">Branchen-Filter</label>
+            <div id="industry_filter" class="space-y-2">
+                <label class="flex items-center">
+                    <input type="checkbox" value="recruiter" class="mr-2">
+                    <span>Recruiter</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" value="sales" class="mr-2">
+                    <span>Sales</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" value="vertrieb" class="mr-2">
+                    <span>Vertrieb</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" value="handel" class="mr-2">
+                    <span>Handel</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" value="industrie" class="mr-2">
+                    <span>Industrie</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" value="dienstleistung" class="mr-2">
+                    <span>Dienstleistung</span>
+                </label>
+            </div>
+            <p class="text-gray-400 text-xs mt-2">Fokussierte Branchen für die Leadsuche</p>
+        </div>
+        
+        <!-- Confidence Score -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">
+                Minimaler Confidence-Score: <span id="confidence-value">0.3</span>
+            </label>
+            <input type="range" id="min_confidence_score" name="min_confidence_score" 
+                   class="w-full" min="0" max="1" step="0.1" value="0.3">
+            <p class="text-gray-400 text-xs mt-1">Mindestqualität für Lead-Ergebnisse</p>
+        </div>
+        
+        <!-- Blacklist Domains -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">Domain-Blacklist</label>
+            <textarea id="blacklist_domains" name="blacklist_domains" rows="6"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 font-mono text-sm focus:border-green-500 focus:outline-none"
+                      placeholder="domain1.com&#10;domain2.de&#10;..."></textarea>
+            <p class="text-gray-400 text-xs mt-1">Eine Domain pro Zeile - diese werden ignoriert</p>
+        </div>
+        
+        <!-- Whitelist Domains -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <label class="block text-sm font-semibold mb-2">Domain-Whitelist</label>
+            <textarea id="whitelist_domains" name="whitelist_domains" rows="6"
+                      class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 font-mono text-sm focus:border-green-500 focus:outline-none"
+                      placeholder="domain1.com&#10;domain2.de&#10;..."></textarea>
+            <p class="text-gray-400 text-xs mt-1">Eine Domain pro Zeile - bevorzugte Quellen</p>
+        </div>
+        
+        <!-- Save Button -->
+        <div class="flex gap-4">
+            <button type="submit" class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded font-semibold transition">
+                Speichern
+            </button>
+            <button type="button" onclick="loadSettings()" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded transition">
+                Zurücksetzen
+            </button>
+        </div>
+    </form>
+    
+    <div id="save-message" class="mt-4 p-4 rounded hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            const data = await response.json();
+            const settings = data.settings;
+            
+            // Populate form fields
+            if (settings.budget_limit_eur !== undefined) {
+                document.getElementById('budget_limit_eur').value = settings.budget_limit_eur;
+            }
+            
+            if (settings.region_filter) {
+                document.getElementById('region_filter').value = settings.region_filter;
+            }
+            
+            if (settings.min_confidence_score !== undefined) {
+                const slider = document.getElementById('min_confidence_score');
+                slider.value = settings.min_confidence_score;
+                document.getElementById('confidence-value').textContent = settings.min_confidence_score;
+            }
+            
+            if (settings.blacklist_domains) {
+                document.getElementById('blacklist_domains').value = settings.blacklist_domains;
+            }
+            
+            if (settings.whitelist_domains) {
+                document.getElementById('whitelist_domains').value = settings.whitelist_domains;
+            }
+            
+            // Handle industry filter (array)
+            if (settings.industry_filter && Array.isArray(settings.industry_filter)) {
+                const checkboxes = document.querySelectorAll('#industry_filter input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    cb.checked = settings.industry_filter.includes(cb.value);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            showMessage('Fehler beim Laden der Einstellungen', 'error');
+        }
+    }
+    
+    async function saveSettings(event) {
+        event.preventDefault();
+        
+        try {
+            // Collect form data
+            const settings = {
+                budget_limit_eur: parseFloat(document.getElementById('budget_limit_eur').value),
+                region_filter: document.getElementById('region_filter').value,
+                min_confidence_score: parseFloat(document.getElementById('min_confidence_score').value),
+                blacklist_domains: document.getElementById('blacklist_domains').value,
+                whitelist_domains: document.getElementById('whitelist_domains').value
+            };
+            
+            // Collect industry filter checkboxes
+            const industryCheckboxes = document.querySelectorAll('#industry_filter input[type="checkbox"]:checked');
+            settings.industry_filter = Array.from(industryCheckboxes).map(cb => cb.value);
+            
+            // Send to API
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(settings)
+            });
+            
+            if (response.ok) {
+                showMessage('Einstellungen erfolgreich gespeichert', 'success');
+            } else {
+                showMessage('Fehler beim Speichern der Einstellungen', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showMessage('Fehler beim Speichern der Einstellungen', 'error');
+        }
+    }
+    
+    function showMessage(text, type) {
+        const msgDiv = document.getElementById('save-message');
+        msgDiv.textContent = text;
+        msgDiv.className = 'mt-4 p-4 rounded ' + (type === 'success' ? 'bg-green-600' : 'bg-red-600');
+        msgDiv.classList.remove('hidden');
+        
+        setTimeout(() => {
+            msgDiv.classList.add('hidden');
+        }, 3000);
+    }
+    
+    // Update confidence score display
+    document.getElementById('min_confidence_score').addEventListener('input', (e) => {
+        document.getElementById('confidence-value').textContent = e.target.value;
+    });
+    
+    // Attach form submit handler
+    document.getElementById('settings-form').addEventListener('submit', saveSettings);
+    
+    // Load settings on page load
+    loadSettings();
+</script>
+{% endblock %}
