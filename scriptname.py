@@ -77,6 +77,11 @@ from stream2_extraction_layer.extraction_enhanced import (
     extract_name_enhanced,
     extract_role_with_context,
 )
+from learning_engine import (
+    LearningEngine,
+    is_mobile_number,
+    is_job_posting,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -347,6 +352,7 @@ CFG = ScraperConfig()
 # =========================
 
 _DB_READY = False  # einmaliges Schema-Setup pro Prozess
+_LEARNING_ENGINE: Optional[LearningEngine] = None  # Global learning engine instance
 
 LEAD_FIELDS = [
     "name","rolle","email","telefon","quelle","score","tags","region",
@@ -461,16 +467,26 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
 def db():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    global _DB_READY
+    global _DB_READY, _LEARNING_ENGINE
     if not _DB_READY:
         _ensure_schema(con)
         _DB_READY = True
+    # Initialize learning engine on first DB access
+    if _LEARNING_ENGINE is None:
+        _LEARNING_ENGINE = LearningEngine(DB_PATH)
     return con
 
 def init_db():
     # bleibt als expliziter Initialisierer erhalten (macht intern dasselbe)
     con = db()
     con.close()
+
+def get_learning_engine() -> Optional[LearningEngine]:
+    """Get the global learning engine instance."""
+    global _LEARNING_ENGINE
+    if _LEARNING_ENGINE is None:
+        _LEARNING_ENGINE = LearningEngine(DB_PATH)
+    return _LEARNING_ENGINE
 
 def migrate_db_unique_indexes():
     """
@@ -576,6 +592,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
     Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
+    STRICT RULE: Only mobile numbers allowed - landline numbers are rejected.
     """
     if not leads:
         return []
@@ -587,21 +604,37 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     sql = f"INSERT OR IGNORE INTO leads ({cols}) VALUES ({placeholders})"
 
     new_rows = []
+    learning_engine = get_learning_engine()
+    
     try:
         for r in leads:
+            # CRITICAL: Check for job postings first - NEVER save job ads as leads
+            source_url = r.get("quelle", "")
+            if is_job_posting(url=source_url, title=r.get("name", ""), 
+                             snippet=r.get("opening_line", ""), content=r.get("tags", "")):
+                log("debug", "Lead dropped at insert (job posting)", url=source_url)
+                continue
+            
             # Phone hardfilter: Re-check phone validity before insert
             phone = (r.get("telefon") or "").strip()
             if phone:
                 is_valid, phone_type = validate_phone(phone)
                 if not is_valid:
-                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=r.get("quelle", ""))
+                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=source_url)
                     continue
-                # Update phone_type if not already set (intentional in-place modification)
-                if not r.get("phone_type"):
-                    r["phone_type"] = phone_type
+                
+                # STRICT: Only mobile numbers allowed
+                # Normalize phone first before checking if it's mobile
+                normalized_phone = normalize_phone(phone)
+                if not is_mobile_number(normalized_phone):
+                    log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
+                    continue
+                
+                # Update phone_type to mobile (since we validated it's mobile)
+                r["phone_type"] = "mobile"
             else:
                 # No phone - skip lead (phone is mandatory)
-                log("debug", "Lead dropped at insert (no phone)", url=r.get("quelle", ""))
+                log("debug", "Lead dropped at insert (no phone)", url=source_url)
                 continue
             vals = [
                 r.get("name",""),
@@ -637,6 +670,15 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             cur.execute(sql, vals)
             if cur.rowcount > 0:
                 new_rows.append(r)
+                # Learn from successful lead (with mobile number)
+                if learning_engine:
+                    try:
+                        # Get the query context from metadata if available
+                        query_context = r.get("_query_context", "")
+                        learning_engine.learn_from_success(r, query=query_context)
+                    except Exception as e:
+                        # Don't fail lead insertion if learning fails
+                        log("debug", "Learning failed", error=str(e))
         con.commit()
     except sqlite3.OperationalError as e:
         # Fallback: sehr alte DB migrieren (harte UNIQUE/fehlende Spalten)
@@ -2047,6 +2089,18 @@ BLACKLIST_PATH_PATTERNS = {
     "news", "blog", "ratgeber", "portal"
 }
 
+# Whitelist for promising patterns - always allow these through
+ALWAYS_ALLOW_PATTERNS = [
+    r'industrievertretung',
+    r'handelsvertret',
+    r'vertriebspartner',
+    r'/ansprechpartner/',
+    r'/team/',
+    r'/ueber-uns/',
+    r'/kontakt/',
+    r'/impressum',
+]
+
 def _matches_hostlist(host: str, blocked: set[str]) -> bool:
     h = (host or "").lower()
     if h.startswith("www."):
@@ -2054,9 +2108,10 @@ def _matches_hostlist(host: str, blocked: set[str]) -> bool:
     return any(h == d or h.endswith("." + d) for d in (b.lower() for b in blocked))
 
 
-def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "") -> Tuple[bool, str]:
+def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_snippet_jackpot: bool = False) -> Tuple[bool, str]:
     """
     Pre-fetch URL filtering: check blacklist hosts and path patterns.
+    Snippet jackpots with contact data are always allowed through (unless job postings).
     Returns (should_skip, reason).
     """
     if not url:
@@ -2070,12 +2125,25 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "") -> Tu
         title_lower = (title or "").lower()
         snippet_lower = (snippet or "").lower()
         
+        # Check for job posting - always block
+        if is_job_posting(url=url, title=title, snippet=snippet):
+            return True, "job_posting"
+        
+        # Check whitelist first - always allow promising patterns
+        combined_text = f"{url_lower} {path} {title_lower}"
+        for pattern in ALWAYS_ALLOW_PATTERNS:
+            if re.search(pattern, combined_text, re.I):
+                return False, ""  # Allow through
+        
+        # Snippet jackpots with contact data always pass (unless job posting - already checked)
+        if is_snippet_jackpot:
+            return False, ""
+        
         # Check host blacklist
         if _matches_hostlist(host, DROP_PORTAL_DOMAINS):
             return True, "blacklist_host"
         
         # Check path/title patterns (case-insensitive)
-        combined_text = f"{url_lower} {path} {title_lower}"
         for pattern in BLACKLIST_PATH_PATTERNS:
             if pattern in combined_text:
                 return True, f"blacklist_pattern_{pattern}"
@@ -2096,6 +2164,10 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
     def _drop(reason: str) -> Tuple[bool, str]:
         log("debug", "lead dropped", reason=reason, url=page_url)
         return True, reason
+    
+    # CRITICAL: Check for job postings first - NEVER save as lead
+    if is_job_posting(url=page_url, title=title, snippet=lead.get("opening_line", ""), content=text):
+        return _drop("job_posting")
 
     # Telefonnummer Pflicht - strict validation
     phone = (lead.get("telefon") or "").strip()
@@ -2105,6 +2177,12 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
     is_valid, phone_type = validate_phone(phone)
     if not is_valid:
         return _drop("no_phone")
+    
+    # STRICT: Only mobile numbers allowed
+    # Normalize phone first before checking if it's mobile
+    normalized_phone = normalize_phone(phone)
+    if not is_mobile_number(normalized_phone):
+        return _drop("not_mobile_number")
 
     if email:
         local, _, domain = email.partition("@")
@@ -4782,19 +4860,40 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
                     log("info", f"💰 SNIPPET-JACKPOT: {u} -> Mail: {len(emails)}, Tel: {len(phones)}")
                 except Exception:
                     pass
+                
+                # CRITICAL: Check for job postings first - NEVER save as lead
+                if is_job_posting(url=u, title=title, snippet=snip):
+                    log("debug", "Snippet jackpot dropped (job posting)", url=u)
+                    continue
+                
+                # Check if we have a mobile number
+                tel = ""
+                has_mobile = False
+                for phone in phones:
+                    if is_mobile_number(phone):
+                        tel = phone
+                        has_mobile = True
+                        break
+                
+                # If no mobile number but has contact, still process for deep crawl
+                # (might find mobile on the actual page)
+                if not has_mobile and phones:
+                    log("debug", "Snippet jackpot has landline only - may deep crawl", url=u)
+                    # Don't save as snippet lead, let it go through normal processing
+                    continue
+                
+                # Only create snippet lead if we have mobile number
+                if not has_mobile and not emails:
+                    continue
+                
                 tags_list = [t for t in (tags_from(snippet_text) or "").split(",") if t]
                 tags_list.append("snippet")
+                if has_mobile:
+                    tags_list.append("mobile")
                 tags_local = ",".join(dict.fromkeys(tags_list))
-                tel = phones[0] if phones else ""
-                phone_type = ""
-                snippet_lower = snippet_text.lower()
-                tel_clean = tel.replace("+", "")
-                mobile_hint = any(h in snippet_lower for h in ["mobil", "mobile", "handy", "cell", "tel:", "telefon"])
-                if tel and (tel_clean.startswith("4915") or tel_clean.startswith("4916") or tel_clean.startswith("4917") or tel_clean.startswith("015") or tel_clean.startswith("016") or tel_clean.startswith("017") or mobile_hint):
-                    phone_type = "mobile"
-                elif tel:
-                    phone_type = "mobile"
-                score = 90 if tel else 80
+                
+                phone_type = "mobile" if has_mobile else ""
+                score = 95 if has_mobile else 80
                 snippet_leads.append({
                     "name": name or "",
                     "rolle": rolle or "",
