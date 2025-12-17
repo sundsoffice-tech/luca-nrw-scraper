@@ -221,6 +221,8 @@ def initialize_default_settings(con: sqlite3.Connection) -> None:
 
 
 # OpenAI Pricing (as of December 2024)
+# TODO: Move to database table or config file for easier updates
+# Update these values when OpenAI changes pricing
 OPENAI_PRICING = {
     'gpt-4o': {'input': 0.0025, 'output': 0.01},  # per 1K tokens
     'gpt-4o-mini': {'input': 0.00015, 'output': 0.0006},

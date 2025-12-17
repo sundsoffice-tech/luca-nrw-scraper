@@ -476,8 +476,14 @@ def db():
             ensure_dashboard_schema(con)
             initialize_default_search_modes(con)
             initialize_default_settings(con)
-        except ImportError:
-            pass  # Dashboard module not available
+        except ImportError as e:
+            # Dashboard module not available - this is expected if dashboard deps not installed
+            import sys
+            if '--verbose' in sys.argv or os.getenv('DEBUG'):
+                print(f"Note: Dashboard module not available: {e}")
+        except Exception as e:
+            # Log other errors but don't fail
+            print(f"Warning: Could not initialize dashboard schema: {e}")
         _DB_READY = True
     # Initialize learning engine on first DB access
     if _LEARNING_ENGINE is None:
@@ -4572,8 +4578,14 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
                             endpoint='chat/completions'
                         )
                         con.close()
-                except Exception:
-                    pass  # Don't fail if cost tracking fails
+                except (ImportError, AttributeError) as e:
+                    # Dashboard not available or schema not initialized
+                    pass
+                except Exception as e:
+                    # Log other errors but don't fail the API call
+                    import sys
+                    if '--verbose' in sys.argv or os.getenv('DEBUG'):
+                        print(f"Warning: Cost tracking failed: {e}")
                 
                 choices = (j.get("choices") or [])
                 if not choices or "message" not in choices[0] or "content" not in choices[0]["message"]:

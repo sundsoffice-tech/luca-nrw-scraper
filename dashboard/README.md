@@ -215,10 +215,33 @@ config = get_mode_config_for_scraper(DB_PATH)
 ## Security Considerations
 
 1. **Production Deployment**: Use a production WSGI server (gunicorn, uwsgi) instead of Flask's development server
-2. **Authentication**: Add authentication middleware for production use
-3. **API Rate Limiting**: Implement rate limiting on API endpoints
-4. **CORS Configuration**: Restrict CORS origins in production
-5. **Database Access**: Ensure proper file permissions on scraper.db
+   - Set `FLASK_DEBUG=false` in production
+   - Example: `gunicorn -w 4 -b 127.0.0.1:5056 'dashboard.app:create_app()'`
+
+2. **CDN Resources**: Currently using CDN for Tailwind CSS and Chart.js
+   - For production, consider hosting these libraries locally
+   - Or add Subresource Integrity (SRI) hashes to CDN links
+   - Example: `<script src="https://cdn.jsdelivr.net/npm/chart.js" integrity="sha384-..." crossorigin="anonymous"></script>`
+
+3. **Authentication**: Add authentication middleware for production use
+   - Consider Flask-Login or OAuth integration
+   - Protect sensitive API endpoints
+
+4. **API Rate Limiting**: Implement rate limiting on API endpoints
+   - Use Flask-Limiter or similar library
+   - Prevent abuse of costly operations
+
+5. **CORS Configuration**: Restrict CORS origins in production
+   - Currently allows all origins for development
+   - Set specific allowed origins in production
+
+6. **Database Access**: Ensure proper file permissions on scraper.db
+   - Database file should not be web-accessible
+   - Use appropriate filesystem permissions
+
+7. **Pricing Data**: OpenAI pricing is hardcoded in `db_schema.py`
+   - Update pricing values when OpenAI changes rates
+   - Consider moving to a configuration file or database table
 
 ## Troubleshooting
 

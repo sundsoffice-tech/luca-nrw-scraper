@@ -252,6 +252,11 @@ def add_log_entry(level: str, message: str):
 
 
 if __name__ == '__main__':
+    import os
     app = create_app()
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     print(f"🎯 LUCA Control Center starting on http://127.0.0.1:5056")
-    app.run(host='127.0.0.1', port=5056, debug=True)
+    print(f"⚠️  Debug mode: {debug_mode}")
+    if not debug_mode:
+        print(f"⚠️  This is a development server. Use a production WSGI server for production.")
+    app.run(host='127.0.0.1', port=5056, debug=debug_mode)
