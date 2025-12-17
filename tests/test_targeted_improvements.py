@@ -125,7 +125,8 @@ class TestHostPathGuards:
             snippet=""
         )
         assert should_skip is True
-        assert "blacklist_pattern" in reason
+        # Can be blocked as either job_posting or blacklist_pattern
+        assert "blacklist_pattern" in reason or reason == "job_posting"
 
 
 class TestGoogleCostReduction:

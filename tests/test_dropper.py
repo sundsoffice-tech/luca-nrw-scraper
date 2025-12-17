@@ -40,7 +40,7 @@ def test_keep_with_valid_phone():
 
 
 def test_drop_on_portal_email_domain():
-    lead = {"email": "person@stepstone.de", "telefon": "+49 123"}
+    lead = {"email": "person@stepstone.de", "telefon": "+491761234567"}  # Valid mobile
 
     drop, reason = scriptname.should_drop_lead(lead, "https://example.com/profile", "profile text")
 
@@ -50,7 +50,7 @@ def test_drop_on_portal_email_domain():
 
 def test_pdf_dropped_without_cv_hint(monkeypatch):
     monkeypatch.setattr(scriptname, "ALLOW_PDF_NON_CV", False)
-    lead = {"email": "user@example.com", "telefon": "+49 123"}
+    lead = {"email": "user@example.com", "telefon": "+491761234567"}  # Valid mobile
 
     drop, reason = scriptname.should_drop_lead(lead, "https://example.com/brochure.pdf", "Produktuebersicht")
 
@@ -60,7 +60,7 @@ def test_pdf_dropped_without_cv_hint(monkeypatch):
 
 def test_pdf_kept_with_cv_hint(monkeypatch):
     monkeypatch.setattr(scriptname, "ALLOW_PDF_NON_CV", False)
-    lead = {"email": "user@example.com", "telefon": "+49 123"}
+    lead = {"email": "user@example.com", "telefon": "+491761234567"}  # Valid mobile
 
     drop, reason = scriptname.should_drop_lead(lead, "https://example.com/cv.pdf", "Lebenslauf Sales")
 
@@ -71,7 +71,7 @@ def test_pdf_kept_with_cv_hint(monkeypatch):
 def test_scoring_email_ordering():
     text = "Sales profile"
     url = "https://example.com/profile"
-    base_lead = {"telefon": "+49 123"}
+    base_lead = {"telefon": "+491761234567"}  # Valid mobile
 
     corp = dict(base_lead, email="alice@company.com")
     free = dict(base_lead, email="bob@gmail.com")

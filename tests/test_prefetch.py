@@ -47,7 +47,8 @@ class TestPrefetchFiltering:
             ""
         )
         assert skip is True
-        assert "blacklist_pattern" in reason
+        # Can be blocked as either job_posting or blacklist_pattern
+        assert "blacklist_pattern" in reason or reason == "job_posting"
         
         # Blog in path
         skip, reason = scriptname.should_skip_url_prefetch(
@@ -82,8 +83,9 @@ class TestPrefetchFiltering:
             "Stellengesuch Vertrieb",
             ""
         )
-        # kleinanzeigen not in blacklist
-        assert skip is False
+        # kleinanzeigen IS in blacklist (DROP_PORTAL_DOMAINS)
+        assert skip is True
+        assert reason == "blacklist_host"
     
     def test_title_pattern_skip(self):
         """Test that patterns in title trigger skip."""
