@@ -624,7 +624,9 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     continue
                 
                 # STRICT: Only mobile numbers allowed
-                if not is_mobile_number(phone):
+                # Normalize phone first before checking if it's mobile
+                normalized_phone = normalize_phone(phone)
+                if not is_mobile_number(normalized_phone):
                     log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
                     continue
                 
@@ -2177,7 +2179,9 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
         return _drop("no_phone")
     
     # STRICT: Only mobile numbers allowed
-    if not is_mobile_number(phone):
+    # Normalize phone first before checking if it's mobile
+    normalized_phone = normalize_phone(phone)
+    if not is_mobile_number(normalized_phone):
         return _drop("not_mobile_number")
 
     if email:
