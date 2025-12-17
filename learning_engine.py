@@ -298,56 +298,64 @@ def is_mobile_number(phone: str) -> bool:
     # Remove all non-digit characters except +
     cleaned = re.sub(r'[^\d+]', '', phone)
     
-    # German mobile prefixes (015x, 016x, 017x)
-    MOBILE_PREFIXES_DE = ['15', '16', '17']
+    # German mobile prefixes (015x, 016x, 017x - complete list)
+    MOBILE_PREFIXES_DE = ['150', '151', '152', '155', '156', '157', '159',
+                          '160', '162', '163', '170', '171', '172', '173',
+                          '174', '175', '176', '177', '178', '179']
     
-    # Austrian mobile prefixes
-    MOBILE_PREFIXES_AT = ['66', '67', '68']
+    # Austrian mobile prefixes  
+    MOBILE_PREFIXES_AT = ['660', '661', '662', '663', '664', '665', '666', '667',
+                          '668', '669', '670', '676', '677', '678', '679',
+                          '680', '681', '688', '689']
     
     # Swiss mobile prefixes
-    MOBILE_PREFIXES_CH = ['76', '77', '78', '79']
+    MOBILE_PREFIXES_CH = ['760', '761', '762', '763', '764', '765', '766', '767',
+                          '768', '769', '770', '771', '772', '773', '774', '775',
+                          '776', '777', '778', '779', '780', '781', '782', '783',
+                          '784', '785', '786', '787', '788', '789', '790', '791',
+                          '792', '793', '794', '795', '796', '797', '798', '799']
     
     # Check German numbers
     if cleaned.startswith('+49'):
-        # Extract prefix after country code (next 2-3 digits)
+        # Extract prefix after country code (next 3 digits)
         rest = cleaned[3:]  # Everything after +49
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_DE
     elif cleaned.startswith('0049'):
         # Extract prefix after country code
         rest = cleaned[4:]  # Everything after 0049
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_DE
     elif cleaned.startswith('0') and not cleaned.startswith('00'):
         # National format (0176...)
         if len(cleaned) >= 4:
-            prefix = cleaned[1:3]  # Skip the leading 0
+            prefix = cleaned[1:4]  # Skip the leading 0, get next 3 digits
             return prefix in MOBILE_PREFIXES_DE
     
     # Check Austrian numbers
     elif cleaned.startswith('+43'):
         rest = cleaned[3:]
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_AT
     elif cleaned.startswith('0043'):
         rest = cleaned[4:]
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_AT
     
     # Check Swiss numbers
     elif cleaned.startswith('+41'):
         rest = cleaned[3:]
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_CH
     elif cleaned.startswith('0041'):
         rest = cleaned[4:]
-        if len(rest) >= 2:
-            prefix = rest[:2]
+        if len(rest) >= 3:
+            prefix = rest[:3]
             return prefix in MOBILE_PREFIXES_CH
     
     return False
