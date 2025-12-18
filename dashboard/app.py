@@ -628,12 +628,12 @@ def create_app(db_path: str = None) -> Flask:
                 params.extend([search_pattern] * 6)
             
             # Status filter
-            if status:
+            if status and status != 'all':
                 where_clauses.append("status = ?")
                 params.append(status)
             
             # Lead type filter
-            if lead_type:
+            if lead_type and lead_type != 'all':
                 where_clauses.append("lead_type = ?")
                 params.append(lead_type)
             
