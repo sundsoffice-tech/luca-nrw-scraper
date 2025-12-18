@@ -2499,7 +2499,13 @@ def _matches_hostlist(host: str, blocked: set[str]) -> bool:
     return any(h == d or h.endswith("." + d) for d in (b.lower() for b in blocked))
 
 
-def is_candidate_url(url: str) -> Optional[bool]:
+def _is_candidates_mode() -> bool:
+    """Check if we're in candidates/recruiter mode based on INDUSTRY env var."""
+    industry = str(os.getenv("INDUSTRY", "")).lower()
+    return "recruiter" in industry or "candidates" in industry
+
+
+def is_candidate_url(url: Optional[str]) -> Optional[bool]:
     """
     Prüft ob URL ein Kandidaten-Profil sein könnte.
     Returns: True (candidate), False (definitely not), None (uncertain, needs further analysis)
@@ -2577,11 +2583,8 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
         if is_job_posting(url=url, title=title, snippet=snippet):
             return True, "job_posting"
         
-        # Check if we're in candidates/recruiter mode
-        is_candidates_mode = "recruiter" in str(os.getenv("INDUSTRY", "")).lower() or "candidates" in str(os.getenv("INDUSTRY", "")).lower()
-        
         # In candidates mode, use candidate URL filtering
-        if is_candidates_mode:
+        if _is_candidates_mode():
             candidate_check = is_candidate_url(url)
             if candidate_check is False:
                 # Definitely not a candidate URL
@@ -3945,10 +3948,8 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
         "Content-Type": "application/json"
     }
     
-    # Check if we're in candidates/recruiter mode
-    is_candidates_mode = "recruiter" in str(os.getenv("INDUSTRY", "")).lower() or "candidates" in str(os.getenv("INDUSTRY", "")).lower()
-    
-    if is_candidates_mode and any(marker in url.lower() for marker in ['/stellengesuche/', 'linkedin.com/in/', 'xing.com/profile/', 'freelancer']):
+    # In candidates mode, use enhanced prompt for likely candidate URLs
+    if _is_candidates_mode() and is_candidate_url(url) is True:
         # Enhanced prompt for candidate profiles
         system_prompt = (
             'Analyze this profile of a person SEEKING a job (Stellengesuch - NOT a job offer). '
