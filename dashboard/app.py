@@ -623,9 +623,9 @@ def create_app(db_path: str = None) -> Flask:
             
             # Search filter
             if search:
-                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR company LIKE ? OR telefon LIKE ? OR mobile_number LIKE ? OR email LIKE ?)")
+                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR company LIKE ? OR telefon LIKE ? OR email LIKE ?)")
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern] * 6)
+                params.extend([search_pattern] * 5)
             
             # Status filter
             if status and status != 'all':
@@ -639,13 +639,13 @@ def create_app(db_path: str = None) -> Flask:
             
             # Phone filter
             if phone_filter == 'has_mobile':
-                where_clauses.append("((mobile_number IS NOT NULL AND mobile_number != '') OR (telefon IS NOT NULL AND telefon != ''))")
+                where_clauses.append("(telefon IS NOT NULL AND telefon != '')")
             elif phone_filter == 'no_mobile':
-                where_clauses.append("((mobile_number IS NULL OR mobile_number = '') AND (telefon IS NULL OR telefon = ''))")
+                where_clauses.append("(telefon IS NULL OR telefon = '')")
             elif phone_filter == 'mobile_only':
-                where_clauses.append("((mobile_number LIKE '015%' OR mobile_number LIKE '016%' OR mobile_number LIKE '017%') OR (telefon LIKE '015%' OR telefon LIKE '016%' OR telefon LIKE '017%'))")
+                where_clauses.append("(telefon LIKE '015%' OR telefon LIKE '016%' OR telefon LIKE '017%')")
             elif phone_filter == 'landline_only':
-                where_clauses.append("(((mobile_number IS NOT NULL AND mobile_number != '' AND mobile_number NOT LIKE '01%') OR (telefon IS NOT NULL AND telefon != '' AND telefon NOT LIKE '01%')))")
+                where_clauses.append("(telefon IS NOT NULL AND telefon != '' AND telefon NOT LIKE '01%')")
             
             # Email filter
             if email_filter == 'has_email':
@@ -696,7 +696,7 @@ def create_app(db_path: str = None) -> Flask:
             total = cur.fetchone()[0]
             
             # Sorting
-            allowed_sorts = ['name', 'mobile_number', 'telefon', 'email', 'company', 'company_name', 'source_url', 'quelle', 'created_at', 'last_updated', 'confidence', 'id']
+            allowed_sorts = ['name', 'telefon', 'email', 'company', 'company_name', 'source_url', 'quelle', 'created_at', 'last_updated', 'confidence', 'id']
             if sort_by in allowed_sorts:
                 sort_direction = 'DESC' if sort_dir == 'desc' else 'ASC'
                 order_by = f"{sort_by} {sort_direction}"
@@ -1004,7 +1004,7 @@ def create_app(db_path: str = None) -> Flask:
 VERSION:3.0
 FN:{lead.get('name', 'Unknown')}
 ORG:{lead.get('company', lead.get('company_name', ''))}
-TEL;TYPE=CELL:{lead.get('mobile_number', lead.get('telefon', ''))}
+TEL;TYPE=CELL:{lead.get('telefon', '')}
 EMAIL:{lead.get('email', '')}
 NOTE:Quelle: {lead.get('source_url', lead.get('quelle', ''))}
 END:VCARD"""

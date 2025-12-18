@@ -178,7 +178,7 @@ function renderLeads(leads) {
     }
     
     tbody.innerHTML = leads.map(lead => {
-        const mobile = lead.mobile_number || lead.telefon || '';
+        const mobile = lead.telefon || '';
         const company = lead.company || lead.company_name || '';
         const source = lead.source_url || lead.quelle || '';
         const confidence = lead.confidence || 0;
