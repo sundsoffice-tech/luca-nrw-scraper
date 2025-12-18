@@ -3,6 +3,21 @@
 {% block title %}Dashboard - LUCA Control Center{% endblock %}
 
 {% block content %}
+<!-- Scraper Control Panel -->
+<section class="mb-6">
+    {% include 'components/control_panel.html' %}
+</section>
+
+<!-- Scheduler and Health in a 2-column grid -->
+<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div>
+        {% include 'components/scheduler_panel.html' %}
+    </div>
+    <div>
+        {% include 'components/health_monitor.html' %}
+    </div>
+</section>
+
 <!-- KPI Cards -->
 <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
@@ -93,6 +108,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/scraper_control.js"></script>
+<script src="/static/js/notifications.js"></script>
 <script>
     let leadsChart = null;
     let sourcesChart = null;

@@ -1,0 +1,131 @@
+<div class="bg-gray-800 rounded-lg p-6 mb-4 border border-gray-700">
+    <h3 class="text-lg font-semibold mb-4">📅 Scheduler</h3>
+    
+    <div class="space-y-4">
+        <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="scheduler-enabled" class="rounded w-5 h-5">
+            <span>Auto-Run aktivieren</span>
+        </label>
+        
+        <div class="flex items-center gap-4">
+            <span class="text-gray-400">Alle</span>
+            <input type="number" id="scheduler-interval" value="2" min="0.5" max="24" step="0.5"
+                   class="w-20 bg-gray-700 rounded px-3 py-2 text-center border border-gray-600 focus:border-green-500 focus:outline-none">
+            <span class="text-gray-400">Stunden</span>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-4">
+            <span class="text-gray-400">Nachtpause:</span>
+            <input type="number" id="scheduler-pause-start" value="23" min="0" max="23"
+                   class="w-20 bg-gray-700 rounded px-3 py-2 text-center border border-gray-600 focus:border-green-500 focus:outline-none">
+            <span class="text-gray-400">bis</span>
+            <input type="number" id="scheduler-pause-end" value="6" min="0" max="23"
+                   class="w-20 bg-gray-700 rounded px-3 py-2 text-center border border-gray-600 focus:border-green-500 focus:outline-none">
+            <span class="text-gray-400">Uhr</span>
+        </div>
+        
+        <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="scheduler-weekends" class="rounded w-5 h-5">
+            <span>Wochenende pausieren</span>
+        </label>
+        
+        <div class="pt-4 border-t border-gray-700">
+            <p class="text-gray-400">Nächster Run: <span id="next-run" class="text-white font-semibold">--:--</span></p>
+        </div>
+        
+        <button onclick="saveScheduler()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded transition">
+            💾 Speichern
+        </button>
+    </div>
+</div>
+
+<script>
+    // Load scheduler config
+    async function loadSchedulerConfig() {
+        try {
+            const response = await fetch('/api/scheduler');
+            const config = await response.json();
+            
+            if (config.error) {
+                console.error('Error loading scheduler config:', config.error);
+                return;
+            }
+            
+            document.getElementById('scheduler-enabled').checked = config.enabled || false;
+            document.getElementById('scheduler-interval').value = config.interval_hours || 2;
+            document.getElementById('scheduler-pause-start').value = config.pause_start_hour || 23;
+            document.getElementById('scheduler-pause-end').value = config.pause_end_hour || 6;
+            document.getElementById('scheduler-weekends').checked = config.pause_weekends || false;
+            
+            if (config.next_run_display) {
+                document.getElementById('next-run').textContent = config.next_run_display;
+            } else {
+                document.getElementById('next-run').textContent = 'Deaktiviert';
+            }
+            
+        } catch (error) {
+            console.error('Error loading scheduler config:', error);
+        }
+    }
+    
+    // Save scheduler config
+    async function saveScheduler() {
+        try {
+            const config = {
+                enabled: document.getElementById('scheduler-enabled').checked,
+                interval_hours: parseFloat(document.getElementById('scheduler-interval').value),
+                pause_start_hour: parseInt(document.getElementById('scheduler-pause-start').value),
+                pause_end_hour: parseInt(document.getElementById('scheduler-pause-end').value),
+                pause_weekends: document.getElementById('scheduler-weekends').checked
+            };
+            
+            const response = await fetch('/api/scheduler', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            });
+            
+            const result = await response.json();
+            
+            if (result.error) {
+                alert('Fehler beim Speichern: ' + result.error);
+                return;
+            }
+            
+            // Update next run display
+            if (result.next_run_datetime) {
+                const nextRun = new Date(result.next_run_datetime);
+                document.getElementById('next-run').textContent = nextRun.toLocaleString('de-DE', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } else {
+                document.getElementById('next-run').textContent = 'Deaktiviert';
+            }
+            
+            // Show notification
+            if (typeof showNotification === 'function') {
+                showNotification('💾 Scheduler gespeichert', 'success');
+            } else {
+                alert('Scheduler gespeichert');
+            }
+            
+        } catch (error) {
+            console.error('Error saving scheduler config:', error);
+            alert('Fehler beim Speichern');
+        }
+    }
+    
+    // Load config on page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadSchedulerConfig);
+    } else {
+        loadSchedulerConfig();
+    }
+    
+    // Refresh next run time every minute
+    setInterval(loadSchedulerConfig, 60000);
+</script>

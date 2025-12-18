@@ -85,6 +85,40 @@ def ensure_dashboard_schema(con: sqlite3.Connection) -> None:
         )
     """)
     
+    # Scheduler configuration table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS scheduler_config (
+            id INTEGER PRIMARY KEY,
+            enabled BOOLEAN DEFAULT FALSE,
+            interval_hours REAL DEFAULT 2.0,
+            pause_start_hour INTEGER DEFAULT 23,
+            pause_end_hour INTEGER DEFAULT 6,
+            pause_weekends BOOLEAN DEFAULT FALSE,
+            last_run TIMESTAMP,
+            next_run TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # Add status column to leads table if it doesn't exist
+    # First check if leads table exists
+    cur.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='leads'
+    """)
+    
+    if cur.fetchone():
+        # Table exists, check if status column exists
+        cur.execute("PRAGMA table_info(leads)")
+        columns = [row[1] for row in cur.fetchall()]
+        
+        if 'status' not in columns:
+            # Column doesn't exist, add it
+            cur.execute("""
+                ALTER TABLE leads ADD COLUMN status TEXT DEFAULT 'new'
+            """)
+    
     con.commit()
 
 
