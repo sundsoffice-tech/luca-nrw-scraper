@@ -5,30 +5,150 @@
 {% block content %}
 <div class="mb-6">
     <h2 class="text-3xl font-bold mb-2">📋 Lead Manager</h2>
-    <p class="text-gray-400">Verwalten Sie alle Leads zentral an einem Ort</p>
+    <p class="text-gray-400">Verwalten Sie alle Leads zentral an einem Ort mit erweiterten Filter- und Export-Funktionen</p>
 </div>
+
+<!-- Selection Bar (hidden by default) -->
+<section id="selection-bar" class="hidden bg-blue-600 rounded-lg p-4 mb-4 border border-blue-500">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        <span class="text-white font-semibold"><strong id="selection-count">0</strong> Leads ausgewählt</span>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="exportSelected('csv')" class="bg-green-600 hover:bg-green-700 rounded px-3 py-2 text-white text-sm transition">
+                📤 CSV Export
+            </button>
+            <button onclick="exportSelected('excel')" class="bg-green-700 hover:bg-green-800 rounded px-3 py-2 text-white text-sm transition">
+                📊 Excel Export
+            </button>
+            <button onclick="exportSelected('vcard')" class="bg-purple-600 hover:bg-purple-700 rounded px-3 py-2 text-white text-sm transition">
+                📇 vCard Export
+            </button>
+            <button onclick="deleteSelected()" class="bg-red-600 hover:bg-red-700 rounded px-3 py-2 text-white text-sm transition">
+                🗑️ Löschen
+            </button>
+            <button onclick="clearSelection()" class="bg-gray-600 hover:bg-gray-700 rounded px-3 py-2 text-white text-sm transition">
+                ✖ Auswahl aufheben
+            </button>
+        </div>
+    </div>
+</section>
 
 <!-- Filters and Search -->
 <section class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-        <!-- Search -->
-        <div class="md:col-span-2">
-            <label class="block text-gray-400 text-sm mb-1">Suche</label>
+    <h3 class="text-lg font-semibold mb-4">🔍 Filter & Suche</h3>
+    
+    <!-- Search -->
+    <div class="mb-4">
+        <label class="block text-gray-400 text-sm mb-2">Freitext-Suche</label>
+        <div class="relative">
             <input 
                 type="text" 
-                id="leads-search" 
-                placeholder="Name, Firma, Telefon..." 
-                class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none"
+                id="search-input" 
+                placeholder="🔍 Suche nach Name, Telefon, E-Mail, Firma..."
+                class="w-full bg-gray-700 rounded-lg px-4 py-2 pl-10 border border-gray-600 focus:border-green-500 focus:outline-none"
             >
+            <span class="absolute left-3 top-2.5 text-gray-400">🔍</span>
+        </div>
+    </div>
+    
+    <!-- Filter Row 1 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <!-- Phone Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Telefon</label>
+            <select id="filter-phone" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">📱 Alle</option>
+                <option value="has_mobile">✅ Mit Handynummer</option>
+                <option value="no_mobile">❌ Ohne Handynummer</option>
+                <option value="mobile_only">📱 Nur Mobil (015x, 016x, 017x)</option>
+                <option value="landline_only">☎️ Nur Festnetz</option>
+            </select>
         </div>
         
+        <!-- Email Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">E-Mail</label>
+            <select id="filter-email" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">📧 Alle</option>
+                <option value="has_email">✅ Mit E-Mail</option>
+                <option value="no_email">❌ Ohne E-Mail</option>
+            </select>
+        </div>
+        
+        <!-- Source Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Quelle</label>
+            <select id="filter-source" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">🌐 Alle</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="xing">Xing</option>
+                <option value="kleinanzeigen">Kleinanzeigen</option>
+                <option value="google">Google</option>
+                <option value="facebook">Facebook</option>
+                <option value="perplexity">Perplexity</option>
+            </select>
+        </div>
+        
+        <!-- Date Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Datum</label>
+            <select id="filter-date" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">📅 Alle</option>
+                <option value="today">Heute</option>
+                <option value="yesterday">Gestern</option>
+                <option value="7days">Letzte 7 Tage</option>
+                <option value="30days">Letzte 30 Tage</option>
+                <option value="custom">Custom Range...</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Custom Date Range (hidden by default) -->
+    <div id="custom-date-range" class="hidden mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-gray-400 text-sm mb-1">Von</label>
+                <input type="date" id="date-from" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-gray-400 text-sm mb-1">Bis</label>
+                <input type="date" id="date-to" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filter Row 2 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <!-- Lead Type Filter -->
         <div>
             <label class="block text-gray-400 text-sm mb-1">Typ</label>
             <select id="filter-lead-type" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
-                <option value="">Alle</option>
-                <option value="company">Firmen (Recruiter)</option>
-                <option value="candidate">Kandidaten</option>
+                <option value="all">Alle</option>
+                <option value="company">🏢 Firmen (Recruiter)</option>
+                <option value="candidate">👤 Kandidaten</option>
+            </select>
+        </div>
+        
+        <!-- Industry Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Industry</label>
+            <select id="filter-industry" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">🏭 Alle</option>
+                <option value="recruiter">Recruiter (Firmen)</option>
+                <option value="candidates">Candidates (Jobsuchende)</option>
+                <option value="solar">Solar</option>
+                <option value="telekom">Telekom</option>
+                <option value="versicherung">Versicherung</option>
+            </select>
+        </div>
+        
+        <!-- Quality Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Qualität</label>
+            <select id="filter-quality" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="all">⭐ Alle</option>
+                <option value="high">⭐⭐⭐ Hoch (&gt;0.8)</option>
+                <option value="medium">⭐⭐ Mittel (0.5-0.8)</option>
+                <option value="low">⭐ Niedrig (&lt;0.5)</option>
             </select>
         </div>
         
@@ -36,7 +156,7 @@
         <div>
             <label class="block text-gray-400 text-sm mb-1">Status</label>
             <select id="filter-status" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
-                <option value="">Alle</option>
+                <option value="all">Alle</option>
                 <option value="new">Neu</option>
                 <option value="contacted">Kontaktiert</option>
                 <option value="interested">Interessiert</option>
@@ -44,41 +164,18 @@
                 <option value="completed">Abgeschlossen</option>
             </select>
         </div>
-        
-        <!-- Date Filter -->
-        <div>
-            <label class="block text-gray-400 text-sm mb-1">Datum ab</label>
-            <input 
-                type="date" 
-                id="filter-date" 
-                class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none"
-            >
-        </div>
     </div>
     
-    <!-- Quick Filters -->
-    <div class="flex flex-wrap gap-3 mb-4">
-        <button id="filter-today" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">
-            📅 Heute
-        </button>
-        <button id="filter-week" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">
-            📅 Diese Woche
-        </button>
-        <button id="filter-clear" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">
-            ✖️ Filter löschen
-        </button>
-    </div>
-    
-    <!-- Export Buttons -->
+    <!-- Action Buttons -->
     <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-700">
-        <button onclick="exportLeads('csv')" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded flex items-center gap-2 transition">
-            📄 CSV Export
+        <button id="filter-clear" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">
+            ✖️ Filter zurücksetzen
         </button>
-        <button onclick="exportLeads('xlsx')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded flex items-center gap-2 transition">
-            📊 Excel Export
+        <button onclick="exportAll('csv')" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm transition">
+            📄 Alle als CSV exportieren
         </button>
-        <button onclick="exportLeads('pdf')" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded flex items-center gap-2 transition">
-            📑 PDF Export
+        <button onclick="exportAll('excel')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm transition">
+            📊 Alle als Excel exportieren
         </button>
     </div>
 </section>
@@ -88,23 +185,38 @@
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-900 border-b border-gray-700">
-                <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">ID</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Typ</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma/Standort</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Mobil</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">E-Mail</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Erfahrung/Rolle</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Quelle</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Datum</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                <tr class="text-left text-gray-400">
+                    <th class="p-3 w-10">
+                        <input type="checkbox" id="select-all" class="rounded" onchange="selectAll(this.checked)">
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="name" onclick="sortBy('name')">
+                        Name <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="mobile_number" onclick="sortBy('mobile_number')">
+                        Telefon <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="email" onclick="sortBy('email')">
+                        E-Mail <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="company" onclick="sortBy('company')">
+                        Firma <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="source_url" onclick="sortBy('source_url')">
+                        Quelle <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="created_at" onclick="sortBy('created_at')">
+                        Datum <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3 sortable cursor-pointer hover:text-white" data-sort="confidence" onclick="sortBy('confidence')">
+                        Score <span class="sort-icon">↕</span>
+                    </th>
+                    <th class="p-3">Aktionen</th>
                 </tr>
             </thead>
             <tbody id="leads-tbody" class="divide-y divide-gray-700">
                 <!-- Leads will be inserted here by JavaScript -->
                 <tr>
-                    <td colspan="10" class="px-6 py-8 text-center text-gray-500">
+                    <td colspan="9" class="px-6 py-8 text-center text-gray-500">
                         <div class="flex items-center justify-center gap-2">
                             <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
                             <span>Lade Leads...</span>
@@ -131,5 +243,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/utils.js"></script>
 <script src="/static/js/leads.js"></script>
 {% endblock %}

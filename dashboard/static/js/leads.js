@@ -1,30 +1,44 @@
 /**
- * Leads Manager JavaScript
- * Handles lead listing, filtering, sorting, and exporting
+ * Enhanced Leads Manager JavaScript
+ * Handles lead listing, filtering, sorting, selection, and bulk operations
  */
 
+// State management
 let currentPage = 1;
+let perPage = 50;
 let currentFilters = {
     search: '',
-    status: '',
+    phone: 'all',
+    email: 'all',
+    source: 'all',
+    date: 'all',
     date_from: '',
-    lead_type: ''
+    date_to: '',
+    industry: 'all',
+    quality: 'all',
+    lead_type: 'all',
+    status: 'all'
 };
+let currentSort = { 
+    column: 'created_at', 
+    direction: 'desc' 
+};
+let selectedLeads = new Set();
 
 /**
  * Initialize leads manager
  */
 function initLeadsManager() {
-    loadLeads();
     setupEventListeners();
+    loadLeads();
 }
 
 /**
  * Setup event listeners
  */
 function setupEventListeners() {
-    // Search input
-    const searchInput = document.getElementById('leads-search');
+    // Search input with debouncing
+    const searchInput = document.getElementById('search-input');
     if (searchInput) {
         let searchTimeout;
         searchInput.addEventListener('input', (e) => {
@@ -33,73 +47,81 @@ function setupEventListeners() {
                 currentFilters.search = e.target.value;
                 currentPage = 1;
                 loadLeads();
-            }, 500);
+            }, 300);
         });
     }
     
-    // Lead type filter
-    const leadTypeFilter = document.getElementById('filter-lead-type');
-    if (leadTypeFilter) {
-        leadTypeFilter.addEventListener('change', (e) => {
-            currentFilters.lead_type = e.target.value;
-            currentPage = 1;
-            loadLeads();
-        });
-    }
+    // All filter dropdowns
+    const filterIds = ['filter-phone', 'filter-email', 'filter-source', 'filter-date', 
+                       'filter-industry', 'filter-quality', 'filter-lead-type', 'filter-status'];
     
-    // Status filter
-    const statusFilter = document.getElementById('filter-status');
-    if (statusFilter) {
-        statusFilter.addEventListener('change', (e) => {
-            currentFilters.status = e.target.value;
-            currentPage = 1;
-            loadLeads();
-        });
-    }
+    filterIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', (e) => {
+                const filterName = id.replace('filter-', '').replace('-', '_');
+                currentFilters[filterName] = e.target.value;
+                
+                // Show/hide custom date range
+                if (id === 'filter-date') {
+                    const customRange = document.getElementById('custom-date-range');
+                    if (e.target.value === 'custom') {
+                        customRange.classList.remove('hidden');
+                    } else {
+                        customRange.classList.add('hidden');
+                    }
+                }
+                
+                currentPage = 1;
+                loadLeads();
+            });
+        }
+    });
     
-    // Date filter
-    const dateFilter = document.getElementById('filter-date');
-    if (dateFilter) {
-        dateFilter.addEventListener('change', (e) => {
+    // Custom date range
+    const dateFrom = document.getElementById('date-from');
+    const dateTo = document.getElementById('date-to');
+    if (dateFrom && dateTo) {
+        dateFrom.addEventListener('change', (e) => {
             currentFilters.date_from = e.target.value;
             currentPage = 1;
             loadLeads();
         });
-    }
-    
-    // Quick filters
-    const todayBtn = document.getElementById('filter-today');
-    if (todayBtn) {
-        todayBtn.addEventListener('click', () => {
-            const today = new Date().toISOString().split('T')[0];
-            currentFilters.date_from = today;
-            document.getElementById('filter-date').value = today;
+        dateTo.addEventListener('change', (e) => {
+            currentFilters.date_to = e.target.value;
             currentPage = 1;
             loadLeads();
         });
     }
     
-    const weekBtn = document.getElementById('filter-week');
-    if (weekBtn) {
-        weekBtn.addEventListener('click', () => {
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const dateStr = weekAgo.toISOString().split('T')[0];
-            currentFilters.date_from = dateStr;
-            document.getElementById('filter-date').value = dateStr;
-            currentPage = 1;
-            loadLeads();
-        });
-    }
-    
+    // Clear filters button
     const clearBtn = document.getElementById('filter-clear');
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-            currentFilters = { search: '', status: '', date_from: '', lead_type: '' };
-            document.getElementById('leads-search').value = '';
-            document.getElementById('filter-status').value = '';
-            document.getElementById('filter-date').value = '';
-            document.getElementById('filter-lead-type').value = '';
+            currentFilters = {
+                search: '',
+                phone: 'all',
+                email: 'all',
+                source: 'all',
+                date: 'all',
+                date_from: '',
+                date_to: '',
+                industry: 'all',
+                quality: 'all',
+                lead_type: 'all',
+                status: 'all'
+            };
+            
+            // Reset all form elements
+            document.getElementById('search-input').value = '';
+            filterIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = 'all';
+            });
+            document.getElementById('date-from').value = '';
+            document.getElementById('date-to').value = '';
+            document.getElementById('custom-date-range').classList.add('hidden');
+            
             currentPage = 1;
             loadLeads();
         });
@@ -107,13 +129,15 @@ function setupEventListeners() {
 }
 
 /**
- * Load leads from API
+ * Load leads from API with filters and sorting
  */
 async function loadLeads() {
     try {
         const params = new URLSearchParams({
             page: currentPage,
-            per_page: 50,
+            per_page: perPage,
+            sort: currentSort.column,
+            dir: currentSort.direction,
             ...currentFilters
         });
         
@@ -126,7 +150,8 @@ async function loadLeads() {
         }
         
         renderLeads(data.leads);
-        renderPagination(data.page, data.pages, data.total);
+        renderPagination(data.pagination);
+        updateSortIndicators();
         
     } catch (error) {
         console.error('Error loading leads:', error);
@@ -135,7 +160,7 @@ async function loadLeads() {
 }
 
 /**
- * Render leads table
+ * Render leads table with checkboxes
  */
 function renderLeads(leads) {
     const tbody = document.getElementById('leads-tbody');
@@ -144,7 +169,7 @@ function renderLeads(leads) {
     if (leads.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="px-6 py-8 text-center text-gray-500">
+                <td colspan="9" class="px-6 py-8 text-center text-gray-500">
                     Keine Leads gefunden
                 </td>
             </tr>
@@ -153,62 +178,49 @@ function renderLeads(leads) {
     }
     
     tbody.innerHTML = leads.map(lead => {
-        const isCandidate = lead.lead_type === 'candidate';
-        const typeEmoji = isCandidate ? '👤' : '🏢';
-        const typeLabel = isCandidate ? 'Kandidat' : 'Firma';
-        
-        // For candidates, show location instead of company
-        const companyOrLocation = isCandidate ? 
-            (lead.location || lead.region || 'N/A') : 
-            (lead.company || lead.company_name || 'N/A');
-        
-        // For candidates, show experience; for companies, show role
-        const experienceOrRole = isCandidate ?
-            (lead.experience_years ? `${lead.experience_years} Jahre` : '-') :
-            (lead.role || lead.rolle || '-');
+        const mobile = lead.mobile_number || lead.telefon || '';
+        const company = lead.company || lead.company_name || '';
+        const source = lead.source_url || lead.quelle || '';
+        const confidence = lead.confidence || 0;
         
         return `
             <tr class="border-b border-gray-700 hover:bg-gray-750">
-                <td class="px-4 py-3 text-sm">${lead.id}</td>
-                <td class="px-4 py-3 text-sm">
-                    <span class="inline-flex items-center px-2 py-1 rounded text-xs ${isCandidate ? 'bg-purple-900 text-purple-200' : 'bg-blue-900 text-blue-200'}">
-                        ${typeEmoji} ${typeLabel}
+                <td class="p-3">
+                    <input type="checkbox" 
+                           class="lead-checkbox rounded" 
+                           data-id="${lead.id}"
+                           ${selectedLeads.has(lead.id) ? 'checked' : ''}
+                           onchange="toggleLeadSelection(${lead.id})">
+                </td>
+                <td class="p-3 font-medium">${escapeHtml(lead.name || '-')}</td>
+                <td class="p-3">
+                    ${mobile ? `<span class="text-green-400">${escapeHtml(mobile)}</span>` : '<span class="text-gray-500">-</span>'}
+                </td>
+                <td class="p-3">${escapeHtml(lead.email || '-')}</td>
+                <td class="p-3">${escapeHtml(company || '-')}</td>
+                <td class="p-3">
+                    <span class="px-2 py-1 rounded text-xs ${getSourceBadgeClass(source)}">
+                        ${getSourceName(source)}
                     </span>
                 </td>
-                <td class="px-4 py-3 text-sm">
-                    <div class="font-medium">${escapeHtml(lead.name || 'N/A')}</div>
-                    ${isCandidate && lead.current_status ? `<div class="text-gray-400 text-xs">${escapeHtml(lead.current_status)}</div>` : ''}
+                <td class="p-3 text-gray-400 text-sm">${formatDate(lead.created_at || lead.last_updated)}</td>
+                <td class="p-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-16 bg-gray-700 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: ${confidence * 100}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-400">${(confidence * 100).toFixed(0)}%</span>
+                    </div>
                 </td>
-                <td class="px-4 py-3 text-sm">${escapeHtml(companyOrLocation)}</td>
-                <td class="px-4 py-3 text-sm">
-                    ${lead.mobile_number || lead.telefon ? `<a href="tel:${lead.mobile_number || lead.telefon}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.mobile_number || lead.telefon)}</a>` : '-'}
-                </td>
-                <td class="px-4 py-3 text-sm">
-                    ${lead.email ? `<a href="mailto:${lead.email}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.email)}</a>` : '-'}
-                </td>
-                <td class="px-4 py-3 text-sm">
-                    <div class="font-medium">${escapeHtml(experienceOrRole)}</div>
-                    ${isCandidate && lead.skills ? `<div class="text-gray-400 text-xs truncate max-w-xs">${escapeHtml(lead.skills)}</div>` : ''}
-                </td>
-                <td class="px-4 py-3 text-sm">
-                    <a href="${lead.source_url || lead.quelle}" target="_blank" class="text-blue-400 hover:text-blue-300 truncate block max-w-xs" title="${escapeHtml(lead.source_url || lead.quelle)}">
-                        ${escapeHtml(getDomain(lead.source_url || lead.quelle))}
-                    </a>
-                </td>
-                <td class="px-4 py-3 text-sm text-gray-400">
-                    ${formatDate(lead.created_at || lead.last_updated)}
-                </td>
-                <td class="px-4 py-3 text-sm">
-                    <select 
-                        class="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600"
-                        onchange="updateLeadStatus(${lead.id}, this.value)"
-                    >
-                        <option value="new" ${lead.status === 'new' ? 'selected' : ''}>Neu</option>
-                        <option value="contacted" ${lead.status === 'contacted' ? 'selected' : ''}>Kontaktiert</option>
-                        <option value="interested" ${lead.status === 'interested' ? 'selected' : ''}>Interessiert</option>
-                        <option value="rejected" ${lead.status === 'rejected' ? 'selected' : ''}>Abgelehnt</option>
-                        <option value="completed" ${lead.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
-                    </select>
+                <td class="p-3">
+                    <div class="flex gap-1">
+                        <button onclick="exportSingleLead(${lead.id})" class="p-1 hover:bg-gray-600 rounded text-sm" title="Exportieren">
+                            📤
+                        </button>
+                        <button onclick="deleteSingleLead(${lead.id})" class="p-1 hover:bg-red-600 rounded text-sm" title="Löschen">
+                            🗑️
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
@@ -218,16 +230,16 @@ function renderLeads(leads) {
 /**
  * Render pagination
  */
-function renderPagination(page, totalPages, totalLeads) {
+function renderPagination(pagination) {
     const paginationDiv = document.getElementById('pagination');
     if (!paginationDiv) return;
     
     const infoDiv = document.getElementById('leads-info');
     if (infoDiv) {
-        infoDiv.textContent = `Zeige Seite ${page} von ${totalPages} (${totalLeads} Leads gesamt)`;
+        infoDiv.textContent = `Zeige Seite ${pagination.page} von ${pagination.total_pages} (${pagination.total} Leads gesamt)`;
     }
     
-    if (totalPages <= 1) {
+    if (pagination.total_pages <= 1) {
         paginationDiv.innerHTML = '';
         return;
     }
@@ -235,14 +247,14 @@ function renderPagination(page, totalPages, totalLeads) {
     let html = '<div class="flex gap-2 items-center">';
     
     // Previous button
-    if (page > 1) {
-        html += `<button onclick="changePage(${page - 1})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">◀ Zurück</button>`;
+    if (pagination.page > 1) {
+        html += `<button onclick="changePage(${pagination.page - 1})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">◀ Zurück</button>`;
     }
     
     // Page numbers
     const maxButtons = 5;
-    let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
-    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    let startPage = Math.max(1, pagination.page - Math.floor(maxButtons / 2));
+    let endPage = Math.min(pagination.total_pages, startPage + maxButtons - 1);
     
     if (endPage - startPage < maxButtons - 1) {
         startPage = Math.max(1, endPage - maxButtons + 1);
@@ -256,23 +268,23 @@ function renderPagination(page, totalPages, totalLeads) {
     }
     
     for (let i = startPage; i <= endPage; i++) {
-        if (i === page) {
+        if (i === pagination.page) {
             html += `<button class="px-3 py-1 bg-blue-600 rounded">${i}</button>`;
         } else {
             html += `<button onclick="changePage(${i})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">${i}</button>`;
         }
     }
     
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
+    if (endPage < pagination.total_pages) {
+        if (endPage < pagination.total_pages - 1) {
             html += `<span class="px-2">...</span>`;
         }
-        html += `<button onclick="changePage(${totalPages})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">${totalPages}</button>`;
+        html += `<button onclick="changePage(${pagination.total_pages})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">${pagination.total_pages}</button>`;
     }
     
     // Next button
-    if (page < totalPages) {
-        html += `<button onclick="changePage(${page + 1})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Weiter ▶</button>`;
+    if (pagination.page < pagination.total_pages) {
+        html += `<button onclick="changePage(${pagination.page + 1})" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded">Weiter ▶</button>`;
     }
     
     html += '</div>';
@@ -289,52 +301,291 @@ function changePage(page) {
 }
 
 /**
- * Update lead status
+ * Sort by column
  */
-async function updateLeadStatus(leadId, newStatus) {
-    try {
-        const response = await fetch(`/api/leads/${leadId}/status`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({status: newStatus})
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Status aktualisiert', 'success');
-        } else {
-            showNotification('Fehler beim Aktualisieren', 'error');
-            loadLeads(); // Reload to reset
+function sortBy(column) {
+    if (currentSort.column === column) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+    loadLeads();
+}
+
+/**
+ * Update sort indicators in table headers
+ */
+function updateSortIndicators() {
+    document.querySelectorAll('.sortable').forEach(th => {
+        const sortColumn = th.getAttribute('data-sort');
+        const icon = th.querySelector('.sort-icon');
+        if (icon) {
+            if (sortColumn === currentSort.column) {
+                icon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            } else {
+                icon.textContent = '↕';
+            }
         }
-        
-    } catch (error) {
-        console.error('Error updating status:', error);
-        showNotification('Fehler beim Aktualisieren', 'error');
-        loadLeads();
+    });
+}
+
+/**
+ * Toggle lead selection
+ */
+function toggleLeadSelection(id) {
+    if (selectedLeads.has(id)) {
+        selectedLeads.delete(id);
+    } else {
+        selectedLeads.add(id);
+    }
+    updateSelectionBar();
+}
+
+/**
+ * Select all leads on current page
+ */
+function selectAll(checked) {
+    const checkboxes = document.querySelectorAll('.lead-checkbox');
+    checkboxes.forEach(cb => {
+        const id = parseInt(cb.dataset.id);
+        cb.checked = checked;
+        if (checked) {
+            selectedLeads.add(id);
+        } else {
+            selectedLeads.delete(id);
+        }
+    });
+    updateSelectionBar();
+}
+
+/**
+ * Clear selection
+ */
+function clearSelection() {
+    selectedLeads.clear();
+    document.querySelectorAll('.lead-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('select-all').checked = false;
+    updateSelectionBar();
+}
+
+/**
+ * Update selection bar visibility and count
+ */
+function updateSelectionBar() {
+    const bar = document.getElementById('selection-bar');
+    const count = document.getElementById('selection-count');
+    
+    if (selectedLeads.size > 0) {
+        bar.classList.remove('hidden');
+        count.textContent = selectedLeads.size;
+    } else {
+        bar.classList.add('hidden');
     }
 }
 
 /**
- * Export leads
+ * Export selected leads
  */
-async function exportLeads(format) {
+async function exportSelected(format) {
+    if (selectedLeads.size === 0) {
+        showNotification('Keine Leads ausgewählt', 'error');
+        return;
+    }
+    
     try {
-        const params = new URLSearchParams(currentFilters);
-        const url = `/api/leads/export/${format}?${params}`;
+        const response = await fetch('/api/leads/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ids: Array.from(selectedLeads),
+                format: format
+            })
+        });
         
-        // Open in new window to trigger download
-        window.open(url, '_blank');
-        
-        showNotification(`Export als ${format.toUpperCase()} gestartet`, 'success');
-        
+        if (response.ok) {
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition ? 
+                contentDisposition.split('filename=')[1]?.replace(/"/g, '') : 
+                `export.${format}`;
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            showNotification(`${selectedLeads.size} Leads exportiert`, 'success');
+        } else {
+            const error = await response.json();
+            showNotification(error.error || 'Fehler beim Exportieren', 'error');
+        }
     } catch (error) {
-        console.error('Error exporting leads:', error);
+        console.error('Export error:', error);
         showNotification('Fehler beim Exportieren', 'error');
     }
 }
 
-// Note: Utility functions (escapeHtml, getDomain, formatDate, showNotification) are in utils.js
+/**
+ * Export all leads with current filters
+ */
+async function exportAll(format) {
+    try {
+        const response = await fetch('/api/leads/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filters: currentFilters,
+                format: format
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition ? 
+                contentDisposition.split('filename=')[1]?.replace(/"/g, '') : 
+                `export.${format}`;
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            showNotification('Export erstellt', 'success');
+        } else {
+            const error = await response.json();
+            showNotification(error.error || 'Fehler beim Exportieren', 'error');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification('Fehler beim Exportieren', 'error');
+    }
+}
+
+/**
+ * Export single lead
+ */
+async function exportSingleLead(id) {
+    try {
+        const response = await fetch('/api/leads/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ids: [id],
+                format: 'vcard'
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lead_${id}.vcf`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            showNotification('Lead exportiert', 'success');
+        } else {
+            showNotification('Fehler beim Exportieren', 'error');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification('Fehler beim Exportieren', 'error');
+    }
+}
+
+/**
+ * Delete selected leads
+ */
+async function deleteSelected() {
+    if (selectedLeads.size === 0) {
+        showNotification('Keine Leads ausgewählt', 'error');
+        return;
+    }
+    
+    if (!confirm(`${selectedLeads.size} Leads wirklich löschen?`)) return;
+    
+    try {
+        const response = await fetch('/api/leads/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: Array.from(selectedLeads) })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            selectedLeads.clear();
+            updateSelectionBar();
+            loadLeads();
+        } else {
+            showNotification(data.error || 'Fehler beim Löschen', 'error');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        showNotification('Fehler beim Löschen', 'error');
+    }
+}
+
+/**
+ * Delete single lead
+ */
+async function deleteSingleLead(id) {
+    if (!confirm('Lead wirklich löschen?')) return;
+    
+    try {
+        const response = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Lead gelöscht', 'success');
+            selectedLeads.delete(id);
+            loadLeads();
+        } else {
+            showNotification(data.error || 'Fehler beim Löschen', 'error');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        showNotification('Fehler beim Löschen', 'error');
+    }
+}
+
+/**
+ * Helper: Get source badge class
+ */
+function getSourceBadgeClass(source) {
+    if (!source) return 'bg-gray-700 text-gray-300';
+    const lower = source.toLowerCase();
+    if (lower.includes('linkedin')) return 'bg-blue-900 text-blue-200';
+    if (lower.includes('xing')) return 'bg-green-900 text-green-200';
+    if (lower.includes('google')) return 'bg-red-900 text-red-200';
+    if (lower.includes('facebook')) return 'bg-indigo-900 text-indigo-200';
+    if (lower.includes('kleinanzeigen')) return 'bg-yellow-900 text-yellow-200';
+    if (lower.includes('perplexity')) return 'bg-purple-900 text-purple-200';
+    return 'bg-gray-700 text-gray-300';
+}
+
+/**
+ * Helper: Get source name
+ */
+function getSourceName(source) {
+    if (!source) return 'Unbekannt';
+    const lower = source.toLowerCase();
+    if (lower.includes('linkedin')) return 'LinkedIn';
+    if (lower.includes('xing')) return 'Xing';
+    if (lower.includes('google')) return 'Google';
+    if (lower.includes('facebook')) return 'Facebook';
+    if (lower.includes('kleinanzeigen')) return 'Kleinanzeigen';
+    if (lower.includes('perplexity')) return 'Perplexity';
+    return getDomain(source);
+}
 
 /**
  * Show error
@@ -344,7 +595,7 @@ function showError(message) {
     if (tbody) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="px-6 py-8 text-center text-red-400">
+                <td colspan="9" class="px-6 py-8 text-center text-red-400">
                     ${escapeHtml(message)}
                 </td>
             </tr>
