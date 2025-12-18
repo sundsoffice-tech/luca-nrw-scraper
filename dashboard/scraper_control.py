@@ -5,7 +5,6 @@ Scraper Control Module - Manages scraper subprocess lifecycle
 
 import os
 import subprocess
-import signal
 import psutil
 import time
 from typing import Optional, Dict, Any

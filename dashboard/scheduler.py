@@ -198,7 +198,8 @@ class ScraperScheduler:
             try:
                 last_run = datetime.fromisoformat(last_run_str)
                 next_run = last_run + timedelta(hours=interval_hours)
-            except:
+            except (ValueError, TypeError):
+                # Invalid date format, use default
                 pass
         
         # Ensure next run is in the future

@@ -531,15 +531,32 @@ def create_app(db_path: str = None) -> Flask:
                 )
             
             elif format == 'xlsx':
-                # Simple XLSX export using pandas
-                import pandas as pd
-                df = pd.DataFrame([dict(row) for row in rows])
+                # XLSX export using openpyxl directly
+                from openpyxl import Workbook
+                from openpyxl.styles import Font
                 
-                output = io.BytesIO()
-                df.to_excel(output, index=False, engine='openpyxl')
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Leads"
+                
+                # Write header
+                headers = list(rows[0].keys())
+                ws.append(headers)
+                
+                # Style header
+                for cell in ws[1]:
+                    cell.font = Font(bold=True)
+                
+                # Write data
+                for row in rows:
+                    ws.append(list(row))
                 
                 con.close()
+                
+                output = io.BytesIO()
+                wb.save(output)
                 output.seek(0)
+                
                 return Response(
                     output.getvalue(),
                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -548,7 +565,7 @@ def create_app(db_path: str = None) -> Flask:
             
             elif format == 'pdf':
                 # Simple PDF export using reportlab
-                from reportlab.lib.pagesizes import letter, A4
+                from reportlab.lib.pagesizes import A4
                 from reportlab.lib import colors
                 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
                 from reportlab.lib.styles import getSampleStyleSheet
