@@ -10,7 +10,7 @@
 
 <!-- Filters and Search -->
 <section class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
         <!-- Search -->
         <div class="md:col-span-2">
             <label class="block text-gray-400 text-sm mb-1">Suche</label>
@@ -20,6 +20,16 @@
                 placeholder="Name, Firma, Telefon..." 
                 class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none"
             >
+        </div>
+        
+        <!-- Lead Type Filter -->
+        <div>
+            <label class="block text-gray-400 text-sm mb-1">Typ</label>
+            <select id="filter-lead-type" class="w-full bg-gray-700 rounded px-3 py-2 border border-gray-600 focus:border-green-500 focus:outline-none">
+                <option value="">Alle</option>
+                <option value="company">Firmen (Recruiter)</option>
+                <option value="candidate">Kandidaten</option>
+            </select>
         </div>
         
         <!-- Status Filter -->
@@ -80,10 +90,12 @@
             <thead class="bg-gray-900 border-b border-gray-700">
                 <tr>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">ID</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Typ</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Firma/Standort</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Mobil</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">E-Mail</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Erfahrung/Rolle</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Quelle</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Datum</th>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
@@ -92,7 +104,7 @@
             <tbody id="leads-tbody" class="divide-y divide-gray-700">
                 <!-- Leads will be inserted here by JavaScript -->
                 <tr>
-                    <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                    <td colspan="10" class="px-6 py-8 text-center text-gray-500">
                         <div class="flex items-center justify-center gap-2">
                             <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
                             <span>Lade Leads...</span>
