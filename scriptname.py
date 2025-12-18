@@ -2521,8 +2521,8 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         '/stellenangebote/',        # Firmen-Anzeigen
         '/karriere/',               # Firmen-Karriereseiten
         '/company/',                # Firmen-Profile
-        '/impressum',               # Firmen-Impressum (außer mit Kandidaten-Kontext)
-        '/kontakt',                 # Firmen-Kontakt (außer mit Kandidaten-Kontext)
+        '/impressum',               # Firmen-Impressum
+        '/kontakt',                 # Firmen-Kontakt
         '/about',                   # Über uns Seiten
         'jobboerse',                # Jobbörsen
         'stepstone.de',             # Jobbörsen
@@ -2546,7 +2546,6 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         'facebook.com/groups/',      # Facebook Gruppen
         't.me/',                     # Telegram Gruppen
         'chat.whatsapp.com/',        # WhatsApp Gruppen
-        'instagram.com/',            # Instagram Profile (können Job-Sucher sein)
         'reddit.com/r/arbeitsleben', # Reddit Karriere-Threads
         'gutefrage.net',             # Fragen zu Jobsuche
         'freelancermap.de',          # Freelancer Portale
@@ -3995,10 +3994,12 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
                 except Exception as e:
                     log("warn", "AI contact extraction parse failed", url=url, error=str(e))
                     return []
-                # Check if this is a candidate response
+                # Check if this is a candidate response (only present in candidate mode)
+                # Note: is_job_seeker is None when using standard prompt (not candidate mode)
+                # We only skip if it's explicitly False (AI determined it's a company)
                 is_job_seeker = parsed.get("is_job_seeker") if isinstance(parsed, dict) else None
                 if is_job_seeker is False:
-                    # AI determined this is not a job seeker (e.g., company page)
+                    # AI explicitly determined this is NOT a job seeker (e.g., company page)
                     log("debug", "AI: Not a job seeker profile", url=url)
                     return []
                 

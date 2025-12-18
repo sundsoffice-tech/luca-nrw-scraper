@@ -47,7 +47,6 @@ def is_candidate_url(url: str) -> Optional[bool]:
         'facebook.com/groups/',      # Facebook Gruppen
         't.me/',                     # Telegram Gruppen
         'chat.whatsapp.com/',        # WhatsApp Gruppen
-        'instagram.com/',            # Instagram Profile (können Job-Sucher sein)
         'reddit.com/r/arbeitsleben', # Reddit Karriere-Threads
         'gutefrage.net',             # Fragen zu Jobsuche
         'freelancermap.de',          # Freelancer Portale
@@ -82,6 +81,7 @@ def main():
             "https://www.facebook.com/groups/vertrieb-jobs-nrw",
             "https://t.me/vertriebler_netzwerk",
             "https://www.reddit.com/r/arbeitsleben/comments/jobsuche",
+            "https://www.gutefrage.net/frage/wie-finde-ich-vertriebsjob",
         ]),
         ("BAD URLS (Should BLOCK)", [
             "https://www.viessmann.de/kontakt",  # ❌ Company contact page

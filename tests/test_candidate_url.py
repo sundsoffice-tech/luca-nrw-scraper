@@ -32,6 +32,9 @@ def test_is_candidate_url_positive():
     # Forums
     assert is_candidate_url("https://www.reddit.com/r/arbeitsleben/comments/abc123") is True
     assert is_candidate_url("https://www.gutefrage.net/frage/wie-finde-ich-vertriebsjob") is True
+    
+    # Instagram should be uncertain (too broad - could be influencers, businesses, etc.)
+    assert is_candidate_url("https://www.instagram.com/user123") is None
 
 
 def test_is_candidate_url_negative():
