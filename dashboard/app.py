@@ -1017,7 +1017,6 @@ if __name__ == '__main__':
     import os
     
     # Load performance settings from database
-    global _perf_state
     saved_settings = load_performance_settings()
     _perf_state.update(saved_settings)
     
