@@ -32,17 +32,20 @@ class ScraperController:
     def _read_output(self):
         """Background thread to read process output."""
         try:
-            for line in iter(self.process.stdout.readline, ''):
-                if line:
+            while True:
+                line = self.process.stdout.readline()
+                if not line:  # Empty string means EOF
+                    break
+                if line.strip():  # Only add non-empty lines
                     self.output_queue.put(line.strip())
                     # Also send to dashboard log queue if available
                     try:
                         from dashboard.app import add_log_entry
                         add_log_entry('INFO', line.strip())
-                    except:
-                        pass
-        except:
-            pass
+                    except Exception:
+                        pass  # Silently ignore if dashboard is not available
+        except Exception:
+            pass  # Process may have terminated
         
     def start(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -150,8 +153,8 @@ class ScraperController:
                         if not line:
                             break
                         remaining_output.append(line.strip())
-                except:
-                    pass
+                except Exception:
+                    pass  # Continue even if reading fails
                 
                 error_msg = '\n'.join(remaining_output) if remaining_output else 'Process terminated without output'
                 self.status = 'error'
@@ -401,18 +404,19 @@ class ScraperController:
         Get recent output from the scraper process.
         
         Args:
-            lines: Number of recent lines to return
+            lines: Maximum number of lines to return from the queue
             
         Returns:
-            List of output lines
+            List of output lines (up to 'lines' count)
         """
         output = []
+        # Retrieve up to 'lines' items from the queue
         while not self.output_queue.empty() and len(output) < lines:
             try:
                 output.append(self.output_queue.get_nowait())
             except queue.Empty:
                 break
-        return output[-lines:]  # Return last N lines
+        return output
 
 
 # Global controller instance
