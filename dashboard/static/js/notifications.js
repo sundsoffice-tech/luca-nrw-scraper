@@ -70,8 +70,8 @@ function notifyNewLead(leadData) {
     if (leadData.company) {
         body += ` - ${leadData.company}`;
     }
-    if (leadData.mobile_number) {
-        body += `\n📱 ${leadData.mobile_number}`;
+    if (leadData.telefon) {
+        body += `\n📱 ${leadData.telefon}`;
     }
     
     showDesktopNotification('🎯 Neuer Lead!', body);
