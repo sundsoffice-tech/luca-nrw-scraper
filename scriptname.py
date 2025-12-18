@@ -5528,11 +5528,21 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
             per_domain_count = {}
             prim: List[UrlLike] = []
+            skipped_by_learning = 0
             for link in links:
                 url = _extract_url(link)
                 if not url:
                     continue
                 dom = urllib.parse.urlparse(url).netloc.lower()
+                
+                # Learning mode: Skip domains with poor performance
+                if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+                    domain_clean = dom[4:] if dom.startswith("www.") else dom
+                    if _LEARNING_ENGINE.should_skip_domain(domain_clean):
+                        log("debug", "Learning: Domain übersprungen (schlechte Historie)", domain=domain_clean)
+                        skipped_by_learning += 1
+                        continue
+                
                 extra = any(k in url.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
                 limit = CFG.max_results_per_domain + (1 if extra else 0)
                 if per_domain_count.get(dom,0) >= limit:
@@ -5542,6 +5552,9 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     continue
                 if not url_seen(url):
                     prim.append(link)
+            
+            if skipped_by_learning > 0:
+                log("info", "Learning: Domains gefiltert", skipped=skipped_by_learning)
 
             chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
             total_links_checked += chk
@@ -5692,6 +5705,32 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     append_xlsx(DEFAULT_XLSX, inserted, ENH_FIELDS)
                     _uilog(f"Export: +{len(inserted)} neue Leads")
                     leads_new_total += len(inserted)
+                    
+                    # Learning mode: Track domain and query performance
+                    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+                        try:
+                            # Track query performance
+                            _LEARNING_ENGINE.record_query_performance(q, len(inserted))
+                            
+                            # Track domain success for each lead
+                            domains_tracked = set()
+                            for lead in inserted:
+                                source_url = lead.get("quelle", "")
+                                if source_url:
+                                    parsed = urllib.parse.urlparse(source_url)
+                                    domain = parsed.netloc.lower()
+                                    if domain.startswith("www."):
+                                        domain = domain[4:]
+                                    if domain and domain not in domains_tracked:
+                                        # Calculate quality based on score and confidence
+                                        quality = min(1.0, (lead.get("score", 0) / 100.0 + lead.get("confidence_score", 0) / 100.0) / 2)
+                                        _LEARNING_ENGINE.record_domain_success(domain, 1, quality)
+                                        domains_tracked.add(domain)
+                            
+                            if domains_tracked:
+                                log("info", "Learning: Domain-Erfolge gespeichert", domains=len(domains_tracked), query_leads=len(inserted))
+                        except Exception as e:
+                            log("debug", "Learning tracking failed", error=str(e))
 
             if _RETRY_URLS:
                 try:
