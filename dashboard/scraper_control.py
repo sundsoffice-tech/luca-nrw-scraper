@@ -7,6 +7,8 @@ import os
 import subprocess
 import psutil
 import time
+import threading
+import queue
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -24,6 +26,26 @@ class ScraperController:
         self.start_time: Optional[datetime] = None
         self.paused: bool = False
         self.params: Dict[str, Any] = {}
+        self.output_queue: queue.Queue = queue.Queue(maxsize=1000)
+        self.output_thread: Optional[threading.Thread] = None
+    
+    def _read_output(self):
+        """Background thread to read process output."""
+        try:
+            while True:
+                line = self.process.stdout.readline()
+                if not line:  # Empty string means EOF
+                    break
+                if line.strip():  # Only add non-empty lines
+                    self.output_queue.put(line.strip())
+                    # Also send to dashboard log queue if available
+                    try:
+                        from dashboard.app import add_log_entry
+                        add_log_entry('INFO', line.strip())
+                    except Exception:
+                        pass  # Silently ignore if dashboard is not available
+        except Exception:
+            pass  # Process may have terminated
         
     def start(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -83,14 +105,31 @@ class ScraperController:
             if params.get('dry_run', False):
                 cmd.append('--dry-run')
             
-            # Start process
+            # Get the project root directory (where .env and scriptname.py are)
+            project_root = os.path.dirname(os.path.dirname(__file__))
+            
+            # Load .env file if python-dotenv is available
+            env = os.environ.copy()
+            env_file = os.path.join(project_root, '.env')
+            if os.path.exists(env_file):
+                try:
+                    from dotenv import dotenv_values
+                    env_vars = dotenv_values(env_file)
+                    env.update(env_vars)
+                except ImportError:
+                    # python-dotenv not available, continue without loading
+                    pass
+            
+            # Start process with correct working directory and environment
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                cwd=project_root,  # IMPORTANT: Set working directory
+                env=env  # IMPORTANT: Pass environment variables
             )
             
             self.pid = self.process.pid
@@ -98,6 +137,32 @@ class ScraperController:
             self.start_time = datetime.now()
             self.params = params
             self.paused = False
+            
+            # Start output reader thread
+            self.output_thread = threading.Thread(target=self._read_output, daemon=True)
+            self.output_thread.start()
+            
+            # Wait briefly to check if process started successfully
+            time.sleep(0.5)
+            if self.process.poll() is not None:
+                # Process already terminated - get error output
+                remaining_output = []
+                try:
+                    while True:
+                        line = self.process.stdout.readline()
+                        if not line:
+                            break
+                        remaining_output.append(line.strip())
+                except Exception:
+                    pass  # Continue even if reading fails
+                
+                error_msg = '\n'.join(remaining_output) if remaining_output else 'Process terminated without output'
+                self.status = 'error'
+                return {
+                    'success': False,
+                    'error': f'Scraper terminated immediately: {error_msg[:500]}',
+                    'status': 'error'
+                }
             
             return {
                 'success': True,
@@ -339,14 +404,19 @@ class ScraperController:
         Get recent output from the scraper process.
         
         Args:
-            lines: Number of recent lines to return
+            lines: Maximum number of lines to return from the queue
             
         Returns:
-            List of output lines
+            List of output lines (up to 'lines' count)
         """
-        # This is a placeholder - in production you'd want to
-        # capture output to a file or buffer for retrieval
-        return []
+        output = []
+        # Retrieve up to 'lines' items from the queue
+        while not self.output_queue.empty() and len(output) < lines:
+            try:
+                output.append(self.output_queue.get_nowait())
+            except queue.Empty:
+                break
+        return output
 
 
 # Global controller instance

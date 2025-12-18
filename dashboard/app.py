@@ -341,6 +341,17 @@ def create_app(db_path: str = None) -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/scraper/output', methods=['GET'])
+    def api_scraper_output():
+        """Get recent scraper output."""
+        try:
+            lines = int(request.args.get('lines', 50))
+            controller = get_controller()
+            output = controller.get_output(lines)
+            return jsonify({'output': output})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
     # ==================== Scheduler API ====================
     
     @app.route('/api/scheduler', methods=['GET'])
