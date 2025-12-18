@@ -102,13 +102,22 @@ def ensure_dashboard_schema(con: sqlite3.Connection) -> None:
     """)
     
     # Add status column to leads table if it doesn't exist
-    try:
-        cur.execute("SELECT status FROM leads LIMIT 1")
-    except sqlite3.OperationalError:
-        # Column doesn't exist, add it
-        cur.execute("""
-            ALTER TABLE leads ADD COLUMN status TEXT DEFAULT 'new'
-        """)
+    # First check if leads table exists
+    cur.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='leads'
+    """)
+    
+    if cur.fetchone():
+        # Table exists, check if status column exists
+        cur.execute("PRAGMA table_info(leads)")
+        columns = [row[1] for row in cur.fetchall()]
+        
+        if 'status' not in columns:
+            # Column doesn't exist, add it
+            cur.execute("""
+                ALTER TABLE leads ADD COLUMN status TEXT DEFAULT 'new'
+            """)
     
     con.commit()
 
