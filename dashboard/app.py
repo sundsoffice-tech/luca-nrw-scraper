@@ -580,8 +580,10 @@ def create_app(db_path: str = None) -> Flask:
                 elements.append(title)
                 
                 # Prepare data for table
+                # Limit to 100 rows for PDF to keep file size reasonable
+                PDF_EXPORT_LIMIT = 100
                 data = [list(rows[0].keys())]  # Header
-                for row in rows[:100]:  # Limit to 100 for PDF
+                for row in rows[:PDF_EXPORT_LIMIT]:
                     data.append([str(v) if v is not None else '' for v in row])
                 
                 # Create table

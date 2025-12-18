@@ -259,38 +259,7 @@ async function resetScraper() {
     }
 }
 
-/**
- * Show notification
- */
-function showNotification(message, type = 'info') {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 transition-opacity duration-300';
-    
-    switch (type) {
-        case 'success':
-            notification.className += ' bg-green-600';
-            break;
-        case 'error':
-            notification.className += ' bg-red-600';
-            break;
-        case 'info':
-        default:
-            notification.className += ' bg-blue-600';
-            break;
-    }
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
-    }, 3000);
-}
+// Note: showNotification function is in utils.js
 
 // Initialize on page load
 if (document.readyState === 'loading') {

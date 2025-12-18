@@ -294,7 +294,9 @@ class ScraperScheduler:
                         self._update_run_times(config)
                 
             except Exception as e:
-                print(f"Scheduler error: {e}")
+                # TODO: Use proper logging instead of print
+                import sys
+                print(f"[SCHEDULER ERROR] {e}", file=sys.stderr)
             
             # Sleep for 60 seconds before checking again
             self._stop_event.wait(60)
@@ -322,7 +324,8 @@ class ScraperScheduler:
             self.start_callback(params)
             
         except Exception as e:
-            print(f"Error executing scheduled run: {e}")
+            import sys
+            print(f"[SCHEDULER ERROR] Error executing scheduled run: {e}", file=sys.stderr)
     
     def _update_run_times(self, config: Dict[str, Any]):
         """
@@ -348,7 +351,8 @@ class ScraperScheduler:
             con.close()
             
         except Exception as e:
-            print(f"Error updating run times: {e}")
+            import sys
+            print(f"[SCHEDULER ERROR] Error updating run times: {e}", file=sys.stderr)
 
 
 # Global scheduler instance

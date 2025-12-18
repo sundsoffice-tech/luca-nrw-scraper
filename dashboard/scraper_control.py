@@ -51,9 +51,11 @@ class ScraperController:
         
         try:
             # Build command
+            # Allow configuration via environment variable or default to scriptname.py
+            script_name = os.getenv('LUCA_SCRAPER_SCRIPT', 'scriptname.py')
             script_path = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
-                'scriptname.py'
+                script_name
             )
             
             cmd = ['python', script_path]
@@ -305,7 +307,8 @@ class ScraperController:
         if self.pid and self.is_running():
             try:
                 proc = psutil.Process(self.pid)
-                status_info['cpu_percent'] = proc.cpu_percent(interval=0.1)
+                # Use interval=0 for non-blocking call (returns 0.0 on first call)
+                status_info['cpu_percent'] = proc.cpu_percent(interval=0)
                 status_info['memory_mb'] = proc.memory_info().rss / 1024 / 1024
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
