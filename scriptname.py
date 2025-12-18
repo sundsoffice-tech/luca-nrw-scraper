@@ -289,6 +289,61 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
+# =========================
+# Mode Configurations
+# =========================
+MODE_CONFIGS = {
+    "standard": {
+        "description": "Normaler Betrieb",
+        "deep_crawl": True,
+        "learning_enabled": False,
+        "async_limit": 35,
+        "request_delay": 2.5,
+        "max_retries": 2,
+        "snippet_priority": False,
+        "save_patterns": False
+    },
+    "learning": {
+        "description": "Lernt aus erfolgreichen Extraktionen",
+        "deep_crawl": True,
+        "learning_enabled": True,
+        "async_limit": 30,
+        "request_delay": 3.0,
+        "max_retries": 3,
+        "snippet_priority": True,
+        "save_patterns": True,
+        "pattern_analysis": True,
+        "success_tracking": True,
+        "domain_scoring": True,
+        "query_optimization": True
+    },
+    "aggressive": {
+        "description": "Maximale Geschwindigkeit, mehr Requests",
+        "deep_crawl": True,
+        "learning_enabled": False,
+        "async_limit": 75,
+        "request_delay": 1.0,
+        "max_retries": 1,
+        "snippet_priority": False,
+        "save_patterns": False,
+        "follow_links": True,
+        "crawl_depth": 3
+    },
+    "snippet_only": {
+        "description": "Nur Snippet-Extraktion, kein Deep-Crawl",
+        "deep_crawl": False,
+        "learning_enabled": False,
+        "async_limit": 50,
+        "request_delay": 1.5,
+        "max_retries": 1,
+        "snippet_priority": True,
+        "save_patterns": False
+    }
+}
+
+# Global mode configuration (will be set in main)
+ACTIVE_MODE_CONFIG = None
+
 # === Rotation: Proxies & User-Agents ===
 def _env_list(val: str, sep: str) -> list[str]:
     return [x.strip() for x in (val or "").split(sep) if x.strip()]
@@ -518,6 +573,39 @@ def get_learning_engine() -> Optional[LearningEngine]:
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
     return _LEARNING_ENGINE
+
+def init_mode(mode: str) -> Dict[str, Any]:
+    """
+    Initialize the operating mode and apply its configuration.
+    
+    Args:
+        mode: Mode name (standard, learning, aggressive, snippet_only)
+    
+    Returns:
+        Mode configuration dictionary
+    """
+    global ACTIVE_MODE_CONFIG, ASYNC_LIMIT, _LEARNING_ENGINE
+    
+    config = MODE_CONFIGS.get(mode, MODE_CONFIGS["standard"])
+    ACTIVE_MODE_CONFIG = config
+    
+    # Apply mode-specific settings
+    ASYNC_LIMIT = config.get("async_limit", 35)
+    
+    # Initialize learning engine if learning mode is enabled
+    if config.get("learning_enabled"):
+        if _LEARNING_ENGINE is None:
+            _LEARNING_ENGINE = LearningEngine(DB_PATH)
+        log("INFO", "Learning-Modus aktiviert", {"stats": _LEARNING_ENGINE.get_pattern_stats()})
+    
+    log("INFO", f"Betriebsmodus initialisiert", {
+        "mode": mode,
+        "description": config.get("description"),
+        "async_limit": config.get("async_limit"),
+        "learning_enabled": config.get("learning_enabled", False)
+    })
+    
+    return config
 
 def migrate_db_unique_indexes():
     """
@@ -5790,6 +5878,12 @@ def parse_args():
                     help="Google CSE dateRestrict, z.B. d30, w8, m3")
     ap.add_argument("--smart", action="store_true", help="AI-generierte Dorks (selbstlernend) aktivieren")
     ap.add_argument("--no-google", action="store_true", help="Google CSE deaktivieren")
+    ap.add_argument(
+        "--mode",
+        choices=["standard", "learning", "aggressive", "snippet_only"],
+        default="standard",
+        help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
+    )
     return ap.parse_args()
 
 
@@ -5827,6 +5921,10 @@ if __name__ == "__main__":
         validate_config()
         init_db()
         migrate_db_unique_indexes()
+        
+        # Initialize mode
+        mode = getattr(args, "mode", "standard")
+        mode_config = init_mode(mode)
 
         if args.reset:
             a,b = reset_history()
@@ -5839,6 +5937,13 @@ if __name__ == "__main__":
             QUERIES = build_queries(selected_industry, per_industry_limit)
             log("info", "Query-Set gebaut", industry=selected_industry,
                 per_industry_limit=per_industry_limit, count=len(QUERIES))
+            
+            # Optimize query order if learning mode is active
+            if mode_config.get("query_optimization") and _LEARNING_ENGINE:
+                original_count = len(QUERIES)
+                QUERIES = _LEARNING_ENGINE.optimize_query_order(QUERIES)
+                log("info", "Learning: Query-Reihenfolge optimiert", count=original_count)
+            
             if getattr(args, "smart", False):
                 if not OPENAI_API_KEY:
                     log("warn", "AI-Smart Dorks aktiviert, aber kein OPENAI_API_KEY gesetzt")
