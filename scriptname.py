@@ -229,7 +229,8 @@ ENH_FIELDS = [
     "industry","recency_indicator","location_specific",
     "confidence_score","last_updated","data_quality",
     "phone_type","whatsapp_link","private_address","social_profile_url",
-    "ai_category","ai_summary"
+    "ai_category","ai_summary",
+    "experience_years","skills","availability","current_status","industries","location","profile_text"
 ]
 
 def export_xlsx(filename: str, rows=None):
@@ -451,6 +452,22 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_category TEXT")
     if "ai_summary" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_summary TEXT")
+    
+    # Candidate-specific columns
+    if "experience_years" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN experience_years INTEGER")
+    if "skills" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN skills TEXT")  # JSON array
+    if "availability" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN availability TEXT")
+    if "current_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN current_status TEXT")
+    if "industries" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN industries TEXT")  # JSON array
+    if "location" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN location TEXT")
+    if "profile_text" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN profile_text TEXT")
     con.commit()
 
     # Indizes (partielle UNIQUE nur wenn Werte vorhanden)
@@ -525,21 +542,26 @@ def migrate_db_unique_indexes():
           last_updated TEXT, data_quality INT,
           phone_type TEXT, whatsapp_link TEXT,
           lead_type TEXT,
-          private_address TEXT, social_profile_url TEXT
+          private_address TEXT, social_profile_url TEXT,
+          experience_years INTEGER, skills TEXT, availability TEXT,
+          current_status TEXT, industries TEXT, location TEXT, profile_text TEXT
         );
 
         INSERT INTO leads_new (
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          phone_type,whatsapp_link,lead_type,private_address,social_profile_url
+          phone_type,whatsapp_link,lead_type,private_address,social_profile_url,
+          experience_years,skills,availability,current_status,industries,location,profile_text
         )
         SELECT
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
           '' AS phone_type, '' AS whatsapp_link, '' AS lead_type,
-          '' AS private_address, '' AS social_profile_url
+          '' AS private_address, '' AS social_profile_url,
+          NULL AS experience_years, '' AS skills, '' AS availability,
+          '' AS current_status, '' AS industries, '' AS location, '' AS profile_text
         FROM leads;
 
         DROP TABLE leads;
@@ -1167,23 +1189,264 @@ SALES   = '(vertrieb OR d2d OR "call center" OR telesales OR outbound OR verkauf
 # Kurze, treffsichere Query-Sets je Branche
 INDUSTRY_QUERIES: dict[str, list[str]] = {
     "candidates": [
-        # Kleinanzeigen (Privatpersonen)
-        'site:kleinanzeigen.de/s-gesuche "vertrieb" "NRW" -gewerblich',
-        'site:kleinanzeigen.de "ich suche job" "vertrieb" "NRW"',
-        'site:markt.de "stellengesuche" "vertrieb"',
-
-        # Messenger Gruppen (Offene Einladungslinks)
-        'site:t.me/joinchat "vertrieb" "gruppe"',
-        'site:chat.whatsapp.com "jobs" "nrw"',
-        'site:chat.whatsapp.com "vertriebler"',
-
-        # Social Media (Public Profiles via Search)
-        'site:linkedin.com/in/ "open to work" "sales" "nrw" -intitle:Login',
-        'site:facebook.com/groups "stellengesuche" "vertrieb" "handynummer"',
-        'site:instagram.com "suche job" "vertrieb" "dm me"',
-
-        # Lebensläufe / Portfolios
-        'filetype:pdf "lebenslauf" "vertrieb" "nrw" -site:xing.com -site:linkedin.com',
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 1: KLEINANZEIGEN STELLENGESUCHE (Primäre Quelle!)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Kleinanzeigen.de - Stellengesuche Vertrieb
+        'site:kleinanzeigen.de/s-stellengesuche "vertrieb" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "sales" "nordrhein-westfalen"',
+        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung"',
+        'site:kleinanzeigen.de/s-stellengesuche "key account" "suche"',
+        'site:kleinanzeigen.de/s-stellengesuche "handelsvertreter" "freiberuflich"',
+        'site:kleinanzeigen.de/s-stellengesuche "verkäufer" "mobil"',
+        'site:kleinanzeigen.de/s-stellengesuche "kundenberater" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "akquise" "erfahrung"',
+        'site:kleinanzeigen.de/s-stellengesuche "telesales" "homeoffice"',
+        'site:kleinanzeigen.de/s-stellengesuche "call center" "agent"',
+        'site:kleinanzeigen.de "ich suche arbeit" "vertrieb"',
+        'site:kleinanzeigen.de "suche stelle" "verkauf" "NRW"',
+        'site:kleinanzeigen.de "biete meine dienste" "vertrieb"',
+        
+        # Markt.de - Stellengesuche
+        'site:markt.de/stellengesuche "vertrieb"',
+        'site:markt.de/stellengesuche "sales manager"',
+        'site:markt.de/stellengesuche "außendienst" "PKW"',
+        'site:markt.de/stellengesuche "handelsvertreter"',
+        'site:markt.de "suche arbeit" "vertrieb" "NRW"',
+        
+        # Quoka - Stellengesuche
+        'site:quoka.de/stellengesuche "vertrieb"',
+        'site:quoka.de/stellengesuche "verkauf" "erfahrung"',
+        'site:quoka.de "suche job" "sales"',
+        
+        # Kalaydo (Regional NRW)
+        'site:kalaydo.de/stellengesuche "vertrieb"',
+        'site:kalaydo.de "suche stelle" "außendienst"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 2: BUSINESS NETZWERKE (Xing, LinkedIn)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Xing - Offene Kandidaten
+        'site:xing.com/profile "offen für angebote" "vertrieb" "NRW"',
+        'site:xing.com/profile "auf jobsuche" "sales"',
+        'site:xing.com/profile "suche neue herausforderung" "key account"',
+        'site:xing.com/profile "verfügbar ab" "vertriebsleiter"',
+        'site:xing.com/profile "in ungekündigter stellung" "außendienst"',
+        'site:xing.com/profile "wechselwillig" "sales manager"',
+        'site:xing.com "freiberuflicher handelsvertreter" "sucht"',
+        'site:xing.com "sales" "open to work" "düsseldorf"',
+        'site:xing.com "vertrieb" "neue chancen" "köln"',
+        'site:xing.com "b2b vertrieb" "suche" "NRW"',
+        
+        # LinkedIn - Open to Work
+        'site:linkedin.com/in "open to work" "sales" "germany"',
+        'site:linkedin.com/in "offen für" "vertrieb" "NRW"',
+        'site:linkedin.com/in "looking for" "sales" "düsseldorf"',
+        'site:linkedin.com/in "seeking" "business development" "köln"',
+        'site:linkedin.com/in "available" "account manager" "essen"',
+        'site:linkedin.com/in "#opentowork" "vertrieb"',
+        'site:linkedin.com "actively looking" "sales representative" "germany"',
+        'site:linkedin.com "job seeker" "key account" "NRW"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 3: SOCIAL MEDIA (Facebook, Instagram, TikTok)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Facebook - Job Suche Posts
+        'site:facebook.com "suche neue herausforderung" "vertrieb"',
+        'site:facebook.com "suche arbeit" "sales" "NRW"',
+        'site:facebook.com "wer kennt wen" "vertriebsjob"',
+        'site:facebook.com "bin auf jobsuche" "verkauf"',
+        'site:facebook.com "suche stelle" "außendienst" "erfahrung"',
+        'site:facebook.com/groups "vertriebler" "jobsuche"',
+        'site:facebook.com/groups "sales jobs" "deutschland"',
+        'site:facebook.com "freelancer" "vertrieb" "verfügbar"',
+        'site:facebook.com "gekündigt" "vertrieb" "suche"',
+        
+        # Instagram - Job Seeker Bios
+        'site:instagram.com "open for work" "sales"',
+        'site:instagram.com "job gesucht" "vertrieb"',
+        'site:instagram.com "DM for work" "sales"',
+        'site:instagram.com "suche job" "verkauf"',
+        'site:instagram.com "available for hire" "business"',
+        'site:instagram.com "freelancer" "vertrieb" "kontakt"',
+        
+        # TikTok - Karriere Content
+        'site:tiktok.com "jobsuche" "vertrieb"',
+        'site:tiktok.com "suche arbeit" "sales"',
+        'site:tiktok.com "arbeitslos" "vertriebler"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 4: MESSENGER GRUPPEN (Telegram, WhatsApp, Discord)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Telegram - Öffentliche Gruppen
+        'site:t.me "vertrieb" "jobs" "gruppe"',
+        'site:t.me "sales jobs" "germany"',
+        'site:t.me "jobsuche" "NRW"',
+        'site:t.me "vertriebler" "netzwerk"',
+        'site:t.me "stellengesuche" "vertrieb"',
+        'site:t.me/joinchat "vertrieb"',
+        'site:t.me/joinchat "sales" "jobs"',
+        
+        # WhatsApp - Öffentliche Einladungslinks
+        'site:chat.whatsapp.com "vertrieb" "jobs"',
+        'site:chat.whatsapp.com "sales" "netzwerk"',
+        'site:chat.whatsapp.com "vertriebler" "gruppe"',
+        'site:chat.whatsapp.com "jobsuche" "NRW"',
+        
+        # Discord - Karriere Server
+        'site:discord.gg "vertrieb" "jobs"',
+        'site:discord.gg "sales" "karriere"',
+        'site:discord.com/invite "jobs" "deutschland"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 5: FOREN & COMMUNITIES
+        # ══════════════════════════════════════════════════════════════
+        
+        # Reddit - Deutsche Karriere-Subreddits
+        'site:reddit.com/r/arbeitsleben "vertrieb" "neuer job"',
+        'site:reddit.com/r/arbeitsleben "sales" "kündigung"',
+        'site:reddit.com/r/arbeitsleben "außendienst" "wechsel"',
+        'site:reddit.com/r/de_EDV "vertrieb" "jobsuche"',
+        'site:reddit.com/r/FragReddit "vertriebsjob" "erfahrung"',
+        'site:reddit.com/r/Finanzen "vertrieb" "gehalt" "wechsel"',
+        'site:reddit.com "gekündigt" "sales" "was tun"',
+        'site:reddit.com "arbeitslos" "vertrieb" "bewerbung"',
+        
+        # Gutefrage.net
+        'site:gutefrage.net "vertrieb" "stelle suchen"',
+        'site:gutefrage.net "sales job" "erfahrung"',
+        'site:gutefrage.net "außendienst" "bewerbung"',
+        'site:gutefrage.net "handelsvertreter werden"',
+        
+        # Wer-weiss-was.de
+        'site:wer-weiss-was.de "vertriebsjob" "suche"',
+        'site:wer-weiss-was.de "sales karriere"',
+        
+        # Motor-Talk (Autoverkäufer)
+        'site:motor-talk.de "autoverkäufer" "suche stelle"',
+        'site:motor-talk.de "verkaufsberater" "wechsel"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 6: FREELANCER PORTALE
+        # ══════════════════════════════════════════════════════════════
+        
+        # Freelancer Profile
+        'site:freelancermap.de "vertrieb" "verfügbar"',
+        'site:freelancermap.de "sales" "freiberufler"',
+        'site:freelance.de "vertriebsexperte" "profil"',
+        'site:freelance.de "handelsvertreter" "selbstständig"',
+        'site:gulp.de "sales" "verfügbar"',
+        'site:gulp.de "vertrieb" "freiberuflich"',
+        
+        # Fiverr/Upwork (Vertriebs-Freelancer)
+        'site:fiverr.com "sales" "germany" "b2b"',
+        'site:upwork.com "sales representative" "german"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 7: LEBENSLAUF-DATENBANKEN & JOBPORTALE
+        # ══════════════════════════════════════════════════════════════
+        
+        # Lebenslauf-Portale (wo Kandidaten sich eintragen)
+        'site:lebenslaufmuster.de "vertrieb" "berufserfahrung"',
+        '"mein lebenslauf" "vertrieb" "NRW" "mobil" filetype:pdf',
+        '"curriculum vitae" "sales" "germany" "phone" filetype:pdf',
+        '"bewerbung" "vertriebserfahrung" "kontakt" filetype:pdf',
+        
+        # StepStone Kandidatenprofile
+        'site:stepstone.de/kandidat "vertrieb"',
+        'site:stepstone.de "profil" "sales manager"',
+        
+        # Indeed Kandidatensuche
+        'site:indeed.com/r "vertrieb" "NRW"',
+        'site:indeed.com "lebenslauf" "sales"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 8: BRANCHEN-SPEZIFISCHE KANDIDATEN
+        # ══════════════════════════════════════════════════════════════
+        
+        # D2D / Door-to-Door Vertriebler
+        'site:kleinanzeigen.de "d2d" "suche" "erfahrung"',
+        '"door to door" "vertriebler" "sucht" "mobil"',
+        '"haustürgeschäft" "erfahrung" "suche arbeit"',
+        
+        # Call Center / Telesales
+        '"call center agent" "suche" "homeoffice" "NRW"',
+        '"telesales" "erfahrung" "suche stelle"',
+        '"telefonvertrieb" "freiberuflich" "verfügbar"',
+        'site:kleinanzeigen.de "telefonverkäufer" "suche"',
+        
+        # Energie / Solar Vertriebler
+        '"solarvertrieb" "suche" "erfahrung" "NRW"',
+        '"energieberater" "freiberuflich" "sucht"',
+        '"photovoltaik" "vertrieb" "suche stelle"',
+        
+        # Versicherung / Finanz
+        '"versicherungsvertreter" "suche" "neue"',
+        '"finanzberater" "wechselwillig" "kontakt"',
+        '"makler" "sucht" "neue herausforderung"',
+        
+        # Telekommunikation
+        '"telekom vertrieb" "suche" "erfahrung"',
+        '"mobilfunk" "sales" "suche stelle"',
+        '"provider" "vertrieb" "wechsel"',
+        
+        # Medizin / Pharma
+        '"pharmareferent" "sucht" "neue"',
+        '"medizinprodukteberater" "verfügbar"',
+        '"healthcare sales" "germany" "open"',
+        
+        # IT / Software
+        '"software sales" "suche" "germany"',
+        '"it vertrieb" "suche stelle" "NRW"',
+        '"saas" "account executive" "open to"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 9: REGIONALE NRW-SUCHE
+        # ══════════════════════════════════════════════════════════════
+        
+        # Düsseldorf
+        '"vertrieb" "suche" "düsseldorf" "mobil"',
+        '"sales" "jobsuche" "düsseldorf" "kontakt"',
+        'site:xing.com "vertrieb" "düsseldorf" "offen für"',
+        
+        # Köln
+        '"vertrieb" "suche" "köln" "erfahrung"',
+        '"außendienst" "köln" "suche stelle"',
+        'site:linkedin.com "sales" "köln" "open"',
+        
+        # Essen/Ruhrgebiet
+        '"vertrieb" "essen" "suche" "mobil"',
+        '"sales" "ruhrgebiet" "jobsuche"',
+        '"dortmund" "vertrieb" "suche stelle"',
+        
+        # Weitere NRW Städte
+        '"vertrieb" "wuppertal" "suche"',
+        '"sales" "bonn" "suche stelle"',
+        '"außendienst" "münster" "suche"',
+        '"vertrieb" "bielefeld" "jobsuche"',
+        '"verkauf" "aachen" "suche stelle"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 10: KARRIERE-EVENTS & NETZWERKE
+        # ══════════════════════════════════════════════════════════════
+        
+        # Karrieremessen Teilnehmer
+        '"jobmesse" "NRW" "vertrieb" "besucher"',
+        '"karrieretag" "düsseldorf" "sales"',
+        '"connecticum" "vertrieb" "teilnehmer"',
+        
+        # Vertriebler-Netzwerke
+        'site:vertriebsmanager.de "mitglied" "profil"',
+        'site:salesjob.de "kandidat" "profil"',
+        '"bdvt" "mitglied" "vertrieb" "kontakt"',
+        
+        # Alumni-Netzwerke
+        '"sales" "alumni" "NRW" "kontakt"',
+        '"vertrieb" "absolvent" "suche stelle"',
     ],
 }
 
@@ -5518,7 +5781,7 @@ def parse_args():
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
     ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
-    ap.add_argument("--industry", choices=["all","recruiter"] + list(INDUSTRY_ORDER),
+    ap.add_argument("--industry", choices=["all","recruiter","candidates"] + list(INDUSTRY_ORDER),
                 default=os.getenv("INDUSTRY","all"),
                 help="Branche für diesen Run (Standard: all)")
     ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
