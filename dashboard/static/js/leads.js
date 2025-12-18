@@ -7,7 +7,8 @@ let currentPage = 1;
 let currentFilters = {
     search: '',
     status: '',
-    date_from: ''
+    date_from: '',
+    lead_type: ''
 };
 
 /**
@@ -33,6 +34,16 @@ function setupEventListeners() {
                 currentPage = 1;
                 loadLeads();
             }, 500);
+        });
+    }
+    
+    // Lead type filter
+    const leadTypeFilter = document.getElementById('filter-lead-type');
+    if (leadTypeFilter) {
+        leadTypeFilter.addEventListener('change', (e) => {
+            currentFilters.lead_type = e.target.value;
+            currentPage = 1;
+            loadLeads();
         });
     }
     
@@ -84,10 +95,11 @@ function setupEventListeners() {
     const clearBtn = document.getElementById('filter-clear');
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-            currentFilters = { search: '', status: '', date_from: '' };
+            currentFilters = { search: '', status: '', date_from: '', lead_type: '' };
             document.getElementById('leads-search').value = '';
             document.getElementById('filter-status').value = '';
             document.getElementById('filter-date').value = '';
+            document.getElementById('filter-lead-type').value = '';
             currentPage = 1;
             loadLeads();
         });
@@ -132,7 +144,7 @@ function renderLeads(leads) {
     if (leads.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                <td colspan="10" class="px-6 py-8 text-center text-gray-500">
                     Keine Leads gefunden
                 </td>
             </tr>
@@ -140,42 +152,67 @@ function renderLeads(leads) {
         return;
     }
     
-    tbody.innerHTML = leads.map(lead => `
-        <tr class="border-b border-gray-700 hover:bg-gray-750">
-            <td class="px-4 py-3 text-sm">${lead.id}</td>
-            <td class="px-4 py-3 text-sm">
-                <div class="font-medium">${escapeHtml(lead.name || 'N/A')}</div>
-                <div class="text-gray-400 text-xs">${escapeHtml(lead.role || '')}</div>
-            </td>
-            <td class="px-4 py-3 text-sm">${escapeHtml(lead.company || 'N/A')}</td>
-            <td class="px-4 py-3 text-sm">
-                ${lead.mobile_number ? `<a href="tel:${lead.mobile_number}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.mobile_number)}</a>` : '-'}
-            </td>
-            <td class="px-4 py-3 text-sm">
-                ${lead.email ? `<a href="mailto:${lead.email}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.email)}</a>` : '-'}
-            </td>
-            <td class="px-4 py-3 text-sm">
-                <a href="${lead.source_url}" target="_blank" class="text-blue-400 hover:text-blue-300 truncate block max-w-xs" title="${escapeHtml(lead.source_url)}">
-                    ${escapeHtml(getDomain(lead.source_url))}
-                </a>
-            </td>
-            <td class="px-4 py-3 text-sm text-gray-400">
-                ${formatDate(lead.created_at)}
-            </td>
-            <td class="px-4 py-3 text-sm">
-                <select 
-                    class="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600"
-                    onchange="updateLeadStatus(${lead.id}, this.value)"
-                >
-                    <option value="new" ${lead.status === 'new' ? 'selected' : ''}>Neu</option>
-                    <option value="contacted" ${lead.status === 'contacted' ? 'selected' : ''}>Kontaktiert</option>
-                    <option value="interested" ${lead.status === 'interested' ? 'selected' : ''}>Interessiert</option>
-                    <option value="rejected" ${lead.status === 'rejected' ? 'selected' : ''}>Abgelehnt</option>
-                    <option value="completed" ${lead.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
-                </select>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = leads.map(lead => {
+        const isCandidate = lead.lead_type === 'candidate';
+        const typeEmoji = isCandidate ? '👤' : '🏢';
+        const typeLabel = isCandidate ? 'Kandidat' : 'Firma';
+        
+        // For candidates, show location instead of company
+        const companyOrLocation = isCandidate ? 
+            (lead.location || lead.region || 'N/A') : 
+            (lead.company || lead.company_name || 'N/A');
+        
+        // For candidates, show experience; for companies, show role
+        const experienceOrRole = isCandidate ?
+            (lead.experience_years ? `${lead.experience_years} Jahre` : '-') :
+            (lead.role || lead.rolle || '-');
+        
+        return `
+            <tr class="border-b border-gray-700 hover:bg-gray-750">
+                <td class="px-4 py-3 text-sm">${lead.id}</td>
+                <td class="px-4 py-3 text-sm">
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs ${isCandidate ? 'bg-purple-900 text-purple-200' : 'bg-blue-900 text-blue-200'}">
+                        ${typeEmoji} ${typeLabel}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    <div class="font-medium">${escapeHtml(lead.name || 'N/A')}</div>
+                    ${isCandidate && lead.current_status ? `<div class="text-gray-400 text-xs">${escapeHtml(lead.current_status)}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-sm">${escapeHtml(companyOrLocation)}</td>
+                <td class="px-4 py-3 text-sm">
+                    ${lead.mobile_number || lead.telefon ? `<a href="tel:${lead.mobile_number || lead.telefon}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.mobile_number || lead.telefon)}</a>` : '-'}
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    ${lead.email ? `<a href="mailto:${lead.email}" class="text-blue-400 hover:text-blue-300">${escapeHtml(lead.email)}</a>` : '-'}
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    <div class="font-medium">${escapeHtml(experienceOrRole)}</div>
+                    ${isCandidate && lead.skills ? `<div class="text-gray-400 text-xs truncate max-w-xs">${escapeHtml(lead.skills)}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    <a href="${lead.source_url || lead.quelle}" target="_blank" class="text-blue-400 hover:text-blue-300 truncate block max-w-xs" title="${escapeHtml(lead.source_url || lead.quelle)}">
+                        ${escapeHtml(getDomain(lead.source_url || lead.quelle))}
+                    </a>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-400">
+                    ${formatDate(lead.created_at || lead.last_updated)}
+                </td>
+                <td class="px-4 py-3 text-sm">
+                    <select 
+                        class="bg-gray-700 rounded px-2 py-1 text-xs border border-gray-600"
+                        onchange="updateLeadStatus(${lead.id}, this.value)"
+                    >
+                        <option value="new" ${lead.status === 'new' ? 'selected' : ''}>Neu</option>
+                        <option value="contacted" ${lead.status === 'contacted' ? 'selected' : ''}>Kontaktiert</option>
+                        <option value="interested" ${lead.status === 'interested' ? 'selected' : ''}>Interessiert</option>
+                        <option value="rejected" ${lead.status === 'rejected' ? 'selected' : ''}>Abgelehnt</option>
+                        <option value="completed" ${lead.status === 'completed' ? 'selected' : ''}>Abgeschlossen</option>
+                    </select>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 /**
@@ -307,7 +344,7 @@ function showError(message) {
     if (tbody) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="px-6 py-8 text-center text-red-400">
+                <td colspan="10" class="px-6 py-8 text-center text-red-400">
                     ${escapeHtml(message)}
                 </td>
             </tr>

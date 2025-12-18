@@ -87,6 +87,70 @@ def create_app(db_path: str = None) -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/stats/candidates')
+    def api_stats_candidates():
+        """Get candidate-specific statistics."""
+        try:
+            import sqlite3
+            con = sqlite3.connect(DB_PATH)
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            
+            # Total candidates
+            cur.execute("SELECT COUNT(*) as count FROM leads WHERE lead_type = 'candidate'")
+            total_candidates = cur.fetchone()['count']
+            
+            # Candidates today
+            cur.execute("""
+                SELECT COUNT(*) as count FROM leads 
+                WHERE lead_type = 'candidate' 
+                AND DATE(last_updated) = DATE('now')
+            """)
+            candidates_today = cur.fetchone()['count']
+            
+            # Candidates with experience
+            cur.execute("""
+                SELECT COUNT(*) as count FROM leads 
+                WHERE lead_type = 'candidate' 
+                AND experience_years IS NOT NULL 
+                AND experience_years > 0
+            """)
+            with_experience = cur.fetchone()['count']
+            
+            # Average experience years
+            cur.execute("""
+                SELECT AVG(experience_years) as avg_exp FROM leads 
+                WHERE lead_type = 'candidate' 
+                AND experience_years IS NOT NULL 
+                AND experience_years > 0
+            """)
+            avg_experience = cur.fetchone()['avg_exp'] or 0
+            
+            # Candidates by location (top 5)
+            cur.execute("""
+                SELECT location, COUNT(*) as count 
+                FROM leads 
+                WHERE lead_type = 'candidate' 
+                AND location IS NOT NULL 
+                AND location != ''
+                GROUP BY location 
+                ORDER BY count DESC 
+                LIMIT 5
+            """)
+            by_location = [dict(row) for row in cur.fetchall()]
+            
+            con.close()
+            
+            return jsonify({
+                'total_candidates': total_candidates,
+                'today': candidates_today,
+                'with_experience': with_experience,
+                'avg_experience_years': round(avg_experience, 1),
+                'by_location': by_location
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
     @app.route('/api/costs')
     def api_costs():
         """Get API cost breakdown."""
@@ -412,6 +476,7 @@ def create_app(db_path: str = None) -> Flask:
             search = request.args.get('search', '')
             status = request.args.get('status', '')
             date_from = request.args.get('date_from', '')
+            lead_type = request.args.get('lead_type', '')
             
             con = sqlite3.connect(DB_PATH)
             con.row_factory = sqlite3.Row
@@ -422,17 +487,21 @@ def create_app(db_path: str = None) -> Flask:
             params = []
             
             if search:
-                where_clauses.append("(name LIKE ? OR company LIKE ? OR mobile_number LIKE ?)")
+                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR telefon LIKE ? OR email LIKE ?)")
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern, search_pattern])
+                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
             
             if status:
                 where_clauses.append("status = ?")
                 params.append(status)
             
             if date_from:
-                where_clauses.append("DATE(created_at) >= ?")
+                where_clauses.append("DATE(last_updated) >= ?")
                 params.append(date_from)
+            
+            if lead_type:
+                where_clauses.append("lead_type = ?")
+                params.append(lead_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
             
