@@ -586,16 +586,32 @@ def create_app(db_path: str = None) -> Flask:
     
     @app.route('/api/leads', methods=['GET'])
     def api_leads_get():
-        """Get leads with pagination and filtering."""
+        """Get leads with advanced filtering, sorting, and pagination."""
         try:
             import sqlite3
             
+            # Pagination
             page = int(request.args.get('page', 1))
             per_page = int(request.args.get('per_page', 50))
+            
+            # Existing filters
             search = request.args.get('search', '')
             status = request.args.get('status', '')
             date_from = request.args.get('date_from', '')
             lead_type = request.args.get('lead_type', '')
+            
+            # New filters
+            phone_filter = request.args.get('phone', 'all')
+            email_filter = request.args.get('email', 'all')
+            source_filter = request.args.get('source', 'all')
+            date_filter = request.args.get('date', 'all')
+            date_to = request.args.get('date_to', '')
+            industry_filter = request.args.get('industry', 'all')
+            quality_filter = request.args.get('quality', 'all')
+            
+            # Sorting
+            sort_by = request.args.get('sort', 'created_at')
+            sort_dir = request.args.get('dir', 'desc')
             
             con = sqlite3.connect(DB_PATH)
             con.row_factory = sqlite3.Row
@@ -605,22 +621,72 @@ def create_app(db_path: str = None) -> Flask:
             where_clauses = []
             params = []
             
+            # Search filter
             if search:
-                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR telefon LIKE ? OR email LIKE ?)")
+                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR company LIKE ? OR telefon LIKE ? OR mobile_number LIKE ? OR email LIKE ?)")
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+                params.extend([search_pattern] * 6)
             
-            if status:
+            # Status filter
+            if status and status != 'all':
                 where_clauses.append("status = ?")
                 params.append(status)
             
-            if date_from:
-                where_clauses.append("DATE(last_updated) >= ?")
-                params.append(date_from)
-            
-            if lead_type:
+            # Lead type filter
+            if lead_type and lead_type != 'all':
                 where_clauses.append("lead_type = ?")
                 params.append(lead_type)
+            
+            # Phone filter
+            if phone_filter == 'has_mobile':
+                where_clauses.append("((mobile_number IS NOT NULL AND mobile_number != '') OR (telefon IS NOT NULL AND telefon != ''))")
+            elif phone_filter == 'no_mobile':
+                where_clauses.append("((mobile_number IS NULL OR mobile_number = '') AND (telefon IS NULL OR telefon = ''))")
+            elif phone_filter == 'mobile_only':
+                where_clauses.append("((mobile_number LIKE '015%' OR mobile_number LIKE '016%' OR mobile_number LIKE '017%') OR (telefon LIKE '015%' OR telefon LIKE '016%' OR telefon LIKE '017%'))")
+            elif phone_filter == 'landline_only':
+                where_clauses.append("(((mobile_number IS NOT NULL AND mobile_number != '' AND mobile_number NOT LIKE '01%') OR (telefon IS NOT NULL AND telefon != '' AND telefon NOT LIKE '01%')))")
+            
+            # Email filter
+            if email_filter == 'has_email':
+                where_clauses.append("email IS NOT NULL AND email != ''")
+            elif email_filter == 'no_email':
+                where_clauses.append("(email IS NULL OR email = '')")
+            
+            # Source filter
+            if source_filter != 'all':
+                where_clauses.append("(source_url LIKE ? OR quelle LIKE ?)")
+                source_pattern = f'%{source_filter}%'
+                params.extend([source_pattern, source_pattern])
+            
+            # Date filter
+            if date_filter == 'today':
+                where_clauses.append("(DATE(created_at) = DATE('now') OR DATE(last_updated) = DATE('now'))")
+            elif date_filter == 'yesterday':
+                where_clauses.append("(DATE(created_at) = DATE('now', '-1 day') OR DATE(last_updated) = DATE('now', '-1 day'))")
+            elif date_filter == '7days':
+                where_clauses.append("((created_at >= DATE('now', '-7 days')) OR (last_updated >= DATE('now', '-7 days')))")
+            elif date_filter == '30days':
+                where_clauses.append("((created_at >= DATE('now', '-30 days')) OR (last_updated >= DATE('now', '-30 days')))")
+            elif date_filter == 'custom' and date_from and date_to:
+                where_clauses.append("((DATE(created_at) BETWEEN ? AND ?) OR (DATE(last_updated) BETWEEN ? AND ?))")
+                params.extend([date_from, date_to, date_from, date_to])
+            elif date_from:
+                where_clauses.append("(DATE(created_at) >= ? OR DATE(last_updated) >= ?)")
+                params.extend([date_from, date_from])
+            
+            # Industry filter
+            if industry_filter != 'all':
+                where_clauses.append("industry = ?")
+                params.append(industry_filter)
+            
+            # Quality filter (confidence score)
+            if quality_filter == 'high':
+                where_clauses.append("confidence > 0.8")
+            elif quality_filter == 'medium':
+                where_clauses.append("confidence BETWEEN 0.5 AND 0.8")
+            elif quality_filter == 'low':
+                where_clauses.append("confidence < 0.5")
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
             
@@ -629,9 +695,17 @@ def create_app(db_path: str = None) -> Flask:
             cur.execute(count_query, params)
             total = cur.fetchone()[0]
             
+            # Sorting
+            allowed_sorts = ['name', 'mobile_number', 'telefon', 'email', 'company', 'company_name', 'source_url', 'quelle', 'created_at', 'last_updated', 'confidence', 'id']
+            if sort_by in allowed_sorts:
+                sort_direction = 'DESC' if sort_dir == 'desc' else 'ASC'
+                order_by = f"{sort_by} {sort_direction}"
+            else:
+                order_by = "created_at DESC"
+            
             # Get paginated data
             offset = (page - 1) * per_page
-            data_query = f"SELECT * FROM leads WHERE {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?"
+            data_query = f"SELECT * FROM leads WHERE {where_sql} ORDER BY {order_by} LIMIT ? OFFSET ?"
             cur.execute(data_query, params + [per_page, offset])
             rows = cur.fetchall()
             
@@ -641,10 +715,12 @@ def create_app(db_path: str = None) -> Flask:
             
             return jsonify({
                 'leads': leads,
-                'total': total,
-                'page': page,
-                'per_page': per_page,
-                'pages': (total + per_page - 1) // per_page
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total': total,
+                    'total_pages': (total + per_page - 1) // per_page
+                }
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -814,6 +890,185 @@ def create_app(db_path: str = None) -> Flask:
                 con.close()
                 return jsonify({'error': 'Invalid format'}), 400
             
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/leads/export', methods=['POST'])
+    def api_leads_export_bulk():
+        """Export selected or filtered leads in various formats."""
+        try:
+            import sqlite3
+            import csv
+            import io
+            from datetime import datetime
+            
+            data = request.get_json() or {}
+            lead_ids = data.get('ids', [])
+            format_type = data.get('format', 'csv')
+            filters = data.get('filters', {})
+            
+            con = sqlite3.connect(DB_PATH)
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            
+            # Build query
+            if lead_ids:
+                # Export specific IDs
+                placeholders = ','.join('?' * len(lead_ids))
+                query = f"SELECT * FROM leads WHERE id IN ({placeholders})"
+                params = lead_ids
+            else:
+                # Export with filters
+                where_clauses = []
+                params = []
+                
+                for key, value in filters.items():
+                    if not value or value == 'all':
+                        continue
+                    
+                    if key == 'search' and value:
+                        where_clauses.append("(name LIKE ? OR company LIKE ? OR email LIKE ?)")
+                        search_pattern = f"%{value}%"
+                        params.extend([search_pattern] * 3)
+                    elif key == 'status' and value:
+                        where_clauses.append("status = ?")
+                        params.append(value)
+                    elif key == 'lead_type' and value:
+                        where_clauses.append("lead_type = ?")
+                        params.append(value)
+                
+                where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+                query = f"SELECT * FROM leads WHERE {where_sql} ORDER BY id DESC"
+            
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            
+            if not rows:
+                con.close()
+                return jsonify({'error': 'No leads to export'}), 404
+            
+            leads = [dict(row) for row in rows]
+            con.close()
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+            
+            if format_type == 'csv':
+                output = io.StringIO()
+                if leads:
+                    writer = csv.DictWriter(output, fieldnames=leads[0].keys())
+                    writer.writeheader()
+                    writer.writerows(leads)
+                
+                response = Response(
+                    output.getvalue(),
+                    mimetype='text/csv; charset=utf-8'
+                )
+                response.headers['Content-Disposition'] = f'attachment; filename=leads_export_{timestamp}.csv'
+                return response
+            
+            elif format_type == 'excel':
+                try:
+                    from openpyxl import Workbook
+                    from io import BytesIO
+                    
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "Leads"
+                    
+                    if leads:
+                        # Header
+                        headers = list(leads[0].keys())
+                        ws.append(headers)
+                        
+                        # Data
+                        for lead in leads:
+                            ws.append(list(lead.values()))
+                    
+                    output = BytesIO()
+                    wb.save(output)
+                    output.seek(0)
+                    
+                    response = Response(
+                        output.getvalue(),
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                    response.headers['Content-Disposition'] = f'attachment; filename=leads_export_{timestamp}.xlsx'
+                    return response
+                except ImportError:
+                    return jsonify({'error': 'openpyxl nicht installiert'}), 500
+            
+            elif format_type == 'vcard':
+                vcards = []
+                for lead in leads:
+                    vcard = f"""BEGIN:VCARD
+VERSION:3.0
+FN:{lead.get('name', 'Unknown')}
+ORG:{lead.get('company', lead.get('company_name', ''))}
+TEL;TYPE=CELL:{lead.get('mobile_number', lead.get('telefon', ''))}
+EMAIL:{lead.get('email', '')}
+NOTE:Quelle: {lead.get('source_url', lead.get('quelle', ''))}
+END:VCARD"""
+                    vcards.append(vcard)
+                
+                response = Response(
+                    '\n'.join(vcards),
+                    mimetype='text/vcard; charset=utf-8'
+                )
+                response.headers['Content-Disposition'] = f'attachment; filename=leads_contacts_{timestamp}.vcf'
+                return response
+            
+            else:
+                return jsonify({'error': 'Invalid format'}), 400
+                
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/leads/delete', methods=['POST'])
+    def api_leads_delete_bulk():
+        """Delete selected leads."""
+        try:
+            import sqlite3
+            
+            data = request.get_json() or {}
+            lead_ids = data.get('ids', [])
+            
+            if not lead_ids:
+                return jsonify({'error': 'Keine Leads ausgewählt'}), 400
+            
+            con = sqlite3.connect(DB_PATH)
+            cur = con.cursor()
+            
+            placeholders = ','.join('?' * len(lead_ids))
+            cur.execute(f"DELETE FROM leads WHERE id IN ({placeholders})", lead_ids)
+            deleted = cur.rowcount
+            
+            con.commit()
+            con.close()
+            
+            return jsonify({
+                'success': True,
+                'deleted': deleted,
+                'message': f'{deleted} Lead(s) gelöscht'
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/leads/<int:lead_id>', methods=['DELETE'])
+    def api_leads_delete_single(lead_id):
+        """Delete a single lead."""
+        try:
+            import sqlite3
+            
+            con = sqlite3.connect(DB_PATH)
+            cur = con.cursor()
+            cur.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
+            deleted = cur.rowcount
+            con.commit()
+            con.close()
+            
+            if deleted:
+                return jsonify({'success': True, 'message': 'Lead gelöscht'})
+            return jsonify({'error': 'Lead nicht gefunden'}), 404
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
