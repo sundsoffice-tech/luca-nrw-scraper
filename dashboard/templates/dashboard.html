@@ -8,13 +8,16 @@
     {% include 'components/control_panel.html' %}
 </section>
 
-<!-- Scheduler and Health in a 2-column grid -->
-<section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+<!-- Scheduler, Health, and Performance in a 3-column grid -->
+<section class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
     <div>
         {% include 'components/scheduler_panel.html' %}
     </div>
     <div>
         {% include 'components/health_monitor.html' %}
+    </div>
+    <div>
+        {% include 'components/performance_monitor.html' %}
     </div>
 </section>
 
@@ -110,6 +113,7 @@
 {% block scripts %}
 <script src="/static/js/scraper_control.js"></script>
 <script src="/static/js/notifications.js"></script>
+<script src="/static/js/performance.js"></script>
 <script>
     let leadsChart = null;
     let sourcesChart = null;

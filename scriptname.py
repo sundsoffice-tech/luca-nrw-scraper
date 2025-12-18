@@ -318,6 +318,29 @@ INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
+
+def get_performance_params():
+    """
+    Fetch current performance parameters from dashboard API.
+    Returns effective parameters based on performance mode and system load.
+    """
+    try:
+        import requests
+        response = requests.get('http://127.0.0.1:5056/api/performance/effective', timeout=2)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('params', {})
+    except Exception:
+        pass
+    
+    # Fallback to environment variables/defaults
+    return {
+        'threads': int(os.getenv("THREADS", "4")),
+        'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
+        'batch_size': int(os.getenv("BATCH_SIZE", "20")),
+        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
+    }
+
 # -------------- Logging --------------
 def log(level:str, msg:str, **ctx):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -5350,23 +5373,40 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         if con:
             con.close()
 
-    rate = _Rate(max_global=ASYNC_LIMIT, max_per_host=ASYNC_PER_HOST)
+    # Get initial performance params from dashboard
+    perf_params = get_performance_params()
+    current_async_limit = perf_params.get('async_limit', ASYNC_LIMIT)
+    current_request_delay = perf_params.get('request_delay', SLEEP_BETWEEN_QUERIES)
+    last_perf_check = time.time()
+    
+    rate = _Rate(max_global=current_async_limit, max_per_host=ASYNC_PER_HOST)
 
     total_links_checked = 0
     leads_new_total = 0
     run_id = start_run()
     _reset_metrics()
-    _uilog(f"Run #{run_id} gestartet")
+    _uilog(f"Run #{run_id} gestartet (Performance Mode: {perf_params.get('async_limit', 'N/A')} async)")
 
 
     try:
         for q in QUERIES:
+            # Periodically refresh performance params (every 30 seconds)
+            if time.time() - last_perf_check > 30:
+                perf_params = get_performance_params()
+                new_async_limit = perf_params.get('async_limit', ASYNC_LIMIT)
+                current_request_delay = perf_params.get('request_delay', SLEEP_BETWEEN_QUERIES)
+                if new_async_limit != current_async_limit:
+                    current_async_limit = new_async_limit
+                    rate = _Rate(max_global=current_async_limit, max_per_host=ASYNC_PER_HOST)
+                    log("info", "Performance params updated", async_limit=current_async_limit, request_delay=current_request_delay)
+                last_perf_check = time.time()
+            
             if run_flag and not run_flag.get("running", True):
                 _uilog("STOP erkannt – breche ab")
                 break
             if (not force) and is_query_done(q):
                 log("info", "Query bereits erledigt (skip)", q=q)
-                await asyncio.sleep(SLEEP_BETWEEN_QUERIES)
+                await asyncio.sleep(current_request_delay)
                 continue
 
             log("info", "Starte Query", q=q)
@@ -5406,7 +5446,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
             if not links:
                 log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG). Mache eine längere Pause.", q=q)
-                await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(1.5,2.5))
+                await asyncio.sleep(current_request_delay + _jitter(1.5,2.5))
 
             try:
                 ka_links = await kleinanzeigen_search_async(q, max_results=KLEINANZEIGEN_MAX_RESULTS)
@@ -5611,7 +5651,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 except Exception as e:
                     log("warn", "Retry wave failed", error=str(e))
 
-            await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4,1.2))
+            await asyncio.sleep(current_request_delay + _jitter(0.4,1.2))
 
         finish_run(run_id, total_links_checked, leads_new_total, "ok", metrics=dict(RUN_METRICS))
         _uilog(f"Run #{run_id} beendet")
