@@ -578,6 +578,9 @@ def init_mode(mode: str) -> Dict[str, Any]:
     """
     Initialize the operating mode and apply its configuration.
     
+    IMPORTANT: This function must be called during startup before any async operations begin,
+    as it modifies global configuration variables.
+    
     Args:
         mode: Mode name (standard, learning, aggressive, snippet_only)
     
@@ -589,7 +592,7 @@ def init_mode(mode: str) -> Dict[str, Any]:
     config = MODE_CONFIGS.get(mode, MODE_CONFIGS["standard"])
     ACTIVE_MODE_CONFIG = config
     
-    # Apply mode-specific settings
+    # Apply mode-specific settings (must be done before any async operations start)
     ASYNC_LIMIT = config.get("async_limit", 35)
     
     # Initialize learning engine if learning mode is enabled
@@ -5722,8 +5725,11 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                                     if domain.startswith("www."):
                                         domain = domain[4:]
                                     if domain and domain not in domains_tracked:
-                                        # Calculate quality based on score and confidence
-                                        quality = min(1.0, (lead.get("score", 0) / 100.0 + lead.get("confidence_score", 0) / 100.0) / 2)
+                                        # Calculate quality based on score and confidence (both expected to be 0-100)
+                                        # Normalize to 0.0-1.0 range and average them
+                                        score_val = max(0, min(100, lead.get("score", 0)))
+                                        confidence_val = max(0, min(100, lead.get("confidence_score", 0)))
+                                        quality = min(1.0, (score_val / 100.0 + confidence_val / 100.0) / 2)
                                         _LEARNING_ENGINE.record_domain_success(domain, 1, quality)
                                         domains_tracked.add(domain)
                             

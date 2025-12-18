@@ -326,6 +326,10 @@ class LearningEngine:
         cur = con.cursor()
         
         try:
+            # Calculate initial score
+            initial_score = min(1.0, 0.5 + (leads_found * 0.1))
+            score_boost = leads_found * 0.1
+            
             cur.execute("""
                 INSERT INTO learning_domains 
                 (domain, total_visits, successful_extractions, leads_found, avg_quality, last_visit, score)
@@ -334,19 +338,19 @@ class LearningEngine:
                     total_visits = total_visits + 1,
                     successful_extractions = successful_extractions + ?,
                     leads_found = leads_found + ?,
-                    avg_quality = (avg_quality * total_visits + ?) / (total_visits + 1),
+                    avg_quality = (avg_quality * (total_visits - 1) + ?) / total_visits,
                     last_visit = CURRENT_TIMESTAMP,
-                    score = MIN(1.0, score + ? * 0.1)
+                    score = MIN(1.0, score + ?)
             """, (
                 domain, 
                 1 if leads_found > 0 else 0, 
                 leads_found, 
                 quality, 
-                0.5 + (leads_found * 0.1),
+                initial_score,
                 1 if leads_found > 0 else 0,
                 leads_found,
                 quality,
-                leads_found
+                score_boost
             ))
             
             con.commit()
@@ -373,6 +377,9 @@ class LearningEngine:
         cur = con.cursor()
         
         try:
+            # Calculate initial effectiveness score
+            initial_effectiveness = min(1.0, leads_found * 0.2)
+            
             cur.execute("""
                 INSERT INTO learning_queries 
                 (query_hash, query_text, times_used, leads_generated, last_used, effectiveness_score)
@@ -380,14 +387,14 @@ class LearningEngine:
                 ON CONFLICT(query_hash) DO UPDATE SET
                     times_used = times_used + 1,
                     leads_generated = leads_generated + ?,
-                    avg_leads_per_run = (leads_generated + ?) * 1.0 / (times_used + 1),
+                    avg_leads_per_run = CAST(leads_generated + ? AS REAL) / (times_used + 1),
                     last_used = CURRENT_TIMESTAMP,
-                    effectiveness_score = MIN(1.0, (leads_generated + ?) * 1.0 / (times_used + 1) * 0.2)
+                    effectiveness_score = MIN(1.0, CAST(leads_generated + ? AS REAL) / (times_used + 1) * 0.2)
             """, (
                 query_hash, 
                 query, 
                 leads_found, 
-                min(1.0, leads_found * 0.2),
+                initial_effectiveness,
                 leads_found,
                 leads_found,
                 leads_found

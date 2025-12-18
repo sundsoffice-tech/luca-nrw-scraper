@@ -250,6 +250,7 @@ def create_app(db_path: str = None) -> Flask:
     @app.route('/api/learning/stats')
     def api_learning_stats():
         """Get learning statistics for learning mode."""
+        con = None
         try:
             con = sqlite3.connect(DB_PATH)
             con.row_factory = sqlite3.Row
@@ -258,7 +259,6 @@ def create_app(db_path: str = None) -> Flask:
             # Check if learning tables exist
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='learning_domains'")
             if not cur.fetchone():
-                con.close()
                 return jsonify({
                     'top_domains': [],
                     'top_patterns': [],
@@ -303,8 +303,6 @@ def create_app(db_path: str = None) -> Flask:
             cur.execute("SELECT COUNT(*), SUM(leads_found) FROM learning_domains")
             domain_stats = cur.fetchone()
             
-            con.close()
-            
             return jsonify({
                 'top_domains': top_domains,
                 'top_patterns': top_patterns,
@@ -313,6 +311,9 @@ def create_app(db_path: str = None) -> Flask:
             })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+        finally:
+            if con:
+                con.close()
     
     @app.route('/api/stream/logs')
     def api_stream_logs():
