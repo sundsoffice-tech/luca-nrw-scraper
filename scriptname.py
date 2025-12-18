@@ -596,14 +596,14 @@ def init_mode(mode: str) -> Dict[str, Any]:
     if config.get("learning_enabled"):
         if _LEARNING_ENGINE is None:
             _LEARNING_ENGINE = LearningEngine(DB_PATH)
-        log("INFO", "Learning-Modus aktiviert", {"stats": _LEARNING_ENGINE.get_pattern_stats()})
+        log("INFO", "Learning-Modus aktiviert", stats=_LEARNING_ENGINE.get_pattern_stats())
     
-    log("INFO", f"Betriebsmodus initialisiert", {
-        "mode": mode,
-        "description": config.get("description"),
-        "async_limit": config.get("async_limit"),
-        "learning_enabled": config.get("learning_enabled", False)
-    })
+    log("INFO", "Betriebsmodus initialisiert",
+        mode=mode,
+        description=config.get("description"),
+        async_limit=config.get("async_limit"),
+        learning_enabled=config.get("learning_enabled", False)
+    )
     
     return config
 
