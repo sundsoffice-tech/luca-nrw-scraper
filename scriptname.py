@@ -2499,6 +2499,63 @@ def _matches_hostlist(host: str, blocked: set[str]) -> bool:
     return any(h == d or h.endswith("." + d) for d in (b.lower() for b in blocked))
 
 
+def is_candidate_url(url: str) -> Optional[bool]:
+    """
+    Prüft ob URL ein Kandidaten-Profil sein könnte.
+    Returns: True (candidate), False (definitely not), None (uncertain, needs further analysis)
+    """
+    if not url:
+        return None
+    
+    url_lower = url.lower()
+    
+    # NEGATIV - Diese URLs blockieren (Stellenangebote, Firmen-Seiten)
+    negative_patterns = [
+        '/jobs/',                   # Stellenangebote, nicht Gesuche!
+        '/stellenangebote/',        # Firmen-Anzeigen
+        '/karriere/',               # Firmen-Karriereseiten
+        '/company/',                # Firmen-Profile
+        '/impressum',               # Firmen-Impressum (außer mit Kandidaten-Kontext)
+        '/kontakt',                 # Firmen-Kontakt (außer mit Kandidaten-Kontext)
+        '/about',                   # Über uns Seiten
+        'jobboerse',                # Jobbörsen
+        'stepstone.de',             # Jobbörsen
+        'indeed.com',               # Jobbörsen
+        'monster.de',               # Jobbörsen
+        'linkedin.com/jobs/',       # Job listings
+        'xing.com/jobs/',           # Job listings
+    ]
+    
+    for neg in negative_patterns:
+        if neg in url_lower:
+            return False
+    
+    # POSITIV - Diese URLs sind gut für Kandidaten
+    positive_patterns = [
+        '/s-stellengesuche/',       # Kleinanzeigen Stellengesuche
+        '/stellengesuche/',          # Andere Portale Stellengesuche
+        'linkedin.com/in/',          # LinkedIn Profile (nicht /jobs/ oder /company/)
+        'xing.com/profile/',         # Xing Profile
+        '/freelancer/',              # Freelancer Profile
+        'facebook.com/groups/',      # Facebook Gruppen
+        't.me/',                     # Telegram Gruppen
+        'chat.whatsapp.com/',        # WhatsApp Gruppen
+        'instagram.com/',            # Instagram Profile (können Job-Sucher sein)
+        'reddit.com/r/arbeitsleben', # Reddit Karriere-Threads
+        'gutefrage.net',             # Fragen zu Jobsuche
+        'freelancermap.de',          # Freelancer Portale
+        'freelance.de',              # Freelancer Portale
+        'gulp.de',                   # Freelancer Portale
+    ]
+    
+    for pos in positive_patterns:
+        if pos in url_lower:
+            return True
+    
+    # Default: Nicht sicher, weitere Prüfung nötig
+    return None
+
+
 def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_snippet_jackpot: bool = False) -> Tuple[bool, str]:
     """
     Pre-fetch URL filtering: check blacklist hosts and path patterns.
@@ -2519,6 +2576,20 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
         # Check for job posting - always block
         if is_job_posting(url=url, title=title, snippet=snippet):
             return True, "job_posting"
+        
+        # Check if we're in candidates/recruiter mode
+        is_candidates_mode = "recruiter" in str(os.getenv("INDUSTRY", "")).lower() or "candidates" in str(os.getenv("INDUSTRY", "")).lower()
+        
+        # In candidates mode, use candidate URL filtering
+        if is_candidates_mode:
+            candidate_check = is_candidate_url(url)
+            if candidate_check is False:
+                # Definitely not a candidate URL
+                return True, "not_candidate_url"
+            elif candidate_check is True:
+                # Definitely a candidate URL, allow through
+                return False, ""
+            # If None, continue with normal filtering
         
         # Check whitelist first - always allow promising patterns
         combined_text = f"{url_lower} {path} {title_lower}"
@@ -3873,10 +3944,29 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
-    system_prompt = (
-        'Extract contact persons. Return JSON: {"contacts": [{"name": "...", "role": "...", "email": "...", "phone": "..."}]}. '
-        "If no specific person found, return empty list."
-    )
+    
+    # Check if we're in candidates/recruiter mode
+    is_candidates_mode = "recruiter" in str(os.getenv("INDUSTRY", "")).lower() or "candidates" in str(os.getenv("INDUSTRY", "")).lower()
+    
+    if is_candidates_mode and any(marker in url.lower() for marker in ['/stellengesuche/', 'linkedin.com/in/', 'xing.com/profile/', 'freelancer']):
+        # Enhanced prompt for candidate profiles
+        system_prompt = (
+            'Analyze this profile of a person SEEKING a job (Stellengesuch - NOT a job offer). '
+            'IMPORTANT: '
+            '- This is a JOB SEEKER profile - the person is LOOKING FOR work '
+            '- Extract contact data of the PERSON (not a company) '
+            '- Mobile phone number is REQUIRED (015x, 016x, 017x, 01xx format) '
+            '- If this is a COMPANY (not a person), set is_job_seeker to false '
+            '- If no mobile phone found, still extract but note it '
+            'Return JSON: {"is_job_seeker": true/false, "contacts": [{"name": "...", "role": "...", "email": "...", "phone": "...", "location": "...", "availability": "..."}]}. '
+            "If no specific job seeker found, return empty contacts list."
+        )
+    else:
+        # Standard prompt for agencies/companies
+        system_prompt = (
+            'Extract contact persons. Return JSON: {"contacts": [{"name": "...", "role": "...", "email": "...", "phone": "..."}]}. '
+            "If no specific person found, return empty list."
+        )
     payload = {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         "response_format": {"type": "json_object"},
@@ -3904,6 +3994,13 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
                 except Exception as e:
                     log("warn", "AI contact extraction parse failed", url=url, error=str(e))
                     return []
+                # Check if this is a candidate response
+                is_job_seeker = parsed.get("is_job_seeker") if isinstance(parsed, dict) else None
+                if is_job_seeker is False:
+                    # AI determined this is not a job seeker (e.g., company page)
+                    log("debug", "AI: Not a job seeker profile", url=url)
+                    return []
+                
                 contacts_raw = parsed.get("contacts") if isinstance(parsed, dict) else None
                 if not isinstance(contacts_raw, list):
                     return []
@@ -3915,15 +4012,27 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
                     role = (c.get("role") or "").strip()
                     email = (c.get("email") or "").strip()
                     phone = normalize_phone(c.get("phone") or "")
+                    location = (c.get("location") or "").strip()
+                    availability = (c.get("availability") or "").strip()
+                    
                     if not (email or phone):
                         continue
-                    cleaned.append({
+                    
+                    contact_record = {
                         "name": name,
                         "rolle": role,
                         "email": email,
                         "telefon": phone,
                         "quelle": url
-                    })
+                    }
+                    
+                    # Add candidate-specific fields if present
+                    if location:
+                        contact_record["location"] = location
+                    if availability:
+                        contact_record["availability"] = availability
+                    
+                    cleaned.append(contact_record)
                 return cleaned
     except Exception as e:
         log("warn", "AI contact extraction failed", url=url, error=str(e))
