@@ -15,16 +15,67 @@ from flask_cors import CORS
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dashboard.db_schema import ensure_dashboard_schema, initialize_default_search_modes, initialize_default_settings
+from dashboard.db_schema import (
+    ensure_dashboard_schema, 
+    initialize_default_search_modes, 
+    initialize_default_settings,
+    save_performance_settings,
+    load_performance_settings
+)
 from dashboard.api import stats, costs, modes, settings
 from dashboard.scraper_control import get_controller
 from dashboard.scheduler import get_scheduler
+
+# Third-party imports for performance monitoring
+import psutil
 
 # Database path
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'scraper.db')
 
 # Global log queue for SSE
 log_queue = queue.Queue(maxsize=1000)
+
+# Global performance state
+_perf_state = {
+    'mode': 'balanced',  # eco, balanced, power, custom
+    'cpu_limit': 80,
+    'ram_limit': 85,
+    'auto_throttle': True,
+    'auto_pause': True,
+    'night_mode': False,
+    'custom': {
+        'threads': 4,
+        'async_limit': 35,
+        'batch_size': 20,
+        'request_delay': 2.5
+    },
+    'current_multiplier': 1.0  # Throttle multiplier
+}
+
+# Performance mode presets
+PERF_MODES = {
+    'eco': {
+        'threads': 1,
+        'async_limit': 10,
+        'batch_size': 5,
+        'request_delay': 5.0,
+        'description': 'Minimal CPU usage, slow but gentle'
+    },
+    'balanced': {
+        'threads': 4,
+        'async_limit': 35,
+        'batch_size': 20,
+        'request_delay': 2.5,
+        'description': 'Auto-adjusts based on system load'
+    },
+    'power': {
+        'threads': 8,
+        'async_limit': 75,
+        'batch_size': 40,
+        'request_delay': 1.0,
+        'description': 'Maximum speed, high CPU usage'
+    }
+}
 
 
 def create_app(db_path: str = None) -> Flask:
@@ -765,7 +816,183 @@ def create_app(db_path: str = None) -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    # ==================== Performance API ====================
+    
+    @app.route('/api/performance', methods=['GET'])
+    def api_performance_get():
+        """Get current system performance metrics."""
+        global _perf_state
+        try:
+            # System metrics
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            ram = psutil.virtual_memory()
+            
+            # Network I/O
+            net_io = psutil.net_io_counters()
+            
+            # Scraper process metrics (if running)
+            scraper_cpu = 0
+            scraper_ram = 0
+            controller = get_controller()
+            if controller.pid and controller.is_running():
+                try:
+                    proc = psutil.Process(controller.pid)
+                    scraper_cpu = proc.cpu_percent(interval=0)
+                    scraper_ram = proc.memory_info().rss / 1024 / 1024  # MB
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            
+            return jsonify({
+                'system': {
+                    'cpu_percent': cpu_percent,
+                    'ram_percent': ram.percent,
+                    'ram_used_gb': round(ram.used / 1024 / 1024 / 1024, 2),
+                    'ram_total_gb': round(ram.total / 1024 / 1024 / 1024, 2),
+                    'net_sent_mb': round(net_io.bytes_sent / 1024 / 1024, 2),
+                    'net_recv_mb': round(net_io.bytes_recv / 1024 / 1024, 2)
+                },
+                'scraper': {
+                    'cpu_percent': scraper_cpu,
+                    'ram_mb': round(scraper_ram, 2)
+                },
+                'settings': _perf_state,
+                'modes': PERF_MODES,
+                'throttled': _perf_state['current_multiplier'] < 1.0
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/performance', methods=['POST'])
+    def api_performance_set():
+        """Update performance settings."""
+        global _perf_state
+        try:
+            data = request.get_json()
+            
+            if 'mode' in data:
+                _perf_state['mode'] = data['mode']
+            if 'cpu_limit' in data:
+                _perf_state['cpu_limit'] = int(data['cpu_limit'])
+            if 'ram_limit' in data:
+                _perf_state['ram_limit'] = int(data['ram_limit'])
+            if 'auto_throttle' in data:
+                _perf_state['auto_throttle'] = bool(data['auto_throttle'])
+            if 'auto_pause' in data:
+                _perf_state['auto_pause'] = bool(data['auto_pause'])
+            if 'night_mode' in data:
+                _perf_state['night_mode'] = bool(data['night_mode'])
+            if 'custom' in data:
+                _perf_state['custom'].update(data['custom'])
+            
+            # Save to database
+            save_performance_settings(_perf_state)
+            
+            # Log settings change
+            log_queue.put(json.dumps({
+                'timestamp': time.time(),
+                'level': 'INFO',
+                'message': f'Performance settings updated: mode={_perf_state["mode"]}'
+            }))
+            
+            return jsonify({'success': True, 'settings': _perf_state})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/performance/effective', methods=['GET'])
+    def api_performance_effective():
+        """Get the effective performance parameters based on current mode and system load."""
+        global _perf_state
+        try:
+            from datetime import datetime
+            
+            mode = _perf_state['mode']
+            
+            if mode == 'custom':
+                params = _perf_state['custom'].copy()
+            else:
+                params = PERF_MODES.get(mode, PERF_MODES['balanced']).copy()
+                # Remove description from params
+                params.pop('description', None)
+            
+            # Apply throttle multiplier if auto-throttle is enabled
+            if _perf_state['auto_throttle'] and _perf_state['current_multiplier'] < 1.0:
+                multiplier = _perf_state['current_multiplier']
+                params['async_limit'] = max(5, int(params['async_limit'] * multiplier))
+                params['batch_size'] = max(3, int(params['batch_size'] * multiplier))
+                params['request_delay'] = params['request_delay'] / multiplier
+            
+            # Night mode adjustments
+            night_mode_active = False
+            if _perf_state['night_mode']:
+                hour = datetime.now().hour
+                if hour >= 23 or hour < 6:
+                    night_mode_active = True
+                    params['async_limit'] = max(5, params['async_limit'] // 2)
+                    params['request_delay'] = params['request_delay'] * 2
+            
+            return jsonify({
+                'mode': mode,
+                'params': params,
+                'throttle_multiplier': _perf_state['current_multiplier'],
+                'night_mode_active': night_mode_active
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
     return app
+
+
+def start_performance_monitor():
+    """Start background thread that monitors system performance and auto-throttles."""
+    def monitor_loop():
+        global _perf_state
+        
+        while True:
+            try:
+                if not _perf_state['auto_throttle']:
+                    time.sleep(5)
+                    continue
+                
+                cpu = psutil.cpu_percent(interval=1)
+                ram = psutil.virtual_memory().percent
+                
+                cpu_limit = _perf_state['cpu_limit']
+                ram_limit = _perf_state['ram_limit']
+                
+                # Calculate throttle multiplier
+                multiplier = 1.0
+                
+                if cpu > cpu_limit:
+                    # Reduce by how much we're over the limit
+                    cpu_excess = (cpu - cpu_limit) / 100
+                    multiplier = min(multiplier, 1.0 - cpu_excess)
+                
+                if ram > ram_limit:
+                    ram_excess = (ram - ram_limit) / 100
+                    multiplier = min(multiplier, 1.0 - ram_excess)
+                
+                # Clamp between 0.2 and 1.0
+                multiplier = max(0.2, min(1.0, multiplier))
+                
+                _perf_state['current_multiplier'] = multiplier
+                
+                # Auto-pause if RAM is critical
+                if _perf_state['auto_pause'] and ram > 95:
+                    controller = get_controller()
+                    if controller.is_running() and not controller.paused:
+                        controller.pause()
+                        print(f"[PERF] Auto-paused scraper due to high RAM: {ram}%")
+                        add_log_entry('WARNING', f'Auto-paused scraper due to high RAM: {ram}%')
+                
+                time.sleep(3)
+                
+            except Exception as e:
+                print(f"[PERF] Monitor error: {e}")
+                time.sleep(5)
+    
+    thread = threading.Thread(target=monitor_loop, daemon=True)
+    thread.start()
+    return thread
 
 
 def add_log_entry(level: str, message: str):
@@ -788,6 +1015,14 @@ def add_log_entry(level: str, message: str):
 
 if __name__ == '__main__':
     import os
+    
+    # Load performance settings from database
+    saved_settings = load_performance_settings()
+    _perf_state.update(saved_settings)
+    
+    # Start performance monitoring thread
+    start_performance_monitor()
+    
     app = create_app()
     debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     print(f"🎯 LUCA Control Center starting on http://127.0.0.1:5056")

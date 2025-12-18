@@ -314,3 +314,70 @@ def track_api_cost(
     """, (provider, endpoint, tokens_input, tokens_output, cost, run_id, model, metadata))
     
     con.commit()
+
+
+def save_performance_settings(settings: dict) -> None:
+    """
+    Save performance settings to database.
+    
+    Args:
+        settings: Dictionary containing performance settings
+    """
+    import json
+    from pathlib import Path
+    
+    # Determine DB_PATH
+    db_path = Path(__file__).parent.parent / 'scraper.db'
+    
+    con = sqlite3.connect(str(db_path))
+    cur = con.cursor()
+    
+    cur.execute("""
+        INSERT OR REPLACE INTO dashboard_settings (key, value, value_type, updated_at)
+        VALUES ('performance_settings', ?, 'json', CURRENT_TIMESTAMP)
+    """, (json.dumps(settings),))
+    
+    con.commit()
+    con.close()
+
+
+def load_performance_settings() -> dict:
+    """
+    Load performance settings from database.
+    
+    Returns:
+        Dictionary containing performance settings, or defaults if not found
+    """
+    import json
+    from pathlib import Path
+    
+    # Determine DB_PATH
+    db_path = Path(__file__).parent.parent / 'scraper.db'
+    
+    try:
+        con = sqlite3.connect(str(db_path))
+        cur = con.cursor()
+        cur.execute("SELECT value FROM dashboard_settings WHERE key = 'performance_settings'")
+        row = cur.fetchone()
+        con.close()
+        if row:
+            return json.loads(row[0])
+    except Exception:
+        pass
+    
+    # Return defaults
+    return {
+        'mode': 'balanced',
+        'cpu_limit': 80,
+        'ram_limit': 85,
+        'auto_throttle': True,
+        'auto_pause': True,
+        'night_mode': False,
+        'custom': {
+            'threads': 4,
+            'async_limit': 35,
+            'batch_size': 20,
+            'request_delay': 2.5
+        },
+        'current_multiplier': 1.0
+    }
