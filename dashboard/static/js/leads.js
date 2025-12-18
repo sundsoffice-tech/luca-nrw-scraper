@@ -179,9 +179,9 @@ function renderLeads(leads) {
     
     tbody.innerHTML = leads.map(lead => {
         const mobile = lead.telefon || '';
-        const company = lead.company || lead.company_name || '';
-        const source = lead.source_url || lead.quelle || '';
-        const confidence = lead.confidence || 0;
+        const company = lead.company_name || '';
+        const source = lead.quelle || '';
+        const confidence = lead.confidence_score || 0;
         
         return `
             <tr class="border-b border-gray-700 hover:bg-gray-750">
@@ -203,13 +203,13 @@ function renderLeads(leads) {
                         ${getSourceName(source)}
                     </span>
                 </td>
-                <td class="p-3 text-gray-400 text-sm">${formatDate(lead.created_at || lead.last_updated)}</td>
+                <td class="p-3 text-gray-400 text-sm">${formatDate(lead.last_updated)}</td>
                 <td class="p-3">
                     <div class="flex items-center gap-2">
                         <div class="w-16 bg-gray-700 rounded-full h-2">
-                            <div class="bg-green-500 h-2 rounded-full" style="width: ${confidence * 100}%"></div>
+                            <div class="bg-green-500 h-2 rounded-full" style="width: ${confidence}%"></div>
                         </div>
-                        <span class="text-xs text-gray-400">${(confidence * 100).toFixed(0)}%</span>
+                        <span class="text-xs text-gray-400">${confidence}%</span>
                     </div>
                 </td>
                 <td class="p-3">

@@ -623,9 +623,9 @@ def create_app(db_path: str = None) -> Flask:
             
             # Search filter
             if search:
-                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR company LIKE ? OR telefon LIKE ? OR email LIKE ?)")
+                where_clauses.append("(name LIKE ? OR company_name LIKE ? OR telefon LIKE ? OR email LIKE ?)")
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern] * 5)
+                params.extend([search_pattern] * 4)
             
             # Status filter
             if status and status != 'all':
@@ -696,12 +696,12 @@ def create_app(db_path: str = None) -> Flask:
             total = cur.fetchone()[0]
             
             # Sorting
-            allowed_sorts = ['name', 'telefon', 'email', 'company', 'company_name', 'source_url', 'quelle', 'created_at', 'last_updated', 'confidence', 'id']
+            allowed_sorts = ['name', 'telefon', 'email', 'company_name', 'quelle', 'last_updated', 'confidence_score', 'id']
             if sort_by in allowed_sorts:
                 sort_direction = 'DESC' if sort_dir == 'desc' else 'ASC'
                 order_by = f"{sort_by} {sort_direction}"
             else:
-                order_by = "created_at DESC"
+                order_by = "last_updated DESC"
             
             # Get paginated data
             offset = (page - 1) * per_page
