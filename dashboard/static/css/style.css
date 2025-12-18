@@ -1,0 +1,158 @@
+/**
+ * LUCA Control Center - Custom Styles
+ */
+
+/* Additional custom styles to complement Tailwind */
+
+/* Smooth transitions */
+* {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Custom animations */
+@keyframes pulse-slow {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}
+
+.animate-pulse-slow {
+    animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Log entry styles */
+.log-entry {
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+}
+
+.log-info {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-left: 2px solid rgba(59, 130, 246, 0.5);
+}
+
+.log-warning {
+    background-color: rgba(251, 191, 36, 0.1);
+    border-left: 2px solid rgba(251, 191, 36, 0.5);
+}
+
+.log-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-left: 2px solid rgba(239, 68, 68, 0.5);
+}
+
+/* Status badge colors */
+.status-badge-new {
+    background-color: #3b82f6;
+}
+
+.status-badge-contacted {
+    background-color: #8b5cf6;
+}
+
+.status-badge-interested {
+    background-color: #10b981;
+}
+
+.status-badge-rejected {
+    background-color: #ef4444;
+}
+
+.status-badge-completed {
+    background-color: #6b7280;
+}
+
+/* Table hover effect */
+.hover\:bg-gray-750:hover {
+    background-color: #2d3748;
+}
+
+/* Loading spinner */
+.spinner {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    border-top: 3px solid #10b981;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Notification styles */
+.notification {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Card hover effect */
+.card-hover {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Focus visible for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+    
+    header,
+    .no-print {
+        display: none !important;
+    }
+}
