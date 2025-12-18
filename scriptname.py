@@ -289,6 +289,61 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
+# =========================
+# Mode Configurations
+# =========================
+MODE_CONFIGS = {
+    "standard": {
+        "description": "Normaler Betrieb",
+        "deep_crawl": True,
+        "learning_enabled": False,
+        "async_limit": 35,
+        "request_delay": 2.5,
+        "max_retries": 2,
+        "snippet_priority": False,
+        "save_patterns": False
+    },
+    "learning": {
+        "description": "Lernt aus erfolgreichen Extraktionen",
+        "deep_crawl": True,
+        "learning_enabled": True,
+        "async_limit": 30,
+        "request_delay": 3.0,
+        "max_retries": 3,
+        "snippet_priority": True,
+        "save_patterns": True,
+        "pattern_analysis": True,
+        "success_tracking": True,
+        "domain_scoring": True,
+        "query_optimization": True
+    },
+    "aggressive": {
+        "description": "Maximale Geschwindigkeit, mehr Requests",
+        "deep_crawl": True,
+        "learning_enabled": False,
+        "async_limit": 75,
+        "request_delay": 1.0,
+        "max_retries": 1,
+        "snippet_priority": False,
+        "save_patterns": False,
+        "follow_links": True,
+        "crawl_depth": 3
+    },
+    "snippet_only": {
+        "description": "Nur Snippet-Extraktion, kein Deep-Crawl",
+        "deep_crawl": False,
+        "learning_enabled": False,
+        "async_limit": 50,
+        "request_delay": 1.5,
+        "max_retries": 1,
+        "snippet_priority": True,
+        "save_patterns": False
+    }
+}
+
+# Global mode configuration (will be set in main)
+ACTIVE_MODE_CONFIG = None
+
 # === Rotation: Proxies & User-Agents ===
 def _env_list(val: str, sep: str) -> list[str]:
     return [x.strip() for x in (val or "").split(sep) if x.strip()]
@@ -541,6 +596,42 @@ def get_learning_engine() -> Optional[LearningEngine]:
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
     return _LEARNING_ENGINE
+
+def init_mode(mode: str) -> Dict[str, Any]:
+    """
+    Initialize the operating mode and apply its configuration.
+    
+    IMPORTANT: This function must be called during startup before any async operations begin,
+    as it modifies global configuration variables.
+    
+    Args:
+        mode: Mode name (standard, learning, aggressive, snippet_only)
+    
+    Returns:
+        Mode configuration dictionary
+    """
+    global ACTIVE_MODE_CONFIG, ASYNC_LIMIT, _LEARNING_ENGINE
+    
+    config = MODE_CONFIGS.get(mode, MODE_CONFIGS["standard"])
+    ACTIVE_MODE_CONFIG = config
+    
+    # Apply mode-specific settings (must be done before any async operations start)
+    ASYNC_LIMIT = config.get("async_limit", 35)
+    
+    # Initialize learning engine if learning mode is enabled
+    if config.get("learning_enabled"):
+        if _LEARNING_ENGINE is None:
+            _LEARNING_ENGINE = LearningEngine(DB_PATH)
+        log("INFO", "Learning-Modus aktiviert", stats=_LEARNING_ENGINE.get_pattern_stats())
+    
+    log("INFO", "Betriebsmodus initialisiert",
+        mode=mode,
+        description=config.get("description"),
+        async_limit=config.get("async_limit"),
+        learning_enabled=config.get("learning_enabled", False)
+    )
+    
+    return config
 
 def migrate_db_unique_indexes():
     """
@@ -5480,11 +5571,21 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
             per_domain_count = {}
             prim: List[UrlLike] = []
+            skipped_by_learning = 0
             for link in links:
                 url = _extract_url(link)
                 if not url:
                     continue
                 dom = urllib.parse.urlparse(url).netloc.lower()
+                
+                # Learning mode: Skip domains with poor performance
+                if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+                    domain_clean = dom[4:] if dom.startswith("www.") else dom
+                    if _LEARNING_ENGINE.should_skip_domain(domain_clean):
+                        log("debug", "Learning: Domain übersprungen (schlechte Historie)", domain=domain_clean)
+                        skipped_by_learning += 1
+                        continue
+                
                 extra = any(k in url.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
                 limit = CFG.max_results_per_domain + (1 if extra else 0)
                 if per_domain_count.get(dom,0) >= limit:
@@ -5494,6 +5595,9 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     continue
                 if not url_seen(url):
                     prim.append(link)
+            
+            if skipped_by_learning > 0:
+                log("info", "Learning: Domains gefiltert", skipped=skipped_by_learning)
 
             chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
             total_links_checked += chk
@@ -5644,6 +5748,35 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     append_xlsx(DEFAULT_XLSX, inserted, ENH_FIELDS)
                     _uilog(f"Export: +{len(inserted)} neue Leads")
                     leads_new_total += len(inserted)
+                    
+                    # Learning mode: Track domain and query performance
+                    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+                        try:
+                            # Track query performance
+                            _LEARNING_ENGINE.record_query_performance(q, len(inserted))
+                            
+                            # Track domain success for each lead
+                            domains_tracked = set()
+                            for lead in inserted:
+                                source_url = lead.get("quelle", "")
+                                if source_url:
+                                    parsed = urllib.parse.urlparse(source_url)
+                                    domain = parsed.netloc.lower()
+                                    if domain.startswith("www."):
+                                        domain = domain[4:]
+                                    if domain and domain not in domains_tracked:
+                                        # Calculate quality based on score and confidence (both expected to be 0-100)
+                                        # Normalize to 0.0-1.0 range and average them
+                                        score_val = max(0, min(100, lead.get("score", 0)))
+                                        confidence_val = max(0, min(100, lead.get("confidence_score", 0)))
+                                        quality = min(1.0, (score_val / 100.0 + confidence_val / 100.0) / 2)
+                                        _LEARNING_ENGINE.record_domain_success(domain, 1, quality)
+                                        domains_tracked.add(domain)
+                            
+                            if domains_tracked:
+                                log("info", "Learning: Domain-Erfolge gespeichert", domains=len(domains_tracked), query_leads=len(inserted))
+                        except Exception as e:
+                            log("debug", "Learning tracking failed", error=str(e))
 
             if _RETRY_URLS:
                 try:
@@ -5830,6 +5963,12 @@ def parse_args():
                     help="Google CSE dateRestrict, z.B. d30, w8, m3")
     ap.add_argument("--smart", action="store_true", help="AI-generierte Dorks (selbstlernend) aktivieren")
     ap.add_argument("--no-google", action="store_true", help="Google CSE deaktivieren")
+    ap.add_argument(
+        "--mode",
+        choices=["standard", "learning", "aggressive", "snippet_only"],
+        default="standard",
+        help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
+    )
     return ap.parse_args()
 
 
@@ -5867,6 +6006,10 @@ if __name__ == "__main__":
         validate_config()
         init_db()
         migrate_db_unique_indexes()
+        
+        # Initialize mode
+        mode = getattr(args, "mode", "standard")
+        mode_config = init_mode(mode)
 
         if args.reset:
             a,b = reset_history()
@@ -5879,6 +6022,13 @@ if __name__ == "__main__":
             QUERIES = build_queries(selected_industry, per_industry_limit)
             log("info", "Query-Set gebaut", industry=selected_industry,
                 per_industry_limit=per_industry_limit, count=len(QUERIES))
+            
+            # Optimize query order if learning mode is active
+            if mode_config.get("query_optimization") and _LEARNING_ENGINE:
+                original_count = len(QUERIES)
+                QUERIES = _LEARNING_ENGINE.optimize_query_order(QUERIES)
+                log("info", "Learning: Query-Reihenfolge optimiert", count=original_count)
+            
             if getattr(args, "smart", False):
                 if not OPENAI_API_KEY:
                     log("warn", "AI-Smart Dorks aktiviert, aber kein OPENAI_API_KEY gesetzt")

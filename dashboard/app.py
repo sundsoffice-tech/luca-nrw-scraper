@@ -298,6 +298,74 @@ def create_app(db_path: str = None) -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/learning/stats')
+    def api_learning_stats():
+        """Get learning statistics for learning mode."""
+        con = None
+        try:
+            con = sqlite3.connect(DB_PATH)
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            
+            # Check if learning tables exist
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='learning_domains'")
+            if not cur.fetchone():
+                return jsonify({
+                    'top_domains': [],
+                    'top_patterns': [],
+                    'total_domains_learned': 0,
+                    'total_leads_from_learning': 0,
+                    'message': 'Learning mode not yet used'
+                })
+            
+            # Top Domains
+            cur.execute("""
+                SELECT domain, score, leads_found, total_visits 
+                FROM learning_domains 
+                ORDER BY score DESC LIMIT 10
+            """)
+            top_domains = [
+                {
+                    'domain': row['domain'], 
+                    'score': round(row['score'], 3), 
+                    'leads': row['leads_found'], 
+                    'visits': row['total_visits']
+                } 
+                for row in cur.fetchall()
+            ]
+            
+            # Top Patterns
+            cur.execute("""
+                SELECT pattern_type, pattern_value, confidence_score, success_count 
+                FROM success_patterns 
+                ORDER BY confidence_score DESC LIMIT 10
+            """)
+            top_patterns = [
+                {
+                    'type': row['pattern_type'], 
+                    'value': row['pattern_value'], 
+                    'confidence': round(row['confidence_score'], 3), 
+                    'count': row['success_count']
+                } 
+                for row in cur.fetchall()
+            ]
+            
+            # Overall statistics
+            cur.execute("SELECT COUNT(*), SUM(leads_found) FROM learning_domains")
+            domain_stats = cur.fetchone()
+            
+            return jsonify({
+                'top_domains': top_domains,
+                'top_patterns': top_patterns,
+                'total_domains_learned': domain_stats[0] or 0,
+                'total_leads_from_learning': domain_stats[1] or 0
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        finally:
+            if con:
+                con.close()
+    
     @app.route('/api/stream/logs')
     def api_stream_logs():
         """Server-Sent Events stream for live logs."""
