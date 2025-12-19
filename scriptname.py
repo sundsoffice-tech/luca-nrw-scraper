@@ -2328,13 +2328,19 @@ async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 
     
     ad_links: List[str] = []
     seen_urls = set()
+    page_num = 1  # Initialize before loop
     
     for page_num in range(1, max_pages + 1):
-        # Build URL with page parameter
+        # Build URL with page parameter, properly handling existing query params
         if page_num == 1:
             url = listing_url
         else:
-            url = f"{listing_url}?page={page_num}"
+            # Parse URL and add page parameter
+            parsed = urllib.parse.urlparse(listing_url)
+            params = urllib.parse.parse_qs(parsed.query)
+            params['page'] = [str(page_num)]
+            new_query = urllib.parse.urlencode(params, doseq=True)
+            url = urllib.parse.urlunparse(parsed._replace(query=new_query))
         
         try:
             # Rate limiting: 2-3 seconds between requests
@@ -2365,8 +2371,10 @@ async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 
                 if not href or "/s-anzeige/" not in href:
                     continue
                 
-                # Build full URL
-                full_url = urllib.parse.urljoin("https://www.kleinanzeigen.de", href)
+                # Build full URL using the base URL from the listing
+                parsed_listing = urllib.parse.urlparse(listing_url)
+                base_url = f"{parsed_listing.scheme}://{parsed_listing.netloc}"
+                full_url = urllib.parse.urljoin(base_url, href)
                 norm_url = _normalize_for_dedupe(full_url)
                 
                 if norm_url in seen_urls:
@@ -2457,12 +2465,8 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         location = location_elem.get_text(" ", strip=True) if location_elem else ""
         
         # Extract name (from title or text)
+        # Use the enhanced name extractor which handles various patterns
         name = extract_name_enhanced(full_text)
-        if not name:
-            # Try to extract from title
-            name_match = re.search(r'\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b', title)
-            if name_match:
-                name = name_match.group(1)
         
         # Only create lead if we found at least one mobile number
         if not phones:
