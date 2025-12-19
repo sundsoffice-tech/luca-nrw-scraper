@@ -3331,9 +3331,28 @@ CANDIDATE_PHONE_CONTEXT = (
     "bewerbung", "stellengesuch", "ich suche", "ich bin", "open to work", "freelancer", "freiberuf",
 )
 
+# Social media profile URL patterns for candidates mode
+SOCIAL_PROFILE_PATTERNS = (
+    "linkedin.com/in/",
+    "xing.com/profile/",
+    "instagram.com/",
+    "facebook.com/",
+    "twitter.com/",
+    "x.com/",
+    "t.me/",
+    "chat.whatsapp.com/",
+)
+
 
 def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") -> Tuple[bool, str]:
     """Detect obvious non-candidate contexts (blogs, shops, company imprint, job ads)."""
+    
+    # NEU: Im Candidates-Modus - Social-Profile NIEMALS als Garbage markieren!
+    if _is_candidates_mode():
+        url_lower = (url or "").lower()
+        if any(pattern in url_lower for pattern in SOCIAL_PROFILE_PATTERNS):
+            return False, ""  # Social-Profile durchlassen!
+    
     t = (text or "").lower()
     t_lower = t
     ttl = (title or "").lower()
@@ -3475,6 +3494,10 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
     return record
 
 def is_candidate_profile_text(text: str) -> bool:
+    # Im Candidates-Modus: Alle Profile durchlassen (verhindert Text-basierte Job-Ad-Erkennung)
+    if _is_candidates_mode():
+        return True
+    
     t = (text or "").lower()
     has_pos = any(tok in t for tok in CANDIDATE_POS_MARKERS)
     if not has_pos:
@@ -4289,12 +4312,25 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     # Check if this is a CANDIDATE seeking a job - NEVER skip candidates!
     is_candidate = is_candidate_seeking_job(title_text or "", "", url)
     
-    if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
-        # Don't skip if it's a candidate seeking a job
-        if not is_candidate:
-            log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
-            mark_url_seen(url, run_id)
-            return (1, [])
+    # NEU: Im Candidates-Modus - Titel-Guard für Social-Profile überspringen
+    url_lower = url.lower()
+    is_social_profile = any(p in url_lower for p in SOCIAL_PROFILE_PATTERNS)
+    
+    if _is_candidates_mode():
+        # Social-Profile überspringen den Titel-Guard
+        if not is_social_profile:
+            if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
+                if not is_candidate:
+                    log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
+                    mark_url_seen(url, run_id)
+                    return (1, [])
+    else:
+        # Standard-Logik für nicht-Candidates-Modus
+        if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
+            if not is_candidate:
+                log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
+                mark_url_seen(url, run_id)
+                return (1, [])
     if job_ad_hit:
         # Don't skip if it's a candidate seeking a job (e.g., "ich suche job (m/w/d)" would have both)
         if not is_candidate:
