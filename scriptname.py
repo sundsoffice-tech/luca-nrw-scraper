@@ -2562,6 +2562,9 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
             return True
     
     # NEGATIV - Only block if definitely NOT a candidate
+    # NOTE: Candidate keywords (stellengesuch/jobgesuch) are checked FIRST above,
+    # so /jobs/ URLs with those keywords will already have returned True by this point.
+    # This means we can safely block generic /jobs/ URLs here without affecting candidate URLs.
     negative_patterns = [
         '/company/',                # Firmen-Profile
         '/impressum',               # Firmen-Impressum
@@ -2569,8 +2572,8 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         '/about',                   # Über uns Seiten
         '/karriere/stellenangebote', # Firmen-Karriereseiten mit Stellenangeboten
         '/karriere/jobs',           # Firmen-Karriereseiten mit Jobs
-        '/stellenangebote/',        # Firmen-Stellenangebote
-        '/jobs/',                   # Generic job listings
+        '/stellenangebote/',        # Firmen-Stellenangebote (without "stellengesuch")
+        '/jobs/',                   # Generic job listings (without "stellengesuch")
         'stepstone.de',             # Job boards
         'indeed.com',               # Job boards
         'monster.de',               # Job boards
