@@ -1083,17 +1083,32 @@ async def query_dasoertliche(name: str, city: str) -> List[Dict]:
     
     # Parse HTML
     results = []
+    parsing_strategy = None
     try:
         soup = BeautifulSoup(html, "html.parser")
         
         # Try to find entries - dasoertliche.de structure may vary
-        # Look for schema.org Person entries or common patterns
+        # Strategy 1: Look for article elements with entry/treffer/hit classes
         entries = soup.find_all("article", class_=re.compile(r"entry|treffer|hit", re.I))
+        if entries:
+            parsing_strategy = "article_elements"
+        
+        # Strategy 2: Look for schema.org Person entries
         if not entries:
             entries = soup.find_all("div", itemtype=re.compile(r"Person", re.I))
+            if entries:
+                parsing_strategy = "schema_org_person"
+        
+        # Strategy 3: Fallback - look for any container with phone numbers
         if not entries:
-            # Fallback: look for any container with phone numbers
             entries = soup.find_all("div", class_=re.compile(r"treffer|result|entry", re.I))
+            if entries:
+                parsing_strategy = "fallback_divs"
+        
+        if parsing_strategy:
+            log("debug", "Telefonbuch-Parse-Strategie", strategy=parsing_strategy, entries_found=len(entries))
+        else:
+            log("debug", "Telefonbuch-Parse: Keine Einträge gefunden")
         
         for entry in entries[:5]:  # Limit to first 5 results
             result = {}
@@ -1168,8 +1183,26 @@ def should_accept_enrichment(
     
     # Simple similarity check - normalize and compare
     def normalize_name(n):
-        # Remove titles and extra spaces
-        n = re.sub(r'\b(dr\.?|prof\.?|dipl\.?-ing\.?)\b', '', n, flags=re.I)
+        # Remove common German academic and professional titles
+        # Comprehensive list of titles to handle variations
+        titles = [
+            r'dr\.?\s*med\.?',  # Dr. med., Dr.med
+            r'dr\.?\s*phil\.?',  # Dr. phil.
+            r'dr\.?\s*ing\.?',   # Dr. Ing.
+            r'dr\.?',            # Dr.
+            r'prof\.?\s*dr\.?',  # Prof. Dr.
+            r'prof\.?',          # Prof.
+            r'dipl\.?-ing\.?',   # Dipl.-Ing.
+            r'dipl\.?',          # Dipl.
+            r'ing\.?',           # Ing.
+            r'mag\.?',           # Mag.
+            r'msc\.?',           # MSc.
+            r'mba\.?',           # MBA.
+            r'b\.?\s*sc\.?',     # B.Sc.
+            r'm\.?\s*sc\.?',     # M.Sc.
+        ]
+        pattern = r'\b(' + '|'.join(titles) + r')\b'
+        n = re.sub(pattern, '', n, flags=re.I)
         return ' '.join(n.split())
     
     result_name_norm = normalize_name(result_name)
@@ -1305,22 +1338,33 @@ async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dic
             enrichment = await enrich_phone_from_telefonbuch(name, city)
             
             if enrichment and enrichment.get("phone"):
-                lead["telefon"] = normalize_phone(enrichment["phone"])
-                lead["phone_type"] = "mobile"
-                
-                # Add address if available
-                if enrichment.get("address"):
-                    lead["private_address"] = enrichment["address"]
-                
-                # Tag as enriched
-                tags = lead.get("tags", "")
-                if tags:
-                    lead["tags"] = tags + ",telefonbuch_enriched"
+                # Normalize and validate phone before assignment
+                normalized_phone = normalize_phone(enrichment["phone"])
+                if normalized_phone:  # Only proceed if normalization succeeded
+                    is_valid, phone_type = validate_phone(normalized_phone)
+                    if is_valid and phone_type == "mobile":
+                        lead["telefon"] = normalized_phone
+                        lead["phone_type"] = "mobile"
+                        
+                        # Add address if available
+                        if enrichment.get("address"):
+                            lead["private_address"] = enrichment["address"]
+                        
+                        # Tag as enriched
+                        tags = lead.get("tags", "")
+                        if tags:
+                            lead["tags"] = tags + ",telefonbuch_enriched"
+                        else:
+                            lead["tags"] = "telefonbuch_enriched"
+                        
+                        log("info", "Telefonbuch-Enrichment erfolgreich", 
+                            name=name, city=city, phone=normalized_phone[:8]+"..." if len(normalized_phone) > 8 else normalized_phone)
+                    else:
+                        log("debug", "Telefonbuch-Enrichment: Ungültige Nummer", 
+                            name=name, phone=normalized_phone, phone_type=phone_type)
                 else:
-                    lead["tags"] = "telefonbuch_enriched"
-                
-                log("info", "Telefonbuch-Enrichment erfolgreich", 
-                    name=name, city=city, phone=lead["telefon"][:8]+"..." if len(lead["telefon"]) > 8 else lead["telefon"])
+                    log("debug", "Telefonbuch-Enrichment: Normalisierung fehlgeschlagen", 
+                        name=name, original_phone=enrichment["phone"])
         
         enriched_leads.append(lead)
     
