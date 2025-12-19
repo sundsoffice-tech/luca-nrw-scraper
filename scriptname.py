@@ -235,7 +235,10 @@ ENH_FIELDS = [
     "confidence_score","last_updated","data_quality",
     "phone_type","whatsapp_link","private_address","social_profile_url",
     "ai_category","ai_summary",
-    "experience_years","skills","availability","current_status","industries","location","profile_text"
+    "experience_years","skills","availability","current_status","industries","location","profile_text",
+    # New candidate-focused fields
+    "candidate_status","mobility","industries_experience","source_type",
+    "profile_url","cv_url","contact_preference","last_activity","name_validated"
 ]
 
 def export_xlsx(filename: str, rows=None):
@@ -293,6 +296,174 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
+
+# =========================
+# Candidate-Focused Constants
+# =========================
+
+# Source Types - Extensive list for candidate-focused scraping
+SOURCE_TYPES = {
+    # PRIMÄR - Direkte Jobsuche
+    "stellengesuch_kleinanzeigen": "Kleinanzeigen.de Stellengesuch",
+    "stellengesuch_markt": "Markt.de Stellengesuch",
+    "stellengesuch_quoka": "Quoka Stellengesuch",
+    "stellengesuch_kalaydo": "Kalaydo Stellengesuch",
+    
+    # SOCIAL MEDIA - Aktiv suchend
+    "linkedin_opentowork": "LinkedIn #OpenToWork",
+    "linkedin_seeking": "LinkedIn 'seeking opportunities'",
+    "xing_offen": "Xing 'offen für Angebote'",
+    "xing_jobsuche": "Xing 'auf Jobsuche'",
+    "facebook_jobpost": "Facebook Jobsuche-Post",
+    "facebook_gruppe": "Facebook Vertriebs-Gruppe",
+    "instagram_bio": "Instagram 'looking for work'",
+    "tiktok_karriere": "TikTok Karriere-Content",
+    
+    # MESSENGER GRUPPEN
+    "telegram_vertrieb": "Telegram Vertriebsgruppe",
+    "telegram_jobs": "Telegram Jobs-Kanal",
+    "whatsapp_gruppe": "WhatsApp Vertriebsgruppe",
+    "discord_karriere": "Discord Karriere-Server",
+    
+    # FOREN & COMMUNITIES
+    "reddit_arbeitsleben": "Reddit r/arbeitsleben",
+    "reddit_fragreddit": "Reddit Karrierefrage",
+    "gutefrage_job": "Gutefrage Jobsuche",
+    "wiwi_treff": "WiWi-Treff Forum",
+    
+    # FREELANCER PORTALE
+    "freelancermap": "Freelancermap Profil",
+    "freelance_de": "Freelance.de Profil",
+    "gulp": "GULP Freiberufler",
+    "fiverr_sales": "Fiverr Sales-Services",
+    "upwork_german": "Upwork deutschsprachig",
+    
+    # LEBENSLAUF/CV
+    "cv_pdf_public": "Öffentliches PDF (Lebenslauf)",
+    "cv_stepstone": "StepStone Kandidatenprofil",
+    "cv_indeed": "Indeed Lebenslauf",
+    
+    # KRISENUNTERNEHMEN (Abwerbung)
+    "kununu_krise": "Kununu Bewertung (Krise)",
+    "linkedin_layoff": "LinkedIn Entlassungs-Post",
+    "insolvenz_news": "Insolvenz-Meldung",
+    
+    # BRANCHEN-SPEZIFISCH
+    "solar_vertrieb": "Solar-Branche Vertrieb",
+    "telekom_sales": "Telekom-Branche Sales",
+    "versicherung_makler": "Versicherungs-Makler",
+    "energie_berater": "Energieberater",
+    "immobilien_makler": "Immobilien-Makler",
+    
+    # QUEREINSTEIGER-POTENZIAL
+    "gastro_wechsler": "Gastro → Vertrieb Wechsler",
+    "einzelhandel_pro": "Einzelhandel mit Sales-Talent",
+    "mlm_aussteiger": "MLM/Network Marketing Aussteiger",
+    "callcenter_erfahren": "Call-Center mit Erfahrung",
+    "promotion_aktiv": "Promoter mit Ambitionen",
+    "door2door_veteran": "D2D Erfahrung",
+}
+
+# Required vs Optional Fields
+REQUIRED_FIELDS = {
+    "name": "Echter menschlicher Name (KI-geprüft!)",
+    "telefon": "Handynummer (015x, 016x, 017x)",
+}
+
+OPTIONAL_FIELDS = {
+    "email": "E-Mail (bevorzugt privat)",
+    "whatsapp_link": "WhatsApp-Link",
+    "profile_url": "Social-Media Profil",
+    "skills": "Fähigkeiten",
+    "experience_years": "Berufserfahrung",
+    "availability": "Verfügbarkeit",
+    "industries_experience": "Branchenerfahrung",
+    "location": "Standort/Region",
+    "mobility": "Mobilität",
+    "cv_url": "Lebenslauf-URL",
+}
+
+# Hidden Gems - Quereinsteiger with sales potential
+HIDDEN_GEMS_PATTERNS = {
+    "gastro_talent": {
+        "keywords": ["restaurant", "gastronomie", "kellner", "service"],
+        "positive": ["kundenorientiert", "stressresistent", "kommunikativ"],
+        "reason": "Gastro-Erfahrung = Kundenkontakt + Belastbarkeit"
+    },
+    "einzelhandel_pro": {
+        "keywords": ["einzelhandel", "verkäufer", "filiale", "retail"],
+        "positive": ["umsatz", "beratung", "kasse", "kundenservice"],
+        "reason": "Einzelhandel = Verkaufserfahrung + Kundenumgang"
+    },
+    "callcenter_veteran": {
+        "keywords": ["callcenter", "call center", "kundenservice", "hotline"],
+        "positive": ["outbound", "telefonverkauf", "telesales"],
+        "reason": "Call-Center = Telefonakquise-Erfahrung"
+    },
+    "mlm_refugee": {
+        "keywords": ["network marketing", "mlm", "direktvertrieb", "tupperware"],
+        "positive": ["selbstständig", "provision", "akquise"],
+        "reason": "MLM-Aussteiger = Kaltakquise + Hunger auf echten Job"
+    },
+    "promotion_hustler": {
+        "keywords": ["promotion", "promoter", "messe", "events"],
+        "positive": ["kommunikativ", "überzeugend", "präsentation"],
+        "reason": "Promoter = Ansprache-Erfahrung + keine Scheu"
+    },
+    "door2door_warrior": {
+        "keywords": ["d2d", "door to door", "haustür", "außendienst"],
+        "positive": ["provision", "abschlussstark", "hartnäckig"],
+        "reason": "D2D-Erfahrung = Härtester Vertrieb überhaupt"
+    },
+    "fitness_coach": {
+        "keywords": ["fitness", "personal trainer", "coach", "studio"],
+        "positive": ["motivierend", "zielorientiert", "membership"],
+        "reason": "Fitness = Verkauf + Überzeugungskraft"
+    },
+}
+
+# Default mode is now candidates
+DEFAULT_MODE = "candidates"
+
+# Hard blocks - never save these
+UNIVERSAL_HARD_BLOCKS = [
+    r'\(m/w/d\)', r'\(w/m/d\)', r'\(d/m/w\)',
+    r'jetzt bewerben', r'bewerbung an:',
+    r'stellenanzeige', r'vakanz',
+    r'recruiting@', r'bewerbung@', r'karriere@',
+    r'hr-manager', r'talent acquisition',
+    r'crypto.*gewinn', r'bitcoin.*investier',
+    r'casino', r'dating',
+]
+
+# Always allow in candidate mode
+CANDIDATE_ALWAYS_ALLOW = [
+    "suche job", "suche arbeit", "suche stelle",
+    "suche neue herausforderung", "stellengesuch",
+    "#opentowork", "offen für angebote", "offen für neues",
+    "arbeitslos", "arbeitssuchend", "freigestellt", "gekündigt",
+    "verfügbar ab", "ab sofort verfügbar", "wechselwillig",
+    "auf jobsuche", "biete meine dienste", "biete mich an",
+    "freiberuflich verfügbar",
+]
+
+# Candidate export fields
+CANDIDATE_EXPORT_FIELDS = [
+    # Pflicht
+    "name", "telefon",
+    
+    # Kandidaten-spezifisch
+    "candidate_status", "source_type", "lead_type",
+    "experience_years", "skills", "industries_experience",
+    "availability", "mobility",
+    
+    # Kontakt
+    "email", "whatsapp_link", "profile_url", "contact_preference",
+    
+    # Meta
+    "score", "region", "last_activity", "last_updated",
+    "name_validated",
+]
 
 # =========================
 # Mode Configurations
@@ -536,7 +707,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     if "ai_summary" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_summary TEXT")
     
-    # Candidate-specific columns
+    # Candidate-specific columns (existing)
     if "experience_years" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN experience_years INTEGER")
     if "skills" not in existing_cols:
@@ -551,6 +722,26 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN location TEXT")
     if "profile_text" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN profile_text TEXT")
+    
+    # New candidate-focused columns
+    if "candidate_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN candidate_status TEXT")  # aktiv_suchend, passiv_offen, etc.
+    if "mobility" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN mobility TEXT")  # remote, hybrid, vor_ort, reisebereit
+    if "industries_experience" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN industries_experience TEXT")  # JSON array
+    if "source_type" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN source_type TEXT")  # Detailed source type
+    if "profile_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN profile_url TEXT")  # Social media profile
+    if "cv_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN cv_url TEXT")  # CV/Resume PDF URL
+    if "contact_preference" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN contact_preference TEXT")  # whatsapp, telefon, email, telegram
+    if "last_activity" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN last_activity TEXT")  # When candidate was last active
+    if "name_validated" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN name_validated INTEGER")  # 1 = AI-validated real name
     con.commit()
 
     # Indizes (partielle UNIQUE nur wenn Werte vorhanden)
@@ -2809,6 +3000,186 @@ def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> 
             return True  # Das ist ein Kandidat! Nicht blocken!
     
     return False
+
+
+# =========================
+# NEW CANDIDATE-FOCUSED VALIDATION FUNCTIONS
+# =========================
+
+def _validate_name_heuristic(name: str) -> Tuple[bool, int, str]:
+    """Fallback-Heuristik für Namensvalidierung ohne KI."""
+    if not name or len(name.strip()) < 3:
+        return False, 0, "Name zu kurz"
+    
+    name_lower = name.lower().strip()
+    
+    # Blacklist
+    blacklist = [
+        "gmbh", "ag", "kg", "ug", "ltd", "inc",
+        "team", "vertrieb", "sales", "info", "kontakt",
+        "ansprechpartner", "unknown", "n/a", "k.a.",
+        "firma", "unternehmen", "company", "abteilung",
+    ]
+    if any(b in name_lower for b in blacklist):
+        return False, 90, f"Blacklist-Wort gefunden"
+    
+    # Muss mindestens 2 Wörter haben
+    words = name.split()
+    if len(words) < 2:
+        return False, 70, "Nur ein Wort"
+    
+    # Keine Zahlen
+    if re.search(r'\d', name):
+        return False, 85, "Enthält Zahlen"
+    
+    return True, 75, "Heuristik: wahrscheinlich echter Name"
+
+
+async def validate_real_name_with_ai(name: str, context: str = "") -> Tuple[bool, int, str]:
+    """
+    KI-Prüfung ob der Name ein echter menschlicher Name ist.
+    
+    Returns: (is_real_name, confidence, reason)
+    """
+    if not OPENAI_API_KEY:
+        # Fallback: Einfache Heuristik
+        return _validate_name_heuristic(name)
+    
+    prompt = f"""
+    Prüfe ob dieser Name ein ECHTER menschlicher Name ist:
+    
+    Name: "{name}"
+    Kontext: "{context}"
+    
+    ECHTE Namen:
+    ✅ "Max Mustermann" - Vor- und Nachname
+    ✅ "Anna-Maria Schmidt" - Doppelname
+    ✅ "Dr. Hans Meier" - Mit Titel
+    ✅ "Mehmet Yılmaz" - Internationale Namen
+    
+    KEINE echten Namen:
+    ❌ "Vertrieb NRW" - Firmenname
+    ❌ "Team Sales" - Abteilung
+    ❌ "info" - Generisch
+    ❌ "123456" - Zahlen
+    ❌ "Ansprechpartner" - Rolle
+    ❌ "GmbH" - Firma
+    ❌ "Unknown Candidate" - Platzhalter
+    ❌ "N/A", "k.A.", "-" - Leer
+    
+    Return JSON: {{"is_real_name": true/false, "confidence": 0-100, "reason": "..."}}
+    """
+    
+    try:
+        import openai
+        client = openai.AsyncOpenAI(api_key=OPENAI_API_KEY)
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=150
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        is_real = result.get("is_real_name", False)
+        confidence = result.get("confidence", 0)
+        reason = result.get("reason", "")
+        
+        return (is_real, confidence, reason)
+    except Exception as e:
+        log("warn", "AI name validation failed, using heuristic", error=str(e))
+        return _validate_name_heuristic(name)
+
+
+def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
+    """
+    Analysiert "wir suchen" im Kontext.
+    
+    Returns: (classification, reason)
+    - "job_ad" = Stellenanzeige (BLOCK)
+    - "candidate" = Kandidat sucht (ALLOW)
+    - "business_inquiry" = Geschäftsanfrage (ALLOW mit Prüfung)
+    - "unclear" = Unklar (weitere Prüfung)
+    """
+    text_lower = text.lower()
+    
+    wir_suchen_matches = list(re.finditer(r'wir\s+suchen', text_lower))
+    
+    if not wir_suchen_matches:
+        return "unclear", "Kein 'wir suchen' gefunden"
+    
+    for match in wir_suchen_matches:
+        start = max(0, match.start() - 200)
+        end = min(len(text_lower), match.end() + 300)
+        context = text_lower[start:end]
+        
+        # === STELLENANZEIGE (BLOCK) ===
+        job_ad_signals = [
+            "(m/w/d)", "(w/m/d)", "(d/m/w)",
+            "zum nächstmöglichen", "zur verstärkung",
+            "für unser team", "ihre aufgaben", "ihr profil",
+            "wir bieten", "benefits", "festanstellung",
+            "vollzeit", "teilzeit", "homeoffice möglich",
+            "bewerbung an", "bewerben sie sich",
+        ]
+        job_ad_count = sum(1 for signal in job_ad_signals if signal in context)
+        
+        if job_ad_count >= 2:
+            return "job_ad", f"Stellenanzeige ({job_ad_count} Signale)"
+        
+        # === KANDIDAT SUCHT (ALLOW) ===
+        candidate_signals = [
+            "wir suchen ein unternehmen", "wir suchen eine firma",
+            "wir suchen aufträge", "wir suchen neue kunden",
+            "wir suchen vertretungen", "wir suchen partner",
+            "wir suchen projekte", "ich und mein team suchen",
+            "wir als handelsvertretung suchen",
+            "wir als freelancer suchen",
+        ]
+        for signal in candidate_signals:
+            if signal in context:
+                return "candidate", f"Kandidat/Team sucht: '{signal}'"
+        
+        # === EINZELPERSON (Pluralis Majestatis) ===
+        solo_signals = [
+            "biete meine dienste", "meine erfahrung",
+            "mein profil", "ich bin", "verfügbar ab",
+            "kontaktieren sie mich",
+        ]
+        for signal in solo_signals:
+            if signal in context:
+                return "candidate", f"Einzelperson ('{signal}' im Kontext)"
+        
+        # === BUSINESS INQUIRY ===
+        business_signals = [
+            "suchen lieferanten", "suchen hersteller",
+            "suchen dienstleister", "suchen zusammenarbeit",
+        ]
+        for signal in business_signals:
+            if signal in context:
+                return "business_inquiry", f"Geschäftsanfrage: '{signal}'"
+    
+    return "unclear", "Kontext nicht eindeutig"
+
+
+def detect_hidden_gem(text: str, url: str = "") -> Tuple[Optional[str], int, str]:
+    """
+    Erkennt Quereinsteiger mit Vertriebspotenzial.
+    
+    Returns: (gem_type, confidence, reason) oder (None, 0, "")
+    """
+    text_lower = text.lower()
+    
+    for gem_type, pattern in HIDDEN_GEMS_PATTERNS.items():
+        keyword_hits = sum(1 for k in pattern["keywords"] if k in text_lower)
+        positive_hits = sum(1 for p in pattern["positive"] if p in text_lower)
+        
+        if keyword_hits >= 1 and positive_hits >= 1:
+            confidence = min(95, 50 + keyword_hits * 15 + positive_hits * 10)
+            return gem_type, confidence, pattern["reason"]
+    
+    return None, 0, ""
 
 def has_nrw_signal(text: str) -> bool:
     """Prüft ob Text NRW-Bezug hat."""
