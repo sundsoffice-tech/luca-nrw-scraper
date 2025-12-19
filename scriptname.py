@@ -2840,8 +2840,10 @@ def is_job_advertisement(text: str = "", title: str = "", snippet: str = "") -> 
     
     # FIRST: Check if this is a CANDIDATE seeking a job - NEVER block candidates!
     if is_candidate_seeking_job(text, title):
-        # Double-check: Is there explicit company hiring language?
-        if not any(offer in combined for offer in JOB_OFFER_SIGNALS):
+        # If candidate signal is found, only mark as job ad if there are MULTIPLE strong job offer signals
+        job_offer_count = sum(1 for offer in JOB_OFFER_SIGNALS if offer in combined)
+        # Require at least 2 job offer signals to override a candidate signal
+        if job_offer_count < 2:
             return False  # It's a candidate, not a job ad!
     
     # THEN: Check for job offer signals
