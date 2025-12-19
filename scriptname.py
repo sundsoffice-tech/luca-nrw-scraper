@@ -2535,6 +2535,11 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
     
     url_lower = url.lower()
     
+    # CRITICAL FIX: Check for candidate keywords first (highest priority)
+    # Don't block /jobs/ or /stellenangebote/ if it contains candidate keywords
+    if 'stellengesuch' in url_lower or 'jobgesuch' in url_lower:
+        return True
+    
     # POSITIV - Kandidaten-URLs (ALWAYS allow these!)
     positive_patterns = [
         '/s-stellengesuche/',       # Kleinanzeigen Stellengesuche
@@ -2556,19 +2561,22 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         if pos in url_lower:
             return True
     
-    # CRITICAL FIX: Don't block /jobs/ if it contains candidate keywords
-    if 'stellengesuch' in url_lower or 'jobgesuch' in url_lower:
-        return True
-    
     # NEGATIV - Only block if definitely NOT a candidate
     negative_patterns = [
         '/company/',                # Firmen-Profile
-        '/impressum',               # Firmen-Impressum (unless Handelsvertreter)
-        'stepstone.de/jobs',        # Stellenangebote
-        'indeed.com/jobs',          # Stellenangebote
-        'monster.de/jobs',          # Stellenangebote
+        '/impressum',               # Firmen-Impressum
+        '/kontakt',                 # Firmen-Kontakt
+        '/about',                   # Über uns Seiten
+        '/karriere/stellenangebote', # Firmen-Karriereseiten mit Stellenangeboten
+        '/karriere/jobs',           # Firmen-Karriereseiten mit Jobs
+        '/stellenangebote/',        # Firmen-Stellenangebote
+        '/jobs/',                   # Generic job listings
+        'stepstone.de',             # Job boards
+        'indeed.com',               # Job boards
+        'monster.de',               # Job boards
         'linkedin.com/jobs/',       # Job listings
         'xing.com/jobs/',           # Job listings
+        'jobboerse',                # Jobbörsen
     ]
     
     for neg in negative_patterns:
