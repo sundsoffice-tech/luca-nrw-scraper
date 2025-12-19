@@ -297,6 +297,26 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
+# Direct crawl URLs for Kleinanzeigen Stellengesuche (bypassing Google)
+DIRECT_CRAWL_URLS = [
+    # Stellengesuche NRW - Vertrieb/Sales
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/vertrieb/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/sales/k0c107l929", 
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/verkauf/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/aussendienst/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/kundenberater/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/handelsvertreter/k0c107l929",
+    
+    # Bundesweit (mehr Volumen)
+    "https://www.kleinanzeigen.de/s-stellengesuche/vertrieb/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/sales/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/verkauf/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/handelsvertreter/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/akquise/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/telesales/k0c107",
+    "https://www.kleinanzeigen.de/s-stellengesuche/call-center/k0c107",
+]
+
 # =========================
 # Candidate-Focused Constants
 # =========================
@@ -2289,6 +2309,196 @@ async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MA
     if uniq:
         log("info", "Kleinanzeigen Treffer", q=keywords, count=len(uniq))
     return uniq
+
+
+async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 5) -> List[str]:
+    """
+    Crawl Kleinanzeigen listing pages directly (not via Google) and extract all ad links.
+    Supports pagination (page 1, 2, 3...).
+    
+    Args:
+        listing_url: Base URL for the listing (e.g., https://www.kleinanzeigen.de/s-stellengesuche/...)
+        max_pages: Maximum number of pages to crawl (default: 5)
+        
+    Returns:
+        List of ad detail URLs
+    """
+    if not ENABLE_KLEINANZEIGEN:
+        return []
+    
+    ad_links: List[str] = []
+    seen_urls = set()
+    
+    for page_num in range(1, max_pages + 1):
+        # Build URL with page parameter
+        if page_num == 1:
+            url = listing_url
+        else:
+            url = f"{listing_url}?page={page_num}"
+        
+        try:
+            # Rate limiting: 2-3 seconds between requests
+            if page_num > 1:
+                await asyncio.sleep(2.0 + _jitter(0.5, 1.0))
+            
+            log("info", "Crawling Kleinanzeigen listing", url=url, page=page_num)
+            
+            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+            if not r or r.status_code != 200:
+                log("warn", "Failed to fetch listing page", url=url, status=r.status_code if r else "None")
+                break
+            
+            html = r.text or ""
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # Extract ad links from listing
+            page_links = 0
+            for art in soup.select("li.ad-listitem article.aditem"):
+                # Try data-href first
+                href = art.get("data-href") or ""
+                if not href:
+                    # Fallback to anchor tag
+                    a_tag = art.find("a", href=True)
+                    if a_tag:
+                        href = a_tag.get("href", "")
+                
+                if not href or "/s-anzeige/" not in href:
+                    continue
+                
+                # Build full URL
+                full_url = urllib.parse.urljoin("https://www.kleinanzeigen.de", href)
+                norm_url = _normalize_for_dedupe(full_url)
+                
+                if norm_url in seen_urls:
+                    continue
+                
+                seen_urls.add(norm_url)
+                ad_links.append(full_url)
+                page_links += 1
+            
+            log("info", "Extracted ad links from page", page=page_num, count=page_links)
+            
+            # If no links found, we've reached the end
+            if page_links == 0:
+                log("info", "No more ads found, stopping pagination", page=page_num)
+                break
+                
+        except Exception as e:
+            log("error", "Error crawling listing page", url=url, error=str(e))
+            break
+    
+    log("info", "Completed Kleinanzeigen listing crawl", total_ads=len(ad_links), pages=page_num)
+    return ad_links
+
+
+async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any]]:
+    """
+    Crawl individual Kleinanzeigen ad detail page and extract contact information.
+    
+    Args:
+        url: URL of the ad detail page
+        
+    Returns:
+        Dict with lead data or None if extraction failed
+    """
+    try:
+        r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+        if not r or r.status_code != 200:
+            log("debug", "Failed to fetch detail page", url=url, status=r.status_code if r else "None")
+            return None
+        
+        html = r.text or ""
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Extract title
+        title_elem = soup.select_one("h1#viewad-title, h1.boxedarticle--title")
+        title = title_elem.get_text(" ", strip=True) if title_elem else ""
+        
+        # Extract description
+        desc_elem = soup.select_one("#viewad-description-text, .boxedarticle--description")
+        description = desc_elem.get_text(" ", strip=True) if desc_elem else ""
+        
+        # Combine text for extraction
+        full_text = f"{title} {description}"
+        
+        # Extract mobile phone numbers (015x, 016x, 017x patterns)
+        phones = []
+        phone_matches = MOBILE_RE.findall(full_text)
+        for phone_match in phone_matches:
+            normalized = normalize_phone(phone_match)
+            if normalized:
+                is_valid, phone_type = validate_phone(normalized)
+                if is_valid and is_mobile_number(normalized):
+                    phones.append(normalized)
+        
+        # Extract email
+        email = ""
+        email_matches = EMAIL_RE.findall(full_text)
+        if email_matches:
+            email = email_matches[0]
+        
+        # Extract WhatsApp link
+        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
+        whatsapp = ""
+        if wa_link:
+            wa_href = wa_link.get("href", "")
+            # Extract phone from WhatsApp link
+            wa_phone = re.sub(r'\D', '', wa_href)
+            if wa_phone:
+                wa_normalized = "+" + wa_phone
+                is_valid, phone_type = validate_phone(wa_normalized)
+                if is_valid and is_mobile_number(wa_normalized):
+                    whatsapp = wa_normalized
+                    if wa_normalized not in phones:
+                        phones.append(wa_normalized)
+        
+        # Extract location/region
+        location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
+        location = location_elem.get_text(" ", strip=True) if location_elem else ""
+        
+        # Extract name (from title or text)
+        name = extract_name_enhanced(full_text)
+        if not name:
+            # Try to extract from title
+            name_match = re.search(r'\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b', title)
+            if name_match:
+                name = name_match.group(1)
+        
+        # Only create lead if we found at least one mobile number
+        if not phones:
+            log("debug", "No mobile numbers found in ad", url=url)
+            return None
+        
+        # Use first mobile number found
+        main_phone = phones[0]
+        
+        # Build lead data
+        lead = {
+            "name": name or "",
+            "rolle": "Vertrieb",  # Default role
+            "email": email,
+            "telefon": main_phone,
+            "quelle": url,
+            "score": 85,  # High score for direct Kleinanzeigen finds
+            "tags": "kleinanzeigen,candidate,mobile,direct_crawl",
+            "lead_type": "candidate",
+            "phone_type": "mobile",
+            "opening_line": title[:200] if title else "",
+            "firma": "",
+            "firma_groesse": "",
+            "branche": "",
+            "region": location if location else "",
+            "frische": "neu",
+            "confidence": 0.85,
+            "data_quality": 0.80,
+        }
+        
+        log("info", "Extracted lead from Kleinanzeigen ad", url=url, has_phone=bool(main_phone), has_email=bool(email))
+        return lead
+        
+    except Exception as e:
+        log("error", "Error extracting Kleinanzeigen detail", url=url, error=str(e))
+        return None
 
 
 # =========================
@@ -6181,6 +6391,79 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     _reset_metrics()
     _uilog(f"Run #{run_id} gestartet (Performance Mode: {perf_params.get('async_limit', 'N/A')} async)")
 
+    # Direct Kleinanzeigen crawling (only in candidates/recruiter mode)
+    if _is_candidates_mode() and ENABLE_KLEINANZEIGEN:
+        _uilog("Starte direktes Kleinanzeigen-Crawling (Stellengesuche)...")
+        direct_crawl_leads = []
+        
+        for crawl_url in DIRECT_CRAWL_URLS:
+            if run_flag and not run_flag.get("running", True):
+                _uilog("STOP erkannt – breche Direct-Crawl ab")
+                break
+            
+            try:
+                log("info", "Direct crawl: Listing-Seite", url=crawl_url)
+                
+                # Step 1: Crawl listing page to get ad links
+                ad_links = await crawl_kleinanzeigen_listings_async(crawl_url, max_pages=5)
+                
+                if not ad_links:
+                    log("info", "Direct crawl: Keine Anzeigen gefunden", url=crawl_url)
+                    continue
+                
+                log("info", "Direct crawl: Anzeigen gefunden", url=crawl_url, count=len(ad_links))
+                
+                # Step 2: Extract details from each ad (with rate limiting)
+                for i, ad_url in enumerate(ad_links):
+                    if run_flag and not run_flag.get("running", True):
+                        break
+                    
+                    # Skip if already seen
+                    if url_seen(ad_url):
+                        log("debug", "Direct crawl: URL bereits gesehen (skip)", url=ad_url)
+                        continue
+                    
+                    # Rate limiting between detail page fetches
+                    if i > 0:
+                        await asyncio.sleep(2.5 + _jitter(0.5, 1.0))
+                    
+                    # Extract lead data from ad detail page
+                    lead_data = await extract_kleinanzeigen_detail_async(ad_url)
+                    
+                    if lead_data:
+                        direct_crawl_leads.append(lead_data)
+                        
+                        # Mark URL as seen
+                        try:
+                            con = db(); cur = con.cursor()
+                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
+                            con.commit()
+                            con.close()
+                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
+                        except Exception as e:
+                            log("warn", "Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                
+                # Rate limiting between listing pages
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+            except Exception as e:
+                log("error", "Direct crawl: Fehler beim Crawlen", url=crawl_url, error=str(e))
+                continue
+        
+        # Insert collected leads
+        if direct_crawl_leads:
+            log("info", "Direct crawl: Leads gefunden", count=len(direct_crawl_leads))
+            _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert")
+            
+            # Insert into database
+            new_leads = insert_leads(direct_crawl_leads)
+            leads_new_total += len(new_leads)
+            
+            log("info", "Direct crawl: Neue Leads gespeichert", count=len(new_leads))
+            _uilog(f"Direct crawl: {len(new_leads)} neue Leads gespeichert")
+        else:
+            log("info", "Direct crawl: Keine Leads gefunden")
+            _uilog("Direct crawl: Keine Leads gefunden")
 
     try:
         for q in QUERIES:
