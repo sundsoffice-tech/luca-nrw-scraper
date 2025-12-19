@@ -256,9 +256,6 @@ function initNewsletterForm() {
             setTimeout(() => {
                 successMessage.classList.add('hidden');
             }, 5000);
-            
-            // Log for demo purposes (remove in production)
-            console.log('Newsletter signup:', email);
         });
     }
 }
