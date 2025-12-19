@@ -1067,8 +1067,8 @@ async def query_dasoertliche(name: str, city: str) -> List[Dict]:
     # Rate limiting
     async with _telefonbuch_rate:
         try:
-            # Fetch the page
-            async with get_client(secure=True) as client:
+            # Fetch the page using _make_client
+            async with _make_client(True, USER_AGENT, None, False, HTTP_TIMEOUT) as client:
                 resp = await client.get(url, timeout=HTTP_TIMEOUT)
                 
                 if not resp or resp.status_code != 200:
