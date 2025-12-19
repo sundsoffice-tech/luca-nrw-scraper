@@ -14,7 +14,7 @@ DEFAULT_SCORE_CONFIG: ScoreConfig = {
     "email_bonus": 30,
     "corporate_email_bonus": 10,
     "phone_bonus": 20,
-    "mobile_bonus": 10,
+    "mobile_bonus": 20,  # Increased from 10 to 20 - mobile numbers are more valuable for candidates!
     "whatsapp_bonus": 15,
     "private_address_bonus": 15,
     "social_profile_bonus": 15,
@@ -152,7 +152,15 @@ def compute_score_v2(
     if sales_hits > 0:
         score += min(sales_hits * 3, config["sales_keywords_bonus"])
 
-    job_keywords = ["jobsuche", "stellensuche", "arbeitslos", "bewerbung", "lebenslauf", "cv"]
+    # Expanded job seeker keywords to match CANDIDATE_POSITIVE_SIGNALS from scriptname.py
+    job_keywords = [
+        "jobsuche", "stellensuche", "arbeitslos", "bewerbung", "lebenslauf", "cv",
+        "suche job", "suche arbeit", "suche stelle", "suche neuen job", "suche neue stelle",
+        "ich suche", "stellengesuch", "auf jobsuche", "offen für angebote", "offen für neue",
+        "suche neue herausforderung", "suche neuen wirkungskreis", "verfügbar ab", "freigestellt",
+        "open to work", "#opentowork", "looking for opportunities", "seeking new",
+        "gekündigt", "wechselwillig", "bin auf der suche", "suche eine neue",
+    ]
     job_hits = sum(text_low.count(k) for k in job_keywords)
     if job_hits > 0:
         score += min(job_hits * 2, config["jobseeker_bonus"])

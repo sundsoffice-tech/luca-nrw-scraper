@@ -120,8 +120,13 @@ SALES_TITLES = [
 ]
 # Regionen statt nur Städte (für breite Suche)
 NRW_REGIONS = [
-    "NRW", "Nordrhein-Westfalen", "Ruhrgebiet", "Rheinland", "Sauerland", "Münsterland", "OWL",
-    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"
+    "nrw", "nordrhein-westfalen", "nordrhein westfalen",
+    "düsseldorf", "köln", "dortmund", "essen", "duisburg",
+    "bochum", "wuppertal", "bielefeld", "bonn", "münster",
+    "gelsenkirchen", "mönchengladbach", "aachen", "krefeld",
+    "oberhausen", "hagen", "hamm", "mülheim", "leverkusen",
+    "solingen", "herne", "neuss", "paderborn", "bottrop",
+    "ruhrgebiet", "rheinland", "sauerland", "münsterland", "owl",
 ]
 
 # Private Mail-Provider (keine Firmen!)
@@ -2175,6 +2180,49 @@ STRICT_JOB_AD_MARKERS = [
     "teamleiter gesucht", "sales manager gesucht", "benefits", "corporate benefits",
 ]
 
+# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
+CANDIDATE_POSITIVE_SIGNALS = [
+    "suche job",
+    "suche arbeit",
+    "suche stelle",
+    "suche neuen job",
+    "suche neue stelle",
+    "ich suche",
+    "stellengesuch",
+    "auf jobsuche",
+    "offen für angebote",
+    "offen für neue",
+    "suche neue herausforderung",
+    "suche neuen wirkungskreis",
+    "verfügbar ab",
+    "freigestellt",
+    "open to work",
+    "#opentowork",
+    "looking for opportunities",
+    "seeking new",
+    "jobsuchend",
+    "arbeitslos",
+    "gekündigt",
+    "wechselwillig",
+    "bin auf der suche",
+    "suche eine neue",
+]
+
+# JOB OFFER SIGNALS - Firmen die Mitarbeiter SUCHEN (SOLLEN geblockt werden)
+JOB_OFFER_SIGNALS = [
+    "(m/w/d)",
+    "(w/m/d)",
+    "wir suchen",
+    "gesucht:",
+    "ab sofort zu besetzen",
+    "stellenangebot",
+    "job zu vergeben",
+    "mitarbeiter gesucht",
+    "verstärkung gesucht",
+    "team sucht",
+    "für unser team",
+]
+
 HIRING_INDICATORS = (
     "wir suchen", "suchen wir", "wir stellen ein", "join our team",
     "deine aufgaben", "ihr profil", "your profile", "wir bieten", "benefits",
@@ -2770,13 +2818,33 @@ def is_employer_email(email: str) -> bool:
     normalized_local = re.sub(r"[._\\-]+", "", local)
     return any(normalized_local.startswith(pref) for pref in EMPLOYER_EMAIL_PREFIXES)
 
+def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> bool:
+    """Prüft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!)."""
+    text_lower = (text + " " + title).lower()
+    
+    # ERST prüfen: Ist es ein KANDIDAT der einen Job SUCHT?
+    for signal in CANDIDATE_POSITIVE_SIGNALS:
+        if signal in text_lower:
+            return True  # Das ist ein Kandidat! Nicht blocken!
+    
+    return False
+
+def has_nrw_signal(text: str) -> bool:
+    """Prüft ob Text NRW-Bezug hat."""
+    text_lower = text.lower()
+    return any(region in text_lower for region in NRW_REGIONS)
+
 def is_job_advertisement(text: str = "", title: str = "", snippet: str = "") -> bool:
     """Return True if content/title/snippet contains strict job-ad markers (company hiring)."""
     combined = " ".join([(text or ""), (title or ""), (snippet or "")]).lower()
-    # Candidate self-intent should bypass unless explicit company wording is present
-    if any(k in combined for k in ["ich suche", "suche job", "suche stelle", "bewerbung", "lebenslauf", "stellengesuch"]):
-        if "wir suchen" not in combined:
-            return False
+    
+    # FIRST: Check if this is a CANDIDATE seeking a job - NEVER block candidates!
+    if is_candidate_seeking_job(text, title):
+        # Double-check: Is there explicit company hiring language?
+        if not any(offer in combined for offer in JOB_OFFER_SIGNALS):
+            return False  # It's a candidate, not a job ad!
+    
+    # THEN: Check for job offer signals
     return any(m in combined for m in STRICT_JOB_AD_MARKERS)
 
 def classify_role(text: str = "", title: str = "") -> str:
@@ -3289,6 +3357,10 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     ttl = (title or "").lower()
     h1l = (h1 or "").lower()
 
+    # FIRST: Check if this is a CANDIDATE seeking a job - NEVER mark candidates as garbage!
+    if is_candidate_seeking_job(text, title, url):
+        return False, ""  # Not garbage - this is a candidate!
+
     news_tokens = (
         "news", "artikel", "bericht", "tipps", "trends", "black friday",
         "angebot", "webinar", "termine", "veranstaltung",
@@ -3307,7 +3379,9 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
 
     job_ad_tokens = ("wir suchen", "wir bieten", "deine aufgaben", "bewirb dich jetzt", "stellenanzeige", "jobangebot") + tuple(STRICT_JOB_AD_MARKERS)
     if any(tok in t for tok in job_ad_tokens):
-        return True, "job_ad"
+        # Double-check: make sure it's not a candidate with these words in context
+        if not is_candidate_seeking_job(text, title, url):
+            return True, "job_ad"
 
     return False, ""
 
@@ -4229,14 +4303,22 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     job_ad_hit = any(k in title_src for k in STRICT_JOB_AD_MARKERS)
     directory_hit = any(k in title_src for k in DIRECTORY_KEYWORDS)
     use_positive_guard = not bool(OPENAI_API_KEY)
+    
+    # Check if this is a CANDIDATE seeking a job - NEVER skip candidates!
+    is_candidate = is_candidate_seeking_job(title_text or "", "", url)
+    
     if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
-        log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
-        mark_url_seen(url, run_id)
-        return (1, [])
+        # Don't skip if it's a candidate seeking a job
+        if not is_candidate:
+            log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
+            mark_url_seen(url, run_id)
+            return (1, [])
     if job_ad_hit:
-        log("debug", "Titel-Guard: Job-Ad Marker erkannt, skip", url=url, title=title_text)
-        mark_url_seen(url, run_id)
-        return (1, [])
+        # Don't skip if it's a candidate seeking a job (e.g., "ich suche job (m/w/d)" would have both)
+        if not is_candidate:
+            log("debug", "Titel-Guard: Job-Ad Marker erkannt, skip", url=url, title=title_text)
+            mark_url_seen(url, run_id)
+            return (1, [])
     if use_positive_guard and not (has_pos_key or intent_hit or suche_biete_hit or directory_hit):
         log("debug", "Titel-Guard: Keine positiven Keywords, skip", url=url, title=title_text)
         mark_url_seen(url, run_id)
