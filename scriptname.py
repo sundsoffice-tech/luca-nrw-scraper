@@ -2223,6 +2223,9 @@ JOB_OFFER_SIGNALS = [
     "für unser team",
 ]
 
+# Minimum number of job offer signals required to override a candidate signal
+MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE = 2
+
 HIRING_INDICATORS = (
     "wir suchen", "suchen wir", "wir stellen ein", "join our team",
     "deine aufgaben", "ihr profil", "your profile", "wir bieten", "benefits",
@@ -2842,8 +2845,7 @@ def is_job_advertisement(text: str = "", title: str = "", snippet: str = "") -> 
     if is_candidate_seeking_job(text, title):
         # If candidate signal is found, only mark as job ad if there are MULTIPLE strong job offer signals
         job_offer_count = sum(1 for offer in JOB_OFFER_SIGNALS if offer in combined)
-        # Require at least 2 job offer signals to override a candidate signal
-        if job_offer_count < 2:
+        if job_offer_count < MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE:
             return False  # It's a candidate, not a job ad!
     
     # THEN: Check for job offer signals

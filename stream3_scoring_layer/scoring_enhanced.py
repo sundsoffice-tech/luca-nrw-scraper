@@ -14,7 +14,7 @@ DEFAULT_SCORE_CONFIG: ScoreConfig = {
     "email_bonus": 30,
     "corporate_email_bonus": 10,
     "phone_bonus": 20,
-    "mobile_bonus": 20,  # Increased from 10 to 20 - mobile numbers are more valuable for candidates!
+    "mobile_bonus": 20,  # Mobile numbers are more valuable for candidates!
     "whatsapp_bonus": 15,
     "private_address_bonus": 15,
     "social_profile_bonus": 15,
