@@ -1,0 +1,40 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Lightning bolt icon -->
+  <g transform="translate(0, 5)">
+    <path d="M18 2L8 18H16L14 30L24 14H16L18 2Z" 
+          fill="url(#gradient1)" 
+          stroke="url(#gradient2)" 
+          stroke-width="1"
+          stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Text: LUCA -->
+  <text x="34" y="26" 
+        font-family="Inter, Arial, sans-serif" 
+        font-size="22" 
+        font-weight="900" 
+        fill="white">LUCA</text>
+  
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="gradient1" x1="8" y1="2" x2="24" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="gradient2" x1="8" y1="2" x2="24" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Glow effect -->
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
