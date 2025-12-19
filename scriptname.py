@@ -22,6 +22,7 @@ warnings.filterwarnings("ignore", message="This package.*renamed to.*ddgs")
 import argparse
 import asyncio
 import csv
+import hashlib
 import json
 import os
 import queue
@@ -296,6 +297,13 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
+
+# Telefonbuch Enrichment Config
+TELEFONBUCH_ENRICHMENT_ENABLED = (os.getenv("TELEFONBUCH_ENRICHMENT_ENABLED", "1") == "1")
+TELEFONBUCH_STRICT_MODE = (os.getenv("TELEFONBUCH_STRICT_MODE", "1") == "1")
+TELEFONBUCH_RATE_LIMIT = float(os.getenv("TELEFONBUCH_RATE_LIMIT", "3.0"))
+TELEFONBUCH_CACHE_DAYS = int(os.getenv("TELEFONBUCH_CACHE_DAYS", "7"))
+TELEFONBUCH_MOBILE_ONLY = (os.getenv("TELEFONBUCH_MOBILE_ONLY", "1") == "1")
 
 # =========================
 # Candidate-Focused Constants
@@ -686,6 +694,15 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       first_run_id INTEGER,
       ts TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS telefonbuch_cache(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      city TEXT NOT NULL,
+      query_hash TEXT UNIQUE,
+      results_json TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     """)
     con.commit()
 
@@ -937,6 +954,378 @@ def url_seen(url: str) -> bool:
 
 def _url_seen_fast(url: str) -> bool:
     return _normalize_for_dedupe(url) in _seen_urls_cache
+
+
+# =========================
+# Telefonbuch Enrichment
+# =========================
+
+async def get_cached_telefonbuch_result(name: str, city: str) -> Optional[List[Dict]]:
+    """Prüft ob Ergebnis im Cache ist (max 7 Tage alt)"""
+    if not name or not city:
+        return None
+    
+    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
+    
+    con = db()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT results_json, created_at 
+        FROM telefonbuch_cache 
+        WHERE query_hash = ?
+    """, (query_hash,))
+    row = cur.fetchone()
+    con.close()
+    
+    if not row:
+        return None
+    
+    results_json, created_at = row
+    
+    # Check if cache is still valid (max 7 days)
+    try:
+        from datetime import datetime, timedelta
+        cache_time = datetime.fromisoformat(created_at)
+        age = datetime.now() - cache_time
+        if age > timedelta(days=TELEFONBUCH_CACHE_DAYS):
+            return None  # Cache expired
+    except Exception:
+        return None
+    
+    try:
+        results = json.loads(results_json) if results_json else []
+        log("debug", "Telefonbuch-Cache Hit", name=name, city=city)
+        return results
+    except Exception:
+        return None
+
+
+async def cache_telefonbuch_result(name: str, city: str, results: List[Dict]):
+    """Speichert Ergebnis im Cache"""
+    if not name or not city:
+        return
+    
+    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
+    results_json = json.dumps(results, ensure_ascii=False)
+    
+    con = db()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO telefonbuch_cache (name, city, query_hash, results_json, created_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+    """, (name, city, query_hash, results_json))
+    con.commit()
+    con.close()
+
+
+# Rate limiter for telefonbuch requests
+class _TelefonbuchRateLimiter:
+    def __init__(self, interval: float = 3.0):
+        self.interval = interval
+        self.last_request = 0.0
+        self.lock = asyncio.Lock()
+    
+    async def __aenter__(self):
+        async with self.lock:
+            now = time.time()
+            elapsed = now - self.last_request
+            if elapsed < self.interval:
+                wait_time = self.interval - elapsed
+                await asyncio.sleep(wait_time)
+            self.last_request = time.time()
+    
+    async def __aexit__(self, *args):
+        pass
+
+_telefonbuch_rate = _TelefonbuchRateLimiter(interval=TELEFONBUCH_RATE_LIMIT)
+
+
+async def query_dasoertliche(name: str, city: str) -> List[Dict]:
+    """
+    Führt eine Suche auf dasoertliche.de durch.
+    
+    URL-Format: https://www.dasoertliche.de/?kw={name}&ci={city}
+    
+    Extrahiert aus HTML:
+        - name: Name des Eintrags
+        - phone: Telefonnummer
+        - address: Adresse
+        - city: Stadt
+    
+    Returns:
+        Liste von Treffern als Dicts
+    """
+    if not name or not city:
+        return []
+    
+    # Build search URL
+    params = urllib.parse.urlencode({"kw": name, "ci": city})
+    url = f"https://www.dasoertliche.de/?{params}"
+    
+    log("debug", "Telefonbuch-Query", name=name, city=city)
+    
+    # Rate limiting
+    async with _telefonbuch_rate:
+        try:
+            # Fetch the page
+            async with get_client(secure=True) as client:
+                resp = await client.get(url, timeout=HTTP_TIMEOUT)
+                
+                if not resp or resp.status_code != 200:
+                    log("warn", "Telefonbuch-Query fehlgeschlagen", status=resp.status_code if resp else -1)
+                    return []
+                
+                html = resp.text if hasattr(resp, 'text') else resp.content.decode('utf-8', errors='ignore')
+                
+        except Exception as e:
+            log("warn", "Telefonbuch-Query Exception", error=str(e))
+            return []
+    
+    # Parse HTML
+    results = []
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Try to find entries - dasoertliche.de structure may vary
+        # Look for schema.org Person entries or common patterns
+        entries = soup.find_all("article", class_=re.compile(r"entry|treffer|hit", re.I))
+        if not entries:
+            entries = soup.find_all("div", itemtype=re.compile(r"Person", re.I))
+        if not entries:
+            # Fallback: look for any container with phone numbers
+            entries = soup.find_all("div", class_=re.compile(r"treffer|result|entry", re.I))
+        
+        for entry in entries[:5]:  # Limit to first 5 results
+            result = {}
+            
+            # Extract name
+            name_elem = entry.find(itemprop="name") or entry.find("h2") or entry.find(class_=re.compile(r"name", re.I))
+            if name_elem:
+                result["name"] = name_elem.get_text(strip=True)
+            
+            # Extract phone
+            phone_elem = (
+                entry.find(itemprop="telephone") or 
+                entry.find(class_=re.compile(r"phone|telefon|tel", re.I)) or
+                entry.find("a", href=re.compile(r"^tel:"))
+            )
+            if phone_elem:
+                phone_text = phone_elem.get_text(strip=True)
+                # Clean phone number
+                phone_clean = re.sub(r'[^\d\+]', '', phone_text.replace(" ", ""))
+                result["phone"] = phone_clean
+            
+            # Extract address
+            address_elem = entry.find(itemprop="streetAddress") or entry.find(class_=re.compile(r"street|address|strasse", re.I))
+            if address_elem:
+                result["address"] = address_elem.get_text(strip=True)
+            
+            # Extract city
+            city_elem = entry.find(itemprop="addressLocality") or entry.find(class_=re.compile(r"city|ort", re.I))
+            if city_elem:
+                result["city"] = city_elem.get_text(strip=True)
+            
+            # Only add if we have at least name and phone
+            if result.get("name") and result.get("phone"):
+                results.append(result)
+        
+    except Exception as e:
+        log("warn", "Telefonbuch-Parse Exception", error=str(e))
+        return []
+    
+    log("info", "Telefonbuch: Treffer gefunden", count=len(results))
+    return results
+
+
+def should_accept_enrichment(
+    original_name: str,
+    original_city: str,
+    results: List[Dict]
+) -> Tuple[bool, Optional[Dict], str]:
+    """
+    Prüft ob Enrichment akzeptiert werden soll.
+    
+    Checks:
+        1. Genau 1 Treffer
+        2. Name-Match >= 90% (fuzzy matching)
+        3. Stadt-Match (enthält oder gleich)
+        4. Telefonnummer ist Mobilnummer (015/016/017)
+    
+    Returns:
+        (accept: bool, result: Dict or None, reason: str)
+    """
+    if not results:
+        return False, None, "Keine Treffer"
+    
+    if TELEFONBUCH_STRICT_MODE and len(results) != 1:
+        return False, None, f"Mehrere Treffer ({len(results)})"
+    
+    result = results[0]
+    
+    # Check name match (simple fuzzy matching)
+    result_name = result.get("name", "").lower().strip()
+    original_name_clean = original_name.lower().strip()
+    
+    # Simple similarity check - normalize and compare
+    def normalize_name(n):
+        # Remove titles and extra spaces
+        n = re.sub(r'\b(dr\.?|prof\.?|dipl\.?-ing\.?)\b', '', n, flags=re.I)
+        return ' '.join(n.split())
+    
+    result_name_norm = normalize_name(result_name)
+    original_name_norm = normalize_name(original_name_clean)
+    
+    # Check if names are similar enough
+    # Simple approach: check if one is contained in the other or vice versa
+    name_match = (
+        result_name_norm in original_name_norm or
+        original_name_norm in result_name_norm or
+        result_name_norm == original_name_norm
+    )
+    
+    if not name_match:
+        # Try word-by-word match (at least 2 words should match)
+        result_words = set(result_name_norm.split())
+        original_words = set(original_name_norm.split())
+        common_words = result_words & original_words
+        if len(common_words) < 2:
+            return False, None, f"Name-Mismatch: '{result_name}' vs '{original_name}'"
+    
+    # Check city match
+    result_city = result.get("city", "").lower().strip()
+    original_city_clean = original_city.lower().strip()
+    
+    city_match = (
+        result_city in original_city_clean or
+        original_city_clean in result_city or
+        result_city == original_city_clean
+    )
+    
+    if not city_match and result_city:  # Allow missing city in result
+        return False, None, f"Stadt-Mismatch: '{result_city}' vs '{original_city}'"
+    
+    # Check phone is mobile number
+    phone = result.get("phone", "")
+    if not phone:
+        return False, None, "Keine Telefonnummer"
+    
+    # Normalize phone
+    normalized_phone = normalize_phone(phone)
+    
+    # Check if mobile
+    if TELEFONBUCH_MOBILE_ONLY:
+        if not is_mobile_number(normalized_phone):
+            return False, None, "Keine Mobilnummer"
+    
+    return True, result, "Akzeptiert"
+
+
+async def enrich_phone_from_telefonbuch(
+    name: str,
+    city: str,
+    strict: bool = True
+) -> Optional[Dict[str, str]]:
+    """
+    Sucht Telefonnummer in dasoertliche.de
+    
+    Args:
+        name: Vor- und Nachname (z.B. "Max Mustermann")
+        city: Stadt (z.B. "Düsseldorf")
+        strict: Nur bei exakt 1 Treffer (100% Genauigkeit)
+    
+    Returns:
+        Dict mit {"phone": "0176...", "address": "..."} oder None
+    
+    Regeln:
+        - Nur wenn Name UND Stadt vorhanden
+        - Nur bei GENAU 1 Treffer (wenn strict=True)
+        - Nur Mobilnummern (015x, 016x, 017x) werden akzeptiert
+        - Rate-Limiting: Max 1 Request / 3 Sekunden
+    """
+    if not TELEFONBUCH_ENRICHMENT_ENABLED:
+        return None
+    
+    if not name or not city:
+        return None
+    
+    log("info", "Telefonbuch-Enrichment gestartet", name=name, city=city)
+    
+    # Check cache first
+    cached = await get_cached_telefonbuch_result(name, city)
+    if cached is not None:
+        results = cached
+    else:
+        # Query dasoertliche.de
+        results = await query_dasoertliche(name, city)
+        
+        # Cache the results
+        await cache_telefonbuch_result(name, city, results)
+    
+    # Validate and accept enrichment
+    accept, result, reason = should_accept_enrichment(name, city, results)
+    
+    if not accept:
+        log("warn", "Telefonbuch-Enrichment abgelehnt", reason=reason, name=name, city=city)
+        return None
+    
+    phone = result.get("phone", "")
+    address = result.get("address", "")
+    
+    log("info", "Telefonbuch-Enrichment erfolgreich", 
+        name=name, city=city, phone=phone[:8]+"..." if len(phone) > 8 else phone)
+    
+    return {
+        "phone": phone,
+        "address": address
+    }
+
+
+async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Enriches leads without phone numbers using telefonbuch lookup.
+    Returns the enriched leads list.
+    """
+    if not TELEFONBUCH_ENRICHMENT_ENABLED or not leads:
+        return leads
+    
+    enriched_leads = []
+    for lead in leads:
+        # Only enrich if NO phone but has name + city
+        if not lead.get("telefon") and lead.get("name") and lead.get("region"):
+            name = lead["name"]
+            city = lead["region"]
+            
+            # Skip if name looks like a company
+            if _looks_like_company_name(name):
+                log("debug", "Telefonbuch-Enrichment übersprungen (Firmenname)", name=name)
+                enriched_leads.append(lead)
+                continue
+            
+            # Try to enrich
+            enrichment = await enrich_phone_from_telefonbuch(name, city)
+            
+            if enrichment and enrichment.get("phone"):
+                lead["telefon"] = normalize_phone(enrichment["phone"])
+                lead["phone_type"] = "mobile"
+                
+                # Add address if available
+                if enrichment.get("address"):
+                    lead["private_address"] = enrichment["address"]
+                
+                # Tag as enriched
+                tags = lead.get("tags", "")
+                if tags:
+                    lead["tags"] = tags + ",telefonbuch_enriched"
+                else:
+                    lead["tags"] = "telefonbuch_enriched"
+                
+                log("info", "Telefonbuch-Enrichment erfolgreich", 
+                    name=name, city=city, phone=lead["telefon"][:8]+"..." if len(lead["telefon"]) > 8 else lead["telefon"])
+        
+        enriched_leads.append(lead)
+    
+    return enriched_leads
+
 
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -3076,6 +3465,41 @@ def _validate_name_heuristic(name: str) -> Tuple[bool, int, str]:
         return False, 85, "Enthält Zahlen"
     
     return True, 75, "Heuristik: wahrscheinlich echter Name"
+
+
+def _looks_like_company_name(name: str) -> bool:
+    """
+    Prüft ob Name wie eine Firma aussieht.
+    
+    Returns True für:
+        - "GmbH", "AG", "KG", "UG" im Namen
+        - "Team", "Vertrieb", "Sales" im Namen
+        - Nur ein Wort
+        - Enthält Zahlen
+    """
+    if not name:
+        return True
+    
+    company_indicators = [
+        "gmbh", "ag", "kg", "ug", "ltd", "inc", 
+        "team", "vertrieb", "sales", "group", "holding",
+        "firma", "unternehmen", "company"
+    ]
+    name_lower = name.lower()
+    
+    # Check for company indicators
+    if any(ind in name_lower for ind in company_indicators):
+        return True
+    
+    # Check for single word (not a full name)
+    if len(name.split()) < 2:
+        return True
+    
+    # Check for numbers
+    if re.search(r'\d', name):
+        return True
+    
+    return False
 
 
 async def validate_real_name_with_ai(name: str, context: str = "") -> Tuple[bool, int, str]:
@@ -6447,6 +6871,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 ]
             )
             if filtered:
+                # Enrich leads without phone numbers using telefonbuch
+                filtered = await enrich_leads_with_telefonbuch(filtered)
                 inserted = insert_leads(filtered)
                 if inserted:
                     append_csv(DEFAULT_CSV, inserted, ENH_FIELDS)
