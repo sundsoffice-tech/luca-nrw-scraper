@@ -3756,6 +3756,15 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     # FIRST: Check if this is a CANDIDATE seeking a job - NEVER mark candidates as garbage!
     if is_candidate_seeking_job(text, title, url):
         return False, ""  # Not garbage - this is a candidate!
+    
+    # NEW: Allow social media profiles in candidate mode
+    url_lower = url.lower() if url else ""
+    social_profile_urls = [
+        "linkedin.com/in/", "xing.com/profile/", "facebook.com/profile/",
+        "instagram.com/", "twitter.com/", "x.com/",
+    ]
+    if any(social_url in url_lower for social_url in social_profile_urls):
+        return False, ""  # Social profiles are allowed in candidate mode
 
     news_tokens = (
         "news", "artikel", "bericht", "tipps", "trends", "black friday",
@@ -3888,7 +3897,21 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
     record["name"] = name
     return record
 
-def is_candidate_profile_text(text: str) -> bool:
+def is_candidate_profile_text(text: str, url: str = "") -> bool:
+    """
+    Check if text represents a candidate profile.
+    In candidate mode, social media profiles are always accepted.
+    """
+    # NEW: Social media profiles are always accepted in candidate mode
+    if url:
+        url_lower = url.lower()
+        social_profile_urls = [
+            "linkedin.com/in/", "xing.com/profile/", "facebook.com/profile/",
+            "instagram.com/", "twitter.com/", "x.com/",
+        ]
+        if any(social_url in url_lower for social_url in social_profile_urls):
+            return True  # Social profiles are always accepted
+    
     t = (text or "").lower()
     has_pos = any(tok in t for tok in CANDIDATE_POS_MARKERS)
     if not has_pos:
@@ -4166,6 +4189,24 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         score += 20
     if has_ignore_kw:
         score -= 100
+    
+    # NEW: Candidate-focused scoring boosts
+    candidate_signals = [sig.lower() for sig in CANDIDATE_ALWAYS_ALLOW]
+    candidate_hits = sum(1 for sig in candidate_signals if sig in t_lower)
+    if candidate_hits > 0:
+        score += min(candidate_hits * 15, 45)  # Up to +45 for strong candidate signals
+        reasons.append(f"candidate_signals_{candidate_hits}")
+    
+    # Social media profile boost
+    if any(social in u for social in ["linkedin.com/in/", "xing.com/profile/"]):
+        score += 20
+        reasons.append("social_profile")
+    
+    # Freelancer/Available signals
+    if any(sig in t_lower for sig in ["freelancer", "verfügbar ab", "ab sofort verfügbar", "freiberuflich"]):
+        score += 10
+        reasons.append("availability_signal")
+    
     if industry_hits:
         score += min(industry_hits * 4, 16)
     if in_nrw:
@@ -4845,7 +4886,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             log("debug", "Candidate detected via wir suchen analysis - allowing", url=url, reason=wir_suchen_reason)
             # Continue processing - this is a candidate
         
-        if not is_candidate_profile_text(text):
+        if not is_candidate_profile_text(text, url):
             log("debug", "Kein Kandidatenprofil - skip", url=url)
             mark_url_seen(url, run_id)
             return (1, [])
