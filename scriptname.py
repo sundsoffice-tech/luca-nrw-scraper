@@ -1555,7 +1555,17 @@ def build_queries(
 ) -> List[str]:
     """
     Build a compact set of high-precision Handelsvertreter dorks.
+    If candidates/recruiter mode is selected, use INDUSTRY_QUERIES["candidates"] instead.
     """
+    # CRITICAL FIX: Use candidates queries when in candidates/recruiter mode
+    if selected_industry and selected_industry.lower() in ("candidates", "recruiter"):
+        base = INDUSTRY_QUERIES.get("candidates", [])
+        queries = list(dict.fromkeys(base))
+        random.shuffle(queries)
+        cap = min(max(1, per_industry_limit), len(queries))
+        return queries[:cap]
+    
+    # Standard mode: use DEFAULT_QUERIES
     queries: List[str] = list(dict.fromkeys(DEFAULT_QUERIES))
     random.shuffle(queries)
 
@@ -2525,38 +2535,22 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
     
     url_lower = url.lower()
     
-    # NEGATIV - Diese URLs blockieren (Stellenangebote, Firmen-Seiten)
-    negative_patterns = [
-        '/jobs/',                   # Stellenangebote, nicht Gesuche!
-        '/stellenangebote/',        # Firmen-Anzeigen
-        '/karriere/',               # Firmen-Karriereseiten
-        '/company/',                # Firmen-Profile
-        '/impressum',               # Firmen-Impressum
-        '/kontakt',                 # Firmen-Kontakt
-        '/about',                   # Über uns Seiten
-        'jobboerse',                # Jobbörsen
-        'stepstone.de',             # Jobbörsen
-        'indeed.com',               # Jobbörsen
-        'monster.de',               # Jobbörsen
-        'linkedin.com/jobs/',       # Job listings
-        'xing.com/jobs/',           # Job listings
-    ]
+    # CRITICAL FIX: Check for candidate keywords first (highest priority)
+    # Don't block /jobs/ or /stellenangebote/ if it contains candidate keywords
+    if 'stellengesuch' in url_lower or 'jobgesuch' in url_lower:
+        return True
     
-    for neg in negative_patterns:
-        if neg in url_lower:
-            return False
-    
-    # POSITIV - Diese URLs sind gut für Kandidaten
+    # POSITIV - Kandidaten-URLs (ALWAYS allow these!)
     positive_patterns = [
         '/s-stellengesuche/',       # Kleinanzeigen Stellengesuche
-        '/stellengesuche/',          # Andere Portale Stellengesuche
+        '/stellengesuche/',          # Andere Portale Stellengesuche  
         'linkedin.com/in/',          # LinkedIn Profile (nicht /jobs/ oder /company/)
         'xing.com/profile/',         # Xing Profile
         '/freelancer/',              # Freelancer Profile
         'facebook.com/groups/',      # Facebook Gruppen
         't.me/',                     # Telegram Gruppen
         'chat.whatsapp.com/',        # WhatsApp Gruppen
-        'reddit.com/r/arbeitsleben', # Reddit Karriere-Threads
+        'reddit.com/r/',             # Reddit Threads
         'gutefrage.net',             # Fragen zu Jobsuche
         'freelancermap.de',          # Freelancer Portale
         'freelance.de',              # Freelancer Portale
@@ -2566,6 +2560,31 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
     for pos in positive_patterns:
         if pos in url_lower:
             return True
+    
+    # NEGATIV - Only block if definitely NOT a candidate
+    # NOTE: Candidate keywords (stellengesuch/jobgesuch) are checked FIRST above,
+    # so /jobs/ URLs with those keywords will already have returned True by this point.
+    # This means we can safely block generic /jobs/ URLs here without affecting candidate URLs.
+    negative_patterns = [
+        '/company/',                # Firmen-Profile
+        '/impressum',               # Firmen-Impressum
+        '/kontakt',                 # Firmen-Kontakt
+        '/about',                   # Über uns Seiten
+        '/karriere/stellenangebote', # Firmen-Karriereseiten mit Stellenangeboten
+        '/karriere/jobs',           # Firmen-Karriereseiten mit Jobs
+        '/stellenangebote/',        # Firmen-Stellenangebote (without "stellengesuch")
+        '/jobs/',                   # Generic job listings (without "stellengesuch")
+        'stepstone.de',             # Job boards
+        'indeed.com',               # Job boards
+        'monster.de',               # Job boards
+        'linkedin.com/jobs/',       # Job listings
+        'xing.com/jobs/',           # Job listings
+        'jobboerse',                # Jobbörsen
+    ]
+    
+    for neg in negative_patterns:
+        if neg in url_lower:
+            return False
     
     # Default: Nicht sicher, weitere Prüfung nötig
     return None
@@ -5176,25 +5195,45 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
 async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
     """
     LLM-generierte Dorks für die angegebene Branche.
+    CRITICAL FIX: Special prompt for candidates/recruiter mode.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return []
-    prompt = (
-        "You are a Headhunter. Generate Google Dorks that find lists of employees, PDF CVs, 'Unser Team' pages, or Freelancer profiles. "
-        "forbidden: Do NOT generate generic B2B searches like 'Händler' or 'Hersteller'. "
-        "Required Patterns (mix these): "
-        f'intitle:\"Team\" \"Sales Manager\" {industry}; '
-        f'filetype:pdf \"Lebenslauf\" {industry} -job -anzeige; '
-        f'site:linkedin.com/in/ \"{industry}\" \"open to work\"; '
-        f'\"stellengesuch\" {industry} \"verfügbar ab\"; '
-        f'\"Ansprechpartner\" \"Vertrieb\" {industry} -intitle:Jobs. '
-        "Return ONLY the dorks, one per line."
-    )
+    
+    # CRITICAL FIX: Different prompt for candidates mode
+    if industry.lower() in ("candidates", "recruiter"):
+        prompt = (
+            "Generate Google Dorks to find JOB SEEKERS (not companies hiring). "
+            "Target: People actively looking for sales/vertrieb jobs. "
+            "Required patterns: "
+            'site:kleinanzeigen.de/s-stellengesuche "vertrieb"; '
+            'site:xing.com/profile "offen für angebote" "sales"; '
+            'site:linkedin.com/in "#opentowork" "vertrieb"; '
+            '"ich suche job" "vertrieb" "NRW" "mobil"; '
+            'site:facebook.com "suche arbeit" "verkauf". '
+            "Return ONLY the dorks, one per line."
+        )
+        system_content = "You create Google search dorks to find job seekers and candidates."
+    else:
+        # Standard B2B prompt
+        prompt = (
+            "You are a Headhunter. Generate Google Dorks that find lists of employees, PDF CVs, 'Unser Team' pages, or Freelancer profiles. "
+            "forbidden: Do NOT generate generic B2B searches like 'Händler' or 'Hersteller'. "
+            "Required Patterns (mix these): "
+            f'intitle:\"Team\" \"Sales Manager\" {industry}; '
+            f'filetype:pdf \"Lebenslauf\" {industry} -job -anzeige; '
+            f'site:linkedin.com/in/ \"{industry}\" \"open to work\"; '
+            f'\"stellengesuch\" {industry} \"verfügbar ab\"; '
+            f'\"Ansprechpartner\" \"Vertrieb\" {industry} -intitle:Jobs. '
+            "Return ONLY the dorks, one per line."
+        )
+        system_content = "You create targeted Google search dorks for B2B lead generation."
+    
     payload = {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         "messages": [
-            {"role": "system", "content": "You create targeted Google search dorks for B2B lead generation."},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": prompt}
         ]
     }
@@ -5886,8 +5925,10 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
                 return role_hit or company_hit or url_hit
 
-            # NUR Kandidaten exportieren, wenn wir im Recruiter-Modus sind
-            if "recruiter" in str(QUERIES).lower() or os.getenv("INDUSTRY") == "recruiter":
+            # NUR Kandidaten exportieren, wenn wir im Recruiter/Candidates-Modus sind
+            # CRITICAL FIX: Also check for "candidates" in addition to "recruiter"
+            industry_env = os.getenv("INDUSTRY", "").lower()
+            if "recruiter" in str(QUERIES).lower() or "candidates" in str(QUERIES).lower() or industry_env in ("recruiter", "candidates"):
                 collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
                 log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
 
@@ -6174,6 +6215,8 @@ if __name__ == "__main__":
         def _run_cycle():
             global QUERIES
             selected_industry = getattr(args, "industry", "all")
+            # CRITICAL FIX: Set INDUSTRY env variable for _is_candidates_mode()
+            os.environ["INDUSTRY"] = selected_industry
             per_industry_limit = max(1, getattr(args, "qpi", 2))
             QUERIES = build_queries(selected_industry, per_industry_limit)
             log("info", "Query-Set gebaut", industry=selected_industry,
