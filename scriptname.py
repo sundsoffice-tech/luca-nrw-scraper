@@ -324,6 +324,63 @@ DIRECT_CRAWL_URLS = [
     "https://www.kleinanzeigen.de/s-stellengesuche/call-center/k0c107",
 ]
 
+# Markt.de Stellengesuche URLs
+MARKT_DE_URLS = [
+    # NRW
+    "https://www.markt.de/stellengesuche/nordrhein-westfalen/vertrieb/",
+    "https://www.markt.de/stellengesuche/nordrhein-westfalen/sales/",
+    "https://www.markt.de/stellengesuche/nordrhein-westfalen/verkauf/",
+    "https://www.markt.de/stellengesuche/nordrhein-westfalen/kundenberater/",
+    # Bundesweit
+    "https://www.markt.de/stellengesuche/vertrieb/",
+    "https://www.markt.de/stellengesuche/sales/",
+    "https://www.markt.de/stellengesuche/handelsvertreter/",
+]
+
+# Quoka.de Stellengesuche URLs
+QUOKA_DE_URLS = [
+    # NRW Städte
+    "https://www.quoka.de/stellengesuche/duesseldorf/",
+    "https://www.quoka.de/stellengesuche/koeln/",
+    "https://www.quoka.de/stellengesuche/dortmund/",
+    "https://www.quoka.de/stellengesuche/essen/",
+    # Kategorien
+    "https://www.quoka.de/stellengesuche/vertrieb-verkauf/",
+    "https://www.quoka.de/stellengesuche/kundenservice/",
+]
+
+# Kalaydo.de Stellengesuche URLs (NRW-fokussiert!)
+KALAYDO_DE_URLS = [
+    # Kalaydo ist stark in NRW
+    "https://www.kalaydo.de/stellengesuche/nordrhein-westfalen/",
+    "https://www.kalaydo.de/stellengesuche/koeln/",
+    "https://www.kalaydo.de/stellengesuche/duesseldorf/",
+    "https://www.kalaydo.de/stellengesuche/bonn/",
+    "https://www.kalaydo.de/stellengesuche/aachen/",
+]
+
+# Meinestadt.de Stellengesuche URLs
+MEINESTADT_DE_URLS = [
+    # Top NRW Städte
+    "https://www.meinestadt.de/duesseldorf/stellengesuche",
+    "https://www.meinestadt.de/koeln/stellengesuche",
+    "https://www.meinestadt.de/dortmund/stellengesuche",
+    "https://www.meinestadt.de/essen/stellengesuche",
+    "https://www.meinestadt.de/bochum/stellengesuche",
+    "https://www.meinestadt.de/wuppertal/stellengesuche",
+    "https://www.meinestadt.de/muenster/stellengesuche",
+    "https://www.meinestadt.de/bonn/stellengesuche",
+]
+
+# Direct crawl source configuration
+DIRECT_CRAWL_SOURCES = {
+    "kleinanzeigen": True,
+    "markt_de": True,
+    "quoka": True,
+    "kalaydo": True,
+    "meinestadt": True,
+}
+
 # =========================
 # Candidate-Focused Constants
 # =========================
@@ -2934,6 +2991,462 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         
     except Exception as e:
         log("error", "Error extracting Kleinanzeigen detail", url=url, error=str(e))
+        return None
+
+
+def _mark_url_seen(url: str, source: str = ""):
+    """
+    Helper function to mark a URL as seen in the database.
+    
+    Args:
+        url: The URL to mark as seen
+        source: Optional source name for logging (e.g., "Markt.de", "Quoka")
+    """
+    try:
+        con = db()
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (url,))
+        con.commit()
+        con.close()
+        _seen_urls_cache.add(_normalize_for_dedupe(url))
+    except Exception as e:
+        log_prefix = f"{source}: " if source else ""
+        log("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
+
+
+async def crawl_markt_de_listings_async() -> List[Dict]:
+    """
+    Crawlt markt.de Stellengesuche-Seiten.
+    
+    HTML-Struktur (typisch):
+    - Listing: <div class="ad-list-item"> oder <article class="result-item">
+    - Link: <a href="/anzeige/...">
+    - Titel: <h2> oder <h3>
+    
+    Pagination: ?page=2, ?page=3, etc.
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("markt_de", True):
+        return []
+    
+    leads = []
+    max_pages = 3  # Limit pages per URL to avoid overload
+    
+    for base_url in MARKT_DE_URLS:
+        for page in range(1, max_pages + 1):
+            if page == 1:
+                url = base_url
+            else:
+                # Add page parameter
+                separator = "&" if "?" in base_url else "?"
+                url = f"{base_url}{separator}page={page}"
+            
+            try:
+                # Rate limiting
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "Markt.de: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "Markt.de: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract ad links - try multiple selectors
+                ad_links = []
+                
+                # Try common selectors for markt.de
+                for selector in [
+                    'a[href*="/anzeige/"]',
+                    'a[href*="/stellengesuche/"]',
+                    '.ad-list-item a',
+                    'article a[href*="/anzeige/"]'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and ("/anzeige/" in href or "/stellengesuche/" in href):
+                            full_url = urllib.parse.urljoin("https://www.markt.de", href)
+                            if full_url not in ad_links:
+                                ad_links.append(full_url)
+                
+                log("info", "Markt.de: Anzeigen gefunden", url=url, count=len(ad_links))
+                
+                if not ad_links:
+                    break  # No more ads, stop pagination
+                
+                # Extract details from each ad
+                for ad_url in ad_links:
+                    if url_seen(ad_url):
+                        continue
+                    
+                    # Rate limiting
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(ad_url, source_tag="markt_de")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "Markt.de: Lead extrahiert", url=ad_url, has_phone=True)
+                        
+                        # Mark as seen
+                        _mark_url_seen(ad_url, source="Markt.de")
+                    else:
+                        log("debug", "Markt.de: Keine Handynummer", url=ad_url)
+                
+            except Exception as e:
+                log("error", "Markt.de: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "Markt.de: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def crawl_quoka_listings_async() -> List[Dict]:
+    """
+    Crawlt quoka.de Stellengesuche-Seiten.
+    
+    HTML-Struktur:
+    - Listing: <li class="q-ad"> oder <div class="result-list-item">
+    - Link: <a href="/stellengesuche/...">
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("quoka", True):
+        return []
+    
+    leads = []
+    max_pages = 3
+    
+    for base_url in QUOKA_DE_URLS:
+        for page in range(1, max_pages + 1):
+            if page == 1:
+                url = base_url
+            else:
+                separator = "&" if "?" in base_url else "?"
+                url = f"{base_url}{separator}page={page}"
+            
+            try:
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "Quoka: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "Quoka: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract ad links
+                ad_links = []
+                
+                for selector in [
+                    'a.q-ad-link',
+                    'li.q-ad a',
+                    'a[href*="/stellengesuche/"]',
+                    '.result-list-item a'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and "/stellengesuche/" in href:
+                            full_url = urllib.parse.urljoin("https://www.quoka.de", href)
+                            if full_url not in ad_links:
+                                ad_links.append(full_url)
+                
+                log("info", "Quoka: Anzeigen gefunden", url=url, count=len(ad_links))
+                
+                if not ad_links:
+                    break
+                
+                for ad_url in ad_links:
+                    if url_seen(ad_url):
+                        continue
+                    
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(ad_url, source_tag="quoka")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "Quoka: Lead extrahiert", url=ad_url, has_phone=True)
+                        
+                        _mark_url_seen(ad_url, source="Quoka")
+                    else:
+                        log("debug", "Quoka: Keine Handynummer", url=ad_url)
+                
+            except Exception as e:
+                log("error", "Quoka: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "Quoka: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def crawl_kalaydo_listings_async() -> List[Dict]:
+    """
+    Crawlt kalaydo.de Stellengesuche-Seiten.
+    Kalaydo ist besonders stark im Rheinland/NRW!
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("kalaydo", True):
+        return []
+    
+    leads = []
+    max_pages = 3
+    
+    for base_url in KALAYDO_DE_URLS:
+        for page in range(1, max_pages + 1):
+            if page == 1:
+                url = base_url
+            else:
+                separator = "&" if "?" in base_url else "?"
+                url = f"{base_url}{separator}page={page}"
+            
+            try:
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "Kalaydo: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "Kalaydo: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract ad links
+                ad_links = []
+                
+                for selector in [
+                    'article.classified-ad a',
+                    'a[href*="/anzeige/"]',
+                    'a[href*="/stellengesuche/"]',
+                    '.ad-item a'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and ("/anzeige/" in href or "/stellengesuche/" in href):
+                            full_url = urllib.parse.urljoin("https://www.kalaydo.de", href)
+                            if full_url not in ad_links:
+                                ad_links.append(full_url)
+                
+                log("info", "Kalaydo: Anzeigen gefunden", url=url, count=len(ad_links))
+                
+                if not ad_links:
+                    break
+                
+                for ad_url in ad_links:
+                    if url_seen(ad_url):
+                        continue
+                    
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(ad_url, source_tag="kalaydo")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "Kalaydo: Lead extrahiert", url=ad_url, has_phone=True)
+                        
+                        _mark_url_seen(ad_url, source="Kalaydo")
+                    else:
+                        log("debug", "Kalaydo: Keine Handynummer", url=ad_url)
+                
+            except Exception as e:
+                log("error", "Kalaydo: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "Kalaydo: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def crawl_meinestadt_listings_async() -> List[Dict]:
+    """
+    Crawlt meinestadt.de Stellengesuche-Seiten.
+    Städte-basiert, gut für lokale Kandidaten.
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("meinestadt", True):
+        return []
+    
+    leads = []
+    max_pages = 3
+    
+    for base_url in MEINESTADT_DE_URLS:
+        for page in range(1, max_pages + 1):
+            if page == 1:
+                url = base_url
+            else:
+                separator = "&" if "?" in base_url else "?"
+                url = f"{base_url}{separator}page={page}"
+            
+            try:
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "Meinestadt: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "Meinestadt: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract ad links
+                ad_links = []
+                
+                for selector in [
+                    'a[href*="/stellengesuche/anzeige/"]',
+                    'a[href*="/anzeige/"]',
+                    '.job-listing a',
+                    'article a'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and ("/stellengesuche/" in href or "/anzeige/" in href):
+                            full_url = urllib.parse.urljoin("https://www.meinestadt.de", href)
+                            if full_url not in ad_links:
+                                ad_links.append(full_url)
+                
+                log("info", "Meinestadt: Anzeigen gefunden", url=url, count=len(ad_links))
+                
+                if not ad_links:
+                    break
+                
+                for ad_url in ad_links:
+                    if url_seen(ad_url):
+                        continue
+                    
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(ad_url, source_tag="meinestadt")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "Meinestadt: Lead extrahiert", url=ad_url, has_phone=True)
+                        
+                        _mark_url_seen(ad_url, source="Meinestadt")
+                    else:
+                        log("debug", "Meinestadt: Keine Handynummer", url=ad_url)
+                
+            except Exception as e:
+                log("error", "Meinestadt: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "Meinestadt: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl") -> Optional[Dict[str, Any]]:
+    """
+    Generic function to extract contact information from any ad detail page.
+    Similar to extract_kleinanzeigen_detail_async but works for multiple sites.
+    
+    Args:
+        url: URL of the ad detail page
+        source_tag: Tag to identify the source (e.g., "markt_de", "quoka")
+        
+    Returns:
+        Dict with lead data or None if extraction failed
+    """
+    try:
+        r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+        if not r or r.status_code != 200:
+            log("debug", f"{source_tag}: Failed to fetch detail", url=url, status=r.status_code if r else "None")
+            return None
+        
+        html = r.text or ""
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Extract title - try multiple selectors
+        title = ""
+        for selector in ["h1", "h1.title", ".ad-title", ".listing-title"]:
+            title_elem = soup.select_one(selector)
+            if title_elem:
+                title = title_elem.get_text(" ", strip=True)
+                break
+        
+        # Extract description - get all text from body
+        description = soup.get_text(" ", strip=True)
+        
+        # Combine text for extraction
+        full_text = f"{title} {description}"
+        
+        # Extract mobile phone numbers
+        phones = []
+        phone_matches = MOBILE_RE.findall(full_text)
+        for phone_match in phone_matches:
+            normalized = normalize_phone(phone_match)
+            if normalized:
+                is_valid, phone_type = validate_phone(normalized)
+                if is_valid and is_mobile_number(normalized):
+                    phones.append(normalized)
+        
+        # Extract email
+        email = ""
+        email_matches = EMAIL_RE.findall(full_text)
+        if email_matches:
+            email = email_matches[0]
+        
+        # Extract WhatsApp link
+        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
+        if wa_link:
+            wa_href = wa_link.get("href", "")
+            wa_phone = re.sub(r'\D', '', wa_href)
+            if wa_phone:
+                wa_normalized = "+" + wa_phone
+                is_valid, phone_type = validate_phone(wa_normalized)
+                if is_valid and is_mobile_number(wa_normalized):
+                    if wa_normalized not in phones:
+                        phones.append(wa_normalized)
+        
+        # Extract name
+        name = extract_name_enhanced(full_text)
+        
+        # Only create lead if we found at least one mobile number
+        if not phones:
+            return None
+        
+        # Use first mobile number found
+        main_phone = phones[0]
+        
+        # Build lead data
+        lead = {
+            "name": name or "",
+            "rolle": "Vertrieb",
+            "email": email,
+            "telefon": main_phone,
+            "quelle": url,
+            "score": 85,
+            "tags": f"{source_tag},candidate,mobile,direct_crawl",
+            "lead_type": "candidate",
+            "phone_type": "mobile",
+            "opening_line": title[:200] if title else "",
+            "firma": "",
+            "firma_groesse": "",
+            "branche": "",
+            "region": "",
+            "frische": "neu",
+            "confidence": 0.85,
+            "data_quality": 0.80,
+        }
+        
+        return lead
+        
+    except Exception as e:
+        log("error", f"{source_tag}: Error extracting detail", url=url, error=str(e))
         return None
 
 
@@ -6862,69 +7375,116 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     _reset_metrics()
     _uilog(f"Run #{run_id} gestartet (Performance Mode: {perf_params.get('async_limit', 'N/A')} async)")
 
-    # Direct Kleinanzeigen crawling (only in candidates/recruiter mode)
+    # Direct crawling from multiple sources (only in candidates/recruiter mode)
     if _is_candidates_mode() and ENABLE_KLEINANZEIGEN:
-        _uilog("Starte direktes Kleinanzeigen-Crawling (Stellengesuche)...")
+        _uilog("Starte direktes Multi-Portal-Crawling (Stellengesuche)...")
         direct_crawl_leads = []
         
-        for crawl_url in DIRECT_CRAWL_URLS:
-            if run_flag and not run_flag.get("running", True):
-                _uilog("STOP erkannt – breche Direct-Crawl ab")
-                break
-            
-            try:
-                log("info", "Direct crawl: Listing-Seite", url=crawl_url)
+        # Kleinanzeigen.de crawling
+        if DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
+            _uilog("Crawle Kleinanzeigen.de...")
+            for crawl_url in DIRECT_CRAWL_URLS:
+                if run_flag and not run_flag.get("running", True):
+                    _uilog("STOP erkannt – breche Direct-Crawl ab")
+                    break
                 
-                # Step 1: Crawl listing page to get ad links
-                ad_links = await crawl_kleinanzeigen_listings_async(crawl_url, max_pages=5)
-                
-                if not ad_links:
-                    log("info", "Direct crawl: Keine Anzeigen gefunden", url=crawl_url)
-                    continue
-                
-                log("info", "Direct crawl: Anzeigen gefunden", url=crawl_url, count=len(ad_links))
-                
-                # Step 2: Extract details from each ad (with rate limiting)
-                for i, ad_url in enumerate(ad_links):
-                    if run_flag and not run_flag.get("running", True):
-                        break
+                try:
+                    log("info", "Direct crawl: Listing-Seite", url=crawl_url)
                     
-                    # Skip if already seen
-                    if url_seen(ad_url):
-                        log("debug", "Direct crawl: URL bereits gesehen (skip)", url=ad_url)
+                    # Step 1: Crawl listing page to get ad links
+                    ad_links = await crawl_kleinanzeigen_listings_async(crawl_url, max_pages=5)
+                    
+                    if not ad_links:
+                        log("info", "Direct crawl: Keine Anzeigen gefunden", url=crawl_url)
                         continue
                     
-                    # Rate limiting between detail page fetches
-                    if i > 0:
-                        await asyncio.sleep(2.5 + _jitter(0.5, 1.0))
+                    log("info", "Direct crawl: Anzeigen gefunden", url=crawl_url, count=len(ad_links))
                     
-                    # Extract lead data from ad detail page
-                    lead_data = await extract_kleinanzeigen_detail_async(ad_url)
-                    
-                    if lead_data:
-                        direct_crawl_leads.append(lead_data)
+                    # Step 2: Extract details from each ad (with rate limiting)
+                    for i, ad_url in enumerate(ad_links):
+                        if run_flag and not run_flag.get("running", True):
+                            break
                         
-                        # Mark URL as seen
-                        try:
-                            con = db(); cur = con.cursor()
-                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
-                            con.commit()
-                            con.close()
-                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
-                        except Exception as e:
-                            log("warn", "Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
-                
-                # Rate limiting between listing pages
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                
-            except Exception as e:
-                log("error", "Direct crawl: Fehler beim Crawlen", url=crawl_url, error=str(e))
-                continue
+                        # Skip if already seen
+                        if url_seen(ad_url):
+                            log("debug", "Direct crawl: URL bereits gesehen (skip)", url=ad_url)
+                            continue
+                        
+                        # Rate limiting between detail page fetches
+                        if i > 0:
+                            await asyncio.sleep(2.5 + _jitter(0.5, 1.0))
+                        
+                        # Extract lead data from ad detail page
+                        lead_data = await extract_kleinanzeigen_detail_async(ad_url)
+                        
+                        if lead_data:
+                            direct_crawl_leads.append(lead_data)
+                            
+                            # Mark URL as seen
+                            try:
+                                con = db(); cur = con.cursor()
+                                cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
+                                con.commit()
+                                con.close()
+                                _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
+                            except Exception as e:
+                                log("warn", "Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                    
+                    # Rate limiting between listing pages
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                except Exception as e:
+                    log("error", "Direct crawl: Fehler beim Crawlen", url=crawl_url, error=str(e))
+                    continue
         
-        # Insert collected leads
+        # Markt.de crawling
+        if DIRECT_CRAWL_SOURCES.get("markt_de", True):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Markt.de...")
+                try:
+                    markt_leads = await crawl_markt_de_listings_async()
+                    direct_crawl_leads.extend(markt_leads)
+                    log("info", "Markt.de crawl complete", count=len(markt_leads))
+                except Exception as e:
+                    log("error", "Markt.de crawl failed", error=str(e))
+        
+        # Quoka.de crawling
+        if DIRECT_CRAWL_SOURCES.get("quoka", True):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Quoka.de...")
+                try:
+                    quoka_leads = await crawl_quoka_listings_async()
+                    direct_crawl_leads.extend(quoka_leads)
+                    log("info", "Quoka crawl complete", count=len(quoka_leads))
+                except Exception as e:
+                    log("error", "Quoka crawl failed", error=str(e))
+        
+        # Kalaydo.de crawling
+        if DIRECT_CRAWL_SOURCES.get("kalaydo", True):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Kalaydo.de...")
+                try:
+                    kalaydo_leads = await crawl_kalaydo_listings_async()
+                    direct_crawl_leads.extend(kalaydo_leads)
+                    log("info", "Kalaydo crawl complete", count=len(kalaydo_leads))
+                except Exception as e:
+                    log("error", "Kalaydo crawl failed", error=str(e))
+        
+        # Meinestadt.de crawling
+        if DIRECT_CRAWL_SOURCES.get("meinestadt", True):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Meinestadt.de...")
+                try:
+                    meinestadt_leads = await crawl_meinestadt_listings_async()
+                    direct_crawl_leads.extend(meinestadt_leads)
+                    log("info", "Meinestadt crawl complete", count=len(meinestadt_leads))
+                except Exception as e:
+                    log("error", "Meinestadt crawl failed", error=str(e))
+        
+        # Insert collected leads from all sources
         if direct_crawl_leads:
-            log("info", "Direct crawl: Leads gefunden", count=len(direct_crawl_leads))
-            _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert")
+            log("info", "Direct crawl: Leads gefunden (alle Quellen)", count=len(direct_crawl_leads))
+            _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert (alle Portale)")
             
             # Insert into database
             new_leads = insert_leads(direct_crawl_leads)
