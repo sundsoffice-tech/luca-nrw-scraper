@@ -2994,6 +2994,26 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         return None
 
 
+def _mark_url_seen(url: str, source: str = ""):
+    """
+    Helper function to mark a URL as seen in the database.
+    
+    Args:
+        url: The URL to mark as seen
+        source: Optional source name for logging (e.g., "Markt.de", "Quoka")
+    """
+    try:
+        con = db()
+        cur = con.cursor()
+        cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (url,))
+        con.commit()
+        con.close()
+        _seen_urls_cache.add(_normalize_for_dedupe(url))
+    except Exception as e:
+        log_prefix = f"{source}: " if source else ""
+        log("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
+
+
 async def crawl_markt_de_listings_async() -> List[Dict]:
     """
     Crawlt markt.de Stellengesuche-Seiten.
@@ -3074,14 +3094,7 @@ async def crawl_markt_de_listings_async() -> List[Dict]:
                         log("info", "Markt.de: Lead extrahiert", url=ad_url, has_phone=True)
                         
                         # Mark as seen
-                        try:
-                            con = db(); cur = con.cursor()
-                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
-                            con.commit()
-                            con.close()
-                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
-                        except Exception as e:
-                            log("warn", "Markt.de: Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                        _mark_url_seen(ad_url, source="Markt.de")
                     else:
                         log("debug", "Markt.de: Keine Handynummer", url=ad_url)
                 
@@ -3164,14 +3177,7 @@ async def crawl_quoka_listings_async() -> List[Dict]:
                         leads.append(lead)
                         log("info", "Quoka: Lead extrahiert", url=ad_url, has_phone=True)
                         
-                        try:
-                            con = db(); cur = con.cursor()
-                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
-                            con.commit()
-                            con.close()
-                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
-                        except Exception as e:
-                            log("warn", "Quoka: Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                        _mark_url_seen(ad_url, source="Quoka")
                     else:
                         log("debug", "Quoka: Keine Handynummer", url=ad_url)
                 
@@ -3251,14 +3257,7 @@ async def crawl_kalaydo_listings_async() -> List[Dict]:
                         leads.append(lead)
                         log("info", "Kalaydo: Lead extrahiert", url=ad_url, has_phone=True)
                         
-                        try:
-                            con = db(); cur = con.cursor()
-                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
-                            con.commit()
-                            con.close()
-                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
-                        except Exception as e:
-                            log("warn", "Kalaydo: Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                        _mark_url_seen(ad_url, source="Kalaydo")
                     else:
                         log("debug", "Kalaydo: Keine Handynummer", url=ad_url)
                 
@@ -3338,14 +3337,7 @@ async def crawl_meinestadt_listings_async() -> List[Dict]:
                         leads.append(lead)
                         log("info", "Meinestadt: Lead extrahiert", url=ad_url, has_phone=True)
                         
-                        try:
-                            con = db(); cur = con.cursor()
-                            cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (ad_url,))
-                            con.commit()
-                            con.close()
-                            _seen_urls_cache.add(_normalize_for_dedupe(ad_url))
-                        except Exception as e:
-                            log("warn", "Meinestadt: Konnte URL nicht als gesehen markieren", url=ad_url, error=str(e))
+                        _mark_url_seen(ad_url, source="Meinestadt")
                     else:
                         log("debug", "Meinestadt: Keine Handynummer", url=ad_url)
                 

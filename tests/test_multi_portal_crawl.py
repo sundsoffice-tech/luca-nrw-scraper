@@ -175,7 +175,7 @@ async def test_crawl_markt_de_mock():
          patch('scriptname.asyncio.sleep', new_callable=AsyncMock), \
          patch('scriptname.url_seen', return_value=False), \
          patch('scriptname.db', return_value=mock_db_con), \
-         patch.dict('scriptname.MARKT_DE_URLS', ["https://www.markt.de/stellengesuche/test/"]):
+         patch('scriptname.MARKT_DE_URLS', ["https://www.markt.de/stellengesuche/test/"]):
         
         # First call returns listing, subsequent calls return details
         mock_http.side_effect = [mock_listing_response, mock_detail_response, mock_detail_response]
@@ -299,7 +299,7 @@ async def test_crawl_with_pagination():
          patch('scriptname.asyncio.sleep', new_callable=AsyncMock), \
          patch('scriptname.url_seen', return_value=False), \
          patch('scriptname.db', return_value=mock_db_con), \
-         patch.dict('scriptname.MARKT_DE_URLS', ["https://www.markt.de/test/"]):
+         patch('scriptname.MARKT_DE_URLS', ["https://www.markt.de/test/"]):
         
         # Return page1, then page2 (empty)
         mock_http.side_effect = [mock_response1, mock_response2]

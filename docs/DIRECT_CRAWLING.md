@@ -310,7 +310,7 @@ All portals use a generic extractor that:
 
 ## Performance Expectations
 
-Based on testing and documentation:
+**Note:** These are projections based on similar platform analysis and Kleinanzeigen.de performance data. Actual results will need to be validated in production.
 
 | Portal | Avg Ads/Run | Mobile % | Expected Leads/Run |
 |--------|-------------|----------|-------------------|
@@ -321,7 +321,12 @@ Based on testing and documentation:
 | Meinestadt.de | ~30-50 | ~20% | ~8-10 |
 | **TOTAL** | **250-340** | - | **73-85** |
 
-These are estimates and actual results will vary based on:
+These are estimates based on:
+- Kleinanzeigen.de actual performance (established baseline)
+- Market analysis of other platforms' job seeker sections
+- Regional NRW coverage patterns
+
+Actual results will vary based on:
 - Time of day/week
 - Seasonal variations
 - Current job market activity
