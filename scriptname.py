@@ -1225,51 +1225,10 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
     return r
 
 def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
-    # FORCE ALLOW for target sites (bypass protection)
-    lower_url = (url or "").lower()
-    if ("linkedin.com" in lower_url) or ("xing.com" in lower_url) or ("facebook.com" in lower_url):
-        return True
-    if rp is None:
-        return True
-    try:
-        return rp.can_fetch(USER_AGENT, url)
-    except Exception:
-        return True
+    return True
 
 async def robots_allowed_async(url: str) -> bool:
-    try:
-        lower_url = (url or "").lower()
-        if ("linkedin.com" in lower_url) or ("xing.com" in lower_url) or ("facebook.com" in lower_url):
-            return True
-
-        p = urllib.parse.urlparse(url)
-        base = f"{p.scheme}://{p.netloc}"
-        rp_ts = _ROBOTS_CACHE.get(base)
-
-        need_refresh = True
-        if rp_ts:
-            rp, ts = rp_ts
-            if time.time() - ts < _ROBOTS_CACHE_TTL:
-                need_refresh = False
-
-        if need_refresh:
-            robots_url = urllib.parse.urljoin(base, "/robots.txt")
-            r = await http_get_async(robots_url, timeout=10)
-            rp = RobotFileParser()
-            if r and r.status_code == 200 and r.text:
-                rp.parse(r.text.splitlines())
-            else:
-                _ROBOTS_CACHE[base] = (rp, time.time())
-                log("warn", "robots.txt Fetch fehlgeschlagen – konservativ erlauben", url=url)
-                return True
-            _ROBOTS_CACHE[base] = (rp, time.time())
-
-        allowed = check_robots_txt(url, _ROBOTS_CACHE[base][0])
-        log("debug", "robots.txt geprüft", url=url, allowed=allowed)
-        return allowed
-    except Exception as e:
-        log("warn", "robots.txt Prüfung fehlgeschlagen – konservativ erlauben", url=url, error=str(e))
-        return True
+    return True
 
 # =========================
 # Suche (modular)
