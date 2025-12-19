@@ -615,7 +615,11 @@ LEAD_FIELDS = [
     "company_name","company_size","hiring_volume","industry",
     "recency_indicator","location_specific","confidence_score","last_updated",
     "data_quality","phone_type","whatsapp_link","private_address","social_profile_url",
-    "ai_category","ai_summary"
+    "ai_category","ai_summary",
+    # New candidate-focused fields
+    "candidate_status","experience_years","availability","mobility","skills",
+    "industries_experience","source_type","profile_url","cv_url",
+    "contact_preference","last_activity","name_validated"
 ]
 
 def _ensure_schema(con: sqlite3.Connection) -> None:
@@ -961,6 +965,19 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 log("debug", "Lead dropped at insert (job posting)", url=source_url)
                 continue
             
+            # Name validation (heuristic only - async AI validation would be too slow here)
+            name = (r.get("name") or "").strip()
+            if name:
+                is_real, confidence, reason = _validate_name_heuristic(name)
+                if not is_real:
+                    log("debug", "Lead dropped at insert (invalid name)", name=name, reason=reason, url=source_url)
+                    continue
+                r["name_validated"] = 1  # Mark as validated
+            else:
+                # No name - skip lead (name is mandatory)
+                log("debug", "Lead dropped at insert (no name)", url=source_url)
+                continue
+            
             # Phone hardfilter: Re-check phone validity before insert
             phone = (r.get("telefon") or "").strip()
             if phone:
@@ -1011,7 +1028,20 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("private_address",""),
                 r.get("social_profile_url",""),
                 r.get("ai_category",""),
-                r.get("ai_summary","")
+                r.get("ai_summary",""),
+                # New candidate fields
+                r.get("candidate_status",""),
+                r.get("experience_years",0),
+                r.get("availability",""),
+                r.get("mobility",""),
+                r.get("skills",""),
+                r.get("industries_experience",""),
+                r.get("source_type",""),
+                r.get("profile_url",""),
+                r.get("cv_url",""),
+                r.get("contact_preference",""),
+                r.get("last_activity",""),
+                r.get("name_validated",0)
             ]
             cur.execute(sql, vals)
             if cur.rowcount > 0:
@@ -1061,7 +1091,20 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("private_address",""),
                 r.get("social_profile_url",""),
                 r.get("ai_category",""),
-                r.get("ai_summary","")
+                r.get("ai_summary",""),
+                # New candidate fields
+                r.get("candidate_status",""),
+                r.get("experience_years",0),
+                r.get("availability",""),
+                r.get("mobility",""),
+                r.get("skills",""),
+                r.get("industries_experience",""),
+                r.get("source_type",""),
+                r.get("profile_url",""),
+                r.get("cv_url",""),
+                r.get("contact_preference",""),
+                r.get("last_activity",""),
+                r.get("name_validated",0)
             ]
             cur.execute(sql, vals)
             if cur.rowcount > 0:
@@ -4791,6 +4834,17 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             log("debug", "Garbage Context detected", url=url, reason=reason)
             mark_url_seen(url, run_id)
             return (1, [])
+        
+        # NEW: Analyze "wir suchen" context before blocking
+        wir_suchen_classification, wir_suchen_reason = analyze_wir_suchen_context(text, url)
+        if wir_suchen_classification == "job_ad":
+            log("debug", "Job-Ad detected via wir suchen analysis", url=url, reason=wir_suchen_reason)
+            mark_url_seen(url, run_id)
+            return (1, [])
+        elif wir_suchen_classification == "candidate":
+            log("debug", "Candidate detected via wir suchen analysis - allowing", url=url, reason=wir_suchen_reason)
+            # Continue processing - this is a candidate
+        
         if not is_candidate_profile_text(text):
             log("debug", "Kein Kandidatenprofil - skip", url=url)
             mark_url_seen(url, run_id)
@@ -4827,6 +4881,12 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     if linkedin_profile and not social_profile_url:
         social_profile_url = url
     role_category = classify_role(text, page_title or title_text)
+    
+    # NEW: Detect hidden gems (Quereinsteiger with sales potential)
+    hidden_gem_type, hidden_gem_confidence, hidden_gem_reason = detect_hidden_gem(text, url)
+    if hidden_gem_type:
+        log("info", "Hidden gem detected", gem_type=hidden_gem_type, confidence=hidden_gem_confidence, 
+            reason=hidden_gem_reason, url=url)
 
     # --- Job/Karriere/Jobs/stellen: nur weiter, wenn direkter Kontaktanker existiert ---
     lu = url.lower()
