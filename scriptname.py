@@ -3331,6 +3331,18 @@ CANDIDATE_PHONE_CONTEXT = (
     "bewerbung", "stellengesuch", "ich suche", "ich bin", "open to work", "freelancer", "freiberuf",
 )
 
+# Social media profile URL patterns for candidates mode
+SOCIAL_PROFILE_PATTERNS = (
+    "linkedin.com/in/",
+    "xing.com/profile/",
+    "instagram.com/",
+    "facebook.com/",
+    "twitter.com/",
+    "x.com/",
+    "t.me/",
+    "chat.whatsapp.com/",
+)
+
 
 def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") -> Tuple[bool, str]:
     """Detect obvious non-candidate contexts (blogs, shops, company imprint, job ads)."""
@@ -3338,17 +3350,7 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     # NEU: Im Candidates-Modus - Social-Profile NIEMALS als Garbage markieren!
     if _is_candidates_mode():
         url_lower = (url or "").lower()
-        social_patterns = [
-            "linkedin.com/in/",
-            "xing.com/profile/",
-            "instagram.com/",
-            "facebook.com/",
-            "twitter.com/",
-            "x.com/",
-            "t.me/",
-            "chat.whatsapp.com/",
-        ]
-        if any(pattern in url_lower for pattern in social_patterns):
+        if any(pattern in url_lower for pattern in SOCIAL_PROFILE_PATTERNS):
             return False, ""  # Social-Profile durchlassen!
     
     t = (text or "").lower()
@@ -3492,7 +3494,7 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
     return record
 
 def is_candidate_profile_text(text: str) -> bool:
-    # Im Candidates-Modus: Social-Profile immer durchlassen
+    # Im Candidates-Modus: Alle Profile durchlassen (verhindert Text-basierte Job-Ad-Erkennung)
     if _is_candidates_mode():
         return True
     
@@ -4311,19 +4313,17 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     is_candidate = is_candidate_seeking_job(title_text or "", "", url)
     
     # NEU: Im Candidates-Modus - Titel-Guard für Social-Profile überspringen
+    url_lower = url.lower()
+    is_social_profile = any(p in url_lower for p in SOCIAL_PROFILE_PATTERNS)
+    
     if _is_candidates_mode():
-        url_lower = url.lower()
-        is_social_profile = any(p in url_lower for p in [
-            "linkedin.com/in/", "xing.com/profile/", "instagram.com/", "facebook.com/"
-        ])
-        if is_social_profile:
-            # Titel-Guard überspringen für Social-Profile
-            pass
-        elif any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
-            if not is_candidate:
-                log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
-                mark_url_seen(url, run_id)
-                return (1, [])
+        # Social-Profile überspringen den Titel-Guard
+        if not is_social_profile:
+            if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
+                if not is_candidate:
+                    log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
+                    mark_url_seen(url, run_id)
+                    return (1, [])
     else:
         # Standard-Logik für nicht-Candidates-Modus
         if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
