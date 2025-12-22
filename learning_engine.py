@@ -775,14 +775,13 @@ class LearningEngine:
                 ON CONFLICT(domain) DO UPDATE SET
                     total_requests = total_requests + 1,
                     successful_requests = successful_requests + ?,
-                    success_rate = CAST(successful_requests + ? AS REAL) / (total_requests + 1),
+                    success_rate = CAST(successful_requests AS REAL) / total_requests,
                     rate_limit_detected = rate_limit_detected OR ?,
                     last_updated = CURRENT_TIMESTAMP
             """, (
                 domain, 
                 1 if success else 0, 
                 1 if rate_limited else 0,
-                1 if success else 0,
                 1 if success else 0,
                 1 if rate_limited else 0
             ))

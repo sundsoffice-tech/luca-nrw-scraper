@@ -93,13 +93,13 @@ def extract_whatsapp_number(html: str) -> Optional[str]:
         if match:
             number = match.group(1)
             # WhatsApp numbers are usually without leading 0 or +
-            # Assume German number if 11 digits starting with 49
-            if number.startswith('49') and len(number) == 12:
+            # German number: +49 (2) + mobile prefix (3) + rest (8) = 13 total
+            if number.startswith('49') and len(number) == 13:
                 return '+' + number
-            elif len(number) == 11:  # Might be German without country code
+            elif len(number) == 11:  # Might be German without country code (01761234567)
+                return '+49' + number[1:]  # Remove leading 0
+            elif len(number) == 10:  # Might be missing leading 0 (1761234567)
                 return '+49' + number
-            elif len(number) == 10:  # Might be missing leading 0
-                return '0' + number
     
     return None
 
@@ -258,7 +258,7 @@ def get_best_phone_number(extraction_results: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-async def extract_phone_with_ai(html: str, openai_api_key: str = None) -> Optional[str]:
+def extract_phone_with_ai(html: str, openai_api_key: str = None) -> Optional[str]:
     """
     Use OpenAI to find hidden/unusual phone numbers.
     
