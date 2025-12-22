@@ -477,15 +477,35 @@ DHD24_URLS = [
     "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-verkauf.html",
 ]
 
+# Freelancermap.de URLs - Vertrieb/Sales Freelancer mit öffentlichen Telefonnummern
+FREELANCERMAP_URLS = [
+    "https://www.freelancermap.de/freelancer-verzeichnis/sales.html",
+    "https://www.freelancermap.de/freelancer-verzeichnis/vertrieb.html",
+    "https://www.freelancermap.de/freelancer-verzeichnis/business-development.html",
+    "https://www.freelancermap.de/freelancer-verzeichnis/account-management.html",
+    "https://www.freelancermap.de/freelancer-verzeichnis/key-account-management.html",
+]
+
+# Freelance.de URLs - Vertrieb/Sales Freelancer
+FREELANCE_DE_URLS = [
+    "https://www.freelance.de/Freiberufler/Vertrieb/",
+    "https://www.freelance.de/Freiberufler/Sales/",
+    "https://www.freelance.de/Freiberufler/Key-Account/",
+    "https://www.freelance.de/Freiberufler/Business-Development/",
+    "https://www.freelance.de/Freiberufler/Account-Manager/",
+]
+
 # Direct crawl source configuration
 DIRECT_CRAWL_SOURCES = {
     "kleinanzeigen": True,
     "markt_de": True,
     "quoka": True,
-    "kalaydo": True,
+    "kalaydo": False,  # Deaktiviert - Blockiert Requests
     "meinestadt": True,
     "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
-    "dhd24": True,
+    "dhd24": False,  # Deaktiviert - 403 Forbidden
+    "freelancermap": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
+    "freelance_de": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
 }
 
 # Parallel crawling configuration
@@ -3879,6 +3899,238 @@ async def crawl_freelancer_portals_async() -> List[Dict]:
                 break
     
     log("info", "Freelancer Portal: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def extract_freelancer_profile_async(profile_url: str, source_tag: str = "freelancer") -> Optional[Dict]:
+    """
+    Extrahiert Daten aus einem Freelancer-Profil.
+    
+    Args:
+        profile_url: URL zum Freelancer-Profil
+        source_tag: Tag für die Quelle (z.B. "freelancermap", "freelance_de")
+    
+    Returns:
+        Lead-Dict oder None
+    """
+    try:
+        r = await http_get_async(profile_url, timeout=HTTP_TIMEOUT)
+        if not r or r.status_code != 200:
+            return None
+        
+        html = r.text or ""
+        soup = BeautifulSoup(html, "html.parser")
+        
+        # Extract name
+        name = None
+        for selector in ['h1.profile-name', 'h1.freelancer-name', '.profile-header h1', 'h1']:
+            elem = soup.select_one(selector)
+            if elem:
+                name = elem.get_text(strip=True)
+                break
+        
+        if not name:
+            return None
+        
+        # Extract phone number
+        phone = None
+        phone_patterns = [
+            r'(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,10}',  # Mobile
+            r'(?:\+49|0)\s*\d{3,5}[\s\/\-]?\d{4,10}'  # Any phone
+        ]
+        
+        for pattern in phone_patterns:
+            phone_match = re.search(pattern, html)
+            if phone_match:
+                phone = phone_match.group(0)
+                break
+        
+        # If no phone found in HTML, try looking in specific elements
+        if not phone:
+            for selector in ['.contact-phone', '.phone', '[data-phone]', 'a[href^="tel:"]']:
+                elem = soup.select_one(selector)
+                if elem:
+                    phone_text = elem.get('data-phone') or elem.get('href', '').replace('tel:', '') or elem.get_text()
+                    if phone_text:
+                        phone = phone_text.strip()
+                        break
+        
+        if not phone:
+            return None  # No phone = not useful
+        
+        # Extract skills/role
+        skills = []
+        for selector in ['.skills .skill', '.tag', '.badge']:
+            skill_elems = soup.select(selector)
+            for elem in skill_elems:
+                skill = elem.get_text(strip=True)
+                if skill and len(skill) < 50:
+                    skills.append(skill)
+        
+        role_guess = ", ".join(skills[:3]) if skills else "Freelancer"
+        
+        # Extract location/region
+        region = ""
+        for selector in ['.location', '.city', '[itemprop="addressLocality"]']:
+            elem = soup.select_one(selector)
+            if elem:
+                region = elem.get_text(strip=True)
+                break
+        
+        # Extract availability
+        availability = ""
+        for selector in ['.availability', '.verfuegbarkeit', '[data-availability]']:
+            elem = soup.select_one(selector)
+            if elem:
+                availability = elem.get_text(strip=True)
+                break
+        
+        # Score: Higher for profiles with mobile numbers
+        normalized_phone = normalize_phone(phone)
+        is_valid, phone_type = validate_phone(normalized_phone)
+        
+        score = 75
+        if phone_type == "mobile":
+            score = 85
+        
+        lead = {
+            "name": name,
+            "telefon": normalized_phone if is_valid else phone,
+            "phone_type": phone_type,
+            "email": "",
+            "role_guess": role_guess,
+            "quelle": profile_url,
+            "score": score,
+            "tags": f"{source_tag},freelancer,direct_crawl",
+            "lead_type": "freelancer",
+            "firma": "",
+            "firma_groesse": "",
+            "branche": "",
+            "region": region,
+            "frische": "neu",
+            "confidence": 0.85,
+            "data_quality": 0.80,
+            "opening_line": f"Verfügbarkeit: {availability}" if availability else "",
+        }
+        
+        return lead
+        
+    except Exception as e:
+        log("error", f"{source_tag}: Error extracting profile", url=profile_url, error=str(e))
+        return None
+
+
+async def crawl_freelancermap_async() -> List[Dict]:
+    """
+    Crawlt Freelancermap.de Profile.
+    Profile haben oft:
+    - Öffentliche Telefonnummer
+    - Verfügbarkeit
+    - Stundensatz
+    - Skills
+    """
+    if not DIRECT_CRAWL_SOURCES.get("freelancermap", False):
+        return []
+    
+    leads = []
+    
+    for url in FREELANCERMAP_URLS:
+        try:
+            log("info", "Freelancermap: Crawle Listing", url=url)
+            
+            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+            if not r or r.status_code != 200:
+                log("warn", "Freelancermap: Fetch failed", url=url, status=r.status_code if r else "None")
+                continue
+            
+            html = r.text or ""
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # Extract profile links
+            profile_links = []
+            for profile_link in soup.select("a.profile-link, a[href*='/freelancer/']"):
+                href = profile_link.get("href", "")
+                if href:
+                    profile_url = urllib.parse.urljoin(url, href)
+                    if profile_url not in profile_links:
+                        profile_links.append(profile_url)
+            
+            log("info", "Freelancermap: Profile gefunden", count=len(profile_links))
+            
+            # Crawl individual profiles
+            for profile_url in profile_links[:10]:  # Limit to 10 profiles per URL
+                if url_seen(profile_url):
+                    continue
+                
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))  # Rate limiting
+                
+                profile_data = await extract_freelancer_profile_async(profile_url, source_tag="freelancermap")
+                if profile_data and profile_data.get("telefon"):
+                    leads.append(profile_data)
+                    _mark_url_seen(profile_url, source="Freelancermap")
+                    log("info", "Freelancermap: Lead extrahiert", url=profile_url)
+            
+            await asyncio.sleep(3.0)  # Rate limiting between URLs
+            
+        except Exception as e:
+            log("error", "Freelancermap: Crawl error", url=url, error=str(e))
+    
+    log("info", "Freelancermap: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
+async def crawl_freelance_de_async() -> List[Dict]:
+    """
+    Crawlt Freelance.de Profile.
+    Profile haben oft öffentliche Kontaktdaten.
+    """
+    if not DIRECT_CRAWL_SOURCES.get("freelance_de", False):
+        return []
+    
+    leads = []
+    
+    for url in FREELANCE_DE_URLS:
+        try:
+            log("info", "Freelance.de: Crawle Listing", url=url)
+            
+            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+            if not r or r.status_code != 200:
+                log("warn", "Freelance.de: Fetch failed", url=url, status=r.status_code if r else "None")
+                continue
+            
+            html = r.text or ""
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # Extract profile links
+            profile_links = []
+            for profile_link in soup.select("a[href*='/Freiberufler/'], a.profile-link, .freelancer-link"):
+                href = profile_link.get("href", "")
+                if href and "/Freiberufler/" in href:
+                    profile_url = urllib.parse.urljoin(url, href)
+                    if profile_url not in profile_links:
+                        profile_links.append(profile_url)
+            
+            log("info", "Freelance.de: Profile gefunden", count=len(profile_links))
+            
+            # Crawl individual profiles
+            for profile_url in profile_links[:10]:  # Limit to 10 profiles per URL
+                if url_seen(profile_url):
+                    continue
+                
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))  # Rate limiting
+                
+                profile_data = await extract_freelancer_profile_async(profile_url, source_tag="freelance_de")
+                if profile_data and profile_data.get("telefon"):
+                    leads.append(profile_data)
+                    _mark_url_seen(profile_url, source="Freelance.de")
+                    log("info", "Freelance.de: Lead extrahiert", url=profile_url)
+            
+            await asyncio.sleep(3.0)  # Rate limiting between URLs
+            
+        except Exception as e:
+            log("error", "Freelance.de: Crawl error", url=url, error=str(e))
+    
+    log("info", "Freelance.de: Crawling abgeschlossen", total_leads=len(leads))
     return leads
 
 
@@ -8030,6 +8282,32 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 except Exception as e:
                     log("error", "Freelancer portals crawl failed", error=str(e))
         
+        # Freelancermap.de crawling (NEU)
+        if DIRECT_CRAWL_SOURCES.get("freelancermap", False):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Freelancermap.de...")
+                try:
+                    freelancermap_leads = await crawl_freelancermap_async()
+                    direct_crawl_leads.extend(freelancermap_leads)
+                    log("info", "Freelancermap crawl complete", count=len(freelancermap_leads))
+                    _uilog(f"Freelancermap: {len(freelancermap_leads)} Leads extrahiert")
+                except Exception as e:
+                    log("error", "Freelancermap crawl failed", error=str(e))
+                    _uilog(f"Freelancermap Fehler: {str(e)}")
+        
+        # Freelance.de crawling (NEU)
+        if DIRECT_CRAWL_SOURCES.get("freelance_de", False):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Freelance.de...")
+                try:
+                    freelance_de_leads = await crawl_freelance_de_async()
+                    direct_crawl_leads.extend(freelance_de_leads)
+                    log("info", "Freelance.de crawl complete", count=len(freelance_de_leads))
+                    _uilog(f"Freelance.de: {len(freelance_de_leads)} Leads extrahiert")
+                except Exception as e:
+                    log("error", "Freelance.de crawl failed", error=str(e))
+                    _uilog(f"Freelance.de Fehler: {str(e)}")
+        
         # Insert collected leads from all sources
         try:
             if direct_crawl_leads:
@@ -8038,6 +8316,37 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 
                 log("info", "Multi-Portal-Crawling abgeschlossen", leads=len(direct_crawl_leads))
                 _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
+                
+                # Telefonbuch-Enrichment für Leads ohne Telefon
+                if TELEFONBUCH_ENRICHMENT_ENABLED:
+                    leads_without_phone = [l for l in direct_crawl_leads if not l.get("telefon") and l.get("name") and l.get("region")]
+                    if leads_without_phone:
+                        log("info", "Starte Telefonbuch-Enrichment", count=len(leads_without_phone))
+                        _uilog(f"Telefonbuch-Enrichment: Prüfe {len(leads_without_phone)} Leads ohne Telefon...")
+                        
+                        try:
+                            enriched_leads = await enrich_leads_with_telefonbuch(leads_without_phone)
+                            
+                            # Update leads with enriched data
+                            enriched_count = 0
+                            for enriched_lead in enriched_leads:
+                                if enriched_lead.get("telefon"):
+                                    # Find and update in direct_crawl_leads
+                                    for i, lead in enumerate(direct_crawl_leads):
+                                        if (lead.get("name") == enriched_lead.get("name") and 
+                                            lead.get("region") == enriched_lead.get("region") and
+                                            not lead.get("telefon")):
+                                            direct_crawl_leads[i] = enriched_lead
+                                            enriched_count += 1
+                                            break
+                            
+                            log("info", "Telefonbuch-Enrichment abgeschlossen", enriched=enriched_count, checked=len(leads_without_phone))
+                            _uilog(f"Telefonbuch-Enrichment: {enriched_count} Leads mit Telefon angereichert")
+                        except Exception as e:
+                            log("error", "Telefonbuch-Enrichment fehlgeschlagen", error=str(e))
+                            _uilog(f"Telefonbuch-Enrichment Fehler: {str(e)}")
+                    else:
+                        log("info", "Telefonbuch-Enrichment: Alle Leads haben bereits Telefonnummern")
                 
                 # Insert collected leads from all sources
                 new_leads = insert_leads(direct_crawl_leads)
