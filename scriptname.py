@@ -7920,15 +7920,14 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
                 
                 # Insert collected leads from all sources
-                if direct_crawl_leads:
-                    new_leads = insert_leads(direct_crawl_leads)
-                    leads_new_total += len(new_leads)
-                    
-                    log("info", "Direct crawl: Neue Leads gespeichert", count=len(new_leads))
-                    _uilog(f"Direct crawl: {len(new_leads)} neue Leads gespeichert")
-                else:
-                    log("info", "Direct crawl: Keine Leads gefunden")
-                    _uilog("Direct crawl: Keine Leads gefunden")
+                new_leads = insert_leads(direct_crawl_leads)
+                leads_new_total += len(new_leads)
+                
+                log("info", "Direct crawl: Neue Leads gespeichert", count=len(new_leads))
+                _uilog(f"Direct crawl: {len(new_leads)} neue Leads gespeichert")
+            else:
+                log("info", "Direct crawl: Keine Leads gefunden")
+                _uilog("Direct crawl: Keine Leads gefunden")
         except Exception as e:
             log("error", "Multi-Portal-Crawling failed", error=str(e))
             _uilog(f"Multi-Portal-Crawling fehlgeschlagen: {str(e)}")
