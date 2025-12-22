@@ -504,11 +504,23 @@ DIRECT_CRAWL_SOURCES = {
     "markt_de": True,
     "quoka": True,
     "kalaydo": False,  # Deaktiviert - Blockiert Requests
-    "meinestadt": True,
+    "meinestadt": False,  # DEAKTIVIERT - 0 Stellengesuche bei 12 Städten (komplett nutzlos)
     "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
-    "dhd24": False,  # Deaktiviert - 403 Forbidden
+    "dhd24": True,  # AKTIVIERT - Alternative zu meinestadt
     "freelancermap": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
     "freelance_de": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
+}
+
+# Portal-specific request delays (seconds) to avoid rate limiting
+PORTAL_DELAYS = {
+    "kleinanzeigen": 3.0,
+    "markt_de": 4.0,
+    "quoka": 6.0,  # ERHÖHT von 3.0 - 429 Rate-Limit Detection
+    "kalaydo": 4.0,
+    "meinestadt": 3.0,
+    "dhd24": 4.0,
+    "freelancermap": 3.0,
+    "freelance_de": 3.0,
 }
 
 # Parallel crawling configuration
