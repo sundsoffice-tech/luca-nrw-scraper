@@ -83,6 +83,15 @@ from learning_engine import (
     is_mobile_number,
     is_job_posting,
 )
+from lead_validation import (
+    validate_lead_before_insert,
+    normalize_phone_number,
+    extract_person_name,
+    validate_lead_name,
+    increment_rejection_stat,
+    get_rejection_stats,
+    reset_rejection_stats,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -1452,6 +1461,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
     Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
     STRICT RULE: Only mobile numbers allowed - landline numbers are rejected.
+    NEW: Uses lead_validation module for comprehensive quality filtering.
     """
     if not leads:
         return []
@@ -1467,46 +1477,77 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     try:
         for r in leads:
-            # CRITICAL: Check for job postings first - NEVER save job ads as leads
+            # STEP 1: Apply comprehensive validation from lead_validation module
+            is_valid, reason = validate_lead_before_insert(r)
+            if not is_valid:
+                log("debug", "Lead abgelehnt", reason=reason, url=r.get('quelle'))
+                increment_rejection_stat(reason)
+                continue
+            
+            # STEP 2: Normalize phone number to international format
+            phone = r.get('telefon')
+            if phone:
+                normalized = normalize_phone_number(phone)
+                if normalized:
+                    r['telefon'] = normalized
+            
+            # STEP 3: Extract real person name from raw text
+            name = r.get('name')
+            if name:
+                extracted_name = extract_person_name(name)
+                if extracted_name:
+                    r['name'] = extracted_name
+                    
+                    # Validate extracted name again
+                    if not validate_lead_name(extracted_name):
+                        log("debug", "Lead abgelehnt nach Name-Extraktion", name=extracted_name)
+                        increment_rejection_stat("Ungültiger Name nach Extraktion")
+                        continue
+            
+            # STEP 4: Additional validation using existing logic for backwards compatibility
             source_url = r.get("quelle", "")
+            
+            # Check for job postings
             if is_job_posting(url=source_url, title=r.get("name", ""), 
                              snippet=r.get("opening_line", ""), content=r.get("tags", "")):
                 log("debug", "Lead dropped at insert (job posting)", url=source_url)
+                increment_rejection_stat("Job posting detected")
                 continue
             
-            # Name validation (heuristic only - async AI validation would be too slow here)
+            # Validate name with heuristics
             name = (r.get("name") or "").strip()
             if name:
-                is_real, confidence, reason = _validate_name_heuristic(name)
+                is_real, confidence, reason_heuristic = _validate_name_heuristic(name)
                 if not is_real:
-                    log("debug", "Lead dropped at insert (invalid name)", name=name, reason=reason, url=source_url)
+                    log("debug", "Lead dropped at insert (invalid name heuristic)", name=name, reason=reason_heuristic, url=source_url)
+                    increment_rejection_stat(f"Invalid name: {reason_heuristic}")
                     continue
                 r["name_validated"] = 1  # Mark as validated
             else:
-                # No name - skip lead (name is mandatory)
                 log("debug", "Lead dropped at insert (no name)", url=source_url)
+                increment_rejection_stat("No name")
                 continue
             
-            # Phone hardfilter: Re-check phone validity before insert
+            # Phone validation - already done by validate_lead_before_insert, but double-check
             phone = (r.get("telefon") or "").strip()
             if phone:
-                is_valid, phone_type = validate_phone(phone)
-                if not is_valid:
-                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=source_url)
+                is_valid_phone, phone_type = validate_phone(phone)
+                if not is_valid_phone:
+                    log("debug", "Lead dropped at insert (invalid phone secondary check)", phone=phone, url=source_url)
+                    increment_rejection_stat("Invalid phone (secondary)")
                     continue
                 
-                # STRICT: Only mobile numbers allowed
-                # Normalize phone first before checking if it's mobile
+                # Ensure it's a mobile number
                 normalized_phone = normalize_phone(phone)
                 if not is_mobile_number(normalized_phone):
                     log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
+                    increment_rejection_stat("Not mobile number")
                     continue
                 
-                # Update phone_type to mobile (since we validated it's mobile)
                 r["phone_type"] = "mobile"
             else:
-                # No phone - skip lead (phone is mandatory)
                 log("debug", "Lead dropped at insert (no phone)", url=source_url)
+                increment_rejection_stat("No phone")
                 continue
             vals = [
                 r.get("name",""),
@@ -1642,6 +1683,25 @@ def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Opti
     con.commit(); con.close()
     if metrics:
         log("info", "Run metrics", **metrics)
+    
+    # Log lead rejection statistics
+    log_rejection_stats()
+
+def log_rejection_stats():
+    """Log statistics about rejected leads at the end of a run."""
+    stats = get_rejection_stats()
+    total_rejected = sum(stats.values())
+    
+    if total_rejected > 0:
+        log("info", "Lead-Filter Statistik", 
+            total_rejected=total_rejected,
+            rejected_phone=stats['invalid_phone'],
+            rejected_source=stats['blocked_source'],
+            rejected_name=stats['invalid_name'],
+            rejected_type=stats['wrong_type'])
+    
+    # Reset statistics for next run
+    reset_rejection_stats()
 
 def reset_history():
     con = db(); cur = con.cursor()
