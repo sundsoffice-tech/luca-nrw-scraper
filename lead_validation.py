@@ -224,12 +224,11 @@ def validate_lead_name(name: str) -> bool:
     if len(name) < 3:
         return False
     
-    # Block technical/test names
+    # Block technical/test names (exact match or clear test patterns)
     blocked_names = [
         '_probe_',
         'test',
         'beispiel',
-        'muster',
         'unknown',
         'n/a',
         'keine angabe',
@@ -238,6 +237,10 @@ def validate_lead_name(name: str) -> bool:
     for blocked in blocked_names:
         if blocked in name_lower:
             return False
+    
+    # Block "muster" only if it's the whole word or at the start
+    if re.search(r'\bmuster\b', name_lower) or name_lower.startswith('muster'):
+        return False
     
     # Block headlines (typical job ad phrases)
     headline_patterns = [
