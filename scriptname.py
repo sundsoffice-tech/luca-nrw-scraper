@@ -3679,15 +3679,12 @@ async def crawl_freelancer_portals_async() -> List[Dict]:
                     for link in links:
                         href = link.get("href", "")
                         if href and any(keyword in href for keyword in ["/freelancer/", "/profil/", "/profile/"]):
-                            # Make absolute URL
+                            # Make absolute URL using urllib.parse.urljoin
                             if href.startswith("http"):
                                 full_url = href
                             else:
-                                # Parse base domain from base_url
-                                from urllib.parse import urlparse
-                                parsed = urlparse(base_url)
-                                base_domain = f"{parsed.scheme}://{parsed.netloc}"
-                                full_url = urllib.parse.urljoin(base_domain, href)
+                                # urljoin handles base URL parsing automatically
+                                full_url = urllib.parse.urljoin(base_url, href)
                             
                             if full_url not in profile_links:
                                 profile_links.append(full_url)

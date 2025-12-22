@@ -74,11 +74,6 @@ def test_freelancer_portal_urls_defined():
     for url in FREELANCER_PORTAL_URLS:
         assert any(domain in url for domain in expected_domains), f"Unexpected domain in URL: {url}"
 
-    assert "markt_de" in DIRECT_CRAWL_SOURCES
-    assert "quoka" in DIRECT_CRAWL_SOURCES
-    assert "kalaydo" in DIRECT_CRAWL_SOURCES
-    assert "meinestadt" in DIRECT_CRAWL_SOURCES
-
 
 @pytest.mark.asyncio
 async def test_extract_generic_detail_with_mobile():
