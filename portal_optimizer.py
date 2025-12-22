@@ -6,6 +6,7 @@ This module analyzes portal performance and generates optimized configurations
 to maximize lead generation while minimizing wasted requests.
 """
 
+import sqlite3
 from typing import Dict, Any, List
 from learning_engine import LearningEngine
 
@@ -168,8 +169,6 @@ class PortalOptimizer:
         Returns:
             Health report with scores and recommendations
         """
-        import sqlite3
-        
         con = sqlite3.connect(self.learning_engine.db_path)
         con.row_factory = sqlite3.Row
         cur = con.cursor()

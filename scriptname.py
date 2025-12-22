@@ -3172,8 +3172,8 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
                         log("info", "Advanced pattern extraction found phone", 
                             url=url, phone=normalized[:8]+"...")
                         # Record this pattern success
-                        if _learning_engine:
-                            _learning_engine.record_phone_pattern(
+                        if _LEARNING_ENGINE:
+                            _LEARNING_ENGINE.record_phone_pattern(
                                 pattern="advanced_extraction",
                                 pattern_type="enhanced",
                                 example=normalized[:8]+"..."
@@ -3229,8 +3229,8 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         if not phones:
             log("debug", "No mobile numbers found in ad", url=url)
             # Record failure for learning
-            if _learning_engine:
-                _learning_engine.learn_from_failure(
+            if _LEARNING_ENGINE:
+                _LEARNING_ENGINE.learn_from_failure(
                     url=url,
                     html_content=html,
                     reason="no_mobile_number_found",
@@ -3389,8 +3389,8 @@ async def crawl_markt_de_listings_async() -> List[Dict]:
                 r = await http_get_async(url, timeout=HTTP_TIMEOUT)
                 if not r or r.status_code != 200:
                     log("warn", "Markt.de: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    if _learning_engine:
-                        _learning_engine.update_domain_performance(
+                    if _LEARNING_ENGINE:
+                        _LEARNING_ENGINE.update_domain_performance(
                             domain="markt.de",
                             success=False,
                             rate_limited=(r.status_code == 429 if r else False)
@@ -3485,8 +3485,8 @@ async def crawl_quoka_listings_async() -> List[Dict]:
                 if not r or r.status_code != 200:
                     log("warn", "Quoka: Failed to fetch", url=url, status=r.status_code if r else "None")
                     # Record failure for learning
-                    if _learning_engine:
-                        _learning_engine.update_domain_performance(
+                    if _LEARNING_ENGINE:
+                        _LEARNING_ENGINE.update_domain_performance(
                             domain="quoka.de",
                             success=False,
                             rate_limited=(r.status_code == 429 if r else False)
@@ -3843,8 +3843,8 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
                         phones.append(normalized)
                         log("info", f"{source_tag}: Advanced extraction found phone", 
                             url=url, phone=normalized[:8]+"...")
-                        if _learning_engine:
-                            _learning_engine.record_phone_pattern(
+                        if _LEARNING_ENGINE:
+                            _LEARNING_ENGINE.record_phone_pattern(
                                 pattern="advanced_extraction",
                                 pattern_type=f"{source_tag}_enhanced",
                                 example=normalized[:8]+"..."
@@ -3887,8 +3887,8 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
         
         # Only create lead if we found at least one mobile number
         if not phones:
-            if _learning_engine:
-                _learning_engine.learn_from_failure(
+            if _LEARNING_ENGINE:
+                _LEARNING_ENGINE.learn_from_failure(
                     url=url,
                     html_content=html,
                     reason=f"{source_tag}_no_mobile_found",
