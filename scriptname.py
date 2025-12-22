@@ -331,6 +331,59 @@ DIRECT_CRAWL_URLS = [
     "https://www.kleinanzeigen.de/s-stellengesuche/akquise/k0c107",
     "https://www.kleinanzeigen.de/s-stellengesuche/telesales/k0c107",
     "https://www.kleinanzeigen.de/s-stellengesuche/call-center/k0c107",
+    
+    # Alle großen NRW-Städte
+    # Köln
+    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/vertrieb/k0c107l945",
+    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/sales/k0c107l945",
+    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/verkauf/k0c107l945",
+    
+    # Dortmund
+    "https://www.kleinanzeigen.de/s-stellengesuche/dortmund/vertrieb/k0c107l947",
+    "https://www.kleinanzeigen.de/s-stellengesuche/dortmund/sales/k0c107l947",
+    
+    # Essen
+    "https://www.kleinanzeigen.de/s-stellengesuche/essen/vertrieb/k0c107l939",
+    "https://www.kleinanzeigen.de/s-stellengesuche/essen/sales/k0c107l939",
+    
+    # Duisburg
+    "https://www.kleinanzeigen.de/s-stellengesuche/duisburg/vertrieb/k0c107l940",
+    
+    # Bochum
+    "https://www.kleinanzeigen.de/s-stellengesuche/bochum/vertrieb/k0c107l941",
+    
+    # Wuppertal
+    "https://www.kleinanzeigen.de/s-stellengesuche/wuppertal/vertrieb/k0c107l942",
+    
+    # Bielefeld
+    "https://www.kleinanzeigen.de/s-stellengesuche/bielefeld/vertrieb/k0c107l943",
+    
+    # Bonn
+    "https://www.kleinanzeigen.de/s-stellengesuche/bonn/vertrieb/k0c107l944",
+    
+    # Münster
+    "https://www.kleinanzeigen.de/s-stellengesuche/muenster/vertrieb/k0c107l946",
+    
+    # Gelsenkirchen
+    "https://www.kleinanzeigen.de/s-stellengesuche/gelsenkirchen/vertrieb/k0c107l948",
+    
+    # Mönchengladbach
+    "https://www.kleinanzeigen.de/s-stellengesuche/moenchengladbach/vertrieb/k0c107l949",
+    
+    # Aachen
+    "https://www.kleinanzeigen.de/s-stellengesuche/aachen/vertrieb/k0c107l950",
+    
+    # Krefeld
+    "https://www.kleinanzeigen.de/s-stellengesuche/krefeld/vertrieb/k0c107l951",
+    
+    # Oberhausen
+    "https://www.kleinanzeigen.de/s-stellengesuche/oberhausen/vertrieb/k0c107l952",
+    
+    # Hagen
+    "https://www.kleinanzeigen.de/s-stellengesuche/hagen/vertrieb/k0c107l953",
+    
+    # Hamm
+    "https://www.kleinanzeigen.de/s-stellengesuche/hamm/vertrieb/k0c107l954",
 ]
 
 # Markt.de Stellengesuche URLs
@@ -348,11 +401,20 @@ MARKT_DE_URLS = [
 
 # Quoka.de Stellengesuche URLs
 QUOKA_DE_URLS = [
-    # NRW Städte
+    # NRW Städte (erweitert)
     "https://www.quoka.de/stellengesuche/duesseldorf/",
     "https://www.quoka.de/stellengesuche/koeln/",
     "https://www.quoka.de/stellengesuche/dortmund/",
     "https://www.quoka.de/stellengesuche/essen/",
+    "https://www.quoka.de/stellengesuche/duisburg/",
+    "https://www.quoka.de/stellengesuche/bochum/",
+    "https://www.quoka.de/stellengesuche/wuppertal/",
+    "https://www.quoka.de/stellengesuche/bielefeld/",
+    "https://www.quoka.de/stellengesuche/bonn/",
+    "https://www.quoka.de/stellengesuche/muenster/",
+    "https://www.quoka.de/stellengesuche/gelsenkirchen/",
+    "https://www.quoka.de/stellengesuche/moenchengladbach/",
+    "https://www.quoka.de/stellengesuche/aachen/",
     # Kategorien
     "https://www.quoka.de/stellengesuche/vertrieb-verkauf/",
     "https://www.quoka.de/stellengesuche/kundenservice/",
@@ -370,15 +432,36 @@ KALAYDO_DE_URLS = [
 
 # Meinestadt.de Stellengesuche URLs
 MEINESTADT_DE_URLS = [
-    # Top NRW Städte
+    # Alle Top-15 NRW Städte
     "https://www.meinestadt.de/duesseldorf/stellengesuche",
     "https://www.meinestadt.de/koeln/stellengesuche",
     "https://www.meinestadt.de/dortmund/stellengesuche",
     "https://www.meinestadt.de/essen/stellengesuche",
+    "https://www.meinestadt.de/duisburg/stellengesuche",
     "https://www.meinestadt.de/bochum/stellengesuche",
     "https://www.meinestadt.de/wuppertal/stellengesuche",
-    "https://www.meinestadt.de/muenster/stellengesuche",
+    "https://www.meinestadt.de/bielefeld/stellengesuche",
     "https://www.meinestadt.de/bonn/stellengesuche",
+    "https://www.meinestadt.de/muenster/stellengesuche",
+    "https://www.meinestadt.de/gelsenkirchen/stellengesuche",
+    "https://www.meinestadt.de/moenchengladbach/stellengesuche",
+    "https://www.meinestadt.de/aachen/stellengesuche",
+    "https://www.meinestadt.de/krefeld/stellengesuche",
+    "https://www.meinestadt.de/oberhausen/stellengesuche",
+]
+
+# Freelancer Portal URLs (NRW-focused)
+FREELANCER_PORTAL_URLS = [
+    # Freelancermap.de - NRW Filter
+    "https://www.freelancermap.de/freelancer-verzeichnis/nordrhein-westfalen-vertrieb.html",
+    "https://www.freelancermap.de/freelancer-verzeichnis/nordrhein-westfalen-sales.html",
+    
+    # Freelance.de - NRW
+    "https://www.freelance.de/Freiberufler/NRW/Vertrieb/",
+    "https://www.freelance.de/Freiberufler/NRW/Sales/",
+    
+    # GULP - NRW
+    "https://www.gulp.de/gulp2/g/projekte?region=nordrhein-westfalen&skill=vertrieb",
 ]
 
 # Direct crawl source configuration
@@ -388,6 +471,7 @@ DIRECT_CRAWL_SOURCES = {
     "quoka": True,
     "kalaydo": True,
     "meinestadt": True,
+    "freelancer_portals": True,
 }
 
 # =========================
@@ -2171,17 +2255,29 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:t.me "stellengesuche" "vertrieb"',
         'site:t.me/joinchat "vertrieb"',
         'site:t.me/joinchat "sales" "jobs"',
+        # NEU: Erweiterte Telegram Gruppen NRW
+        'site:t.me "vertrieb" "NRW" OR "düsseldorf" OR "köln"',
+        'site:t.me "sales jobs" "deutschland" "nrw"',
+        'site:t.me "handelsvertreter" "gruppe"',
+        '"telegram gruppe" "vertrieb" "NRW"',
         
         # WhatsApp - Öffentliche Einladungslinks
         'site:chat.whatsapp.com "vertrieb" "jobs"',
         'site:chat.whatsapp.com "sales" "netzwerk"',
         'site:chat.whatsapp.com "vertriebler" "gruppe"',
         'site:chat.whatsapp.com "jobsuche" "NRW"',
+        # NEU: Erweiterte WhatsApp Gruppen
+        'site:chat.whatsapp.com "vertrieb" "nrw"',
+        'site:chat.whatsapp.com "sales" "düsseldorf"',
+        '"whatsapp gruppe" "vertriebler" "köln"',
         
         # Discord - Karriere Server
         'site:discord.gg "vertrieb" "jobs"',
         'site:discord.gg "sales" "karriere"',
         'site:discord.com/invite "jobs" "deutschland"',
+        # NEU: Erweiterte Discord Server
+        'site:discord.gg "vertrieb" "deutschland"',
+        'site:discord.com/invite "sales" "karriere"',
         
         # ══════════════════════════════════════════════════════════════
         # KATEGORIE 5: FOREN & COMMUNITIES
@@ -2253,6 +2349,9 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:kleinanzeigen.de "d2d" "suche" "erfahrung"',
         '"door to door" "vertriebler" "sucht" "mobil"',
         '"haustürgeschäft" "erfahrung" "suche arbeit"',
+        # NEU: Erweiterte D2D/Haustür NRW
+        'site:kleinanzeigen.de/s-stellengesuche "haustür" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung" "NRW"',
         
         # Call Center / Telesales
         '"call center agent" "suche" "homeoffice" "NRW"',
@@ -2264,16 +2363,26 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"solarvertrieb" "suche" "erfahrung" "NRW"',
         '"energieberater" "freiberuflich" "sucht"',
         '"photovoltaik" "vertrieb" "suche stelle"',
+        # NEU: Erweiterte Solar/Energie NRW
+        'site:kleinanzeigen.de/s-stellengesuche "solar" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "photovoltaik" "köln"',
+        'site:kleinanzeigen.de/s-stellengesuche "energie" "düsseldorf"',
         
         # Versicherung / Finanz
         '"versicherungsvertreter" "suche" "neue"',
         '"finanzberater" "wechselwillig" "kontakt"',
         '"makler" "sucht" "neue herausforderung"',
+        # NEU: Erweiterte Versicherung NRW
+        'site:kleinanzeigen.de/s-stellengesuche "versicherung" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "finanzberater" "köln"',
         
         # Telekommunikation
         '"telekom vertrieb" "suche" "erfahrung"',
         '"mobilfunk" "sales" "suche stelle"',
         '"provider" "vertrieb" "wechsel"',
+        # NEU: Erweiterte Telekom NRW
+        'site:kleinanzeigen.de/s-stellengesuche "telekom" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "mobilfunk" "düsseldorf"',
         
         # Medizin / Pharma
         '"pharmareferent" "sucht" "neue"',
@@ -3508,6 +3617,109 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
     except Exception as e:
         log("error", f"{source_tag}: Error extracting detail", url=url, error=str(e))
         return None
+
+
+async def crawl_freelancer_portals_async() -> List[Dict]:
+    """
+    Crawlt Freelancer-Portale für NRW Vertriebs-Profile.
+    Extrahiert: Name, Telefon, Skills, Verfügbarkeit.
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("freelancer_portals", True):
+        return []
+    
+    leads = []
+    max_pages = 2  # Limit to 2 pages per URL to avoid overload
+    
+    for base_url in FREELANCER_PORTAL_URLS:
+        for page in range(1, max_pages + 1):
+            # Construct page URL
+            if page == 1:
+                url = base_url
+            else:
+                # Different portals have different pagination styles
+                if "freelancermap.de" in base_url:
+                    url = f"{base_url}?page={page}"
+                elif "freelance.de" in base_url:
+                    url = f"{base_url}?page={page}"
+                elif "gulp.de" in base_url:
+                    separator = "&" if "?" in base_url else "?"
+                    url = f"{base_url}{separator}page={page}"
+                else:
+                    url = base_url
+            
+            try:
+                # Rate limiting: 3-4s between requests
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "Freelancer Portal: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "Freelancer Portal: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract profile links - try multiple selectors
+                profile_links = []
+                
+                for selector in [
+                    'a[href*="/freelancer/"]',
+                    'a[href*="/profil/"]',
+                    'a[href*="/profile/"]',
+                    '.freelancer-item a',
+                    '.profile-link',
+                    'article a'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and any(keyword in href for keyword in ["/freelancer/", "/profil/", "/profile/"]):
+                            # Make absolute URL
+                            if href.startswith("http"):
+                                full_url = href
+                            else:
+                                # Parse base domain from base_url
+                                from urllib.parse import urlparse
+                                parsed = urlparse(base_url)
+                                base_domain = f"{parsed.scheme}://{parsed.netloc}"
+                                full_url = urllib.parse.urljoin(base_domain, href)
+                            
+                            if full_url not in profile_links:
+                                profile_links.append(full_url)
+                
+                log("info", "Freelancer Portal: Profile gefunden", url=url, count=len(profile_links))
+                
+                # If no profiles found, stop pagination
+                if not profile_links:
+                    break
+                
+                # Extract details from each profile
+                for profile_url in profile_links:
+                    if url_seen(profile_url):
+                        continue
+                    
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(profile_url, source_tag="freelancer_portal")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "Freelancer Portal: Lead extrahiert", url=profile_url, has_phone=True)
+                        
+                        _mark_url_seen(profile_url, source="FreelancerPortal")
+                    else:
+                        log("debug", "Freelancer Portal: Keine Handynummer", url=profile_url)
+                
+            except Exception as e:
+                log("error", "Freelancer Portal: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "Freelancer Portal: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
 
 
 # =========================
@@ -7540,6 +7752,17 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     log("info", "Meinestadt crawl complete", count=len(meinestadt_leads))
                 except Exception as e:
                     log("error", "Meinestadt crawl failed", error=str(e))
+        
+        # Freelancer Portals crawling
+        if DIRECT_CRAWL_SOURCES.get("freelancer_portals", True):
+            if run_flag and run_flag.get("running", True):
+                _uilog("Crawle Freelancer-Portale...")
+                try:
+                    freelancer_leads = await crawl_freelancer_portals_async()
+                    direct_crawl_leads.extend(freelancer_leads)
+                    log("info", "Freelancer portals crawl complete", count=len(freelancer_leads))
+                except Exception as e:
+                    log("error", "Freelancer portals crawl failed", error=str(e))
         
         # Insert collected leads from all sources
         if direct_crawl_leads:
