@@ -5642,7 +5642,7 @@ def is_candidate_profile_text(text: str, url: str = "") -> bool:
         ]
         if any(social_url in url_lower for social_url in social_profile_urls):
             return True  # Social profiles are always accepted
-def is_candidate_profile_text(text: str) -> bool:
+    
     # Im Candidates-Modus: Alle Profile durchlassen (verhindert Text-basierte Job-Ad-Erkennung)
     if _is_candidates_mode():
         return True
