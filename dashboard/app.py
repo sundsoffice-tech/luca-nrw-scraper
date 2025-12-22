@@ -298,11 +298,52 @@ def create_app(db_path: str = None) -> Flask:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/api/learning/portal-health')
+    def api_portal_health():
+        """Get portal health report."""
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from portal_optimizer import get_portal_optimizer
+            
+            optimizer = get_portal_optimizer(DB_PATH)
+            health_report = optimizer.get_portal_health_report()
+            
+            return jsonify(health_report)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/learning/improvements')
+    def api_learning_improvements():
+        """Get AI-generated improvement suggestions."""
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from learning_engine import LearningEngine
+            
+            engine = LearningEngine(DB_PATH)
+            improvements = engine.generate_improved_patterns()
+            
+            return jsonify({
+                'improvements': improvements,
+                'count': len(improvements),
+                'success': True
+            })
+        except Exception as e:
+            return jsonify({'error': str(e), 'success': False}), 500
+    
     @app.route('/api/learning/stats')
     def api_learning_stats():
-        """Get learning statistics for learning mode."""
+        """Get comprehensive AI learning engine statistics."""
         con = None
         try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+            from learning_engine import LearningEngine
+            
             con = sqlite3.connect(DB_PATH)
             con.row_factory = sqlite3.Row
             cur = con.cursor()
@@ -315,8 +356,15 @@ def create_app(db_path: str = None) -> Flask:
                     'top_patterns': [],
                     'total_domains_learned': 0,
                     'total_leads_from_learning': 0,
+                    'ai_learning': {},
+                    'portal_optimization': {},
                     'message': 'Learning mode not yet used'
                 })
+            
+            # Get comprehensive learning stats using engine
+            engine = LearningEngine(DB_PATH)
+            ai_stats = engine.get_ai_learning_stats()
+            pattern_stats = engine.get_pattern_stats()
             
             # Top Domains
             cur.execute("""
@@ -354,14 +402,29 @@ def create_app(db_path: str = None) -> Flask:
             cur.execute("SELECT COUNT(*), SUM(leads_found) FROM learning_domains")
             domain_stats = cur.fetchone()
             
+            # Get portal optimization recommendations
+            try:
+                from portal_optimizer import get_portal_optimizer
+                optimizer = get_portal_optimizer(DB_PATH)
+                portal_analysis = optimizer.analyze_portal_performance()
+                suggestions = optimizer.get_optimization_suggestions()
+            except Exception:
+                portal_analysis = {}
+                suggestions = []
+            
             return jsonify({
                 'top_domains': top_domains,
                 'top_patterns': top_patterns,
                 'total_domains_learned': domain_stats[0] or 0,
-                'total_leads_from_learning': domain_stats[1] or 0
+                'total_leads_from_learning': domain_stats[1] or 0,
+                'ai_learning': ai_stats,
+                'patterns': pattern_stats,
+                'portal_optimization': portal_analysis,
+                'suggestions': suggestions[:5],  # Top 5 suggestions
+                'success': True
             })
         except Exception as e:
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e), 'success': False}), 500
         finally:
             if con:
                 con.close()

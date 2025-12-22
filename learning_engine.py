@@ -76,6 +76,73 @@ class LearningEngine:
             )
         """)
         
+        # Extraction Patterns table - tracks successful extraction patterns
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS extraction_patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_type TEXT NOT NULL,
+                pattern TEXT NOT NULL,
+                description TEXT,
+                success_count INTEGER DEFAULT 0,
+                last_success TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(pattern_type, pattern)
+            )
+        """)
+        
+        # Failed Extractions table - learn from failures
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS failed_extractions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                failure_reason TEXT,
+                html_snippet TEXT,
+                visible_phone_numbers TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Phone Patterns table - discovered phone number formats
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS phone_patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern TEXT NOT NULL UNIQUE,
+                pattern_type TEXT,
+                success_count INTEGER DEFAULT 0,
+                example_matches TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Domain Performance table - detailed portal tracking
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS domain_performance (
+                domain TEXT PRIMARY KEY,
+                enabled BOOLEAN DEFAULT 1,
+                priority INTEGER DEFAULT 2,
+                delay_seconds REAL DEFAULT 3.0,
+                success_rate REAL DEFAULT 0.0,
+                total_requests INTEGER DEFAULT 0,
+                successful_requests INTEGER DEFAULT 0,
+                rate_limit_detected BOOLEAN DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reason TEXT
+            )
+        """)
+        
+        # AI Improvements table - track AI-generated improvements
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ai_improvements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                improvement_type TEXT NOT NULL,
+                description TEXT,
+                implementation_status TEXT DEFAULT 'pending',
+                impact_estimate TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMP
+            )
+        """)
+        
         con.commit()
         con.close()
     
@@ -587,6 +654,298 @@ class LearningEngine:
                     "total_leads": queries[2] or 0
                 }
             }
+        finally:
+            con.close()
+
+
+    def learn_from_failure(self, url: str, html_content: str, reason: str, 
+                          visible_phones: Optional[List[str]] = None) -> None:
+        """
+        Learn from extraction failures to improve future attempts.
+        
+        Args:
+            url: URL where extraction failed
+            html_content: HTML content (will be truncated to snippet)
+            reason: Why extraction failed
+            visible_phones: Any phone numbers visible in HTML (for learning)
+        """
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            # Store HTML snippet (first 2000 chars)
+            html_snippet = html_content[:2000] if html_content else ""
+            visible_phones_str = json.dumps(visible_phones) if visible_phones else None
+            
+            cur.execute("""
+                INSERT INTO failed_extractions 
+                (url, failure_reason, html_snippet, visible_phone_numbers, timestamp)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (url, reason, html_snippet, visible_phones_str))
+            
+            con.commit()
+        except Exception:
+            pass
+        finally:
+            con.close()
+    
+    def record_extraction_pattern(self, pattern_type: str, pattern: str, 
+                                  description: str = "") -> None:
+        """
+        Record a successful extraction pattern for future use.
+        
+        Args:
+            pattern_type: Type of pattern (e.g., 'phone_regex', 'css_selector', 'whatsapp_link')
+            pattern: The actual pattern/selector
+            description: Human-readable description
+        """
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            cur.execute("""
+                INSERT INTO extraction_patterns 
+                (pattern_type, pattern, description, success_count, last_success)
+                VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(pattern_type, pattern) DO UPDATE SET
+                    success_count = success_count + 1,
+                    last_success = CURRENT_TIMESTAMP
+            """, (pattern_type, pattern, description))
+            
+            con.commit()
+        except Exception:
+            pass
+        finally:
+            con.close()
+    
+    def record_phone_pattern(self, pattern: str, pattern_type: str, 
+                            example: str = "") -> None:
+        """
+        Record a discovered phone number pattern.
+        
+        Args:
+            pattern: Regex pattern for phone number
+            pattern_type: Type of pattern (e.g., 'spaced', 'obfuscated', 'whatsapp')
+            example: Example phone number that matches
+        """
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            cur.execute("""
+                INSERT INTO phone_patterns 
+                (pattern, pattern_type, success_count, example_matches)
+                VALUES (?, ?, 1, ?)
+                ON CONFLICT(pattern) DO UPDATE SET
+                    success_count = success_count + 1,
+                    example_matches = example_matches || ', ' || ?
+            """, (pattern, pattern_type, example, example))
+            
+            con.commit()
+        except Exception:
+            pass
+        finally:
+            con.close()
+    
+    def update_domain_performance(self, domain: str, success: bool, 
+                                  rate_limited: bool = False) -> None:
+        """
+        Update portal/domain performance metrics.
+        
+        Args:
+            domain: Domain name
+            success: Whether the request was successful
+            rate_limited: Whether rate limiting was detected
+        """
+        if not domain:
+            return
+        
+        # Remove www. prefix
+        if domain.startswith("www."):
+            domain = domain[4:]
+        
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            cur.execute("""
+                INSERT INTO domain_performance 
+                (domain, total_requests, successful_requests, rate_limit_detected, last_updated)
+                VALUES (?, 1, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(domain) DO UPDATE SET
+                    total_requests = total_requests + 1,
+                    successful_requests = successful_requests + ?,
+                    success_rate = CAST(successful_requests AS REAL) / total_requests,
+                    rate_limit_detected = rate_limit_detected OR ?,
+                    last_updated = CURRENT_TIMESTAMP
+            """, (
+                domain, 
+                1 if success else 0, 
+                1 if rate_limited else 0,
+                1 if success else 0,
+                1 if rate_limited else 0
+            ))
+            
+            con.commit()
+        except Exception:
+            pass
+        finally:
+            con.close()
+    
+    def generate_improved_patterns(self) -> List[Dict[str, str]]:
+        """
+        Generate improved extraction patterns based on learning data.
+        
+        Returns:
+            List of pattern improvements with type, pattern, and description
+        """
+        improvements = []
+        
+        con = sqlite3.connect(self.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        try:
+            # Get successful phone patterns
+            cur.execute("""
+                SELECT pattern, pattern_type, success_count 
+                FROM phone_patterns 
+                WHERE success_count >= 2
+                ORDER BY success_count DESC
+                LIMIT 10
+            """)
+            
+            for row in cur.fetchall():
+                improvements.append({
+                    "type": "phone_pattern",
+                    "pattern": row["pattern"],
+                    "description": f"Phone pattern ({row['pattern_type']}) with {row['success_count']} successes"
+                })
+            
+            # Get successful extraction patterns
+            cur.execute("""
+                SELECT pattern_type, pattern, description, success_count 
+                FROM extraction_patterns 
+                WHERE success_count >= 3
+                ORDER BY success_count DESC
+                LIMIT 10
+            """)
+            
+            for row in cur.fetchall():
+                improvements.append({
+                    "type": row["pattern_type"],
+                    "pattern": row["pattern"],
+                    "description": f"{row['description']} ({row['success_count']} successes)"
+                })
+            
+            return improvements
+        finally:
+            con.close()
+    
+    def optimize_portal_config(self) -> Dict[str, Any]:
+        """
+        Generate optimized portal configuration based on performance data.
+        
+        Returns:
+            Dictionary with portal recommendations
+        """
+        con = sqlite3.connect(self.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        recommendations = {
+            "disable": [],
+            "delay_increase": [],
+            "prioritize": []
+        }
+        
+        try:
+            # Find portals to disable (low success rate, many attempts)
+            cur.execute("""
+                SELECT domain, success_rate, total_requests, rate_limit_detected
+                FROM domain_performance
+                WHERE total_requests >= 10
+                ORDER BY success_rate ASC
+                LIMIT 10
+            """)
+            
+            for row in cur.fetchall():
+                if row["success_rate"] < 0.05:  # Less than 5% success
+                    recommendations["disable"].append({
+                        "domain": row["domain"],
+                        "reason": f"Low success rate: {row['success_rate']:.1%} ({row['total_requests']} attempts)",
+                        "success_rate": row["success_rate"]
+                    })
+                elif row["rate_limit_detected"]:
+                    recommendations["delay_increase"].append({
+                        "domain": row["domain"],
+                        "reason": "Rate limiting detected",
+                        "suggested_delay": 8.0
+                    })
+            
+            # Find high-performing portals to prioritize
+            cur.execute("""
+                SELECT domain, success_rate, total_requests
+                FROM domain_performance
+                WHERE total_requests >= 5 AND success_rate >= 0.2
+                ORDER BY success_rate DESC
+                LIMIT 5
+            """)
+            
+            for row in cur.fetchall():
+                recommendations["prioritize"].append({
+                    "domain": row["domain"],
+                    "success_rate": row["success_rate"],
+                    "requests": row["total_requests"]
+                })
+            
+            return recommendations
+        finally:
+            con.close()
+    
+    def get_ai_learning_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive AI learning statistics.
+        
+        Returns:
+            Dictionary with learning statistics
+        """
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            stats = {}
+            
+            # Phone patterns learned
+            cur.execute("SELECT COUNT(*) FROM phone_patterns")
+            stats["phone_patterns_learned"] = cur.fetchone()[0]
+            
+            # Extraction patterns
+            cur.execute("SELECT COUNT(*) FROM extraction_patterns")
+            stats["extraction_patterns"] = cur.fetchone()[0]
+            
+            # Failed extractions (for learning)
+            cur.execute("SELECT COUNT(*) FROM failed_extractions")
+            stats["failures_logged"] = cur.fetchone()[0]
+            
+            # Portal performance
+            cur.execute("""
+                SELECT 
+                    COUNT(*) as total_portals,
+                    AVG(success_rate) as avg_success_rate,
+                    SUM(CASE WHEN rate_limit_detected = 1 THEN 1 ELSE 0 END) as rate_limited_portals
+                FROM domain_performance
+            """)
+            perf = cur.fetchone()
+            stats["portals_tracked"] = perf[0]
+            stats["avg_portal_success_rate"] = round(perf[1] or 0, 3)
+            stats["rate_limited_portals"] = perf[2]
+            
+            # AI improvements
+            cur.execute("SELECT COUNT(*) FROM ai_improvements")
+            stats["ai_improvements_generated"] = cur.fetchone()[0]
+            
+            return stats
         finally:
             con.close()
 

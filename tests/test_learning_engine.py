@@ -260,3 +260,219 @@ class TestLearningEngine:
         # Check that we have some successes recorded
         total_successes = sum(s["total_successes"] for s in stats.values())
         assert total_successes > 0
+
+
+class TestAILearningFeatures:
+    """Tests for new AI learning features."""
+    
+    def test_new_tables_created(self, learning_engine, temp_db):
+        """Test that new AI learning tables are created."""
+        con = sqlite3.connect(temp_db)
+        cur = con.cursor()
+        
+        # Check for new tables
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cur.fetchall()]
+        
+        assert 'extraction_patterns' in tables
+        assert 'failed_extractions' in tables
+        assert 'phone_patterns' in tables
+        assert 'domain_performance' in tables
+        assert 'ai_improvements' in tables
+        
+        con.close()
+    
+    def test_learn_from_failure(self, learning_engine):
+        """Test recording extraction failures."""
+        learning_engine.learn_from_failure(
+            url="https://example.com/test",
+            html_content="<html><body>Test</body></html>",
+            reason="no_mobile_found",
+            visible_phones=["0211123456"]  # Landline, not mobile
+        )
+        
+        # Verify failure was recorded
+        con = sqlite3.connect(learning_engine.db_path)
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM failed_extractions")
+        count = cur.fetchone()[0]
+        assert count == 1
+        con.close()
+    
+    def test_record_extraction_pattern(self, learning_engine):
+        """Test recording successful extraction patterns."""
+        learning_engine.record_extraction_pattern(
+            pattern_type="phone_regex",
+            pattern=r"\+49\s*1[567]\d{9}",
+            description="Standard mobile pattern"
+        )
+        
+        # Verify pattern was recorded
+        con = sqlite3.connect(learning_engine.db_path)
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM extraction_patterns")
+        count = cur.fetchone()[0]
+        assert count == 1
+        con.close()
+    
+    def test_record_phone_pattern(self, learning_engine):
+        """Test recording phone number patterns."""
+        learning_engine.record_phone_pattern(
+            pattern=r"0\s*1\s*7\s*6",
+            pattern_type="spaced",
+            example="0 1 7 6 1234567"
+        )
+        
+        # Verify pattern was recorded
+        con = sqlite3.connect(learning_engine.db_path)
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM phone_patterns")
+        count = cur.fetchone()[0]
+        assert count == 1
+        con.close()
+    
+    def test_update_domain_performance(self, learning_engine):
+        """Test tracking domain performance."""
+        # Record success
+        learning_engine.update_domain_performance(
+            domain="kleinanzeigen.de",
+            success=True,
+            rate_limited=False
+        )
+        
+        # Record failure
+        learning_engine.update_domain_performance(
+            domain="kleinanzeigen.de",
+            success=False,
+            rate_limited=False
+        )
+        
+        # Record rate limit
+        learning_engine.update_domain_performance(
+            domain="quoka.de",
+            success=False,
+            rate_limited=True
+        )
+        
+        # Verify performance was tracked
+        con = sqlite3.connect(learning_engine.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM domain_performance WHERE domain = ?", ("kleinanzeigen.de",))
+        row = cur.fetchone()
+        assert row is not None
+        assert row['total_requests'] == 2
+        assert row['successful_requests'] == 1
+        assert row['success_rate'] == 0.5
+        
+        cur.execute("SELECT * FROM domain_performance WHERE domain = ?", ("quoka.de",))
+        row = cur.fetchone()
+        assert row is not None
+        assert row['rate_limit_detected'] == 1
+        
+        con.close()
+    
+    def test_generate_improved_patterns(self, learning_engine):
+        """Test generating improved patterns."""
+        # Add some patterns first
+        learning_engine.record_phone_pattern(
+            pattern=r"0\s*1\s*[567]",
+            pattern_type="spaced",
+            example="0 1 7 6"
+        )
+        learning_engine.record_phone_pattern(
+            pattern=r"0\s*1\s*[567]",
+            pattern_type="spaced",
+            example="0 1 6 2"
+        )
+        
+        learning_engine.record_extraction_pattern(
+            pattern_type="css_selector",
+            pattern=".phone-number",
+            description="Phone number class"
+        )
+        learning_engine.record_extraction_pattern(
+            pattern_type="css_selector",
+            pattern=".phone-number",
+            description="Phone number class"
+        )
+        learning_engine.record_extraction_pattern(
+            pattern_type="css_selector",
+            pattern=".phone-number",
+            description="Phone number class"
+        )
+        
+        # Generate improvements
+        improvements = learning_engine.generate_improved_patterns()
+        
+        assert isinstance(improvements, list)
+        assert len(improvements) >= 1
+        
+        # Check structure
+        for imp in improvements:
+            assert 'type' in imp
+            assert 'pattern' in imp
+            assert 'description' in imp
+    
+    def test_optimize_portal_config(self, learning_engine):
+        """Test portal configuration optimization."""
+        # Add some portal performance data
+        for i in range(15):
+            learning_engine.update_domain_performance(
+                domain="meinestadt.de",
+                success=False,
+                rate_limited=False
+            )
+        
+        for i in range(10):
+            learning_engine.update_domain_performance(
+                domain="kleinanzeigen.de",
+                success=True if i < 3 else False,
+                rate_limited=False
+            )
+        
+        # Get recommendations
+        recommendations = learning_engine.optimize_portal_config()
+        
+        assert 'disable' in recommendations
+        assert 'delay_increase' in recommendations
+        assert 'prioritize' in recommendations
+        
+        # meinestadt should be recommended for disabling (0% success)
+        disabled_domains = [r['domain'] for r in recommendations['disable']]
+        assert 'meinestadt.de' in disabled_domains
+    
+    def test_get_ai_learning_stats(self, learning_engine):
+        """Test getting comprehensive AI learning stats."""
+        # Add some data
+        learning_engine.record_phone_pattern(
+            pattern=r"test",
+            pattern_type="test",
+            example="test"
+        )
+        learning_engine.learn_from_failure(
+            url="https://test.com",
+            html_content="test",
+            reason="test"
+        )
+        learning_engine.update_domain_performance(
+            domain="test.de",
+            success=True,
+            rate_limited=False
+        )
+        
+        # Get stats
+        stats = learning_engine.get_ai_learning_stats()
+        
+        assert 'phone_patterns_learned' in stats
+        assert 'extraction_patterns' in stats
+        assert 'failures_logged' in stats
+        assert 'portals_tracked' in stats
+        assert 'avg_portal_success_rate' in stats
+        assert 'ai_improvements_generated' in stats
+        
+        assert stats['phone_patterns_learned'] >= 1
+        assert stats['failures_logged'] >= 1
+        assert stats['portals_tracked'] >= 1
+
