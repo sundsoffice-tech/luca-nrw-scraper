@@ -7895,6 +7895,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
     # Direct crawling from multiple sources (only in candidates/recruiter mode)
     if _is_candidates_mode():
+        direct_crawl_leads = []
         _uilog("Candidates-Modus: Starte paralleles Multi-Portal-Crawling")
         log("info", "Starting parallel portal crawling", parallel_enabled=PARALLEL_PORTAL_CRAWL)
         
@@ -7910,15 +7911,15 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     log("error", "Freelancer portals crawl failed", error=str(e))
         
         # Insert collected leads from all sources
-        if direct_crawl_leads:
-            log("info", "Direct crawl: Leads gefunden (alle Quellen)", count=len(direct_crawl_leads))
-            _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert (alle Portale)")
-            
-            log("info", "Multi-Portal-Crawling abgeschlossen", leads=len(direct_crawl_leads))
-            _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
-            
-            # Insert collected leads from all sources
+        try:
             if direct_crawl_leads:
+                log("info", "Direct crawl: Leads gefunden (alle Quellen)", count=len(direct_crawl_leads))
+                _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert (alle Portale)")
+                
+                log("info", "Multi-Portal-Crawling abgeschlossen", leads=len(direct_crawl_leads))
+                _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
+                
+                # Insert collected leads from all sources
                 new_leads = insert_leads(direct_crawl_leads)
                 leads_new_total += len(new_leads)
                 
