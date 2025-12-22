@@ -92,6 +92,11 @@ from lead_validation import (
     get_rejection_stats,
     reset_rejection_stats,
 )
+from phone_patterns import (
+    extract_all_phone_patterns,
+    get_best_phone_number,
+    extract_whatsapp_number,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -3055,9 +3060,10 @@ async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 
             url = urllib.parse.urlunparse(parsed._replace(query=new_query))
         
         try:
-            # Rate limiting: 2-3 seconds between requests
+            # Use configured delay for kleinanzeigen portal
             if page_num > 1:
-                await asyncio.sleep(2.0 + _jitter(0.5, 1.0))
+                delay = PORTAL_DELAYS.get("kleinanzeigen", 3.0)
+                await asyncio.sleep(delay + _jitter(0.5, 1.0))
             
             log("info", "Crawling Kleinanzeigen listing", url=url, page=page_num)
             
@@ -3141,8 +3147,10 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         # Combine text for extraction
         full_text = f"{title} {description}"
         
-        # Extract mobile phone numbers (015x, 016x, 017x patterns)
+        # Extract mobile phone numbers using advanced patterns
         phones = []
+        
+        # Standard extraction with existing regex
         phone_matches = MOBILE_RE.findall(full_text)
         for phone_match in phone_matches:
             normalized = normalize_phone(phone_match)
@@ -3151,26 +3159,63 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
                 if is_valid and is_mobile_number(normalized):
                     phones.append(normalized)
         
+        # Enhanced extraction using phone_patterns module
+        if not phones:
+            log("debug", "Standard extraction failed, trying advanced patterns", url=url)
+            try:
+                extraction_results = extract_all_phone_patterns(html, full_text)
+                best_phone = get_best_phone_number(extraction_results)
+                if best_phone:
+                    normalized = normalize_phone(best_phone)
+                    if normalized and is_mobile_number(normalized):
+                        phones.append(normalized)
+                        log("info", "Advanced pattern extraction found phone", 
+                            url=url, phone=normalized[:8]+"...")
+                        # Record this pattern success
+                        if _learning_engine:
+                            _learning_engine.record_phone_pattern(
+                                pattern="advanced_extraction",
+                                pattern_type="enhanced",
+                                example=normalized[:8]+"..."
+                            )
+            except Exception as e:
+                log("debug", "Advanced phone extraction failed", error=str(e))
+        
         # Extract email
         email = ""
         email_matches = EMAIL_RE.findall(full_text)
         if email_matches:
             email = email_matches[0]
         
-        # Extract WhatsApp link
-        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
+        # Extract WhatsApp link using enhanced extraction
         whatsapp = ""
-        if wa_link:
-            wa_href = wa_link.get("href", "")
-            # Extract phone from WhatsApp link
-            wa_phone = re.sub(r'\D', '', wa_href)
-            if wa_phone:
-                wa_normalized = "+" + wa_phone
-                is_valid, phone_type = validate_phone(wa_normalized)
-                if is_valid and is_mobile_number(wa_normalized):
-                    whatsapp = wa_normalized
-                    if wa_normalized not in phones:
-                        phones.append(wa_normalized)
+        try:
+            wa_number = extract_whatsapp_number(html)
+            if wa_number:
+                normalized_wa = normalize_phone(wa_number)
+                if normalized_wa and is_mobile_number(normalized_wa):
+                    whatsapp = normalized_wa
+                    if normalized_wa not in phones:
+                        phones.append(normalized_wa)
+                        log("info", "WhatsApp link extraction found phone", 
+                            url=url, phone=normalized_wa[:8]+"...")
+        except Exception:
+            pass
+        
+        # Fallback: Try old WhatsApp link extraction
+        if not whatsapp:
+            wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
+            if wa_link:
+                wa_href = wa_link.get("href", "")
+                # Extract phone from WhatsApp link
+                wa_phone = re.sub(r'\D', '', wa_href)
+                if wa_phone:
+                    wa_normalized = "+" + wa_phone
+                    is_valid, phone_type = validate_phone(wa_normalized)
+                    if is_valid and is_mobile_number(wa_normalized):
+                        whatsapp = wa_normalized
+                        if wa_normalized not in phones:
+                            phones.append(wa_normalized)
         
         # Extract location/region
         location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
@@ -3183,6 +3228,14 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         # Only create lead if we found at least one mobile number
         if not phones:
             log("debug", "No mobile numbers found in ad", url=url)
+            # Record failure for learning
+            if _learning_engine:
+                _learning_engine.learn_from_failure(
+                    url=url,
+                    html_content=html,
+                    reason="no_mobile_number_found",
+                    visible_phones=[]
+                )
             return None
         
         # Use first mobile number found
@@ -3327,14 +3380,21 @@ async def crawl_markt_de_listings_async() -> List[Dict]:
                 url = f"{base_url}{separator}page={page}"
             
             try:
-                # Rate limiting
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                # Use configured delay for markt_de portal
+                delay = PORTAL_DELAYS.get("markt_de", 3.0)
+                await asyncio.sleep(delay + _jitter(0.5, 1.0))
                 
                 log("info", "Markt.de: Listing-Seite", url=url, page=page)
                 
                 r = await http_get_async(url, timeout=HTTP_TIMEOUT)
                 if not r or r.status_code != 200:
                     log("warn", "Markt.de: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    if _learning_engine:
+                        _learning_engine.update_domain_performance(
+                            domain="markt.de",
+                            success=False,
+                            rate_limited=(r.status_code == 429 if r else False)
+                        )
                     break
                 
                 html = r.text or ""
@@ -3415,13 +3475,22 @@ async def crawl_quoka_listings_async() -> List[Dict]:
                 url = f"{base_url}{separator}page={page}"
             
             try:
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                # Use configured delay for quoka portal
+                delay = PORTAL_DELAYS.get("quoka", 3.0)
+                await asyncio.sleep(delay + _jitter(0.5, 1.0))
                 
                 log("info", "Quoka: Listing-Seite", url=url, page=page)
                 
                 r = await http_get_async(url, timeout=HTTP_TIMEOUT)
                 if not r or r.status_code != 200:
                     log("warn", "Quoka: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    # Record failure for learning
+                    if _learning_engine:
+                        _learning_engine.update_domain_performance(
+                            domain="quoka.de",
+                            success=False,
+                            rate_limited=(r.status_code == 429 if r else False)
+                        )
                     break
                 
                 html = r.text or ""
@@ -3751,8 +3820,10 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
         # Combine text for extraction
         full_text = f"{title} {description}"
         
-        # Extract mobile phone numbers
+        # Extract mobile phone numbers using standard and advanced patterns
         phones = []
+        
+        # Standard extraction
         phone_matches = MOBILE_RE.findall(full_text)
         for phone_match in phone_matches:
             normalized = normalize_phone(phone_match)
@@ -3761,13 +3832,45 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
                 if is_valid and is_mobile_number(normalized):
                     phones.append(normalized)
         
+        # Enhanced extraction if standard failed
+        if not phones:
+            try:
+                extraction_results = extract_all_phone_patterns(html, full_text)
+                best_phone = get_best_phone_number(extraction_results)
+                if best_phone:
+                    normalized = normalize_phone(best_phone)
+                    if normalized and is_mobile_number(normalized):
+                        phones.append(normalized)
+                        log("info", f"{source_tag}: Advanced extraction found phone", 
+                            url=url, phone=normalized[:8]+"...")
+                        if _learning_engine:
+                            _learning_engine.record_phone_pattern(
+                                pattern="advanced_extraction",
+                                pattern_type=f"{source_tag}_enhanced",
+                                example=normalized[:8]+"..."
+                            )
+            except Exception as e:
+                log("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
+        
         # Extract email
         email = ""
         email_matches = EMAIL_RE.findall(full_text)
         if email_matches:
             email = email_matches[0]
         
-        # Extract WhatsApp link
+        # Extract WhatsApp link using enhanced extraction
+        try:
+            wa_number = extract_whatsapp_number(html)
+            if wa_number:
+                normalized_wa = normalize_phone(wa_number)
+                if normalized_wa and is_mobile_number(normalized_wa):
+                    if normalized_wa not in phones:
+                        phones.append(normalized_wa)
+                        log("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
+        except Exception:
+            pass
+        
+        # Fallback: Try old WhatsApp link extraction
         wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
         if wa_link:
             wa_href = wa_link.get("href", "")
@@ -3784,6 +3887,13 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
         
         # Only create lead if we found at least one mobile number
         if not phones:
+            if _learning_engine:
+                _learning_engine.learn_from_failure(
+                    url=url,
+                    html_content=html,
+                    reason=f"{source_tag}_no_mobile_found",
+                    visible_phones=[]
+                )
             return None
         
         # Use first mobile number found
