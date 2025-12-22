@@ -384,6 +384,12 @@ DIRECT_CRAWL_URLS = [
     
     # Hamm
     "https://www.kleinanzeigen.de/s-stellengesuche/hamm/vertrieb/k0c107l954",
+    
+    # Zusätzliche Berufsfelder NRW
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/kundenservice/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/call-center/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/promotion/k0c107l929",
+    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/telefonverkauf/k0c107l929",
 ]
 
 # Markt.de Stellengesuche URLs
@@ -464,6 +470,13 @@ FREELANCER_PORTAL_URLS = [
     "https://www.gulp.de/gulp2/g/projekte?region=nordrhein-westfalen&skill=vertrieb",
 ]
 
+# DHD24.com Stellengesuche URLs (neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten)
+DHD24_URLS = [
+    "https://www.dhd24.com/kleinanzeigen/stellengesuche.html",
+    "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-vertrieb.html",
+    "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-verkauf.html",
+]
+
 # Direct crawl source configuration
 DIRECT_CRAWL_SOURCES = {
     "kleinanzeigen": True,
@@ -471,7 +484,8 @@ DIRECT_CRAWL_SOURCES = {
     "quoka": True,
     "kalaydo": True,
     "meinestadt": True,
-    "freelancer_portals": True,
+    "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
+    "dhd24": True,
 }
 
 # Parallel crawling configuration
@@ -3583,6 +3597,90 @@ async def crawl_meinestadt_listings_async() -> List[Dict]:
     return leads
 
 
+async def crawl_dhd24_listings_async() -> List[Dict]:
+    """
+    Crawlt DHD24.com Stellengesuche-Seiten.
+    Neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten.
+    Ähnliche Struktur wie andere Kleinanzeigen-Portale.
+    
+    Returns:
+        Liste von Lead-Dicts
+    """
+    if not DIRECT_CRAWL_SOURCES.get("dhd24", True):
+        return []
+    
+    leads = []
+    max_pages = 3  # Max 3 Seiten pro URL
+    
+    for base_url in DHD24_URLS:
+        for page in range(1, max_pages + 1):
+            if page == 1:
+                url = base_url
+            else:
+                # DHD24 pagination format
+                separator = "&" if "?" in base_url else "?"
+                url = f"{base_url}{separator}page={page}"
+            
+            try:
+                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                
+                log("info", "DHD24: Listing-Seite", url=url, page=page)
+                
+                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
+                if not r or r.status_code != 200:
+                    log("warn", "DHD24: Failed to fetch", url=url, status=r.status_code if r else "None")
+                    break
+                
+                html = r.text or ""
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Extract ad links - trying various selectors
+                ad_links_set = set()
+                
+                for selector in [
+                    'a[href*="/stellengesuche/"]',
+                    'a[href*="/jobs/"]',
+                    'a[href*="/anzeige/"]',
+                    '.ad-list a',
+                    '.listing-item a',
+                    'article a'
+                ]:
+                    links = soup.select(selector)
+                    for link in links:
+                        href = link.get("href", "")
+                        if href and any(path in href for path in ["/stellengesuche/", "/jobs/", "/anzeige/"]):
+                            full_url = urllib.parse.urljoin("https://www.dhd24.com", href)
+                            ad_links_set.add(full_url)
+                
+                ad_links = list(ad_links_set)
+                log("info", "DHD24: Anzeigen gefunden", url=url, count=len(ad_links))
+                
+                if not ad_links:
+                    break
+                
+                for ad_url in ad_links:
+                    if url_seen(ad_url):
+                        continue
+                    
+                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
+                    
+                    lead = await extract_generic_detail_async(ad_url, source_tag="dhd24")
+                    if lead and lead.get("telefon"):
+                        leads.append(lead)
+                        log("info", "DHD24: Lead extrahiert", url=ad_url, has_phone=True)
+                        
+                        _mark_url_seen(ad_url, source="DHD24")
+                    else:
+                        log("debug", "DHD24: Keine Handynummer", url=ad_url)
+                
+            except Exception as e:
+                log("error", "DHD24: Fehler beim Crawlen", url=url, error=str(e))
+                break
+    
+    log("info", "DHD24: Crawling abgeschlossen", total_leads=len(leads))
+    return leads
+
+
 async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl") -> Optional[Dict[str, Any]]:
     """
     Generic function to extract contact information from any ad detail page.
@@ -4030,6 +4128,10 @@ async def crawl_all_portals_parallel() -> List[Dict]:
         tasks.append(crawl_meinestadt_listings_async())
         portal_names.append("Meinestadt")
     
+    if DIRECT_CRAWL_SOURCES.get("dhd24", True):
+        tasks.append(crawl_dhd24_listings_async())
+        portal_names.append("DHD24")
+    
     if not tasks:
         log("info", "Keine Portale für paralleles Crawling aktiviert")
         return []
@@ -4111,6 +4213,14 @@ async def crawl_portals_sequential() -> List[Dict]:
             log("info", "Meinestadt crawl complete (sequential)", count=len(leads))
         except Exception as e:
             log("error", "Meinestadt crawl failed (sequential)", error=str(e))
+    
+    if DIRECT_CRAWL_SOURCES.get("dhd24", True):
+        try:
+            leads = await crawl_dhd24_listings_async()
+            all_leads.extend(leads)
+            log("info", "DHD24 crawl complete (sequential)", count=len(leads))
+        except Exception as e:
+            log("error", "DHD24 crawl failed (sequential)", error=str(e))
     
     return all_leads
 
@@ -7899,7 +8009,17 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         _uilog("Candidates-Modus: Starte paralleles Multi-Portal-Crawling")
         log("info", "Starting parallel portal crawling", parallel_enabled=PARALLEL_PORTAL_CRAWL)
         
-        # Freelancer Portals crawling
+        # Multi-Portal crawling (Kleinanzeigen, Markt.de, Quoka, Kalaydo, Meinestadt, DHD24)
+        if run_flag and run_flag.get("running", True):
+            _uilog("Crawle alle Portale...")
+            try:
+                portal_leads = await crawl_portals_smart()
+                direct_crawl_leads.extend(portal_leads)
+                log("info", "Multi-portal crawl complete", count=len(portal_leads))
+            except Exception as e:
+                log("error", "Multi-portal crawl failed", error=str(e))
+        
+        # Freelancer Portals crawling (separat, da deaktiviert)
         if DIRECT_CRAWL_SOURCES.get("freelancer_portals", True):
             if run_flag and run_flag.get("running", True):
                 _uilog("Crawle Freelancer-Portale...")
