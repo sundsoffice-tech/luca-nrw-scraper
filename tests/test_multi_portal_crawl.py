@@ -16,11 +16,13 @@ from scriptname import (
     crawl_quoka_listings_async,
     crawl_kalaydo_listings_async,
     crawl_meinestadt_listings_async,
+    crawl_freelancer_portals_async,
     extract_generic_detail_async,
     MARKT_DE_URLS,
     QUOKA_DE_URLS,
     KALAYDO_DE_URLS,
     MEINESTADT_DE_URLS,
+    FREELANCER_PORTAL_URLS,
     DIRECT_CRAWL_SOURCES,
 )
 
@@ -34,6 +36,8 @@ def test_url_constants_defined():
     assert isinstance(QUOKA_DE_URLS, list)
     assert len(QUOKA_DE_URLS) > 0
     assert all("quoka.de" in url for url in QUOKA_DE_URLS)
+    # Verify expanded Quoka URLs (at least 15)
+    assert len(QUOKA_DE_URLS) >= 15, f"Expected at least 15 Quoka URLs, got {len(QUOKA_DE_URLS)}"
     
     assert isinstance(KALAYDO_DE_URLS, list)
     assert len(KALAYDO_DE_URLS) > 0
@@ -42,6 +46,8 @@ def test_url_constants_defined():
     assert isinstance(MEINESTADT_DE_URLS, list)
     assert len(MEINESTADT_DE_URLS) > 0
     assert all("meinestadt.de" in url for url in MEINESTADT_DE_URLS)
+    # Verify expanded Meinestadt URLs (at least 15)
+    assert len(MEINESTADT_DE_URLS) >= 15, f"Expected at least 15 Meinestadt URLs, got {len(MEINESTADT_DE_URLS)}"
 
 
 def test_source_configuration():
@@ -52,6 +58,21 @@ def test_source_configuration():
     assert "quoka" in DIRECT_CRAWL_SOURCES
     assert "kalaydo" in DIRECT_CRAWL_SOURCES
     assert "meinestadt" in DIRECT_CRAWL_SOURCES
+    # Verify new freelancer_portals source
+    assert "freelancer_portals" in DIRECT_CRAWL_SOURCES
+
+
+def test_freelancer_portal_urls_defined():
+    """Test that FREELANCER_PORTAL_URLS constant is properly defined."""
+    assert isinstance(FREELANCER_PORTAL_URLS, list)
+    assert len(FREELANCER_PORTAL_URLS) > 0
+    # Verify at least 5 URLs
+    assert len(FREELANCER_PORTAL_URLS) >= 5, f"Expected at least 5 URLs, got {len(FREELANCER_PORTAL_URLS)}"
+    
+    # Check that URLs are for freelancer portals
+    expected_domains = ["freelancermap.de", "freelance.de", "gulp.de"]
+    for url in FREELANCER_PORTAL_URLS:
+        assert any(domain in url for domain in expected_domains), f"Unexpected domain in URL: {url}"
 
 
 @pytest.mark.asyncio
@@ -308,6 +329,71 @@ async def test_crawl_with_pagination():
         
         # Should have stopped after page 2 (no ads found)
         assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_crawl_freelancer_portals_disabled():
+    """Test that crawl_freelancer_portals_async returns empty list when disabled."""
+    
+    with patch.dict('scriptname.DIRECT_CRAWL_SOURCES', {"freelancer_portals": False}):
+        result = await crawl_freelancer_portals_async()
+        assert result == []
+
+
+@pytest.mark.asyncio
+async def test_crawl_freelancer_portals_mock():
+    """Test crawl_freelancer_portals_async with mocked response."""
+    
+    # Mock listing page with profile links
+    mock_listing_html = """
+    <html>
+        <body>
+            <div class="freelancer-item">
+                <a href="/freelancer/vertrieb-experte-123">Vertrieb Experte</a>
+            </div>
+            <div class="freelancer-item">
+                <a href="/freelancer/sales-manager-456">Sales Manager</a>
+            </div>
+        </body>
+    </html>
+    """
+    
+    # Mock profile page with mobile number
+    mock_profile_html = """
+    <html>
+        <body>
+            <h1>Freelancer Profil</h1>
+            <div>Erfahrener Vertriebsprofi verfügbar</div>
+            <div>Kontakt: 0176 99887766</div>
+        </body>
+    </html>
+    """
+    
+    mock_listing_response = Mock()
+    mock_listing_response.status_code = 200
+    mock_listing_response.text = mock_listing_html
+    
+    mock_profile_response = Mock()
+    mock_profile_response.status_code = 200
+    mock_profile_response.text = mock_profile_html
+    
+    mock_db_con = Mock()
+    mock_cursor = Mock()
+    mock_db_con.cursor.return_value = mock_cursor
+    
+    with patch('scriptname.http_get_async', new_callable=AsyncMock) as mock_http, \
+         patch('scriptname.asyncio.sleep', new_callable=AsyncMock), \
+         patch('scriptname.url_seen', return_value=False), \
+         patch('scriptname.db', return_value=mock_db_con), \
+         patch('scriptname.FREELANCER_PORTAL_URLS', ["https://www.freelancermap.de/test/"]):
+        
+        # First call returns listing, subsequent calls return profile
+        mock_http.side_effect = [mock_listing_response, mock_profile_response, mock_profile_response]
+        
+        result = await crawl_freelancer_portals_async()
+        
+        assert isinstance(result, list)
+        # Should have found leads (mocked to succeed)
 
 
 if __name__ == "__main__":
