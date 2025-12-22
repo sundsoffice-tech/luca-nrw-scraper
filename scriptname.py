@@ -495,6 +495,9 @@ FREELANCE_DE_URLS = [
     "https://www.freelance.de/Freiberufler/Account-Manager/",
 ]
 
+# Freelancer portal crawling configuration
+MAX_PROFILES_PER_URL = 10  # Limit profiles crawled per URL to avoid overload
+
 # Direct crawl source configuration
 DIRECT_CRAWL_SOURCES = {
     "kleinanzeigen": True,
@@ -3956,7 +3959,9 @@ async def extract_freelancer_profile_async(profile_url: str, source_tag: str = "
                         break
         
         if not phone:
-            return None  # No phone = not useful
+            # Phone numbers are required for lead qualification - profiles without
+            # contact information are not useful for this sales-focused scraper
+            return None
         
         # Extract skills/role
         skills = []
@@ -4058,7 +4063,7 @@ async def crawl_freelancermap_async() -> List[Dict]:
             log("info", "Freelancermap: Profile gefunden", count=len(profile_links))
             
             # Crawl individual profiles
-            for profile_url in profile_links[:10]:  # Limit to 10 profiles per URL
+            for profile_url in profile_links[:MAX_PROFILES_PER_URL]:
                 if url_seen(profile_url):
                     continue
                 
@@ -4113,7 +4118,7 @@ async def crawl_freelance_de_async() -> List[Dict]:
             log("info", "Freelance.de: Profile gefunden", count=len(profile_links))
             
             # Crawl individual profiles
-            for profile_url in profile_links[:10]:  # Limit to 10 profiles per URL
+            for profile_url in profile_links[:MAX_PROFILES_PER_URL]:
                 if url_seen(profile_url):
                     continue
                 
@@ -8327,18 +8332,21 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                         try:
                             enriched_leads = await enrich_leads_with_telefonbuch(leads_without_phone)
                             
-                            # Update leads with enriched data
+                            # Update leads with enriched data using dictionary for O(1) lookup
+                            # Build lookup dictionary: key = (name, region), value = index
+                            lead_lookup = {}
+                            for i, lead in enumerate(direct_crawl_leads):
+                                if not lead.get("telefon") and lead.get("name") and lead.get("region"):
+                                    key = (lead.get("name"), lead.get("region"))
+                                    lead_lookup[key] = i
+                            
                             enriched_count = 0
                             for enriched_lead in enriched_leads:
                                 if enriched_lead.get("telefon"):
-                                    # Find and update in direct_crawl_leads
-                                    for i, lead in enumerate(direct_crawl_leads):
-                                        if (lead.get("name") == enriched_lead.get("name") and 
-                                            lead.get("region") == enriched_lead.get("region") and
-                                            not lead.get("telefon")):
-                                            direct_crawl_leads[i] = enriched_lead
-                                            enriched_count += 1
-                                            break
+                                    key = (enriched_lead.get("name"), enriched_lead.get("region"))
+                                    if key in lead_lookup:
+                                        direct_crawl_leads[lead_lookup[key]] = enriched_lead
+                                        enriched_count += 1
                             
                             log("info", "Telefonbuch-Enrichment abgeschlossen", enriched=enriched_count, checked=len(leads_without_phone))
                             _uilog(f"Telefonbuch-Enrichment: {enriched_count} Leads mit Telefon angereichert")
