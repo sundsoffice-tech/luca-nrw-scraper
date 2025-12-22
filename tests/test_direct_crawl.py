@@ -27,6 +27,16 @@ def test_direct_crawl_urls_defined():
     for url in DIRECT_CRAWL_URLS:
         assert "kleinanzeigen.de" in url
         assert "stellengesuche" in url
+    
+    # Verify we have at least 33 URLs (expanded NRW cities)
+    assert len(DIRECT_CRAWL_URLS) >= 33, f"Expected at least 33 URLs, got {len(DIRECT_CRAWL_URLS)}"
+    
+    # Verify major NRW cities are present
+    cities_to_check = ['koeln', 'dortmund', 'essen', 'duisburg', 'bochum', 'wuppertal', 
+                       'bielefeld', 'bonn', 'muenster', 'gelsenkirchen', 'moenchengladbach', 
+                       'aachen', 'krefeld', 'oberhausen', 'hagen', 'hamm']
+    cities_found = [city for city in cities_to_check if any(city in url for url in DIRECT_CRAWL_URLS)]
+    assert len(cities_found) == len(cities_to_check), f"Not all cities found. Missing: {set(cities_to_check) - set(cities_found)}"
 
 
 @pytest.mark.asyncio
