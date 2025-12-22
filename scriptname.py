@@ -3798,22 +3798,28 @@ async def crawl_all_portals_parallel() -> List[Dict]:
         Zusammengeführte Liste aller Leads von allen Portalen
     """
     tasks = []
+    portal_names = []
     
     # Alle aktivierten Portale als parallele Tasks
     if DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
         tasks.append(crawl_kleinanzeigen_portal_async())
+        portal_names.append("Kleinanzeigen")
     
     if DIRECT_CRAWL_SOURCES.get("markt_de", True):
         tasks.append(crawl_markt_de_listings_async())
+        portal_names.append("Markt.de")
     
     if DIRECT_CRAWL_SOURCES.get("quoka", True):
         tasks.append(crawl_quoka_listings_async())
+        portal_names.append("Quoka")
     
     if DIRECT_CRAWL_SOURCES.get("kalaydo", True):
         tasks.append(crawl_kalaydo_listings_async())
+        portal_names.append("Kalaydo")
     
     if DIRECT_CRAWL_SOURCES.get("meinestadt", True):
         tasks.append(crawl_meinestadt_listings_async())
+        portal_names.append("Meinestadt")
     
     if not tasks:
         log("info", "Keine Portale für paralleles Crawling aktiviert")
@@ -3828,11 +3834,13 @@ async def crawl_all_portals_parallel() -> List[Dict]:
     # Ergebnisse zusammenführen und Fehler loggen
     all_leads = []
     for i, result in enumerate(results):
+        portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
         if isinstance(result, Exception):
-            log("error", f"Portal {i} fehlgeschlagen", error=str(result))
+            log("error", f"{portal_name} fehlgeschlagen", error=str(result))
             continue
         if isinstance(result, list):
             all_leads.extend(result)
+            log("debug", f"{portal_name} erfolgreich", leads=len(result))
     
     elapsed = time.time() - start_time
     log("info", "Paralleles Crawling abgeschlossen", 
