@@ -3635,7 +3635,7 @@ async def crawl_dhd24_listings_async() -> List[Dict]:
                 soup = BeautifulSoup(html, "html.parser")
                 
                 # Extract ad links - trying various selectors
-                ad_links = []
+                ad_links_set = set()
                 
                 for selector in [
                     'a[href*="/stellengesuche/"]',
@@ -3648,11 +3648,11 @@ async def crawl_dhd24_listings_async() -> List[Dict]:
                     links = soup.select(selector)
                     for link in links:
                         href = link.get("href", "")
-                        if href and ("/stellengesuche/" in href or "/jobs/" in href or "/anzeige/" in href):
+                        if href and any(path in href for path in ["/stellengesuche/", "/jobs/", "/anzeige/"]):
                             full_url = urllib.parse.urljoin("https://www.dhd24.com", href)
-                            if full_url not in ad_links:
-                                ad_links.append(full_url)
+                            ad_links_set.add(full_url)
                 
+                ad_links = list(ad_links_set)
                 log("info", "DHD24: Anzeigen gefunden", url=url, count=len(ad_links))
                 
                 if not ad_links:
