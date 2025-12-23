@@ -262,21 +262,29 @@ class ActiveLearningEngine:
             self.learned_phone_patterns.append(regex)
     
     def _generate_pattern_key(self, raw: str) -> str:
-        """Generiert Pattern-Key (z.B. '0XXX-XXXXXXX')"""
+        """
+        Generiert Pattern-Key (z.B. '0XXX-XXXXXXX')
+        Konvertiert Ziffern zu 'X' und behält nur Separatoren ( -/.())
+        Andere Zeichen (inkl. '+') werden herausgefiltert
+        """
         result = []
         for c in raw:
             if c.isdigit():
                 result.append('X')
             elif c in ' -/.()':
                 result.append(c)
+            # Andere Zeichen werden ignoriert (z.B. '+')
         return ''.join(result)
     
     def _generate_regex(self, raw: str) -> str:
-        """Generiert Regex aus Beispiel-Nummer"""
-        # Ersetze Ziffern durch \d, behalte Separatoren
+        """
+        Generiert Regex aus Beispiel-Nummer
+        Ersetzt alle Ziffern durch \\d, behält Separatoren
+        """
+        # Escape special regex characters
         pattern = re.escape(raw)
-        pattern = re.sub(r'\\d', r'\\d', pattern)
-        pattern = re.sub(r'\d', r'\\d', pattern)
+        # Replace escaped digits with \d pattern
+        pattern = re.sub(r'\\\d', r'\\d', pattern)
         return pattern
     
     def get_learned_phone_patterns(self) -> List[str]:
