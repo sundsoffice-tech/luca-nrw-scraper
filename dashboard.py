@@ -231,6 +231,119 @@ def show_run_history():
     except sqlite3.OperationalError:
         print("  Noch keine Run-Historie")
 
+
+def show_dork_categories():
+    """Zeigt Dork-Kategorien und deren Performance"""
+    print("\n🎯 DORK KATEGORIEN")
+    print("-" * 65)
+    try:
+        conn = get_connection()
+        rows = conn.execute("""
+            SELECT 
+                CASE 
+                    WHEN dork LIKE 'site:%' THEN 'Site-Specific'
+                    WHEN dork LIKE 'inurl:%' THEN 'URL-Pattern'
+                    WHEN dork LIKE '%OR%' THEN 'Power-Dorks'
+                    ELSE 'Standard'
+                END as category,
+                COUNT(*) as count,
+                SUM(leads_with_phone) as leads
+            FROM learning_dork_performance
+            GROUP BY category
+            ORDER BY leads DESC
+        """).fetchall()
+        
+        if rows:
+            print(f"  {'Kategorie':<20} {'Dorks':>8} {'Leads':>8}")
+            print(f"  {'-'*20} {'-'*8} {'-'*8}")
+            for row in rows:
+                category = row[0] or "?"
+                count = row[1] or 0
+                leads = row[2] or 0
+                print(f"  {category:<20} {count:>8} {leads:>8}")
+        else:
+            print("  Noch keine Dork-Performance-Daten")
+        conn.close()
+    except Exception as e:
+        print(f"  Fehler: {e}")
+
+
+def show_dedup_stats():
+    """Zeigt Deduplizierungs-Statistiken"""
+    print("\n🔄 DEDUPLIZIERUNG")
+    print("-" * 65)
+    try:
+        conn = get_connection()
+        
+        # Check if tables exist
+        cursor = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name LIKE 'dedup_%'
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        if not tables:
+            print("  ⚠️  Deduplizierungs-Tabellen werden beim nächsten Run erstellt")
+            conn.close()
+            return
+        
+        phones = 0
+        emails = 0
+        names = 0
+        
+        if 'dedup_phones' in tables:
+            phones = conn.execute('SELECT COUNT(*) FROM dedup_phones').fetchone()[0]
+        if 'dedup_emails' in tables:
+            emails = conn.execute('SELECT COUNT(*) FROM dedup_emails').fetchone()[0]
+        if 'dedup_name_city' in tables:
+            names = conn.execute('SELECT COUNT(*) FROM dedup_name_city').fetchone()[0]
+        
+        print(f"  Eindeutige Telefonnummern: {phones:>8}")
+        print(f"  Eindeutige E-Mails:         {emails:>8}")
+        print(f"  Eindeutige Name+Stadt:      {names:>8}")
+        print(f"  Geschätzte Duplikate verhindert: {phones + emails + names:>6}")
+        
+        conn.close()
+    except Exception as e:
+        print(f"  Fehler: {e}")
+
+
+def show_portal_comparison():
+    """Vergleicht Portal-Performance (Effizienz)"""
+    print("\n📊 PORTAL VERGLEICH (Leads pro 100 URLs)")
+    print("-" * 65)
+    try:
+        conn = get_connection()
+        rows = conn.execute("""
+            SELECT portal,
+                   SUM(urls_crawled) as urls,
+                   SUM(leads_with_phone) as leads,
+                   CASE WHEN SUM(urls_crawled) > 0 
+                        THEN ROUND(SUM(leads_with_phone) * 100.0 / SUM(urls_crawled), 1)
+                        ELSE 0 END as efficiency
+            FROM learning_portal_metrics
+            WHERE timestamp > datetime('now', '-7 days')
+            GROUP BY portal
+            ORDER BY efficiency DESC
+        """).fetchall()
+        
+        if rows:
+            print(f"  {'Portal':<20} {'URLs':>8} {'Leads':>8} {'Effizienz':>10}")
+            print(f"  {'-'*20} {'-'*8} {'-'*8} {'-'*10}")
+            for row in rows:
+                portal = row[0][:20] if row[0] else "?"
+                urls = row[1] or 0
+                leads = row[2] or 0
+                eff = row[3] or 0
+                bar = "█" * min(int(eff / 2), 25) if eff else ""
+                print(f"  {portal:<20} {urls:>8} {leads:>8} {eff:>8.1f}% {bar}")
+        else:
+            print("  Noch keine Portal-Metriken (starte Scraper)")
+        conn.close()
+    except Exception as e:
+        print(f"  Fehler: {e}")
+
+
 def main():
     print_header()
     show_leads_stats()
@@ -240,6 +353,9 @@ def main():
     show_host_backoff()
     show_disabled_portals()
     show_run_history()
+    show_dork_categories()
+    show_dedup_stats()
+    show_portal_comparison()
     print("\n" + "=" * 65)
     print("  Tipp: Starte mit 'python dashboard.py' jederzeit neu")
     print("  Live: while($true) { cls; python dashboard.py; Start-Sleep 30 }")
