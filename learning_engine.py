@@ -8,7 +8,7 @@ and uses this data to optimize future searches and improve lead quality.
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import urllib.parse
 import re
@@ -1402,7 +1402,7 @@ class ActiveLearningEngine:
         """
         try:
             backoff_until = (datetime.now(timezone.utc) + 
-                           datetime.timedelta(hours=backoff_hours)).isoformat()
+                           timedelta(hours=backoff_hours)).isoformat()
             
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.execute("SELECT failures FROM host_backoff WHERE host = ?", (host,))
