@@ -1948,12 +1948,16 @@ def _penalize_host(host: str, reason: str = "error"):
         return
     
     # API-Hosts bekommen kürzere Penalty
-    if host.endswith("googleapis.com") or host.startswith("api."):
+    # Use proper domain matching to avoid substring attacks
+    is_google_api = host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com")
+    is_api_host = host.startswith("api.")
+    
+    if is_google_api or is_api_host:
         penalty = CB_API_PENALTY
     else:
         penalty = CB_BASE_PENALTY
     
-    if host in {"www.googleapis.com", "googleapis.com"}:
+    if is_google_api:
         # Google API: never hard-penalize; at most a short cool-down
         st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
         st["penalty_until"] = time.time() + penalty
@@ -1975,7 +1979,8 @@ def _penalize_host(host: str, reason: str = "error"):
         pass  # Learning ist optional
 
 def _host_allowed(host: str) -> bool:
-    if host in {"www.googleapis.com", "googleapis.com"}:
+    # Use proper domain matching to avoid substring attacks
+    if host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com"):
         return True
     st = _HOST_STATE.get(host)
     if not st:
