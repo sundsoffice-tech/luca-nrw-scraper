@@ -1,0 +1,28 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/luca-nrw-scraper/luca-nrw-scraper
+plugins: anyio-4.12.0
+collecting ... collected 19 items
+
+tests/test_extended_features.py::test_dorks_extended_import PASSED       [  5%]
+tests/test_extended_features.py::test_get_all_dorks PASSED               [ 10%]
+tests/test_extended_features.py::test_get_dorks_by_category PASSED       [ 15%]
+tests/test_extended_features.py::test_get_random_dorks PASSED            [ 21%]
+tests/test_extended_features.py::test_dorks_count PASSED                 [ 26%]
+tests/test_extended_features.py::test_phone_extractor_import PASSED      [ 31%]
+tests/test_extended_features.py::test_normalize_phone PASSED             [ 36%]
+tests/test_extended_features.py::test_is_valid_phone PASSED              [ 42%]
+tests/test_extended_features.py::test_extract_phones_advanced PASSED     [ 47%]
+tests/test_extended_features.py::test_calculate_confidence PASSED        [ 52%]
+tests/test_extended_features.py::test_social_scraper_import PASSED       [ 57%]
+tests/test_extended_features.py::test_social_media_scraper PASSED        [ 63%]
+tests/test_extended_features.py::test_social_media_dorks PASSED          [ 68%]
+tests/test_extended_features.py::test_platform_config PASSED             [ 73%]
+tests/test_extended_features.py::test_deduplication_import PASSED        [ 78%]
+tests/test_extended_features.py::test_lead_deduplicator PASSED           [ 84%]
+tests/test_extended_features.py::test_deduplicator_phone_normalization PASSED [ 89%]
+tests/test_extended_features.py::test_deduplicator_fuzzy_name_match PASSED [ 94%]
+tests/test_extended_features.py::test_all_modules_importable PASSED      [100%]
+
+============================== 19 passed in 0.08s ==============================
