@@ -80,6 +80,7 @@ from stream2_extraction_layer.extraction_enhanced import (
 )
 from learning_engine import (
     LearningEngine,
+    ActiveLearningEngine,
     is_mobile_number,
     is_job_posting,
 )
@@ -4672,18 +4673,191 @@ async def crawl_portals_smart() -> List[Dict]:
     """
     Wählt automatisch zwischen parallel und sequentiell.
     Bei Fehler im parallelen Modus: Fallback auf sequentiell.
+    Integriert Active Learning für Portal-Performance-Tracking.
     
     Returns:
         Liste aller Leads von allen Portalen
     """
+    # Initialize active learning engine
+    active_learning = ActiveLearningEngine(DB_PATH)
+    
+    # Get current run ID from database
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT MAX(id) FROM runs")
+    run_id_row = cur.fetchone()
+    current_run_id = run_id_row[0] if run_id_row and run_id_row[0] else 0
+    con.close()
+    
     if PARALLEL_PORTAL_CRAWL:
         try:
-            return await crawl_all_portals_parallel()
+            leads = await crawl_all_portals_parallel_with_learning(active_learning, current_run_id)
+            return leads
         except Exception as e:
             log("warn", "Paralleles Crawling fehlgeschlagen, Fallback auf sequentiell", error=str(e))
     
-    # Fallback: Sequentielles Crawling
-    return await crawl_portals_sequential()
+    # Fallback: Sequentielles Crawling mit Learning
+    return await crawl_portals_sequential_with_learning(active_learning, current_run_id)
+
+
+async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearningEngine, run_id: int) -> List[Dict]:
+    """
+    Crawlt ALLE aktivierten Portale gleichzeitig mit Active Learning Integration.
+    
+    Returns:
+        Zusammengeführte Liste aller Leads von allen Portalen
+    """
+    tasks = []
+    portal_names = []
+    portal_configs = []
+    
+    # Define portal configurations with their names
+    portal_config_list = [
+        ("kleinanzeigen", "Kleinanzeigen", crawl_kleinanzeigen_portal_async),
+        ("markt_de", "Markt.de", crawl_markt_de_listings_async),
+        ("quoka", "Quoka", crawl_quoka_listings_async),
+        ("kalaydo", "Kalaydo", crawl_kalaydo_listings_async),
+        ("meinestadt", "Meinestadt", crawl_meinestadt_listings_async),
+        ("dhd24", "DHD24", crawl_dhd24_listings_async),
+    ]
+    
+    # Check each portal with learning engine
+    for portal_key, portal_name, portal_func in portal_config_list:
+        if DIRECT_CRAWL_SOURCES.get(portal_key, False):
+            # Check if we should skip this portal based on learning
+            if learning_engine.should_skip_portal(portal_key):
+                log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
+                continue
+            
+            tasks.append(portal_func())
+            portal_names.append(portal_name)
+            portal_configs.append(portal_key)
+    
+    if not tasks:
+        log("info", "Keine Portale für paralleles Crawling aktiviert")
+        return []
+    
+    log("info", "Starte paralleles Portal-Crawling mit Learning", portals=len(tasks))
+    start_time = time.time()
+    
+    # Alle Tasks gleichzeitig ausführen
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Ergebnisse zusammenführen und Learning-Metriken erfassen
+    all_leads = []
+    for i, result in enumerate(results):
+        portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
+        portal_key = portal_configs[i] if i < len(portal_configs) else f"unknown_{i}"
+        
+        if isinstance(result, Exception):
+            log("error", f"{portal_name} fehlgeschlagen", error=str(result))
+            # Record failure for learning
+            learning_engine.record_portal_result(
+                portal=portal_key,
+                urls_crawled=0,
+                leads_found=0,
+                leads_with_phone=0,
+                run_id=run_id
+            )
+            continue
+        
+        if isinstance(result, list):
+            all_leads.extend(result)
+            
+            # Calculate metrics for learning
+            leads_with_phone = len([l for l in result if l.get('telefon')])
+            
+            # Record portal performance for learning
+            # Note: For direct portal crawling, we approximate URLs crawled as leads found
+            # This is a limitation since portal functions return leads, not crawl counts
+            # Success rate is calculated as leads_with_phone / leads_found for accuracy
+            learning_engine.record_portal_result(
+                portal=portal_key,
+                urls_crawled=len(result),  # Approximation: each lead represents a crawled URL
+                leads_found=len(result),
+                leads_with_phone=leads_with_phone,
+                run_id=run_id
+            )
+            
+            log("debug", f"{portal_name} erfolgreich", 
+                leads=len(result), 
+                with_phone=leads_with_phone,
+                success_rate=f"{(leads_with_phone/max(1, len(result))*100):.1f}%")
+    
+    elapsed = time.time() - start_time
+    log("info", "Paralleles Crawling abgeschlossen", 
+        total_leads=len(all_leads), 
+        duration_sec=round(elapsed, 1),
+        portals_success=len([r for r in results if not isinstance(r, Exception)]))
+    
+    # Deduplizierung
+    unique_leads = deduplicate_parallel_leads(all_leads)
+    
+    return unique_leads
+
+
+async def crawl_portals_sequential_with_learning(learning_engine: ActiveLearningEngine, run_id: int) -> List[Dict]:
+    """
+    Fallback: Sequentielles Crawling aller Portale mit Active Learning.
+    
+    Returns:
+        Liste aller Leads von allen Portalen
+    """
+    all_leads = []
+    
+    # Define portal configurations
+    portal_configs = [
+        ("kleinanzeigen", "Kleinanzeigen", crawl_kleinanzeigen_portal_async),
+        ("markt_de", "Markt.de", crawl_markt_de_listings_async),
+        ("quoka", "Quoka", crawl_quoka_listings_async),
+        ("kalaydo", "Kalaydo", crawl_kalaydo_listings_async),
+        ("meinestadt", "Meinestadt", crawl_meinestadt_listings_async),
+        ("dhd24", "DHD24", crawl_dhd24_listings_async),
+    ]
+    
+    for portal_key, portal_name, portal_func in portal_configs:
+        if not DIRECT_CRAWL_SOURCES.get(portal_key, False):
+            continue
+        
+        # Check if we should skip this portal based on learning
+        if learning_engine.should_skip_portal(portal_key):
+            log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
+            continue
+        
+        try:
+            leads = await portal_func()
+            all_leads.extend(leads)
+            
+            # Calculate metrics for learning
+            leads_with_phone = len([l for l in leads if l.get('telefon')])
+            
+            # Record portal performance
+            # Note: For direct portal crawling, we approximate URLs crawled as leads found
+            # This is a limitation since portal functions return leads, not crawl counts
+            # Success rate is calculated as leads_with_phone / leads_found for accuracy
+            learning_engine.record_portal_result(
+                portal=portal_key,
+                urls_crawled=len(leads),  # Approximation: each lead represents a crawled URL
+                leads_found=len(leads),
+                leads_with_phone=leads_with_phone,
+                run_id=run_id
+            )
+            
+            log("info", f"{portal_name} crawl complete (sequential)", 
+                count=len(leads),
+                with_phone=leads_with_phone)
+        except Exception as e:
+            log("error", f"{portal_name} crawl failed (sequential)", error=str(e))
+            # Record failure
+            learning_engine.record_portal_result(
+                portal=portal_key,
+                urls_crawled=0,
+                leads_found=0,
+                leads_with_phone=0,
+                run_id=run_id
+            )
+    
+    return all_leads
 
 
 def is_likely_human_name(text: str) -> bool:
@@ -8890,6 +9064,11 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 _uilog(f"Learning Empfehlungen: {recommendations}")
         except Exception as e:
             log("debug", "Learning report failed", error=str(e))
+        # Run post-run learning analysis
+        try:
+            post_run_learning_analysis(run_id)
+        except Exception as e:
+            log("error", "Post-run learning analysis failed", error=str(e))
         
         _uilog(f"Run #{run_id} beendet")
 
@@ -8907,6 +9086,56 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         _CLIENT_SECURE=None
         _CLIENT_INSECURE=None
 
+
+
+def post_run_learning_analysis(run_id: int) -> None:
+    """
+    Analyze learning data after a run and make recommendations.
+    
+    This function:
+    1. Analyzes portal performance
+    2. Identifies best-performing dorks
+    3. Suggests portal configuration changes
+    4. Logs learning insights
+    
+    Args:
+        run_id: The ID of the completed run
+    """
+    try:
+        learning = ActiveLearningEngine(DB_PATH)
+        
+        # Get portal statistics
+        portal_stats = learning.get_portal_stats()
+        
+        if portal_stats:
+            log("info", "[LEARNING] Portal Performance Summary:")
+            for portal, stats in portal_stats.items():
+                log("info", f"  {portal}: {stats['total_with_phone']}/{stats['total_leads']} leads with phone "
+                          f"({stats['avg_success_rate']*100:.1f}% success rate over {stats['runs']} runs)")
+                
+                # Warn about poor performers
+                if stats['runs'] >= 3 and stats['avg_success_rate'] < 0.01:
+                    log("warn", f"[LEARNING] Portal {portal} has consistently poor performance - "
+                              f"consider disabling in DIRECT_CRAWL_SOURCES")
+        
+        # Get best dorks
+        best_dorks = learning.get_best_dorks(n=5)
+        if best_dorks:
+            log("info", f"[LEARNING] Top performing search queries: {', '.join(best_dorks[:3])}")
+        
+        # Get learning summary
+        summary = learning.get_learning_summary()
+        if summary:
+            log("info", f"[LEARNING] System has tracked {summary.get('total_portal_runs', 0)} portal runs, "
+                      f"{summary.get('phone_patterns_learned', 0)} phone patterns, "
+                      f"and {summary.get('core_dorks', 0)} core search queries")
+        
+        # Log any hosts in backoff
+        if summary.get('hosts_in_backoff', 0) > 0:
+            log("warn", f"[LEARNING] {summary.get('hosts_in_backoff')} hosts are currently in backoff period")
+    
+    except Exception as e:
+        log("error", "[LEARNING] Post-run analysis failed", error=str(e))
 
 
 # =========================
