@@ -145,7 +145,7 @@ class LearningEngine:
         
         # Active Learning: Portal/Run Metrics
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS learning_metrics (
+            CREATE TABLE IF NOT EXISTS learning_portal_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id INTEGER,
                 timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -153,16 +153,18 @@ class LearningEngine:
                 urls_crawled INTEGER DEFAULT 0,
                 leads_found INTEGER DEFAULT 0,
                 leads_with_phone INTEGER DEFAULT 0,
-                success_rate REAL DEFAULT 0.0
+                success_rate REAL DEFAULT 0.0,
+                errors INTEGER DEFAULT 0
             )
         """)
         
         # Active Learning: Dork/Query Performance
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS dork_performance (
+            CREATE TABLE IF NOT EXISTS learning_dork_performance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 dork TEXT UNIQUE,
                 times_used INTEGER DEFAULT 0,
+                total_results INTEGER DEFAULT 0,
                 leads_found INTEGER DEFAULT 0,
                 leads_with_phone INTEGER DEFAULT 0,
                 score REAL DEFAULT 0.0,
@@ -1187,7 +1189,7 @@ class ActiveLearningEngine:
         self.current_run_metrics = {}
     
     def record_portal_result(self, portal: str, urls_crawled: int, leads_found: int, 
-                            leads_with_phone: int, run_id: int = None) -> None:
+                            leads_with_phone: int, run_id: int = None, errors: int = 0) -> None:
         """
         Record results after each portal crawl.
         
@@ -1197,16 +1199,17 @@ class ActiveLearningEngine:
             leads_found: Total leads found
             leads_with_phone: Leads with valid phone numbers
             run_id: Current run ID (optional)
+            errors: Number of errors encountered (optional)
         """
         success_rate = leads_with_phone / max(1, urls_crawled)
         
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
-                    INSERT INTO learning_metrics 
-                    (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate))
+                    INSERT INTO learning_portal_metrics 
+                    (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate, errors)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate, errors))
                 conn.commit()
             
             # Check if portal should be automatically disabled
@@ -1233,7 +1236,7 @@ class ActiveLearningEngine:
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.execute("""
                     SELECT AVG(success_rate) FROM (
-                        SELECT success_rate FROM learning_metrics 
+                        SELECT success_rate FROM learning_portal_metrics 
                         WHERE portal = ? 
                         ORDER BY timestamp DESC 
                         LIMIT ?
@@ -1244,7 +1247,7 @@ class ActiveLearningEngine:
         except Exception:
             return 0.5
     
-    def record_dork_result(self, dork: str, leads_found: int, leads_with_phone: int) -> None:
+    def record_dork_result(self, dork: str, leads_found: int, leads_with_phone: int, total_results: int = 0) -> None:
         """
         Record performance of a search query (dork).
         
@@ -1252,6 +1255,7 @@ class ActiveLearningEngine:
             dork: The search query/dork used
             leads_found: Number of leads found with this query
             leads_with_phone: Number of leads with valid phone numbers
+            total_results: Total number of search results returned (optional)
         """
         try:
             score = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
@@ -1259,27 +1263,28 @@ class ActiveLearningEngine:
             
             with sqlite3.connect(self.db_path) as conn:
                 # Check if dork exists
-                cur = conn.execute("SELECT times_used, leads_found, leads_with_phone FROM dork_performance WHERE dork = ?", (dork,))
+                cur = conn.execute("SELECT times_used, total_results, leads_found, leads_with_phone FROM learning_dork_performance WHERE dork = ?", (dork,))
                 existing = cur.fetchone()
                 
                 if existing:
                     new_times = existing[0] + 1
-                    new_leads = existing[1] + leads_found
-                    new_phone_leads = existing[2] + leads_with_phone
+                    new_total_results = existing[1] + total_results
+                    new_leads = existing[2] + leads_found
+                    new_phone_leads = existing[3] + leads_with_phone
                     new_score = new_phone_leads / max(1, new_leads)
                     
                     conn.execute("""
-                        UPDATE dork_performance 
-                        SET times_used = ?, leads_found = ?, leads_with_phone = ?, 
+                        UPDATE learning_dork_performance 
+                        SET times_used = ?, total_results = ?, leads_found = ?, leads_with_phone = ?, 
                             score = ?, last_used = datetime('now'), pool = ?
                         WHERE dork = ?
-                    """, (new_times, new_leads, new_phone_leads, new_score, pool, dork))
+                    """, (new_times, new_total_results, new_leads, new_phone_leads, new_score, pool, dork))
                 else:
                     conn.execute("""
-                        INSERT INTO dork_performance 
-                        (dork, times_used, leads_found, leads_with_phone, score, last_used, pool)
-                        VALUES (?, 1, ?, ?, ?, datetime('now'), ?)
-                    """, (dork, leads_found, leads_with_phone, score, pool))
+                        INSERT INTO learning_dork_performance 
+                        (dork, times_used, total_results, leads_found, leads_with_phone, score, last_used, pool)
+                        VALUES (?, 1, ?, ?, ?, ?, datetime('now'), ?)
+                    """, (dork, total_results, leads_found, leads_with_phone, score, pool))
                 
                 conn.commit()
         except Exception:
@@ -1355,7 +1360,7 @@ class ActiveLearningEngine:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cur = conn.execute("""
-                    SELECT dork FROM dork_performance 
+                    SELECT dork FROM learning_dork_performance 
                     WHERE pool = 'core' AND times_used > 2
                     ORDER BY score DESC, leads_with_phone DESC
                     LIMIT ?
@@ -1476,7 +1481,7 @@ class ActiveLearningEngine:
                         SUM(leads_found) as total_leads,
                         SUM(leads_with_phone) as total_with_phone,
                         AVG(success_rate) as avg_success_rate
-                    FROM learning_metrics
+                    FROM learning_portal_metrics
                     GROUP BY portal
                     ORDER BY avg_success_rate DESC
                 """)
@@ -1508,14 +1513,14 @@ class ActiveLearningEngine:
                 summary = {}
                 
                 # Total metrics tracked
-                cur = conn.execute("SELECT COUNT(*) FROM learning_metrics")
+                cur = conn.execute("SELECT COUNT(*) FROM learning_portal_metrics")
                 summary['total_portal_runs'] = cur.fetchone()[0]
                 
                 # Dork statistics
                 cur = conn.execute("""
                     SELECT COUNT(*), 
                            SUM(CASE WHEN pool = 'core' THEN 1 ELSE 0 END) as core_count
-                    FROM dork_performance
+                    FROM learning_dork_performance
                 """)
                 result = cur.fetchone()
                 summary['total_dorks_tracked'] = result[0]
