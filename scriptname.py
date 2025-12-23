@@ -98,6 +98,28 @@ from phone_patterns import (
     get_best_phone_number,
     extract_whatsapp_number,
 )
+# New modules for extended functionality
+from dorks_extended import (
+    get_all_dorks,
+    get_random_dorks,
+    get_dorks_by_category,
+    POWER_DORKS,
+    JOB_SEEKER_DORKS,
+)
+from phone_extractor import (
+    extract_phones_advanced,
+    get_best_phone,
+    is_valid_phone as is_valid_phone_enhanced,
+)
+from social_scraper import (
+    SOCIAL_MEDIA_DORKS,
+    SocialMediaScraper,
+    get_all_social_dorks,
+)
+from deduplication import (
+    LeadDeduplicator,
+    get_deduplicator,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -527,6 +549,120 @@ PORTAL_DELAYS = {
     "dhd24": 4.0,
     "freelancermap": 3.0,
     "freelance_de": 3.0,
+}
+
+# ==================== NEW PORTAL CONFIGURATIONS ====================
+# Extended portal configuration with priorities and detailed settings
+PORTAL_CONFIGS = {
+    "kleinanzeigen": {
+        "enabled": True,
+        "base_urls": DIRECT_CRAWL_URLS,
+        "delay": 3.0,
+        "priority": 1,
+        "type": "classifieds"
+    },
+    "markt_de": {
+        "enabled": True,
+        "base_urls": MARKT_DE_URLS,
+        "delay": 4.0,
+        "priority": 2,
+        "type": "classifieds"
+    },
+    "quoka": {
+        "enabled": True,
+        "base_urls": QUOKA_DE_URLS,
+        "delay": 6.0,
+        "priority": 3,
+        "type": "classifieds"
+    },
+    "indeed": {
+        "enabled": True,
+        "base_urls": [
+            "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
+            "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
+            "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
+            "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
+        ],
+        "delay": 3.0,
+        "priority": 4,
+        "type": "job_board"
+    },
+    "stepstone": {
+        "enabled": True,
+        "base_urls": [
+            "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
+            "https://www.stepstone.de/jobs/sales/in-nrw",
+            "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
+        ],
+        "delay": 3.0,
+        "priority": 5,
+        "type": "job_board"
+    },
+    "arbeitsagentur": {
+        "enabled": True,
+        "base_urls": [
+            "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
+            "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
+        ],
+        "delay": 2.0,
+        "priority": 6,
+        "type": "job_board"
+    },
+    "monster": {
+        "enabled": True,
+        "base_urls": [
+            "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
+            "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
+        ],
+        "delay": 3.0,
+        "priority": 7,
+        "type": "job_board"
+    },
+    "stellenanzeigen": {
+        "enabled": True,
+        "base_urls": [
+            "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
+            "https://www.stellenanzeigen.de/jobs-sales-nrw/",
+        ],
+        "delay": 2.5,
+        "priority": 8,
+        "type": "job_board"
+    },
+    "meinestadt": {
+        "enabled": True,  # Reaktiviert mit besserer Handhabung
+        "base_urls": MEINESTADT_DE_URLS,
+        "delay": 3.0,
+        "priority": 9,
+        "type": "classifieds"
+    },
+    "dhd24": {
+        "enabled": False,  # Bleibt deaktiviert (oft blockiert)
+        "base_urls": DHD24_URLS,
+        "delay": 5.0,
+        "priority": 99,
+        "type": "classifieds"
+    },
+    "kalaydo": {
+        "enabled": False,  # Deaktiviert - blockiert Requests
+        "base_urls": KALAYDO_DE_URLS,
+        "delay": 4.0,
+        "priority": 99,
+        "type": "classifieds"
+    },
+    "freelancermap": {
+        "enabled": True,
+        "base_urls": FREELANCERMAP_URLS,
+        "delay": 3.0,
+        "priority": 10,
+        "type": "freelancer"
+    },
+    "freelance_de": {
+        "enabled": True,
+        "base_urls": FREELANCE_DE_URLS,
+        "delay": 3.0,
+        "priority": 11,
+        "type": "freelancer"
+    },
 }
 
 # Parallel crawling configuration
@@ -8216,6 +8352,67 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
         log("warn", "Smart dorks generation failed", error=str(e))
         return []
     return []
+
+
+def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
+    """
+    Wählt die besten Dorks basierend auf Learning + Extended Dorks
+    
+    Kombiniert:
+    - Top-Performer aus Learning (50%)
+    - Power-Dorks aus dorks_extended (25%)
+    - Zufällige neue Dorks zum Testen (25%)
+    - Social Media Dorks (Bonus)
+    
+    Args:
+        industry: Branche (z.B. "candidates", "vertrieb")
+        count: Anzahl der gewünschten Dorks
+    
+    Returns:
+        Liste der ausgewählten Dorks
+    """
+    dorks = []
+    
+    try:
+        # 1. Top-Performer aus Learning (50%)
+        learning = ActiveLearningEngine()
+        best_dorks = learning.get_best_dorks(count // 2)
+        dorks.extend(best_dorks)
+        
+        # 2. Power-Dorks aus Extended (25%)
+        power_count = count // 4
+        dorks.extend(POWER_DORKS[:power_count])
+        
+        # 3. Zufällige neue Dorks zum Testen (25%)
+        random_count = count // 4
+        random_dorks = get_random_dorks(random_count)
+        dorks.extend(random_dorks)
+        
+        # 4. Social Media Dorks (Bonus - 5 Stück)
+        social_dorks = SOCIAL_MEDIA_DORKS[:5]
+        dorks.extend(social_dorks)
+        
+        # 5. Job Seeker Dorks für Candidates Mode
+        if industry and industry.lower() in ("candidates", "recruiter"):
+            job_seeker = JOB_SEEKER_DORKS[:10]
+            dorks.extend(job_seeker)
+        
+    except Exception as e:
+        log("warn", f"Error in get_smart_dorks_extended: {e}")
+        # Fallback: nur Power-Dorks und Job Seeker
+        dorks = POWER_DORKS[:count // 2] + JOB_SEEKER_DORKS[:count // 2]
+    
+    # Deduplizieren und begrenzen
+    seen = set()
+    unique_dorks = []
+    for dork in dorks:
+        dork_lower = dork.lower()
+        if dork_lower not in seen:
+            seen.add(dork_lower)
+            unique_dorks.append(dork)
+    
+    return unique_dorks[:count]
+
 
 # =========================
 # Export (CSV/XLSX append)
