@@ -5,7 +5,7 @@ import pytest
 import os
 import sqlite3
 import tempfile
-from learning_engine import LearningEngine, is_mobile_number, is_job_posting
+from learning_engine import LearningEngine, ActiveLearningEngine, is_mobile_number, is_job_posting
 
 
 @pytest.fixture
@@ -475,4 +475,313 @@ class TestAILearningFeatures:
         assert stats['phone_patterns_learned'] >= 1
         assert stats['failures_logged'] >= 1
         assert stats['portals_tracked'] >= 1
+
+
+class TestActiveLearningEngine:
+    """Tests for the ActiveLearningEngine class."""
+    
+    @pytest.fixture
+    def active_learning(self, temp_db):
+        """Create an active learning engine instance."""
+        # First initialize the base learning engine to create tables
+        base_engine = LearningEngine(temp_db)
+        return ActiveLearningEngine(temp_db)
+    
+    def test_initialization(self, active_learning, temp_db):
+        """Test that active learning engine initializes correctly."""
+        # Check that new tables were created
+        con = sqlite3.connect(temp_db)
+        cur = con.cursor()
+        
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cur.fetchall()]
+        
+        assert 'learning_metrics' in tables
+        assert 'dork_performance' in tables
+        assert 'phone_patterns_learned' in tables
+        assert 'host_backoff' in tables
+        
+        con.close()
+    
+    def test_record_portal_result(self, active_learning):
+        """Test recording portal performance."""
+        active_learning.record_portal_result(
+            portal="kleinanzeigen",
+            urls_crawled=100,
+            leads_found=20,
+            leads_with_phone=5,
+            run_id=1
+        )
+        
+        # Verify data was recorded
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM learning_metrics WHERE portal = ?", ("kleinanzeigen",))
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['urls_crawled'] == 100
+        assert row['leads_found'] == 20
+        assert row['leads_with_phone'] == 5
+        assert row['success_rate'] == 0.05  # 5/100
+        
+        con.close()
+    
+    def test_should_skip_portal_good_performance(self, active_learning):
+        """Test that good performing portals are not skipped."""
+        # Record good performance
+        for i in range(5):
+            active_learning.record_portal_result(
+                portal="kleinanzeigen",
+                urls_crawled=100,
+                leads_found=50,
+                leads_with_phone=10,
+                run_id=i
+            )
+        
+        # Should NOT skip
+        assert active_learning.should_skip_portal("kleinanzeigen") is False
+    
+    def test_should_skip_portal_poor_performance(self, active_learning):
+        """Test that poor performing portals are skipped."""
+        # Record poor performance (0% success rate)
+        for i in range(5):
+            active_learning.record_portal_result(
+                portal="meinestadt",
+                urls_crawled=100,
+                leads_found=0,
+                leads_with_phone=0,
+                run_id=i
+            )
+        
+        # Should skip
+        assert active_learning.should_skip_portal("meinestadt") is True
+    
+    def test_record_dork_result(self, active_learning):
+        """Test recording dork/query performance."""
+        dork = "site:kleinanzeigen.de vertrieb NRW"
+        
+        active_learning.record_dork_result(
+            dork=dork,
+            leads_found=10,
+            leads_with_phone=3
+        )
+        
+        # Verify data was recorded
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM dork_performance WHERE dork = ?", (dork,))
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['times_used'] == 1
+        assert row['leads_found'] == 10
+        assert row['leads_with_phone'] == 3
+        assert row['score'] == 0.3  # 3/10
+        assert row['pool'] == 'core'  # Has phone leads
+        
+        con.close()
+    
+    def test_record_dork_result_multiple_times(self, active_learning):
+        """Test that dork results accumulate correctly."""
+        dork = "vertrieb handy NRW"
+        
+        # Record multiple times
+        active_learning.record_dork_result(dork, leads_found=5, leads_with_phone=2)
+        active_learning.record_dork_result(dork, leads_found=8, leads_with_phone=4)
+        active_learning.record_dork_result(dork, leads_found=3, leads_with_phone=1)
+        
+        # Verify accumulated data
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM dork_performance WHERE dork = ?", (dork,))
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['times_used'] == 3
+        assert row['leads_found'] == 16  # 5+8+3
+        assert row['leads_with_phone'] == 7  # 2+4+1
+        assert abs(row['score'] - (7/16)) < 0.01  # 7/16 ≈ 0.4375
+        
+        con.close()
+    
+    def test_get_best_dorks(self, active_learning):
+        """Test retrieving best performing dorks."""
+        # Record various dorks with different performance
+        dorks_data = [
+            ("excellent dork", 10, 8),  # 80% success
+            ("good dork", 10, 5),       # 50% success
+            ("mediocre dork", 10, 2),   # 20% success
+            ("poor dork", 10, 0),       # 0% success
+        ]
+        
+        for dork, leads, with_phone in dorks_data:
+            for _ in range(3):  # Use each 3 times to pass times_used > 2 filter
+                active_learning.record_dork_result(dork, leads, with_phone)
+        
+        # Get best dorks
+        best = active_learning.get_best_dorks(n=2)
+        
+        assert len(best) <= 2
+        assert "excellent dork" in best
+        # Should be ordered by score
+        if len(best) == 2:
+            assert best[0] == "excellent dork"
+    
+    def test_learn_phone_pattern(self, active_learning):
+        """Test learning phone patterns."""
+        active_learning.learn_phone_pattern(
+            raw_phone="0171 - 123 456",
+            normalized="+491711234567",
+            portal="kleinanzeigen"
+        )
+        
+        # Verify pattern was learned
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM phone_patterns_learned")
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['pattern'] == "XXXX - XXX XXX"  # Digits replaced with X
+        assert row['times_matched'] == 1
+        assert row['source_portal'] == "kleinanzeigen"
+        
+        con.close()
+    
+    def test_learn_phone_pattern_multiple_times(self, active_learning):
+        """Test that phone patterns accumulate correctly."""
+        pattern_phone = "0176 123 456"
+        
+        # Learn same pattern multiple times
+        for _ in range(5):
+            active_learning.learn_phone_pattern(
+                raw_phone=pattern_phone,
+                normalized="+491761234567",
+                portal="kleinanzeigen"
+            )
+        
+        # Verify times_matched increased
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM phone_patterns_learned WHERE pattern = ?", ("XXXX XXX XXX",))
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['times_matched'] == 5
+        
+        con.close()
+    
+    def test_get_learned_phone_patterns(self, active_learning):
+        """Test retrieving learned phone patterns."""
+        # Learn various patterns
+        patterns = [
+            ("0171 123456", 5),   # Learn 5 times
+            ("0162-123-456", 3),  # Learn 3 times
+            ("0150 12 34 56", 1), # Learn 1 time (should be filtered)
+        ]
+        
+        for phone, times in patterns:
+            for _ in range(times):
+                active_learning.learn_phone_pattern(
+                    raw_phone=phone,
+                    normalized="+49...",
+                    portal="test"
+                )
+        
+        # Get patterns (min 2 matches)
+        learned = active_learning.get_learned_phone_patterns()
+        
+        # Should only return patterns with > 2 matches
+        assert len(learned) == 2
+        assert "XXXX XXXXXX" in learned      # 0171 123456 pattern, 5 times
+        assert "XXXX-XXX-XXX" in learned    # 0162-123-456 pattern, 3 times
+    
+    def test_record_host_failure(self, active_learning):
+        """Test recording host failures."""
+        active_learning.record_host_failure(
+            host="dhd24.com",
+            reason="HTTP 403 Forbidden",
+            backoff_hours=2
+        )
+        
+        # Verify failure was recorded
+        con = sqlite3.connect(active_learning.db_path)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        
+        cur.execute("SELECT * FROM host_backoff WHERE host = ?", ("dhd24.com",))
+        row = cur.fetchone()
+        
+        assert row is not None
+        assert row['failures'] == 1
+        assert row['reason'] == "HTTP 403 Forbidden"
+        assert row['backoff_until'] is not None
+        
+        con.close()
+    
+    def test_should_backoff_host_active(self, active_learning):
+        """Test that hosts in backoff period are detected."""
+        active_learning.record_host_failure(
+            host="blocked.com",
+            reason="Rate limited",
+            backoff_hours=1
+        )
+        
+        # Should be in backoff
+        assert active_learning.should_backoff_host("blocked.com") is True
+    
+    def test_should_backoff_host_expired(self, active_learning):
+        """Test that expired backoff periods are detected."""
+        # This would require time manipulation or a very short backoff
+        # For now, just test that non-existent hosts don't backoff
+        assert active_learning.should_backoff_host("never-failed.com") is False
+    
+    def test_get_portal_stats(self, active_learning):
+        """Test getting portal statistics."""
+        # Record data for multiple portals
+        active_learning.record_portal_result("kleinanzeigen", 100, 20, 5, 1)
+        active_learning.record_portal_result("kleinanzeigen", 100, 15, 3, 2)
+        active_learning.record_portal_result("markt_de", 50, 10, 2, 1)
+        
+        stats = active_learning.get_portal_stats()
+        
+        assert "kleinanzeigen" in stats
+        assert "markt_de" in stats
+        
+        kl_stats = stats["kleinanzeigen"]
+        assert kl_stats['runs'] == 2
+        assert kl_stats['total_urls'] == 200
+        assert kl_stats['total_leads'] == 35
+        assert kl_stats['total_with_phone'] == 8
+    
+    def test_get_learning_summary(self, active_learning):
+        """Test getting overall learning summary."""
+        # Add some data
+        active_learning.record_portal_result("test", 100, 10, 2, 1)
+        active_learning.record_dork_result("test dork", 5, 1)
+        active_learning.learn_phone_pattern("0171 123", "+49171123", "test")
+        
+        summary = active_learning.get_learning_summary()
+        
+        assert 'total_portal_runs' in summary
+        assert 'total_dorks_tracked' in summary
+        assert 'core_dorks' in summary
+        assert 'phone_patterns_learned' in summary
+        assert 'hosts_in_backoff' in summary
+        
+        assert summary['total_portal_runs'] >= 1
+        assert summary['total_dorks_tracked'] >= 1
+        assert summary['phone_patterns_learned'] >= 1
+
 
