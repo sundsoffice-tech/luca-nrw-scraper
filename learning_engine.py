@@ -143,6 +143,56 @@ class LearningEngine:
             )
         """)
         
+        # Active Learning: Portal/Run Metrics
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS learning_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                portal TEXT,
+                urls_crawled INTEGER DEFAULT 0,
+                leads_found INTEGER DEFAULT 0,
+                leads_with_phone INTEGER DEFAULT 0,
+                success_rate REAL DEFAULT 0.0
+            )
+        """)
+        
+        # Active Learning: Dork/Query Performance
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS dork_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dork TEXT UNIQUE,
+                times_used INTEGER DEFAULT 0,
+                leads_found INTEGER DEFAULT 0,
+                leads_with_phone INTEGER DEFAULT 0,
+                score REAL DEFAULT 0.0,
+                last_used TEXT,
+                pool TEXT DEFAULT 'explore'
+            )
+        """)
+        
+        # Active Learning: Phone Patterns Learned
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS phone_patterns_learned (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern TEXT UNIQUE,
+                times_matched INTEGER DEFAULT 0,
+                source_portal TEXT,
+                discovered_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Active Learning: Host Backoff
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS host_backoff (
+                host TEXT PRIMARY KEY,
+                failures INTEGER DEFAULT 0,
+                last_failure TEXT,
+                backoff_until TEXT,
+                reason TEXT
+            )
+        """)
+        
         con.commit()
         con.close()
     
@@ -1124,3 +1174,360 @@ def is_job_posting(url: str = "", title: str = "", snippet: str = "", content: s
         return True
     
     return False
+
+
+class ActiveLearningEngine:
+    """
+    Active self-learning system that tracks portal performance, query effectiveness,
+    and phone patterns to optimize future scraping runs.
+    """
+    
+    def __init__(self, db_path: str = "scraper.db"):
+        self.db_path = db_path
+        self.current_run_metrics = {}
+    
+    def record_portal_result(self, portal: str, urls_crawled: int, leads_found: int, 
+                            leads_with_phone: int, run_id: int = None) -> None:
+        """
+        Record results after each portal crawl.
+        
+        Args:
+            portal: Portal name (e.g., 'kleinanzeigen', 'markt_de')
+            urls_crawled: Number of URLs crawled from this portal
+            leads_found: Total leads found
+            leads_with_phone: Leads with valid phone numbers
+            run_id: Current run ID (optional)
+        """
+        success_rate = leads_with_phone / max(1, urls_crawled)
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT INTO learning_metrics 
+                    (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (run_id, portal, urls_crawled, leads_found, leads_with_phone, success_rate))
+                conn.commit()
+            
+            # Check if portal should be automatically disabled
+            if self._get_portal_avg_success(portal, last_n=5) < 0.01:
+                print(f"[LEARNING] Portal {portal} has 0% success rate - consider disabling")
+        except Exception as e:
+            # Don't fail the scraping run if learning fails
+            print(f"[LEARNING] Failed to record portal result: {e}")
+    
+    def _get_portal_avg_success(self, portal: str, last_n: int = 5) -> float:
+        """
+        Get average success rate for a portal over the last N runs.
+        
+        Args:
+            portal: Portal name
+            last_n: Number of recent runs to average
+            
+        Returns:
+            Average success rate (0.0-1.0)
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("""
+                    SELECT AVG(success_rate) FROM (
+                        SELECT success_rate FROM learning_metrics 
+                        WHERE portal = ? 
+                        ORDER BY timestamp DESC 
+                        LIMIT ?
+                    )
+                """, (portal, last_n))
+                result = cur.fetchone()
+                return result[0] if result and result[0] is not None else 0.5
+        except Exception:
+            return 0.5
+    
+    def record_dork_result(self, dork: str, leads_found: int, leads_with_phone: int) -> None:
+        """
+        Record performance of a search query (dork).
+        
+        Args:
+            dork: The search query/dork used
+            leads_found: Number of leads found with this query
+            leads_with_phone: Number of leads with valid phone numbers
+        """
+        try:
+            score = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
+            pool = 'core' if leads_with_phone > 0 else 'explore'
+            
+            with sqlite3.connect(self.db_path) as conn:
+                # Check if dork exists
+                cur = conn.execute("SELECT times_used, leads_found, leads_with_phone FROM dork_performance WHERE dork = ?", (dork,))
+                existing = cur.fetchone()
+                
+                if existing:
+                    new_times = existing[0] + 1
+                    new_leads = existing[1] + leads_found
+                    new_phone_leads = existing[2] + leads_with_phone
+                    new_score = new_phone_leads / max(1, new_leads)
+                    
+                    conn.execute("""
+                        UPDATE dork_performance 
+                        SET times_used = ?, leads_found = ?, leads_with_phone = ?, 
+                            score = ?, last_used = datetime('now'), pool = ?
+                        WHERE dork = ?
+                    """, (new_times, new_leads, new_phone_leads, new_score, pool, dork))
+                else:
+                    conn.execute("""
+                        INSERT INTO dork_performance 
+                        (dork, times_used, leads_found, leads_with_phone, score, last_used, pool)
+                        VALUES (?, 1, ?, ?, ?, datetime('now'), ?)
+                    """, (dork, leads_found, leads_with_phone, score, pool))
+                
+                conn.commit()
+        except Exception as e:
+            print(f"[LEARNING] Failed to record dork result: {e}")
+    
+    def learn_phone_pattern(self, raw_phone: str, normalized: str, portal: str) -> None:
+        """
+        Learn from a successfully extracted phone number pattern.
+        
+        Args:
+            raw_phone: Raw phone number as found in HTML
+            normalized: Normalized phone number
+            portal: Portal where this was found
+        """
+        try:
+            # Extract pattern (e.g., "0171 - 123 456" -> "XXXX - XXX XXX")
+            pattern = self._extract_pattern(raw_phone)
+            
+            if pattern:
+                with sqlite3.connect(self.db_path) as conn:
+                    cur = conn.execute(
+                        "SELECT times_matched FROM phone_patterns_learned WHERE pattern = ?", 
+                        (pattern,)
+                    )
+                    existing = cur.fetchone()
+                    
+                    if existing:
+                        conn.execute("""
+                            UPDATE phone_patterns_learned 
+                            SET times_matched = times_matched + 1 
+                            WHERE pattern = ?
+                        """, (pattern,))
+                    else:
+                        conn.execute("""
+                            INSERT INTO phone_patterns_learned 
+                            (pattern, times_matched, source_portal)
+                            VALUES (?, 1, ?)
+                        """, (pattern, portal))
+                    
+                    conn.commit()
+        except Exception as e:
+            print(f"[LEARNING] Failed to learn phone pattern: {e}")
+    
+    def _extract_pattern(self, phone: str) -> str:
+        """
+        Extract pattern from a phone number.
+        
+        Args:
+            phone: Phone number string
+            
+        Returns:
+            Pattern representation
+        """
+        if not phone:
+            return ""
+        
+        # Replace digits with X, keep structure
+        pattern = re.sub(r'\d', 'X', phone)
+        return pattern[:50]  # Limit length
+    
+    def get_best_dorks(self, n: int = 10) -> List[str]:
+        """
+        Get the best performing search queries.
+        
+        Args:
+            n: Number of dorks to return
+            
+        Returns:
+            List of best dork strings
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("""
+                    SELECT dork FROM dork_performance 
+                    WHERE pool = 'core' AND times_used > 2
+                    ORDER BY score DESC, leads_with_phone DESC
+                    LIMIT ?
+                """, (n,))
+                return [row[0] for row in cur.fetchall()]
+        except Exception:
+            return []
+    
+    def should_skip_portal(self, portal: str) -> bool:
+        """
+        Determine if a portal should be skipped based on historical performance.
+        
+        Args:
+            portal: Portal name
+            
+        Returns:
+            True if portal should be skipped, False otherwise
+        """
+        avg_success = self._get_portal_avg_success(portal, last_n=5)
+        return avg_success < 0.01  # Less than 1% success rate
+    
+    def get_learned_phone_patterns(self) -> List[str]:
+        """
+        Get learned phone patterns that have been successful multiple times.
+        
+        Returns:
+            List of phone patterns
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("""
+                    SELECT pattern FROM phone_patterns_learned 
+                    WHERE times_matched > 2
+                    ORDER BY times_matched DESC
+                """)
+                return [row[0] for row in cur.fetchall()]
+        except Exception:
+            return []
+    
+    def record_host_failure(self, host: str, reason: str, backoff_hours: int = 1) -> None:
+        """
+        Record a host failure and set backoff period.
+        
+        Args:
+            host: Host/domain that failed
+            reason: Reason for failure
+            backoff_hours: Hours to back off
+        """
+        try:
+            backoff_until = (datetime.now(timezone.utc) + 
+                           datetime.timedelta(hours=backoff_hours)).isoformat()
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("SELECT failures FROM host_backoff WHERE host = ?", (host,))
+                existing = cur.fetchone()
+                
+                if existing:
+                    new_failures = existing[0] + 1
+                    conn.execute("""
+                        UPDATE host_backoff 
+                        SET failures = ?, last_failure = datetime('now'), 
+                            backoff_until = ?, reason = ?
+                        WHERE host = ?
+                    """, (new_failures, backoff_until, reason, host))
+                else:
+                    conn.execute("""
+                        INSERT INTO host_backoff 
+                        (host, failures, last_failure, backoff_until, reason)
+                        VALUES (?, 1, datetime('now'), ?, ?)
+                    """, (host, backoff_until, reason))
+                
+                conn.commit()
+        except Exception as e:
+            print(f"[LEARNING] Failed to record host failure: {e}")
+    
+    def should_backoff_host(self, host: str) -> bool:
+        """
+        Check if we should back off from a host.
+        
+        Args:
+            host: Host to check
+            
+        Returns:
+            True if we should back off, False otherwise
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("""
+                    SELECT backoff_until FROM host_backoff 
+                    WHERE host = ?
+                """, (host,))
+                result = cur.fetchone()
+                
+                if result and result[0]:
+                    backoff_until = datetime.fromisoformat(result[0])
+                    return datetime.now(timezone.utc) < backoff_until
+        except Exception:
+            pass
+        
+        return False
+    
+    def get_portal_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics for all portals.
+        
+        Returns:
+            Dictionary with portal statistics
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cur = conn.execute("""
+                    SELECT 
+                        portal,
+                        COUNT(*) as runs,
+                        SUM(urls_crawled) as total_urls,
+                        SUM(leads_found) as total_leads,
+                        SUM(leads_with_phone) as total_with_phone,
+                        AVG(success_rate) as avg_success_rate
+                    FROM learning_metrics
+                    GROUP BY portal
+                    ORDER BY avg_success_rate DESC
+                """)
+                
+                stats = {}
+                for row in cur.fetchall():
+                    stats[row['portal']] = {
+                        'runs': row['runs'],
+                        'total_urls': row['total_urls'],
+                        'total_leads': row['total_leads'],
+                        'total_with_phone': row['total_with_phone'],
+                        'avg_success_rate': round(row['avg_success_rate'] or 0, 4)
+                    }
+                
+                return stats
+        except Exception as e:
+            print(f"[LEARNING] Failed to get portal stats: {e}")
+            return {}
+    
+    def get_learning_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of what the system has learned.
+        
+        Returns:
+            Dictionary with learning summary
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                summary = {}
+                
+                # Total metrics tracked
+                cur = conn.execute("SELECT COUNT(*) FROM learning_metrics")
+                summary['total_portal_runs'] = cur.fetchone()[0]
+                
+                # Dork statistics
+                cur = conn.execute("""
+                    SELECT COUNT(*), 
+                           SUM(CASE WHEN pool = 'core' THEN 1 ELSE 0 END) as core_count
+                    FROM dork_performance
+                """)
+                result = cur.fetchone()
+                summary['total_dorks_tracked'] = result[0]
+                summary['core_dorks'] = result[1]
+                
+                # Phone patterns learned
+                cur = conn.execute("SELECT COUNT(*) FROM phone_patterns_learned")
+                summary['phone_patterns_learned'] = cur.fetchone()[0]
+                
+                # Hosts in backoff
+                cur = conn.execute("""
+                    SELECT COUNT(*) FROM host_backoff 
+                    WHERE backoff_until > datetime('now')
+                """)
+                summary['hosts_in_backoff'] = cur.fetchone()[0]
+                
+                return summary
+        except Exception as e:
+            print(f"[LEARNING] Failed to get learning summary: {e}")
+            return {}

@@ -80,6 +80,7 @@ from stream2_extraction_layer.extraction_enhanced import (
 )
 from learning_engine import (
     LearningEngine,
+    ActiveLearningEngine,
     is_mobile_number,
     is_job_posting,
 )
