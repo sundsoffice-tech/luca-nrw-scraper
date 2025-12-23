@@ -3220,6 +3220,13 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
                                 pattern_type="enhanced",
                                 example=normalized[:8]+"..."
                             )
+                        # NEW: Learn phone pattern for AI Learning Engine
+                        try:
+                            from ai_learning_engine import ActiveLearningEngine
+                            learning = ActiveLearningEngine()
+                            learning.learn_phone_pattern(best_phone, normalized, "kleinanzeigen")
+                        except Exception:
+                            pass  # Learning is optional
             except Exception as e:
                 log("debug", "Advanced phone extraction failed", error=str(e))
         
@@ -3891,6 +3898,13 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
                                 pattern_type=f"{source_tag}_enhanced",
                                 example=normalized[:8]+"..."
                             )
+                        # NEW: Learn phone pattern for AI Learning Engine
+                        try:
+                            from ai_learning_engine import ActiveLearningEngine
+                            learning = ActiveLearningEngine()
+                            learning.learn_phone_pattern(best_phone, normalized, source_tag)
+                        except Exception:
+                            pass  # Learning is optional
             except Exception as e:
                 log("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
         
@@ -8848,6 +8862,30 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             await asyncio.sleep(current_request_delay + _jitter(0.4,1.2))
 
         finish_run(run_id, total_links_checked, leads_new_total, "ok", metrics=dict(RUN_METRICS))
+        
+        # Post-run learning analysis
+        try:
+            from ai_learning_engine import ActiveLearningEngine
+            learning = ActiveLearningEngine()
+            summary = learning.get_learning_summary()
+            
+            _uilog("=== LEARNING REPORT ===")
+            _uilog(f"Portal Stats: {summary['portal_stats']}")
+            _uilog(f"Best Dorks: {summary['best_dorks']}")
+            _uilog(f"Learned Patterns: {summary['learned_patterns']}")
+            _uilog(f"Disabled Portals: {summary['disabled_portals']}")
+            
+            # Empfehlungen generieren
+            recommendations = []
+            for portal, stats in summary['portal_stats'].items():
+                if stats['avg_success'] < 1.0:
+                    recommendations.append(f"Portal {portal} hat nur {stats['avg_success']}% Erfolg")
+            
+            if recommendations:
+                _uilog(f"Learning Empfehlungen: {recommendations}")
+        except Exception as e:
+            log("debug", "Learning report failed", error=str(e))
+        
         _uilog(f"Run #{run_id} beendet")
 
     except Exception as e:
