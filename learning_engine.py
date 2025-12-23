@@ -1211,10 +1211,12 @@ class ActiveLearningEngine:
             
             # Check if portal should be automatically disabled
             if self._get_portal_avg_success(portal, last_n=5) < 0.01:
-                print(f"[LEARNING] Portal {portal} has 0% success rate - consider disabling")
+                # Log warning (using print as fallback since learning_engine has no dependency on log())
+                import sys
+                print(f"[LEARNING] Portal {portal} has <1% success rate - consider disabling", file=sys.stderr)
         except Exception as e:
-            # Don't fail the scraping run if learning fails
-            print(f"[LEARNING] Failed to record portal result: {e}")
+            # Silent fail - don't break the scraping run if learning fails
+            pass
     
     def _get_portal_avg_success(self, portal: str, last_n: int = 5) -> float:
         """
@@ -1280,8 +1282,9 @@ class ActiveLearningEngine:
                     """, (dork, leads_found, leads_with_phone, score, pool))
                 
                 conn.commit()
-        except Exception as e:
-            print(f"[LEARNING] Failed to record dork result: {e}")
+        except Exception:
+            # Silent fail - don't break the scraping run if learning fails
+            pass
     
     def learn_phone_pattern(self, raw_phone: str, normalized: str, portal: str) -> None:
         """
@@ -1318,8 +1321,9 @@ class ActiveLearningEngine:
                         """, (pattern, portal))
                     
                     conn.commit()
-        except Exception as e:
-            print(f"[LEARNING] Failed to learn phone pattern: {e}")
+        except Exception:
+            # Silent fail - don't break the scraping run if learning fails
+            pass
     
     def _extract_pattern(self, phone: str) -> str:
         """
@@ -1424,8 +1428,9 @@ class ActiveLearningEngine:
                     """, (host, backoff_until, reason))
                 
                 conn.commit()
-        except Exception as e:
-            print(f"[LEARNING] Failed to record host failure: {e}")
+        except Exception:
+            # Silent fail - don't break the scraping run if learning fails
+            pass
     
     def should_backoff_host(self, host: str) -> bool:
         """
@@ -1487,8 +1492,8 @@ class ActiveLearningEngine:
                     }
                 
                 return stats
-        except Exception as e:
-            print(f"[LEARNING] Failed to get portal stats: {e}")
+        except Exception:
+            # Silent fail - return empty dict if stats retrieval fails
             return {}
     
     def get_learning_summary(self) -> Dict[str, Any]:
@@ -1528,6 +1533,6 @@ class ActiveLearningEngine:
                 summary['hosts_in_backoff'] = cur.fetchone()[0]
                 
                 return summary
-        except Exception as e:
-            print(f"[LEARNING] Failed to get learning summary: {e}")
+        except Exception:
+            # Silent fail - return empty dict if summary retrieval fails
             return {}

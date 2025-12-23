@@ -4704,9 +4704,12 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearni
             leads_with_phone = len([l for l in result if l.get('telefon')])
             
             # Record portal performance for learning
+            # Note: For direct portal crawling, we approximate URLs crawled as leads found
+            # This is a limitation since portal functions return leads, not crawl counts
+            # Success rate is calculated as leads_with_phone / leads_found for accuracy
             learning_engine.record_portal_result(
                 portal=portal_key,
-                urls_crawled=len(result),  # URLs = leads in this case (direct crawl)
+                urls_crawled=len(result),  # Approximation: each lead represents a crawled URL
                 leads_found=len(result),
                 leads_with_phone=leads_with_phone,
                 run_id=run_id
@@ -4765,9 +4768,12 @@ async def crawl_portals_sequential_with_learning(learning_engine: ActiveLearning
             leads_with_phone = len([l for l in leads if l.get('telefon')])
             
             # Record portal performance
+            # Note: For direct portal crawling, we approximate URLs crawled as leads found
+            # This is a limitation since portal functions return leads, not crawl counts
+            # Success rate is calculated as leads_with_phone / leads_found for accuracy
             learning_engine.record_portal_result(
                 portal=portal_key,
-                urls_crawled=len(leads),
+                urls_crawled=len(leads),  # Approximation: each lead represents a crawled URL
                 leads_found=len(leads),
                 leads_with_phone=leads_with_phone,
                 run_id=run_id
