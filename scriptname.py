@@ -80,10 +80,14 @@ from stream2_extraction_layer.extraction_enhanced import (
 )
 from learning_engine import (
     LearningEngine,
-    ActiveLearningEngine,
     is_mobile_number,
     is_job_posting,
 )
+# Import the active learning engine from ai_learning_engine for dork and portal tracking
+try:
+    from ai_learning_engine import ActiveLearningEngine
+except ImportError:
+    ActiveLearningEngine = None
 from lead_validation import (
     validate_lead_before_insert,
     normalize_phone_number,
@@ -8819,9 +8823,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
     # Initialize active learning engine for dork tracking (if learning enabled)
     active_learning_engine = None
-    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled"):
+    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and ActiveLearningEngine:
         try:
-            from ai_learning_engine import ActiveLearningEngine
             active_learning_engine = ActiveLearningEngine(DB_PATH)
             log("info", "Active Learning Engine initialisiert für Dork-Tracking")
         except Exception as e:

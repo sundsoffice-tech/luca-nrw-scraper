@@ -195,7 +195,9 @@ class LearningEngine:
             )
         """)
         
-        # Create indexes for better query performance
+        con.commit()
+        
+        # Create indexes for better query performance (after commit)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_run ON learning_portal_metrics(run_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_portal ON learning_portal_metrics(portal)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_timestamp ON learning_portal_metrics(timestamp)")
