@@ -729,14 +729,14 @@ CANDIDATE_EXPORT_FIELDS = [
 # =========================
 MODE_CONFIGS = {
     "standard": {
-        "description": "Normaler Betrieb",
+        "description": "Normaler Betrieb mit Learning",
         "deep_crawl": True,
-        "learning_enabled": False,
+        "learning_enabled": True,
         "async_limit": 35,
         "request_delay": 2.5,
         "max_retries": 2,
         "snippet_priority": False,
-        "save_patterns": False
+        "save_patterns": True
     },
     "learning": {
         "description": "Lernt aus erfolgreichen Extraktionen",
@@ -753,26 +753,26 @@ MODE_CONFIGS = {
         "query_optimization": True
     },
     "aggressive": {
-        "description": "Maximale Geschwindigkeit, mehr Requests",
+        "description": "Maximale Geschwindigkeit mit Learning",
         "deep_crawl": True,
-        "learning_enabled": False,
+        "learning_enabled": True,
         "async_limit": 75,
         "request_delay": 1.0,
         "max_retries": 1,
         "snippet_priority": False,
-        "save_patterns": False,
+        "save_patterns": True,
         "follow_links": True,
         "crawl_depth": 3
     },
     "snippet_only": {
-        "description": "Nur Snippet-Extraktion, kein Deep-Crawl",
+        "description": "Nur Snippet-Extraktion mit Learning",
         "deep_crawl": False,
-        "learning_enabled": False,
+        "learning_enabled": True,
         "async_limit": 50,
         "request_delay": 1.5,
         "max_retries": 1,
         "snippet_priority": True,
-        "save_patterns": False
+        "save_patterns": True
     }
 }
 
