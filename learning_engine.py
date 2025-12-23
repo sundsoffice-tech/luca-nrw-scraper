@@ -1254,15 +1254,15 @@ class ActiveLearningEngine:
         except Exception:
             return 0.5
     
-    def record_dork_result(self, dork: str, leads_found: int, leads_with_phone: int, total_results: int = 0) -> None:
+    def record_dork_result(self, dork: str, results: int, leads_found: int, leads_with_phone: int) -> None:
         """
         Record performance of a search query (dork).
         
         Args:
             dork: The search query/dork used
+            results: Total number of search results returned
             leads_found: Number of leads found with this query
             leads_with_phone: Number of leads with valid phone numbers
-            total_results: Total number of search results returned (optional)
         """
         try:
             score = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
@@ -1275,7 +1275,7 @@ class ActiveLearningEngine:
                 
                 if existing:
                     new_times = existing[0] + 1
-                    new_total_results = existing[1] + total_results
+                    new_total_results = existing[1] + results
                     new_leads = existing[2] + leads_found
                     new_phone_leads = existing[3] + leads_with_phone
                     new_score = new_phone_leads / max(1, new_leads)
@@ -1291,7 +1291,7 @@ class ActiveLearningEngine:
                         INSERT INTO learning_dork_performance 
                         (dork, times_used, total_results, leads_found, leads_with_phone, score, last_used, pool)
                         VALUES (?, 1, ?, ?, ?, ?, datetime('now'), ?)
-                    """, (dork, total_results, leads_found, leads_with_phone, score, pool))
+                    """, (dork, results, leads_found, leads_with_phone, score, pool))
                 
                 conn.commit()
         except Exception:

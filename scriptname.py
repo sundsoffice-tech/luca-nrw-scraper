@@ -8817,6 +8817,16 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     _reset_metrics()
     _uilog(f"Run #{run_id} gestartet (Performance Mode: {perf_params.get('async_limit', 'N/A')} async)")
 
+    # Initialize active learning engine for dork tracking (if learning enabled)
+    active_learning_engine = None
+    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled"):
+        try:
+            from ai_learning_engine import ActiveLearningEngine
+            active_learning_engine = ActiveLearningEngine(DB_PATH)
+            log("info", "Active Learning Engine initialisiert für Dork-Tracking")
+        except Exception as e:
+            log("warn", "Active Learning Engine konnte nicht initialisiert werden", error=str(e))
+
     # Direct crawling from multiple sources (only in candidates/recruiter mode)
     if _is_candidates_mode():
         direct_crawl_leads = []
@@ -9207,15 +9217,14 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                             _LEARNING_ENGINE.record_query_performance(q, len(inserted))
                             
                             # Track dork performance (active learning system)
-                            from ai_learning_engine import ActiveLearningEngine
-                            active_learning = ActiveLearningEngine(DB_PATH)
-                            leads_with_phone = len([l for l in inserted if l.get('telefon')])
-                            active_learning.record_dork_result(
-                                dork=q,
-                                results=len(links),  # Total search results
-                                leads_found=len(inserted),  # Leads actually inserted
-                                leads_with_phone=leads_with_phone  # Leads with phone numbers
-                            )
+                            if active_learning_engine:
+                                leads_with_phone = len([l for l in inserted if l.get('telefon')])
+                                active_learning_engine.record_dork_result(
+                                    dork=q,
+                                    results=len(links),  # Total search results
+                                    leads_found=len(inserted),  # Leads actually inserted
+                                    leads_with_phone=leads_with_phone  # Leads with phone numbers
+                                )
                             
                             # Track domain success for each lead
                             domains_tracked = set()
