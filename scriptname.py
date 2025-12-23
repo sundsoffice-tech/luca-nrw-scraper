@@ -295,7 +295,7 @@ ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 
 # Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
@@ -532,6 +532,28 @@ PORTAL_DELAYS = {
 PARALLEL_PORTAL_CRAWL = os.getenv("PARALLEL_PORTAL_CRAWL", "1") == "1"
 MAX_CONCURRENT_PORTALS = int(os.getenv("MAX_CONCURRENT_PORTALS", "5"))
 PORTAL_CONCURRENCY_PER_SITE = int(os.getenv("PORTAL_CONCURRENCY_PER_SITE", "2"))
+
+
+def get_active_portals() -> Dict[str, bool]:
+    """Gibt aktive Portale zurück, basierend auf Learning"""
+    try:
+        from ai_learning_engine import ActiveLearningEngine
+        learning = ActiveLearningEngine()
+        
+        base_config = DIRECT_CRAWL_SOURCES.copy()
+        
+        # Learning überschreibt Base-Config
+        for portal in base_config.keys():
+            should_skip, reason = learning.should_skip_portal(portal)
+            if should_skip:
+                base_config[portal] = False
+                log("info", f"Learning: Portal {portal} deaktiviert", reason=reason)
+        
+        return base_config
+    except Exception as e:
+        # Fallback: Original config if learning fails
+        log("warn", "Learning engine nicht verfügbar, nutze Standard-Config", error=str(e))
+        return DIRECT_CRAWL_SOURCES.copy()
 
 # =========================
 # Candidate-Focused Constants
@@ -782,7 +804,7 @@ MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
 MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
+SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))  # konservativ für Rate-Limit Schutz
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 
@@ -1872,7 +1894,8 @@ PDF_CT = "application/pdf"
 # Circuit-Breaker pro Host
 _HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "failures": int}}
 # URLs, die wegen 429/403 in die zweite Welle sollen
-CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "90"))  # Sekunden
+CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))  # Reduziert von 90 auf 30 Sekunden
+CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))   # Neu: Kürzere Penalty für APIs
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
 
 RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
@@ -1919,22 +1942,37 @@ def _host_from(url: str) -> str:
     except Exception:
         return ""
 
-def _penalize_host(host: str):
+def _penalize_host(host: str, reason: str = "error"):
+    """Penalisiert Host mit Learning-Integration"""
     if not host:
         return
+    
+    # API-Hosts bekommen kürzere Penalty
+    if host.endswith("googleapis.com") or host.startswith("api."):
+        penalty = CB_API_PENALTY
+    else:
+        penalty = CB_BASE_PENALTY
+    
     if host in {"www.googleapis.com", "googleapis.com"}:
         # Google API: never hard-penalize; at most a short cool-down
         st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        penalty = random.uniform(10, 30)
         st["penalty_until"] = time.time() + penalty
         st["failures"] = 0
         log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
-        return
-    st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-    st["failures"] = min(st["failures"] + 1, 10)
-    penalty = min(CB_BASE_PENALTY * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
-    st["penalty_until"] = time.time() + penalty
-    log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
+    else:
+        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+        st["failures"] = min(st["failures"] + 1, 10)
+        penalty = min(penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
+        st["penalty_until"] = time.time() + penalty
+        log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
+    
+    # Learning Engine informieren
+    try:
+        from ai_learning_engine import ActiveLearningEngine
+        learning = ActiveLearningEngine()
+        learning.record_host_failure(host, reason)
+    except Exception:
+        pass  # Learning ist optional
 
 def _host_allowed(host: str) -> bool:
     if host in {"www.googleapis.com", "googleapis.com"}:
@@ -2070,7 +2108,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 # Wenn HEAD 405/501 → kein erneutes HEAD versuchen (spart Roundtrips).
                 # Zusätzlich: bei 405 sanfte Host-Penalty (viele Sites blocken HEAD hart).
                 if r_head.status_code == 405:
-                    _penalize_host(host)
+                    _penalize_host(host, "405")
                     log("info", "HEAD 405: host penalized, continue with GET", url=url)
                 if r_head.status_code in (405, 501):
                     pass  # einfach mit GET fortfahren
@@ -2099,7 +2137,8 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
             setattr(r, "insecure_ssl", False)
             return r
         if _should_retry_status(r.status_code):
-            _penalize_host(host)
+            reason = "429" if r.status_code == 429 else "error"
+            _penalize_host(host, reason)
             _schedule_retry(url, r.status_code)
             log("warn", f"{r.status_code} received", url=url)
             return r
@@ -2114,7 +2153,8 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 setattr(r, "insecure_ssl", False)
                 return r
             if _should_retry_status(r.status_code):
-                _penalize_host(host)
+                reason = "429" if r.status_code == 429 else "error"
+                _penalize_host(host, reason)
                 _schedule_retry(url, r.status_code)
                 log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
                 return r
@@ -2133,7 +2173,8 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 log("warn", "SSL Fallback ohne Verify genutzt", url=url)
                 return r2
             if _should_retry_status(r2.status_code):
-                _penalize_host(host)
+                reason = "429" if r2.status_code == 429 else "error"
+                _penalize_host(host, reason)
                 _schedule_retry(url, r2.status_code)
                 log("warn", f"{r2.status_code} received (insecure TLS)", url=url)
                 return r2
@@ -2148,7 +2189,8 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                     log("warn", "SSL Fallback (HTTP/1.1) genutzt", url=url)
                     return r2
                 if _should_retry_status(r2.status_code):
-                    _penalize_host(host)
+                    reason = "429" if r2.status_code == 429 else "error"
+                    _penalize_host(host, reason)
                     _schedule_retry(url, r2.status_code)
                     log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
                     return r2
@@ -2203,7 +2245,7 @@ GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
 GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
 GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduced to 1-2 for cost control
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 für Cost & Rate-Limit Control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
@@ -4486,28 +4528,31 @@ async def crawl_all_portals_parallel() -> List[Dict]:
     tasks = []
     portal_names = []
     
+    # Get active portals from learning engine
+    active_portals = get_active_portals()
+    
     # Alle aktivierten Portale als parallele Tasks
-    if DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
+    if active_portals.get("kleinanzeigen", True):
         tasks.append(crawl_kleinanzeigen_portal_async())
         portal_names.append("Kleinanzeigen")
     
-    if DIRECT_CRAWL_SOURCES.get("markt_de", True):
+    if active_portals.get("markt_de", True):
         tasks.append(crawl_markt_de_listings_async())
         portal_names.append("Markt.de")
     
-    if DIRECT_CRAWL_SOURCES.get("quoka", True):
+    if active_portals.get("quoka", True):
         tasks.append(crawl_quoka_listings_async())
         portal_names.append("Quoka")
     
-    if DIRECT_CRAWL_SOURCES.get("kalaydo", True):
+    if active_portals.get("kalaydo", True):
         tasks.append(crawl_kalaydo_listings_async())
         portal_names.append("Kalaydo")
     
-    if DIRECT_CRAWL_SOURCES.get("meinestadt", True):
+    if active_portals.get("meinestadt", True):
         tasks.append(crawl_meinestadt_listings_async())
         portal_names.append("Meinestadt")
     
-    if DIRECT_CRAWL_SOURCES.get("dhd24", True):
+    if active_portals.get("dhd24", True):
         tasks.append(crawl_dhd24_listings_async())
         portal_names.append("DHD24")
     
