@@ -9203,8 +9203,19 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     # Learning mode: Track domain and query performance
                     if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
                         try:
-                            # Track query performance
+                            # Track query performance (old learning system)
                             _LEARNING_ENGINE.record_query_performance(q, len(inserted))
+                            
+                            # Track dork performance (active learning system)
+                            from ai_learning_engine import ActiveLearningEngine
+                            active_learning = ActiveLearningEngine(DB_PATH)
+                            leads_with_phone = len([l for l in inserted if l.get('telefon')])
+                            active_learning.record_dork_result(
+                                dork=q,
+                                results=len(links),  # Total search results
+                                leads_found=len(inserted),  # Leads actually inserted
+                                leads_with_phone=leads_with_phone  # Leads with phone numbers
+                            )
                             
                             # Track domain success for each lead
                             domains_tracked = set()
