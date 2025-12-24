@@ -1,0 +1,42 @@
+{
+  "start": "2025-12-24T13:07:34.558524",
+  "runs": 1,
+  "total_leads_saved": 0,
+  "errors": [
+    "[2025-12-24 13:08:02] [ERROR  ] HTTP GET endgültig gescheitert {\"url\": \"https://www.freelance.de/Freiberufler/Vertrieb/\"}",
+    "[2025-12-24 13:08:03] [ERROR  ] HTTP GET endgültig gescheitert {\"url\": \"https://www.freelance.de/Freiberufler/Sales/\"}",
+    "[2025-12-24 13:08:05] [ERROR  ] HTTP GET endgültig gescheitert {\"url\": \"https://www.freelance.de/Freiberufler/Key-Account/\"}",
+    "[2025-12-24 13:08:07] [ERROR  ] HTTP GET endgültig gescheitert {\"url\": \"https://www.freelance.de/Freiberufler/Business-Development/\"}",
+    "[2025-12-24 13:08:09] [ERROR  ] HTTP GET endgültig gescheitert {\"url\": \"https://www.freelance.de/Freiberufler/Account-Manager/\"}"
+  ],
+  "warnings": [
+    "[2025-12-24 13:07:42] [WARN   ] Active Learning Engine konnte nicht initialisiert werden {\"error\": \"cannot access local variable 'ActiveLearningEngine",
+    "[2025-12-24 13:08:02] [WARN   ] Freelance.de: Fetch failed {\"url\": \"https://www.freelance.de/Freiberufler/Vertrieb/\", \"status\": \"None\"}",
+    "[2025-12-24 13:08:03] [WARN   ] Freelance.de: Fetch failed {\"url\": \"https://www.freelance.de/Freiberufler/Sales/\", \"status\": \"None\"}",
+    "[2025-12-24 13:08:05] [WARN   ] Freelance.de: Fetch failed {\"url\": \"https://www.freelance.de/Freiberufler/Key-Account/\", \"status\": \"None\"}",
+    "[2025-12-24 13:08:07] [WARN   ] Freelance.de: Fetch failed {\"url\": \"https://www.freelance.de/Freiberufler/Business-Development/\", \"status\": \"None\"}",
+    "[2025-12-24 13:08:09] [WARN   ] Freelance.de: Fetch failed {\"url\": \"https://www.freelance.de/Freiberufler/Account-Manager/\", \"status\": \"None\"}"
+  ],
+  "skipped_portals": {
+    "Kleinanzeigen": 1,
+    "Markt.de": 1,
+    "Quoka": 1,
+    "DHD24": 1
+  },
+  "skipped_queries": 30,
+  "http_errors": {
+    "403": 1,
+    "429": 1,
+    "5xx": 1,
+    "timeout": 1
+  },
+  "portal_results": {
+    "Freelancermap": 0,
+    "Freelance": 0
+  },
+  "rejected_leads": [],
+  "end": "2025-12-24T13:18:16.032158",
+  "duration_minutes": 10.7,
+  "db_total_leads": 80,
+  "db_error": "no such column: scraped_at"
+}

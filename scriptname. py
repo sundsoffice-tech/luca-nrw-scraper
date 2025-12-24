@@ -4915,7 +4915,7 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[Act
     for portal_key, portal_name, portal_func in portal_config_list:
         if DIRECT_CRAWL_SOURCES.get(portal_key, False):
             # Check if we should skip this portal based on learning
-            if False:   # DISABLED: Portal-Skipping
+            if learning_engine and learning_engine.should_skip_portal(portal_key):
                 log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
                 continue
             
@@ -5012,7 +5012,7 @@ async def crawl_portals_sequential_with_learning(learning_engine: Optional[Activ
             continue
         
         # Check if we should skip this portal based on learning
-        if False:   # DISABLED: Portal-Skipping
+        if learning_engine and learning_engine.should_skip_portal(portal_key):
             log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
             continue
         

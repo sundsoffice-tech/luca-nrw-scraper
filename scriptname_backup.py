@@ -22,7 +22,6 @@ warnings.filterwarnings("ignore", message="This package.*renamed to.*ddgs")
 import argparse
 import asyncio
 import csv
-import hashlib
 import json
 import os
 import queue
@@ -82,52 +81,6 @@ from learning_engine import (
     LearningEngine,
     is_mobile_number,
     is_job_posting,
-)
-# Import the active learning engine from ai_learning_engine for dork and portal tracking
-try:
-    from ai_learning_engine import ActiveLearningEngine
-except ImportError:
-    ActiveLearningEngine = None
-from lead_validation import (
-    validate_lead_before_insert,
-    normalize_phone_number,
-    extract_person_name,
-    validate_lead_name,
-    increment_rejection_stat,
-    get_rejection_stats,
-    reset_rejection_stats,
-)
-from phone_patterns import (
-    extract_all_phone_patterns,
-    get_best_phone_number,
-    extract_whatsapp_number,
-)
-# New modules for extended functionality
-from dorks_extended import (
-    get_all_dorks,
-    get_random_dorks,
-    get_dorks_by_category,
-    POWER_DORKS,
-    JOB_SEEKER_DORKS,
-)
-from phone_extractor import (
-    extract_phones_advanced,
-    get_best_phone,
-    is_valid_phone as is_valid_phone_enhanced,
-)
-from social_scraper import (
-    SOCIAL_MEDIA_DORKS,
-    SocialMediaScraper,
-    get_all_social_dorks,
-)
-from deduplication import (
-    LeadDeduplicator,
-    get_deduplicator,
-)
-from login_handler import (
-    LoginHandler,
-    get_login_handler,
-    check_and_handle_login,
 )
 
 # Suppress the noisy XML warning
@@ -327,7 +280,7 @@ ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
 
 # Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
@@ -343,363 +296,6 @@ NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum",
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
-
-# Telefonbuch Enrichment Config
-TELEFONBUCH_ENRICHMENT_ENABLED = (os.getenv("TELEFONBUCH_ENRICHMENT_ENABLED", "1") == "1")
-TELEFONBUCH_STRICT_MODE = (os.getenv("TELEFONBUCH_STRICT_MODE", "1") == "1")
-TELEFONBUCH_RATE_LIMIT = float(os.getenv("TELEFONBUCH_RATE_LIMIT", "3.0"))
-TELEFONBUCH_CACHE_DAYS = int(os.getenv("TELEFONBUCH_CACHE_DAYS", "7"))
-TELEFONBUCH_MOBILE_ONLY = (os.getenv("TELEFONBUCH_MOBILE_ONLY", "1") == "1")
-# Direct crawl URLs for Kleinanzeigen Stellengesuche (bypassing Google)
-DIRECT_CRAWL_URLS = [
-    # Stellengesuche NRW - Vertrieb/Sales
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/vertrieb/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/sales/k0c107l929", 
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/verkauf/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/aussendienst/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/kundenberater/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/handelsvertreter/k0c107l929",
-    
-    # Bundesweit (mehr Volumen)
-    "https://www.kleinanzeigen.de/s-stellengesuche/vertrieb/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/sales/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/verkauf/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/handelsvertreter/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/akquise/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/telesales/k0c107",
-    "https://www.kleinanzeigen.de/s-stellengesuche/call-center/k0c107",
-    
-    # Alle großen NRW-Städte
-    # Köln
-    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/vertrieb/k0c107l945",
-    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/sales/k0c107l945",
-    "https://www.kleinanzeigen.de/s-stellengesuche/koeln/verkauf/k0c107l945",
-    
-    # Dortmund
-    "https://www.kleinanzeigen.de/s-stellengesuche/dortmund/vertrieb/k0c107l947",
-    "https://www.kleinanzeigen.de/s-stellengesuche/dortmund/sales/k0c107l947",
-    
-    # Essen
-    "https://www.kleinanzeigen.de/s-stellengesuche/essen/vertrieb/k0c107l939",
-    "https://www.kleinanzeigen.de/s-stellengesuche/essen/sales/k0c107l939",
-    
-    # Duisburg
-    "https://www.kleinanzeigen.de/s-stellengesuche/duisburg/vertrieb/k0c107l940",
-    
-    # Bochum
-    "https://www.kleinanzeigen.de/s-stellengesuche/bochum/vertrieb/k0c107l941",
-    
-    # Wuppertal
-    "https://www.kleinanzeigen.de/s-stellengesuche/wuppertal/vertrieb/k0c107l942",
-    
-    # Bielefeld
-    "https://www.kleinanzeigen.de/s-stellengesuche/bielefeld/vertrieb/k0c107l943",
-    
-    # Bonn
-    "https://www.kleinanzeigen.de/s-stellengesuche/bonn/vertrieb/k0c107l944",
-    
-    # Münster
-    "https://www.kleinanzeigen.de/s-stellengesuche/muenster/vertrieb/k0c107l946",
-    
-    # Gelsenkirchen
-    "https://www.kleinanzeigen.de/s-stellengesuche/gelsenkirchen/vertrieb/k0c107l948",
-    
-    # Mönchengladbach
-    "https://www.kleinanzeigen.de/s-stellengesuche/moenchengladbach/vertrieb/k0c107l949",
-    
-    # Aachen
-    "https://www.kleinanzeigen.de/s-stellengesuche/aachen/vertrieb/k0c107l950",
-    
-    # Krefeld
-    "https://www.kleinanzeigen.de/s-stellengesuche/krefeld/vertrieb/k0c107l951",
-    
-    # Oberhausen
-    "https://www.kleinanzeigen.de/s-stellengesuche/oberhausen/vertrieb/k0c107l952",
-    
-    # Hagen
-    "https://www.kleinanzeigen.de/s-stellengesuche/hagen/vertrieb/k0c107l953",
-    
-    # Hamm
-    "https://www.kleinanzeigen.de/s-stellengesuche/hamm/vertrieb/k0c107l954",
-    
-    # Zusätzliche Berufsfelder NRW
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/kundenservice/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/call-center/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/promotion/k0c107l929",
-    "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/telefonverkauf/k0c107l929",
-]
-
-# Markt.de Stellengesuche URLs
-MARKT_DE_URLS = [
-    # NRW
-    "https://www.markt.de/stellengesuche/nordrhein-westfalen/vertrieb/",
-    "https://www.markt.de/stellengesuche/nordrhein-westfalen/sales/",
-    "https://www.markt.de/stellengesuche/nordrhein-westfalen/verkauf/",
-    "https://www.markt.de/stellengesuche/nordrhein-westfalen/kundenberater/",
-    # Bundesweit
-    "https://www.markt.de/stellengesuche/vertrieb/",
-    "https://www.markt.de/stellengesuche/sales/",
-    "https://www.markt.de/stellengesuche/handelsvertreter/",
-]
-
-# Quoka.de Stellengesuche URLs
-QUOKA_DE_URLS = [
-    # NRW Städte (erweitert)
-    "https://www.quoka.de/stellengesuche/duesseldorf/",
-    "https://www.quoka.de/stellengesuche/koeln/",
-    "https://www.quoka.de/stellengesuche/dortmund/",
-    "https://www.quoka.de/stellengesuche/essen/",
-    "https://www.quoka.de/stellengesuche/duisburg/",
-    "https://www.quoka.de/stellengesuche/bochum/",
-    "https://www.quoka.de/stellengesuche/wuppertal/",
-    "https://www.quoka.de/stellengesuche/bielefeld/",
-    "https://www.quoka.de/stellengesuche/bonn/",
-    "https://www.quoka.de/stellengesuche/muenster/",
-    "https://www.quoka.de/stellengesuche/gelsenkirchen/",
-    "https://www.quoka.de/stellengesuche/moenchengladbach/",
-    "https://www.quoka.de/stellengesuche/aachen/",
-    # Kategorien
-    "https://www.quoka.de/stellengesuche/vertrieb-verkauf/",
-    "https://www.quoka.de/stellengesuche/kundenservice/",
-]
-
-# Kalaydo.de Stellengesuche URLs (NRW-fokussiert!)
-KALAYDO_DE_URLS = [
-    # Kalaydo ist stark in NRW
-    "https://www.kalaydo.de/stellengesuche/nordrhein-westfalen/",
-    "https://www.kalaydo.de/stellengesuche/koeln/",
-    "https://www.kalaydo.de/stellengesuche/duesseldorf/",
-    "https://www.kalaydo.de/stellengesuche/bonn/",
-    "https://www.kalaydo.de/stellengesuche/aachen/",
-]
-
-# Meinestadt.de Stellengesuche URLs
-MEINESTADT_DE_URLS = [
-    # Alle Top-15 NRW Städte
-    "https://www.meinestadt.de/duesseldorf/stellengesuche",
-    "https://www.meinestadt.de/koeln/stellengesuche",
-    "https://www.meinestadt.de/dortmund/stellengesuche",
-    "https://www.meinestadt.de/essen/stellengesuche",
-    "https://www.meinestadt.de/duisburg/stellengesuche",
-    "https://www.meinestadt.de/bochum/stellengesuche",
-    "https://www.meinestadt.de/wuppertal/stellengesuche",
-    "https://www.meinestadt.de/bielefeld/stellengesuche",
-    "https://www.meinestadt.de/bonn/stellengesuche",
-    "https://www.meinestadt.de/muenster/stellengesuche",
-    "https://www.meinestadt.de/gelsenkirchen/stellengesuche",
-    "https://www.meinestadt.de/moenchengladbach/stellengesuche",
-    "https://www.meinestadt.de/aachen/stellengesuche",
-    "https://www.meinestadt.de/krefeld/stellengesuche",
-    "https://www.meinestadt.de/oberhausen/stellengesuche",
-]
-
-# Freelancer Portal URLs (NRW-focused)
-FREELANCER_PORTAL_URLS = [
-    # Freelancermap.de - NRW Filter
-    "https://www.freelancermap.de/freelancer-verzeichnis/nordrhein-westfalen-vertrieb.html",
-    "https://www.freelancermap.de/freelancer-verzeichnis/nordrhein-westfalen-sales.html",
-    
-    # Freelance.de - NRW
-    "https://www.freelance.de/Freiberufler/NRW/Vertrieb/",
-    "https://www.freelance.de/Freiberufler/NRW/Sales/",
-    
-    # GULP - NRW
-    "https://www.gulp.de/gulp2/g/projekte?region=nordrhein-westfalen&skill=vertrieb",
-]
-
-# DHD24.com Stellengesuche URLs (neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten)
-DHD24_URLS = [
-    "https://www.dhd24.com/kleinanzeigen/stellengesuche.html",
-    "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-vertrieb.html",
-    "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-verkauf.html",
-]
-
-# Freelancermap.de URLs - Vertrieb/Sales Freelancer mit öffentlichen Telefonnummern
-FREELANCERMAP_URLS = [
-    "https://www.freelancermap.de/freelancer-verzeichnis/sales.html",
-    "https://www.freelancermap.de/freelancer-verzeichnis/vertrieb.html",
-    "https://www.freelancermap.de/freelancer-verzeichnis/business-development.html",
-    "https://www.freelancermap.de/freelancer-verzeichnis/account-management.html",
-    "https://www.freelancermap.de/freelancer-verzeichnis/key-account-management.html",
-]
-
-# Freelance.de URLs - Vertrieb/Sales Freelancer
-FREELANCE_DE_URLS = [
-    "https://www.freelance.de/Freiberufler/Vertrieb/",
-    "https://www.freelance.de/Freiberufler/Sales/",
-    "https://www.freelance.de/Freiberufler/Key-Account/",
-    "https://www.freelance.de/Freiberufler/Business-Development/",
-    "https://www.freelance.de/Freiberufler/Account-Manager/",
-]
-
-# Freelancer portal crawling configuration
-MAX_PROFILES_PER_URL = 10  # Limit profiles crawled per URL to avoid overload
-
-# Direct crawl source configuration
-DIRECT_CRAWL_SOURCES = {
-    "kleinanzeigen": True,
-    "markt_de": True,
-    "quoka": True,
-    "kalaydo": False,  # Deaktiviert - Blockiert Requests
-    "meinestadt": False,  # DEAKTIVIERT - 0 Stellengesuche bei 12 Städten (komplett nutzlos)
-    "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
-    "dhd24": True,  # AKTIVIERT - Alternative zu meinestadt
-    "freelancermap": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
-    "freelance_de": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
-}
-
-# Portal-specific request delays (seconds) to avoid rate limiting
-PORTAL_DELAYS = {
-    "kleinanzeigen": 3.0,
-    "markt_de": 4.0,
-    "quoka": 6.0,  # ERHÖHT von 3.0 - 429 Rate-Limit Detection
-    "kalaydo": 4.0,
-    "meinestadt": 3.0,
-    "dhd24": 4.0,
-    "freelancermap": 3.0,
-    "freelance_de": 3.0,
-}
-
-# ==================== NEW PORTAL CONFIGURATIONS ====================
-# Extended portal configuration with priorities and detailed settings
-PORTAL_CONFIGS = {
-    "kleinanzeigen": {
-        "enabled": True,
-        "base_urls": DIRECT_CRAWL_URLS,
-        "delay": 3.0,
-        "priority": 1,
-        "type": "classifieds"
-    },
-    "markt_de": {
-        "enabled": True,
-        "base_urls": MARKT_DE_URLS,
-        "delay": 4.0,
-        "priority": 2,
-        "type": "classifieds"
-    },
-    "quoka": {
-        "enabled": True,
-        "base_urls": QUOKA_DE_URLS,
-        "delay": 6.0,
-        "priority": 3,
-        "type": "classifieds"
-    },
-    "indeed": {
-        "enabled": True,
-        "base_urls": [
-            "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
-            "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
-            "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
-            "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
-        ],
-        "delay": 3.0,
-        "priority": 4,
-        "type": "job_board"
-    },
-    "stepstone": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
-            "https://www.stepstone.de/jobs/sales/in-nrw",
-            "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
-        ],
-        "delay": 3.0,
-        "priority": 5,
-        "type": "job_board"
-    },
-    "arbeitsagentur": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
-        ],
-        "delay": 2.0,
-        "priority": 6,
-        "type": "job_board"
-    },
-    "monster": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
-            "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
-        ],
-        "delay": 3.0,
-        "priority": 7,
-        "type": "job_board"
-    },
-    "stellenanzeigen": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
-            "https://www.stellenanzeigen.de/jobs-sales-nrw/",
-        ],
-        "delay": 2.5,
-        "priority": 8,
-        "type": "job_board"
-    },
-    "meinestadt": {
-        "enabled": True,  # Reaktiviert mit besserer Handhabung
-        "base_urls": MEINESTADT_DE_URLS,
-        "delay": 3.0,
-        "priority": 9,
-        "type": "classifieds"
-    },
-    "dhd24": {
-        "enabled": False,  # Bleibt deaktiviert (oft blockiert)
-        "base_urls": DHD24_URLS,
-        "delay": 5.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "kalaydo": {
-        "enabled": False,  # Deaktiviert - blockiert Requests
-        "base_urls": KALAYDO_DE_URLS,
-        "delay": 4.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "freelancermap": {
-        "enabled": True,
-        "base_urls": FREELANCERMAP_URLS,
-        "delay": 3.0,
-        "priority": 10,
-        "type": "freelancer"
-    },
-    "freelance_de": {
-        "enabled": True,
-        "base_urls": FREELANCE_DE_URLS,
-        "delay": 3.0,
-        "priority": 11,
-        "type": "freelancer"
-    },
-}
-
-# Parallel crawling configuration
-PARALLEL_PORTAL_CRAWL = os.getenv("PARALLEL_PORTAL_CRAWL", "1") == "1"
-MAX_CONCURRENT_PORTALS = int(os.getenv("MAX_CONCURRENT_PORTALS", "5"))
-PORTAL_CONCURRENCY_PER_SITE = int(os.getenv("PORTAL_CONCURRENCY_PER_SITE", "2"))
-
-
-def get_active_portals() -> Dict[str, bool]:
-    """Gibt aktive Portale zurück, basierend auf Learning"""
-    try:
-        from ai_learning_engine import ActiveLearningEngine
-        learning = ActiveLearningEngine()
-        
-        base_config = DIRECT_CRAWL_SOURCES.copy()
-        
-        # Learning überschreibt Base-Config
-        for portal in base_config.keys():
-            should_skip, reason = learning.should_skip_portal(portal)
-            if should_skip:
-                base_config[portal] = False
-                log("info", f"Learning: Portal {portal} deaktiviert", reason=reason)
-        
-        return base_config
-    except Exception as e:
-        # Fallback: Original config if learning fails
-        log("warn", "Learning engine nicht verfügbar, nutze Standard-Config", error=str(e))
-        return DIRECT_CRAWL_SOURCES.copy()
 
 # =========================
 # Candidate-Focused Constants
@@ -874,14 +470,14 @@ CANDIDATE_EXPORT_FIELDS = [
 # =========================
 MODE_CONFIGS = {
     "standard": {
-        "description": "Normaler Betrieb mit Learning",
+        "description": "Normaler Betrieb",
         "deep_crawl": True,
-        "learning_enabled": True,
+        "learning_enabled": False,
         "async_limit": 35,
         "request_delay": 2.5,
         "max_retries": 2,
         "snippet_priority": False,
-        "save_patterns": True
+        "save_patterns": False
     },
     "learning": {
         "description": "Lernt aus erfolgreichen Extraktionen",
@@ -898,26 +494,26 @@ MODE_CONFIGS = {
         "query_optimization": True
     },
     "aggressive": {
-        "description": "Maximale Geschwindigkeit mit Learning",
+        "description": "Maximale Geschwindigkeit, mehr Requests",
         "deep_crawl": True,
-        "learning_enabled": True,
+        "learning_enabled": False,
         "async_limit": 75,
         "request_delay": 1.0,
         "max_retries": 1,
         "snippet_priority": False,
-        "save_patterns": True,
+        "save_patterns": False,
         "follow_links": True,
         "crawl_depth": 3
     },
     "snippet_only": {
-        "description": "Nur Snippet-Extraktion mit Learning",
+        "description": "Nur Snippet-Extraktion, kein Deep-Crawl",
         "deep_crawl": False,
-        "learning_enabled": True,
+        "learning_enabled": False,
         "async_limit": 50,
         "request_delay": 1.5,
         "max_retries": 1,
         "snippet_priority": True,
-        "save_patterns": True
+        "save_patterns": False
     }
 }
 
@@ -950,7 +546,7 @@ MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
 MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))  # konservativ für Rate-Limit Schutz
+SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 
@@ -1089,15 +685,6 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       url TEXT PRIMARY KEY,
       first_run_id INTEGER,
       ts TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS telefonbuch_cache(
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      city TEXT NOT NULL,
-      query_hash TEXT UNIQUE,
-      results_json TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     """)
     con.commit()
@@ -1351,428 +938,11 @@ def url_seen(url: str) -> bool:
 def _url_seen_fast(url: str) -> bool:
     return _normalize_for_dedupe(url) in _seen_urls_cache
 
-
-# =========================
-# Telefonbuch Enrichment
-# =========================
-
-async def get_cached_telefonbuch_result(name: str, city: str) -> Optional[List[Dict]]:
-    """Prüft ob Ergebnis im Cache ist (max 7 Tage alt)"""
-    if not name or not city:
-        return None
-    
-    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
-    
-    con = db()
-    cur = con.cursor()
-    cur.execute("""
-        SELECT results_json, created_at 
-        FROM telefonbuch_cache 
-        WHERE query_hash = ?
-    """, (query_hash,))
-    row = cur.fetchone()
-    con.close()
-    
-    if not row:
-        return None
-    
-    results_json, created_at = row
-    
-    # Check if cache is still valid (max 7 days)
-    try:
-        from datetime import datetime, timedelta
-        cache_time = datetime.fromisoformat(created_at)
-        age = datetime.now() - cache_time
-        if age > timedelta(days=TELEFONBUCH_CACHE_DAYS):
-            return None  # Cache expired
-    except Exception:
-        return None
-    
-    try:
-        results = json.loads(results_json) if results_json else []
-        log("debug", "Telefonbuch-Cache Hit", name=name, city=city)
-        return results
-    except Exception:
-        return None
-
-
-async def cache_telefonbuch_result(name: str, city: str, results: List[Dict]):
-    """Speichert Ergebnis im Cache"""
-    if not name or not city:
-        return
-    
-    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
-    results_json = json.dumps(results, ensure_ascii=False)
-    
-    con = db()
-    cur = con.cursor()
-    cur.execute("""
-        INSERT OR REPLACE INTO telefonbuch_cache (name, city, query_hash, results_json, created_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
-    """, (name, city, query_hash, results_json))
-    con.commit()
-    con.close()
-
-
-# Rate limiter for telefonbuch requests
-class _TelefonbuchRateLimiter:
-    def __init__(self, interval: float = 3.0):
-        self.interval = interval
-        self.last_request = 0.0
-        self.lock = asyncio.Lock()
-    
-    async def __aenter__(self):
-        async with self.lock:
-            now = time.time()
-            elapsed = now - self.last_request
-            if elapsed < self.interval:
-                wait_time = self.interval - elapsed
-                await asyncio.sleep(wait_time)
-            self.last_request = time.time()
-    
-    async def __aexit__(self, *args):
-        pass
-
-_telefonbuch_rate = _TelefonbuchRateLimiter(interval=TELEFONBUCH_RATE_LIMIT)
-
-
-async def query_dasoertliche(name: str, city: str) -> List[Dict]:
-    """
-    Führt eine Suche auf dasoertliche.de durch.
-    
-    URL-Format: https://www.dasoertliche.de/?kw={name}&ci={city}
-    
-    Extrahiert aus HTML:
-        - name: Name des Eintrags
-        - phone: Telefonnummer
-        - address: Adresse
-        - city: Stadt
-    
-    Returns:
-        Liste von Treffern als Dicts
-    """
-    if not name or not city:
-        return []
-    
-    # Build search URL
-    params = urllib.parse.urlencode({"kw": name, "ci": city})
-    url = f"https://www.dasoertliche.de/?{params}"
-    
-    log("debug", "Telefonbuch-Query", name=name, city=city)
-    
-    # Rate limiting
-    async with _telefonbuch_rate:
-        try:
-            # Fetch the page using _make_client
-            async with _make_client(True, USER_AGENT, None, False, HTTP_TIMEOUT) as client:
-                resp = await client.get(url, timeout=HTTP_TIMEOUT)
-                
-                if not resp or resp.status_code != 200:
-                    log("warn", "Telefonbuch-Query fehlgeschlagen", status=resp.status_code if resp else -1)
-                    return []
-                
-                html = resp.text if hasattr(resp, 'text') else resp.content.decode('utf-8', errors='ignore')
-                
-        except Exception as e:
-            log("warn", "Telefonbuch-Query Exception", error=str(e))
-            return []
-    
-    # Parse HTML
-    results = []
-    parsing_strategy = None
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Try to find entries - dasoertliche.de structure may vary
-        # Strategy 1: Look for article elements with entry/treffer/hit classes
-        entries = soup.find_all("article", class_=re.compile(r"entry|treffer|hit", re.I))
-        if entries:
-            parsing_strategy = "article_elements"
-        
-        # Strategy 2: Look for schema.org Person entries
-        if not entries:
-            entries = soup.find_all("div", itemtype=re.compile(r"Person", re.I))
-            if entries:
-                parsing_strategy = "schema_org_person"
-        
-        # Strategy 3: Fallback - look for any container with phone numbers
-        if not entries:
-            entries = soup.find_all("div", class_=re.compile(r"treffer|result|entry", re.I))
-            if entries:
-                parsing_strategy = "fallback_divs"
-        
-        if parsing_strategy:
-            log("debug", "Telefonbuch-Parse-Strategie", strategy=parsing_strategy, entries_found=len(entries))
-        else:
-            log("debug", "Telefonbuch-Parse: Keine Einträge gefunden")
-        
-        for entry in entries[:5]:  # Limit to first 5 results
-            result = {}
-            
-            # Extract name
-            name_elem = entry.find(itemprop="name") or entry.find("h2") or entry.find(class_=re.compile(r"name", re.I))
-            if name_elem:
-                result["name"] = name_elem.get_text(strip=True)
-            
-            # Extract phone
-            phone_elem = (
-                entry.find(itemprop="telephone") or 
-                entry.find(class_=re.compile(r"phone|telefon|tel", re.I)) or
-                entry.find("a", href=re.compile(r"^tel:"))
-            )
-            if phone_elem:
-                phone_text = phone_elem.get_text(strip=True)
-                # Clean phone number
-                phone_clean = re.sub(r'[^\d\+]', '', phone_text.replace(" ", ""))
-                result["phone"] = phone_clean
-            
-            # Extract address
-            address_elem = entry.find(itemprop="streetAddress") or entry.find(class_=re.compile(r"street|address|strasse", re.I))
-            if address_elem:
-                result["address"] = address_elem.get_text(strip=True)
-            
-            # Extract city
-            city_elem = entry.find(itemprop="addressLocality") or entry.find(class_=re.compile(r"city|ort", re.I))
-            if city_elem:
-                result["city"] = city_elem.get_text(strip=True)
-            
-            # Only add if we have at least name and phone
-            if result.get("name") and result.get("phone"):
-                results.append(result)
-        
-    except Exception as e:
-        log("warn", "Telefonbuch-Parse Exception", error=str(e))
-        return []
-    
-    log("info", "Telefonbuch: Treffer gefunden", count=len(results))
-    return results
-
-
-def should_accept_enrichment(
-    original_name: str,
-    original_city: str,
-    results: List[Dict]
-) -> Tuple[bool, Optional[Dict], str]:
-    """
-    Prüft ob Enrichment akzeptiert werden soll.
-    
-    Checks:
-        1. Genau 1 Treffer
-        2. Name-Match >= 90% (fuzzy matching)
-        3. Stadt-Match (enthält oder gleich)
-        4. Telefonnummer ist Mobilnummer (015/016/017)
-    
-    Returns:
-        (accept: bool, result: Dict or None, reason: str)
-    """
-    if not results:
-        return False, None, "Keine Treffer"
-    
-    if TELEFONBUCH_STRICT_MODE and len(results) != 1:
-        return False, None, f"Mehrere Treffer ({len(results)})"
-    
-    result = results[0]
-    
-    # Check name match (simple fuzzy matching)
-    result_name = result.get("name", "").lower().strip()
-    original_name_clean = original_name.lower().strip()
-    
-    # Simple similarity check - normalize and compare
-    def normalize_name(n):
-        # Remove common German academic and professional titles
-        # Comprehensive list of titles to handle variations
-        titles = [
-            r'dr\.?\s*med\.?',  # Dr. med., Dr.med
-            r'dr\.?\s*phil\.?',  # Dr. phil.
-            r'dr\.?\s*ing\.?',   # Dr. Ing.
-            r'dr\.?',            # Dr.
-            r'prof\.?\s*dr\.?',  # Prof. Dr.
-            r'prof\.?',          # Prof.
-            r'dipl\.?-ing\.?',   # Dipl.-Ing.
-            r'dipl\.?',          # Dipl.
-            r'ing\.?',           # Ing.
-            r'mag\.?',           # Mag.
-            r'msc\.?',           # MSc.
-            r'mba\.?',           # MBA.
-            r'b\.?\s*sc\.?',     # B.Sc.
-            r'm\.?\s*sc\.?',     # M.Sc.
-        ]
-        pattern = r'\b(' + '|'.join(titles) + r')\b'
-        n = re.sub(pattern, '', n, flags=re.I)
-        return ' '.join(n.split())
-    
-    result_name_norm = normalize_name(result_name)
-    original_name_norm = normalize_name(original_name_clean)
-    
-    # Check if names are similar enough
-    # Simple approach: check if one is contained in the other or vice versa
-    name_match = (
-        result_name_norm in original_name_norm or
-        original_name_norm in result_name_norm or
-        result_name_norm == original_name_norm
-    )
-    
-    if not name_match:
-        # Try word-by-word match (at least 2 words should match)
-        result_words = set(result_name_norm.split())
-        original_words = set(original_name_norm.split())
-        common_words = result_words & original_words
-        if len(common_words) < 2:
-            return False, None, f"Name-Mismatch: '{result_name}' vs '{original_name}'"
-    
-    # Check city match
-    result_city = result.get("city", "").lower().strip()
-    original_city_clean = original_city.lower().strip()
-    
-    city_match = (
-        result_city in original_city_clean or
-        original_city_clean in result_city or
-        result_city == original_city_clean
-    )
-    
-    if not city_match and result_city:  # Allow missing city in result
-        return False, None, f"Stadt-Mismatch: '{result_city}' vs '{original_city}'"
-    
-    # Check phone is mobile number
-    phone = result.get("phone", "")
-    if not phone:
-        return False, None, "Keine Telefonnummer"
-    
-    # Normalize phone
-    normalized_phone = normalize_phone(phone)
-    
-    # Check if mobile
-    if TELEFONBUCH_MOBILE_ONLY:
-        if not is_mobile_number(normalized_phone):
-            return False, None, "Keine Mobilnummer"
-    
-    return True, result, "Akzeptiert"
-
-
-async def enrich_phone_from_telefonbuch(
-    name: str,
-    city: str,
-    strict: bool = True
-) -> Optional[Dict[str, str]]:
-    """
-    Sucht Telefonnummer in dasoertliche.de
-    
-    Args:
-        name: Vor- und Nachname (z.B. "Max Mustermann")
-        city: Stadt (z.B. "Düsseldorf")
-        strict: Nur bei exakt 1 Treffer (100% Genauigkeit)
-    
-    Returns:
-        Dict mit {"phone": "0176...", "address": "..."} oder None
-    
-    Regeln:
-        - Nur wenn Name UND Stadt vorhanden
-        - Nur bei GENAU 1 Treffer (wenn strict=True)
-        - Nur Mobilnummern (015x, 016x, 017x) werden akzeptiert
-        - Rate-Limiting: Max 1 Request / 3 Sekunden
-    """
-    if not TELEFONBUCH_ENRICHMENT_ENABLED:
-        return None
-    
-    if not name or not city:
-        return None
-    
-    log("info", "Telefonbuch-Enrichment gestartet", name=name, city=city)
-    
-    # Check cache first
-    cached = await get_cached_telefonbuch_result(name, city)
-    if cached is not None:
-        results = cached
-    else:
-        # Query dasoertliche.de
-        results = await query_dasoertliche(name, city)
-        
-        # Cache the results
-        await cache_telefonbuch_result(name, city, results)
-    
-    # Validate and accept enrichment
-    accept, result, reason = should_accept_enrichment(name, city, results)
-    
-    if not accept:
-        log("warn", "Telefonbuch-Enrichment abgelehnt", reason=reason, name=name, city=city)
-        return None
-    
-    phone = result.get("phone", "")
-    address = result.get("address", "")
-    
-    log("info", "Telefonbuch-Enrichment erfolgreich", 
-        name=name, city=city, phone=phone[:8]+"..." if len(phone) > 8 else phone)
-    
-    return {
-        "phone": phone,
-        "address": address
-    }
-
-
-async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Enriches leads without phone numbers using telefonbuch lookup.
-    Returns the enriched leads list.
-    """
-    if not TELEFONBUCH_ENRICHMENT_ENABLED or not leads:
-        return leads
-    
-    enriched_leads = []
-    for lead in leads:
-        # Only enrich if NO phone but has name + city
-        if not lead.get("telefon") and lead.get("name") and lead.get("region"):
-            name = lead["name"]
-            city = lead["region"]
-            
-            # Skip if name looks like a company
-            if _looks_like_company_name(name):
-                log("debug", "Telefonbuch-Enrichment übersprungen (Firmenname)", name=name)
-                enriched_leads.append(lead)
-                continue
-            
-            # Try to enrich
-            enrichment = await enrich_phone_from_telefonbuch(name, city)
-            
-            if enrichment and enrichment.get("phone"):
-                # Normalize and validate phone before assignment
-                normalized_phone = normalize_phone(enrichment["phone"])
-                if normalized_phone:  # Only proceed if normalization succeeded
-                    is_valid, phone_type = validate_phone(normalized_phone)
-                    if is_valid and phone_type == "mobile":
-                        lead["telefon"] = normalized_phone
-                        lead["phone_type"] = "mobile"
-                        
-                        # Add address if available
-                        if enrichment.get("address"):
-                            lead["private_address"] = enrichment["address"]
-                        
-                        # Tag as enriched
-                        tags = lead.get("tags", "")
-                        if tags:
-                            lead["tags"] = tags + ",telefonbuch_enriched"
-                        else:
-                            lead["tags"] = "telefonbuch_enriched"
-                        
-                        log("info", "Telefonbuch-Enrichment erfolgreich", 
-                            name=name, city=city, phone=normalized_phone[:8]+"..." if len(normalized_phone) > 8 else normalized_phone)
-                    else:
-                        log("debug", "Telefonbuch-Enrichment: Ungültige Nummer", 
-                            name=name, phone=normalized_phone, phone_type=phone_type)
-                else:
-                    log("debug", "Telefonbuch-Enrichment: Normalisierung fehlgeschlagen", 
-                        name=name, original_phone=enrichment["phone"])
-        
-        enriched_leads.append(lead)
-    
-    return enriched_leads
-
-
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
     Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
     STRICT RULE: Only mobile numbers allowed - landline numbers are rejected.
-    NEW: Uses lead_validation module for comprehensive quality filtering.
     """
     if not leads:
         return []
@@ -1788,77 +958,46 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     try:
         for r in leads:
-            # STEP 1: Apply comprehensive validation from lead_validation module
-            is_valid, reason = validate_lead_before_insert(r)
-            if not is_valid:
-                log("debug", "Lead abgelehnt", reason=reason, url=r.get('quelle'))
-                increment_rejection_stat(reason)
-                continue
-            
-            # STEP 2: Normalize phone number to international format
-            phone = r.get('telefon')
-            if phone:
-                normalized = normalize_phone_number(phone)
-                if normalized:
-                    r['telefon'] = normalized
-            
-            # STEP 3: Extract real person name from raw text
-            name = r.get('name')
-            if name:
-                extracted_name = extract_person_name(name)
-                if extracted_name:
-                    r['name'] = extracted_name
-                    
-                    # Validate extracted name again
-                    if not validate_lead_name(extracted_name):
-                        log("debug", "Lead abgelehnt nach Name-Extraktion", name=extracted_name)
-                        increment_rejection_stat("Ungültiger Name nach Extraktion")
-                        continue
-            
-            # STEP 4: Additional validation using existing logic for backwards compatibility
+            # CRITICAL: Check for job postings first - NEVER save job ads as leads
             source_url = r.get("quelle", "")
-            
-            # Check for job postings
             if is_job_posting(url=source_url, title=r.get("name", ""), 
                              snippet=r.get("opening_line", ""), content=r.get("tags", "")):
                 log("debug", "Lead dropped at insert (job posting)", url=source_url)
-                increment_rejection_stat("Job posting detected")
                 continue
             
-            # Validate name with heuristics
+            # Name validation (heuristic only - async AI validation would be too slow here)
             name = (r.get("name") or "").strip()
             if name:
-                is_real, confidence, reason_heuristic = _validate_name_heuristic(name)
+                is_real, confidence, reason = _validate_name_heuristic(name)
                 if not is_real:
-                    log("debug", "Lead dropped at insert (invalid name heuristic)", name=name, reason=reason_heuristic, url=source_url)
-                    increment_rejection_stat(f"Invalid name: {reason_heuristic}")
+                    log("debug", "Lead dropped at insert (invalid name)", name=name, reason=reason, url=source_url)
                     continue
                 r["name_validated"] = 1  # Mark as validated
             else:
+                # No name - skip lead (name is mandatory)
                 log("debug", "Lead dropped at insert (no name)", url=source_url)
-                increment_rejection_stat("No name")
                 continue
             
-            # Phone validation - already done by validate_lead_before_insert, but double-check
+            # Phone hardfilter: Re-check phone validity before insert
             phone = (r.get("telefon") or "").strip()
             if phone:
-                is_valid_phone, phone_type = validate_phone(phone)
-                if not is_valid_phone:
-                    log("debug", "Lead dropped at insert (invalid phone secondary check)", phone=phone, url=source_url)
-                    increment_rejection_stat("Invalid phone (secondary)")
+                is_valid, phone_type = validate_phone(phone)
+                if not is_valid:
+                    log("debug", "Lead dropped at insert (invalid phone)", phone=phone, url=source_url)
                     continue
                 
-                # Ensure it's a mobile number
+                # STRICT: Only mobile numbers allowed
+                # Normalize phone first before checking if it's mobile
                 normalized_phone = normalize_phone(phone)
                 if not is_mobile_number(normalized_phone):
                     log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
-                    increment_rejection_stat("Not mobile number")
                     continue
                 
+                # Update phone_type to mobile (since we validated it's mobile)
                 r["phone_type"] = "mobile"
             else:
+                # No phone - skip lead (phone is mandatory)
                 log("debug", "Lead dropped at insert (no phone)", url=source_url)
-                increment_rejection_stat("No phone")
                 continue
             vals = [
                 r.get("name",""),
@@ -1994,25 +1133,6 @@ def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Opti
     con.commit(); con.close()
     if metrics:
         log("info", "Run metrics", **metrics)
-    
-    # Log lead rejection statistics
-    log_rejection_stats()
-
-def log_rejection_stats():
-    """Log statistics about rejected leads at the end of a run."""
-    stats = get_rejection_stats()
-    total_rejected = sum(stats.values())
-    
-    if total_rejected > 0:
-        log("info", "Lead-Filter Statistik", 
-            total_rejected=total_rejected,
-            rejected_phone=stats['invalid_phone'],
-            rejected_source=stats['blocked_source'],
-            rejected_name=stats['invalid_name'],
-            rejected_type=stats['wrong_type'])
-    
-    # Reset statistics for next run
-    reset_rejection_stats()
 
 def reset_history():
     con = db(); cur = con.cursor()
@@ -2040,8 +1160,7 @@ PDF_CT = "application/pdf"
 # Circuit-Breaker pro Host
 _HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "failures": int}}
 # URLs, die wegen 429/403 in die zweite Welle sollen
-CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))  # Reduziert von 90 auf 30 Sekunden
-CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))   # Neu: Kürzere Penalty für APIs
+CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "90"))  # Sekunden
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
 
 RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
@@ -2088,45 +1207,25 @@ def _host_from(url: str) -> str:
     except Exception:
         return ""
 
-def _penalize_host(host: str, reason: str = "error"):
-    """Penalisiert Host mit Learning-Integration"""
+def _penalize_host(host: str):
     if not host:
         return
-    
-    # API-Hosts bekommen kürzere Penalty
-    # Use proper domain matching to avoid substring attacks
-    is_google_api = host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com")
-    is_api_host = host.startswith("api.")
-    
-    if is_google_api or is_api_host:
-        penalty = CB_API_PENALTY
-    else:
-        penalty = CB_BASE_PENALTY
-    
-    if is_google_api:
+    if host in {"www.googleapis.com", "googleapis.com"}:
         # Google API: never hard-penalize; at most a short cool-down
         st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+        penalty = random.uniform(10, 30)
         st["penalty_until"] = time.time() + penalty
         st["failures"] = 0
         log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
-    else:
-        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        st["failures"] = min(st["failures"] + 1, 10)
-        penalty = min(penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
-        st["penalty_until"] = time.time() + penalty
-        log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
-    
-    # Learning Engine informieren
-    try:
-        from ai_learning_engine import ActiveLearningEngine
-        learning = ActiveLearningEngine()
-        learning.record_host_failure(host, reason)
-    except Exception:
-        pass  # Learning ist optional
+        return
+    st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+    st["failures"] = min(st["failures"] + 1, 10)
+    penalty = min(CB_BASE_PENALTY * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
+    st["penalty_until"] = time.time() + penalty
+    log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
 
 def _host_allowed(host: str) -> bool:
-    # Use proper domain matching to avoid substring attacks
-    if host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com"):
+    if host in {"www.googleapis.com", "googleapis.com"}:
         return True
     st = _HOST_STATE.get(host)
     if not st:
@@ -2259,7 +1358,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 # Wenn HEAD 405/501 → kein erneutes HEAD versuchen (spart Roundtrips).
                 # Zusätzlich: bei 405 sanfte Host-Penalty (viele Sites blocken HEAD hart).
                 if r_head.status_code == 405:
-                    _penalize_host(host, "405")
+                    _penalize_host(host)
                     log("info", "HEAD 405: host penalized, continue with GET", url=url)
                 if r_head.status_code in (405, 501):
                     pass  # einfach mit GET fortfahren
@@ -2288,8 +1387,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
             setattr(r, "insecure_ssl", False)
             return r
         if _should_retry_status(r.status_code):
-            reason = "429" if r.status_code == 429 else "error"
-            _penalize_host(host, reason)
+            _penalize_host(host)
             _schedule_retry(url, r.status_code)
             log("warn", f"{r.status_code} received", url=url)
             return r
@@ -2304,8 +1402,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 setattr(r, "insecure_ssl", False)
                 return r
             if _should_retry_status(r.status_code):
-                reason = "429" if r.status_code == 429 else "error"
-                _penalize_host(host, reason)
+                _penalize_host(host)
                 _schedule_retry(url, r.status_code)
                 log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
                 return r
@@ -2324,8 +1421,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 log("warn", "SSL Fallback ohne Verify genutzt", url=url)
                 return r2
             if _should_retry_status(r2.status_code):
-                reason = "429" if r2.status_code == 429 else "error"
-                _penalize_host(host, reason)
+                _penalize_host(host)
                 _schedule_retry(url, r2.status_code)
                 log("warn", f"{r2.status_code} received (insecure TLS)", url=url)
                 return r2
@@ -2340,8 +1436,7 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                     log("warn", "SSL Fallback (HTTP/1.1) genutzt", url=url)
                     return r2
                 if _should_retry_status(r2.status_code):
-                    reason = "429" if r2.status_code == 429 else "error"
-                    _penalize_host(host, reason)
+                    _penalize_host(host)
                     _schedule_retry(url, r2.status_code)
                     log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
                     return r2
@@ -2366,45 +1461,6 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
         log("warn", "Nicht-200 beim Abruf – skip", url=url, status=status)
         return None
     _LAST_STATUS[url] = 200
-    return r
-
-
-async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HTTP_TIMEOUT):
-    """
-    Fetch mit automatischer Login-Erkennung und Session-Management
-    Verwendet die Login-Handler-Funktionalität, um bei Bedarf einen Login anzufordern
-    """
-    handler = get_login_handler()
-    portal = handler.get_portal_from_url(url)
-    
-    # Lade gespeicherte Cookies falls vorhanden
-    if portal and handler.has_valid_session(portal):
-        saved_cookies = handler.get_session_cookies(portal)
-        if saved_cookies:
-            log("debug", f"Verwende gespeicherte Cookies für {portal}")
-            # Cookies werden nicht direkt in curl_cffi verwendet, aber wir markieren die Session als aktiv
-    
-    # Führe normalen Request aus
-    r = await fetch_response_async(url, headers=headers, params=params, timeout=timeout)
-    
-    # Prüfe Response auf Login-Anforderungen
-    if r is not None:
-        response_text = getattr(r, "text", "") or ""
-        status = getattr(r, "status_code", 200)
-        
-        if handler.detect_login_required(response_text, status, url):
-            log("warn", f"Login erforderlich für {portal or url}")
-            
-            # Alte Session invalidieren
-            if portal:
-                handler.invalidate_session(portal)
-            
-            # Manuellen Login anfordern (blockierend)
-            # Hinweis: In Produktionsumgebung sollte dies async oder in separatem Thread erfolgen
-            # Für jetzt: Wir loggen nur eine Warnung und geben None zurück
-            log("warn", f"Bitte führe manuell aus: python scriptname.py --login {portal}")
-            return None
-    
     return r
 
 def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
@@ -2435,7 +1491,7 @@ GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
 GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
 GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 für Cost & Rate-Limit Control
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduced to 1-2 for cost control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
@@ -2546,29 +1602,17 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:t.me "stellengesuche" "vertrieb"',
         'site:t.me/joinchat "vertrieb"',
         'site:t.me/joinchat "sales" "jobs"',
-        # NEU: Erweiterte Telegram Gruppen NRW
-        'site:t.me "vertrieb" "NRW" OR "düsseldorf" OR "köln"',
-        'site:t.me "sales jobs" "deutschland" "nrw"',
-        'site:t.me "handelsvertreter" "gruppe"',
-        '"telegram gruppe" "vertrieb" "NRW"',
         
         # WhatsApp - Öffentliche Einladungslinks
         'site:chat.whatsapp.com "vertrieb" "jobs"',
         'site:chat.whatsapp.com "sales" "netzwerk"',
         'site:chat.whatsapp.com "vertriebler" "gruppe"',
         'site:chat.whatsapp.com "jobsuche" "NRW"',
-        # NEU: Erweiterte WhatsApp Gruppen
-        'site:chat.whatsapp.com "vertrieb" "nrw"',
-        'site:chat.whatsapp.com "sales" "düsseldorf"',
-        '"whatsapp gruppe" "vertriebler" "köln"',
         
         # Discord - Karriere Server
         'site:discord.gg "vertrieb" "jobs"',
         'site:discord.gg "sales" "karriere"',
         'site:discord.com/invite "jobs" "deutschland"',
-        # NEU: Erweiterte Discord Server
-        'site:discord.gg "vertrieb" "deutschland"',
-        'site:discord.com/invite "sales" "karriere"',
         
         # ══════════════════════════════════════════════════════════════
         # KATEGORIE 5: FOREN & COMMUNITIES
@@ -2640,9 +1684,6 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:kleinanzeigen.de "d2d" "suche" "erfahrung"',
         '"door to door" "vertriebler" "sucht" "mobil"',
         '"haustürgeschäft" "erfahrung" "suche arbeit"',
-        # NEU: Erweiterte D2D/Haustür NRW
-        'site:kleinanzeigen.de/s-stellengesuche "haustür" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung" "NRW"',
         
         # Call Center / Telesales
         '"call center agent" "suche" "homeoffice" "NRW"',
@@ -2654,26 +1695,16 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"solarvertrieb" "suche" "erfahrung" "NRW"',
         '"energieberater" "freiberuflich" "sucht"',
         '"photovoltaik" "vertrieb" "suche stelle"',
-        # NEU: Erweiterte Solar/Energie NRW
-        'site:kleinanzeigen.de/s-stellengesuche "solar" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "photovoltaik" "köln"',
-        'site:kleinanzeigen.de/s-stellengesuche "energie" "düsseldorf"',
         
         # Versicherung / Finanz
         '"versicherungsvertreter" "suche" "neue"',
         '"finanzberater" "wechselwillig" "kontakt"',
         '"makler" "sucht" "neue herausforderung"',
-        # NEU: Erweiterte Versicherung NRW
-        'site:kleinanzeigen.de/s-stellengesuche "versicherung" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "finanzberater" "köln"',
         
         # Telekommunikation
         '"telekom vertrieb" "suche" "erfahrung"',
         '"mobilfunk" "sales" "suche stelle"',
         '"provider" "vertrieb" "wechsel"',
-        # NEU: Erweiterte Telekom NRW
-        'site:kleinanzeigen.de/s-stellengesuche "telekom" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "mobilfunk" "düsseldorf"',
         
         # Medizin / Pharma
         '"pharmareferent" "sucht" "neue"',
@@ -3260,1253 +2291,6 @@ async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MA
     return uniq
 
 
-async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 5) -> List[str]:
-    """
-    Crawl Kleinanzeigen listing pages directly (not via Google) and extract all ad links.
-    Supports pagination (page 1, 2, 3...).
-    
-    Args:
-        listing_url: Base URL for the listing (e.g., https://www.kleinanzeigen.de/s-stellengesuche/...)
-        max_pages: Maximum number of pages to crawl (default: 5)
-        
-    Returns:
-        List of ad detail URLs
-    """
-    if not ENABLE_KLEINANZEIGEN:
-        return []
-    
-    ad_links: List[str] = []
-    seen_urls = set()
-    page_num = 1  # Initialize before loop
-    
-    for page_num in range(1, max_pages + 1):
-        # Build URL with page parameter, properly handling existing query params
-        if page_num == 1:
-            url = listing_url
-        else:
-            # Parse URL and add page parameter
-            parsed = urllib.parse.urlparse(listing_url)
-            params = urllib.parse.parse_qs(parsed.query)
-            params['page'] = [str(page_num)]
-            new_query = urllib.parse.urlencode(params, doseq=True)
-            url = urllib.parse.urlunparse(parsed._replace(query=new_query))
-        
-        try:
-            # Use configured delay for kleinanzeigen portal
-            if page_num > 1:
-                delay = PORTAL_DELAYS.get("kleinanzeigen", 3.0)
-                await asyncio.sleep(delay + _jitter(0.5, 1.0))
-            
-            log("info", "Crawling Kleinanzeigen listing", url=url, page=page_num)
-            
-            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-            if not r or r.status_code != 200:
-                log("warn", "Failed to fetch listing page", url=url, status=r.status_code if r else "None")
-                break
-            
-            html = r.text or ""
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Extract ad links from listing
-            page_links = 0
-            for art in soup.select("li.ad-listitem article.aditem"):
-                # Try data-href first
-                href = art.get("data-href") or ""
-                if not href:
-                    # Fallback to anchor tag
-                    a_tag = art.find("a", href=True)
-                    if a_tag:
-                        href = a_tag.get("href", "")
-                
-                if not href or "/s-anzeige/" not in href:
-                    continue
-                
-                # Build full URL using the base URL from the listing
-                parsed_listing = urllib.parse.urlparse(listing_url)
-                base_url = f"{parsed_listing.scheme}://{parsed_listing.netloc}"
-                full_url = urllib.parse.urljoin(base_url, href)
-                norm_url = _normalize_for_dedupe(full_url)
-                
-                if norm_url in seen_urls:
-                    continue
-                
-                seen_urls.add(norm_url)
-                ad_links.append(full_url)
-                page_links += 1
-            
-            log("info", "Extracted ad links from page", page=page_num, count=page_links)
-            
-            # If no links found, we've reached the end
-            if page_links == 0:
-                log("info", "No more ads found, stopping pagination", page=page_num)
-                break
-                
-        except Exception as e:
-            log("error", "Error crawling listing page", url=url, error=str(e))
-            break
-    
-    log("info", "Completed Kleinanzeigen listing crawl", total_ads=len(ad_links), pages=page_num)
-    return ad_links
-
-
-async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any]]:
-    """
-    Crawl individual Kleinanzeigen ad detail page and extract contact information.
-    
-    Args:
-        url: URL of the ad detail page
-        
-    Returns:
-        Dict with lead data or None if extraction failed
-    """
-    try:
-        r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-        if not r or r.status_code != 200:
-            log("debug", "Failed to fetch detail page", url=url, status=r.status_code if r else "None")
-            return None
-        
-        html = r.text or ""
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Extract title
-        title_elem = soup.select_one("h1#viewad-title, h1.boxedarticle--title")
-        title = title_elem.get_text(" ", strip=True) if title_elem else ""
-        
-        # Extract description
-        desc_elem = soup.select_one("#viewad-description-text, .boxedarticle--description")
-        description = desc_elem.get_text(" ", strip=True) if desc_elem else ""
-        
-        # Combine text for extraction
-        full_text = f"{title} {description}"
-        
-        # Extract mobile phone numbers using advanced patterns
-        phones = []
-        
-        # Standard extraction with existing regex
-        phone_matches = MOBILE_RE.findall(full_text)
-        for phone_match in phone_matches:
-            normalized = normalize_phone(phone_match)
-            if normalized:
-                is_valid, phone_type = validate_phone(normalized)
-                if is_valid and is_mobile_number(normalized):
-                    phones.append(normalized)
-        
-        # Enhanced extraction using phone_patterns module
-        if not phones:
-            log("debug", "Standard extraction failed, trying advanced patterns", url=url)
-            try:
-                extraction_results = extract_all_phone_patterns(html, full_text)
-                best_phone = get_best_phone_number(extraction_results)
-                if best_phone:
-                    normalized = normalize_phone(best_phone)
-                    if normalized and is_mobile_number(normalized):
-                        phones.append(normalized)
-                        log("info", "Advanced pattern extraction found phone", 
-                            url=url, phone=normalized[:8]+"...")
-                        # Record this pattern success
-                        if _LEARNING_ENGINE:
-                            _LEARNING_ENGINE.record_phone_pattern(
-                                pattern="advanced_extraction",
-                                pattern_type="enhanced",
-                                example=normalized[:8]+"..."
-                            )
-                        # NEW: Learn phone pattern for AI Learning Engine
-                        try:
-                            from ai_learning_engine import ActiveLearningEngine
-                            learning = ActiveLearningEngine()
-                            learning.learn_phone_pattern(best_phone, normalized, "kleinanzeigen")
-                        except Exception:
-                            pass  # Learning is optional
-            except Exception as e:
-                log("debug", "Advanced phone extraction failed", error=str(e))
-        
-        # Extract email
-        email = ""
-        email_matches = EMAIL_RE.findall(full_text)
-        if email_matches:
-            email = email_matches[0]
-        
-        # Extract WhatsApp link using enhanced extraction
-        whatsapp = ""
-        try:
-            wa_number = extract_whatsapp_number(html)
-            if wa_number:
-                normalized_wa = normalize_phone(wa_number)
-                if normalized_wa and is_mobile_number(normalized_wa):
-                    whatsapp = normalized_wa
-                    if normalized_wa not in phones:
-                        phones.append(normalized_wa)
-                        log("info", "WhatsApp link extraction found phone", 
-                            url=url, phone=normalized_wa[:8]+"...")
-        except Exception:
-            pass
-        
-        # Fallback: Try old WhatsApp link extraction
-        if not whatsapp:
-            wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
-            if wa_link:
-                wa_href = wa_link.get("href", "")
-                # Extract phone from WhatsApp link
-                wa_phone = re.sub(r'\D', '', wa_href)
-                if wa_phone:
-                    wa_normalized = "+" + wa_phone
-                    is_valid, phone_type = validate_phone(wa_normalized)
-                    if is_valid and is_mobile_number(wa_normalized):
-                        whatsapp = wa_normalized
-                        if wa_normalized not in phones:
-                            phones.append(wa_normalized)
-        
-        # Extract location/region
-        location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
-        location = location_elem.get_text(" ", strip=True) if location_elem else ""
-        
-        # Extract name (from title or text)
-        # Use the enhanced name extractor which handles various patterns
-        name = extract_name_enhanced(full_text)
-        
-        # Only create lead if we found at least one mobile number
-        if not phones:
-            log("debug", "No mobile numbers found in ad", url=url)
-            # Record failure for learning
-            if _LEARNING_ENGINE:
-                _LEARNING_ENGINE.learn_from_failure(
-                    url=url,
-                    html_content=html,
-                    reason="no_mobile_number_found",
-                    visible_phones=[]
-                )
-            return None
-        
-        # Use first mobile number found
-        main_phone = phones[0]
-        
-        # Build lead data
-        lead = {
-            "name": name or "",
-            "rolle": "Vertrieb",  # Default role
-            "email": email,
-            "telefon": main_phone,
-            "quelle": url,
-            "score": 85,  # High score for direct Kleinanzeigen finds
-            "tags": "kleinanzeigen,candidate,mobile,direct_crawl",
-            "lead_type": "candidate",
-            "phone_type": "mobile",
-            "opening_line": title[:200] if title else "",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": location if location else "",
-            "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
-        }
-        
-        log("info", "Extracted lead from Kleinanzeigen ad", url=url, has_phone=bool(main_phone), has_email=bool(email))
-        return lead
-        
-    except Exception as e:
-        log("error", "Error extracting Kleinanzeigen detail", url=url, error=str(e))
-        return None
-
-
-def _mark_url_seen(url: str, source: str = ""):
-    """
-    Helper function to mark a URL as seen in the database.
-    
-    Args:
-        url: The URL to mark as seen
-        source: Optional source name for logging (e.g., "Markt.de", "Quoka")
-    """
-    try:
-        con = db()
-        cur = con.cursor()
-        cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (url,))
-        con.commit()
-        con.close()
-        _seen_urls_cache.add(_normalize_for_dedupe(url))
-    except Exception as e:
-        log_prefix = f"{source}: " if source else ""
-        log("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
-
-
-async def crawl_kleinanzeigen_portal_async() -> List[Dict]:
-    """
-    Wrapper function to crawl Kleinanzeigen that matches the pattern of other portals.
-    Crawls all configured DIRECT_CRAWL_URLS and returns list of lead dicts.
-    
-    Returns:
-        List of lead dicts extracted from Kleinanzeigen
-    """
-    if not DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
-        return []
-    
-    if not ENABLE_KLEINANZEIGEN:
-        return []
-    
-    leads = []
-    
-    for crawl_url in DIRECT_CRAWL_URLS:
-        try:
-            log("info", "Kleinanzeigen: Crawling listing", url=crawl_url)
-            
-            # Step 1: Get ad links from listing page
-            ad_links = await crawl_kleinanzeigen_listings_async(crawl_url, max_pages=5)
-            
-            if not ad_links:
-                log("info", "Kleinanzeigen: No ads found", url=crawl_url)
-                continue
-            
-            log("info", "Kleinanzeigen: Ads found", url=crawl_url, count=len(ad_links))
-            
-            # Step 2: Extract details from each ad
-            for i, ad_url in enumerate(ad_links):
-                if url_seen(ad_url):
-                    log("debug", "Kleinanzeigen: URL already seen (skip)", url=ad_url)
-                    continue
-                
-                # Rate limiting between detail page fetches
-                if i > 0:
-                    await asyncio.sleep(2.5 + _jitter(0.5, 1.0))
-                
-                # Extract lead data from ad detail page
-                lead_data = await extract_kleinanzeigen_detail_async(ad_url)
-                
-                if lead_data:
-                    leads.append(lead_data)
-                    # Mark URL as seen
-                    _mark_url_seen(ad_url, source="Kleinanzeigen")
-                else:
-                    log("debug", "Kleinanzeigen: No valid lead data", url=ad_url)
-            
-            # Rate limiting between listing pages
-            await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-            
-        except Exception as e:
-            log("error", "Kleinanzeigen: Error crawling", url=crawl_url, error=str(e))
-            continue
-    
-    log("info", "Kleinanzeigen: Crawling complete", total_leads=len(leads))
-    return leads
-
-
-async def crawl_markt_de_listings_async() -> List[Dict]:
-    """
-    Crawlt markt.de Stellengesuche-Seiten.
-    
-    HTML-Struktur (typisch):
-    - Listing: <div class="ad-list-item"> oder <article class="result-item">
-    - Link: <a href="/anzeige/...">
-    - Titel: <h2> oder <h3>
-    
-    Pagination: ?page=2, ?page=3, etc.
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("markt_de", True):
-        return []
-    
-    leads = []
-    max_pages = 3  # Limit pages per URL to avoid overload
-    
-    for base_url in MARKT_DE_URLS:
-        for page in range(1, max_pages + 1):
-            if page == 1:
-                url = base_url
-            else:
-                # Add page parameter
-                separator = "&" if "?" in base_url else "?"
-                url = f"{base_url}{separator}page={page}"
-            
-            try:
-                # Use configured delay for markt_de portal
-                delay = PORTAL_DELAYS.get("markt_de", 3.0)
-                await asyncio.sleep(delay + _jitter(0.5, 1.0))
-                
-                log("info", "Markt.de: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "Markt.de: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    if _LEARNING_ENGINE:
-                        _LEARNING_ENGINE.update_domain_performance(
-                            domain="markt.de",
-                            success=False,
-                            rate_limited=(r.status_code == 429 if r else False)
-                        )
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract ad links - try multiple selectors
-                ad_links = []
-                
-                # Try common selectors for markt.de
-                for selector in [
-                    'a[href*="/anzeige/"]',
-                    'a[href*="/stellengesuche/"]',
-                    '.ad-list-item a',
-                    'article a[href*="/anzeige/"]'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and ("/anzeige/" in href or "/stellengesuche/" in href):
-                            full_url = urllib.parse.urljoin("https://www.markt.de", href)
-                            if full_url not in ad_links:
-                                ad_links.append(full_url)
-                
-                log("info", "Markt.de: Anzeigen gefunden", url=url, count=len(ad_links))
-                
-                if not ad_links:
-                    break  # No more ads, stop pagination
-                
-                # Extract details from each ad
-                for ad_url in ad_links:
-                    if url_seen(ad_url):
-                        continue
-                    
-                    # Rate limiting
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(ad_url, source_tag="markt_de")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "Markt.de: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        # Mark as seen
-                        _mark_url_seen(ad_url, source="Markt.de")
-                    else:
-                        log("debug", "Markt.de: Keine Handynummer", url=ad_url)
-                
-            except Exception as e:
-                log("error", "Markt.de: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "Markt.de: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def crawl_quoka_listings_async() -> List[Dict]:
-    """
-    Crawlt quoka.de Stellengesuche-Seiten.
-    
-    HTML-Struktur:
-    - Listing: <li class="q-ad"> oder <div class="result-list-item">
-    - Link: <a href="/stellengesuche/...">
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("quoka", True):
-        return []
-    
-    leads = []
-    max_pages = 3
-    
-    for base_url in QUOKA_DE_URLS:
-        for page in range(1, max_pages + 1):
-            if page == 1:
-                url = base_url
-            else:
-                separator = "&" if "?" in base_url else "?"
-                url = f"{base_url}{separator}page={page}"
-            
-            try:
-                # Use configured delay for quoka portal
-                delay = PORTAL_DELAYS.get("quoka", 3.0)
-                await asyncio.sleep(delay + _jitter(0.5, 1.0))
-                
-                log("info", "Quoka: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "Quoka: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    # Record failure for learning
-                    if _LEARNING_ENGINE:
-                        _LEARNING_ENGINE.update_domain_performance(
-                            domain="quoka.de",
-                            success=False,
-                            rate_limited=(r.status_code == 429 if r else False)
-                        )
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract ad links
-                ad_links = []
-                
-                for selector in [
-                    'a.q-ad-link',
-                    'li.q-ad a',
-                    'a[href*="/stellengesuche/"]',
-                    '.result-list-item a'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and "/stellengesuche/" in href:
-                            full_url = urllib.parse.urljoin("https://www.quoka.de", href)
-                            if full_url not in ad_links:
-                                ad_links.append(full_url)
-                
-                log("info", "Quoka: Anzeigen gefunden", url=url, count=len(ad_links))
-                
-                if not ad_links:
-                    break
-                
-                for ad_url in ad_links:
-                    if url_seen(ad_url):
-                        continue
-                    
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(ad_url, source_tag="quoka")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "Quoka: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        _mark_url_seen(ad_url, source="Quoka")
-                    else:
-                        log("debug", "Quoka: Keine Handynummer", url=ad_url)
-                
-            except Exception as e:
-                log("error", "Quoka: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "Quoka: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def crawl_kalaydo_listings_async() -> List[Dict]:
-    """
-    Crawlt kalaydo.de Stellengesuche-Seiten.
-    Kalaydo ist besonders stark im Rheinland/NRW!
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("kalaydo", True):
-        return []
-    
-    leads = []
-    max_pages = 3
-    
-    for base_url in KALAYDO_DE_URLS:
-        for page in range(1, max_pages + 1):
-            if page == 1:
-                url = base_url
-            else:
-                separator = "&" if "?" in base_url else "?"
-                url = f"{base_url}{separator}page={page}"
-            
-            try:
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                
-                log("info", "Kalaydo: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "Kalaydo: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract ad links
-                ad_links = []
-                
-                for selector in [
-                    'article.classified-ad a',
-                    'a[href*="/anzeige/"]',
-                    'a[href*="/stellengesuche/"]',
-                    '.ad-item a'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and ("/anzeige/" in href or "/stellengesuche/" in href):
-                            full_url = urllib.parse.urljoin("https://www.kalaydo.de", href)
-                            if full_url not in ad_links:
-                                ad_links.append(full_url)
-                
-                log("info", "Kalaydo: Anzeigen gefunden", url=url, count=len(ad_links))
-                
-                if not ad_links:
-                    break
-                
-                for ad_url in ad_links:
-                    if url_seen(ad_url):
-                        continue
-                    
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(ad_url, source_tag="kalaydo")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "Kalaydo: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        _mark_url_seen(ad_url, source="Kalaydo")
-                    else:
-                        log("debug", "Kalaydo: Keine Handynummer", url=ad_url)
-                
-            except Exception as e:
-                log("error", "Kalaydo: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "Kalaydo: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def crawl_meinestadt_listings_async() -> List[Dict]:
-    """
-    Crawlt meinestadt.de Stellengesuche-Seiten.
-    Städte-basiert, gut für lokale Kandidaten.
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("meinestadt", True):
-        return []
-    
-    leads = []
-    max_pages = 3
-    
-    for base_url in MEINESTADT_DE_URLS:
-        for page in range(1, max_pages + 1):
-            if page == 1:
-                url = base_url
-            else:
-                separator = "&" if "?" in base_url else "?"
-                url = f"{base_url}{separator}page={page}"
-            
-            try:
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                
-                log("info", "Meinestadt: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "Meinestadt: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract ad links
-                ad_links = []
-                
-                for selector in [
-                    'a[href*="/stellengesuche/anzeige/"]',
-                    'a[href*="/anzeige/"]',
-                    '.job-listing a',
-                    'article a'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and ("/stellengesuche/" in href or "/anzeige/" in href):
-                            full_url = urllib.parse.urljoin("https://www.meinestadt.de", href)
-                            if full_url not in ad_links:
-                                ad_links.append(full_url)
-                
-                log("info", "Meinestadt: Anzeigen gefunden", url=url, count=len(ad_links))
-                
-                if not ad_links:
-                    break
-                
-                for ad_url in ad_links:
-                    if url_seen(ad_url):
-                        continue
-                    
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(ad_url, source_tag="meinestadt")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "Meinestadt: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        _mark_url_seen(ad_url, source="Meinestadt")
-                    else:
-                        log("debug", "Meinestadt: Keine Handynummer", url=ad_url)
-                
-            except Exception as e:
-                log("error", "Meinestadt: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "Meinestadt: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def crawl_dhd24_listings_async() -> List[Dict]:
-    """
-    Crawlt DHD24.com Stellengesuche-Seiten.
-    Neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten.
-    Ähnliche Struktur wie andere Kleinanzeigen-Portale.
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("dhd24", True):
-        return []
-    
-    leads = []
-    max_pages = 3  # Max 3 Seiten pro URL
-    
-    for base_url in DHD24_URLS:
-        for page in range(1, max_pages + 1):
-            if page == 1:
-                url = base_url
-            else:
-                # DHD24 pagination format
-                separator = "&" if "?" in base_url else "?"
-                url = f"{base_url}{separator}page={page}"
-            
-            try:
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                
-                log("info", "DHD24: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "DHD24: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract ad links - trying various selectors
-                ad_links_set = set()
-                
-                for selector in [
-                    'a[href*="/stellengesuche/"]',
-                    'a[href*="/jobs/"]',
-                    'a[href*="/anzeige/"]',
-                    '.ad-list a',
-                    '.listing-item a',
-                    'article a'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and any(path in href for path in ["/stellengesuche/", "/jobs/", "/anzeige/"]):
-                            full_url = urllib.parse.urljoin("https://www.dhd24.com", href)
-                            ad_links_set.add(full_url)
-                
-                ad_links = list(ad_links_set)
-                log("info", "DHD24: Anzeigen gefunden", url=url, count=len(ad_links))
-                
-                if not ad_links:
-                    break
-                
-                for ad_url in ad_links:
-                    if url_seen(ad_url):
-                        continue
-                    
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(ad_url, source_tag="dhd24")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "DHD24: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        _mark_url_seen(ad_url, source="DHD24")
-                    else:
-                        log("debug", "DHD24: Keine Handynummer", url=ad_url)
-                
-            except Exception as e:
-                log("error", "DHD24: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "DHD24: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl") -> Optional[Dict[str, Any]]:
-    """
-    Generic function to extract contact information from any ad detail page.
-    Similar to extract_kleinanzeigen_detail_async but works for multiple sites.
-    
-    Args:
-        url: URL of the ad detail page
-        source_tag: Tag to identify the source (e.g., "markt_de", "quoka")
-        
-    Returns:
-        Dict with lead data or None if extraction failed
-    """
-    try:
-        r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-        if not r or r.status_code != 200:
-            log("debug", f"{source_tag}: Failed to fetch detail", url=url, status=r.status_code if r else "None")
-            return None
-        
-        html = r.text or ""
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Extract title - try multiple selectors
-        title = ""
-        for selector in ["h1", "h1.title", ".ad-title", ".listing-title"]:
-            title_elem = soup.select_one(selector)
-            if title_elem:
-                title = title_elem.get_text(" ", strip=True)
-                break
-        
-        # Extract description - get all text from body
-        description = soup.get_text(" ", strip=True)
-        
-        # Combine text for extraction
-        full_text = f"{title} {description}"
-        
-        # Extract mobile phone numbers using standard and advanced patterns
-        phones = []
-        
-        # Standard extraction
-        phone_matches = MOBILE_RE.findall(full_text)
-        for phone_match in phone_matches:
-            normalized = normalize_phone(phone_match)
-            if normalized:
-                is_valid, phone_type = validate_phone(normalized)
-                if is_valid and is_mobile_number(normalized):
-                    phones.append(normalized)
-        
-        # Enhanced extraction if standard failed
-        if not phones:
-            try:
-                extraction_results = extract_all_phone_patterns(html, full_text)
-                best_phone = get_best_phone_number(extraction_results)
-                if best_phone:
-                    normalized = normalize_phone(best_phone)
-                    if normalized and is_mobile_number(normalized):
-                        phones.append(normalized)
-                        log("info", f"{source_tag}: Advanced extraction found phone", 
-                            url=url, phone=normalized[:8]+"...")
-                        if _LEARNING_ENGINE:
-                            _LEARNING_ENGINE.record_phone_pattern(
-                                pattern="advanced_extraction",
-                                pattern_type=f"{source_tag}_enhanced",
-                                example=normalized[:8]+"..."
-                            )
-                        # NEW: Learn phone pattern for AI Learning Engine
-                        try:
-                            from ai_learning_engine import ActiveLearningEngine
-                            learning = ActiveLearningEngine()
-                            learning.learn_phone_pattern(best_phone, normalized, source_tag)
-                        except Exception:
-                            pass  # Learning is optional
-            except Exception as e:
-                log("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
-        
-        # Extract email
-        email = ""
-        email_matches = EMAIL_RE.findall(full_text)
-        if email_matches:
-            email = email_matches[0]
-        
-        # Extract WhatsApp link using enhanced extraction
-        try:
-            wa_number = extract_whatsapp_number(html)
-            if wa_number:
-                normalized_wa = normalize_phone(wa_number)
-                if normalized_wa and is_mobile_number(normalized_wa):
-                    if normalized_wa not in phones:
-                        phones.append(normalized_wa)
-                        log("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
-        except Exception:
-            pass
-        
-        # Fallback: Try old WhatsApp link extraction
-        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
-        if wa_link:
-            wa_href = wa_link.get("href", "")
-            wa_phone = re.sub(r'\D', '', wa_href)
-            if wa_phone:
-                wa_normalized = "+" + wa_phone
-                is_valid, phone_type = validate_phone(wa_normalized)
-                if is_valid and is_mobile_number(wa_normalized):
-                    if wa_normalized not in phones:
-                        phones.append(wa_normalized)
-        
-        # Extract name
-        name = extract_name_enhanced(full_text)
-        
-        # Only create lead if we found at least one mobile number
-        if not phones:
-            if _LEARNING_ENGINE:
-                _LEARNING_ENGINE.learn_from_failure(
-                    url=url,
-                    html_content=html,
-                    reason=f"{source_tag}_no_mobile_found",
-                    visible_phones=[]
-                )
-            return None
-        
-        # Use first mobile number found
-        main_phone = phones[0]
-        
-        # Build lead data
-        lead = {
-            "name": name or "",
-            "rolle": "Vertrieb",
-            "email": email,
-            "telefon": main_phone,
-            "quelle": url,
-            "score": 85,
-            "tags": f"{source_tag},candidate,mobile,direct_crawl",
-            "lead_type": "candidate",
-            "phone_type": "mobile",
-            "opening_line": title[:200] if title else "",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": "",
-            "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
-        }
-        
-        return lead
-        
-    except Exception as e:
-        log("error", f"{source_tag}: Error extracting detail", url=url, error=str(e))
-        return None
-
-
-async def crawl_freelancer_portals_async() -> List[Dict]:
-    """
-    Crawlt Freelancer-Portale für NRW Vertriebs-Profile.
-    Extrahiert: Name, Telefon, Skills, Verfügbarkeit.
-    
-    Returns:
-        Liste von Lead-Dicts
-    """
-    if not DIRECT_CRAWL_SOURCES.get("freelancer_portals", True):
-        return []
-    
-    leads = []
-    max_pages = 2  # Limit to 2 pages per URL to avoid overload
-    
-    for base_url in FREELANCER_PORTAL_URLS:
-        for page in range(1, max_pages + 1):
-            # Construct page URL
-            if page == 1:
-                url = base_url
-            else:
-                # Different portals have different pagination styles
-                if "freelancermap.de" in base_url:
-                    url = f"{base_url}?page={page}"
-                elif "freelance.de" in base_url:
-                    url = f"{base_url}?page={page}"
-                elif "gulp.de" in base_url:
-                    separator = "&" if "?" in base_url else "?"
-                    url = f"{base_url}{separator}page={page}"
-                else:
-                    url = base_url
-            
-            try:
-                # Rate limiting: 3-4s between requests
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                
-                log("info", "Freelancer Portal: Listing-Seite", url=url, page=page)
-                
-                r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-                if not r or r.status_code != 200:
-                    log("warn", "Freelancer Portal: Failed to fetch", url=url, status=r.status_code if r else "None")
-                    break
-                
-                html = r.text or ""
-                soup = BeautifulSoup(html, "html.parser")
-                
-                # Extract profile links - try multiple selectors
-                profile_links = []
-                
-                for selector in [
-                    'a[href*="/freelancer/"]',
-                    'a[href*="/profil/"]',
-                    'a[href*="/profile/"]',
-                    '.freelancer-item a',
-                    '.profile-link',
-                    'article a'
-                ]:
-                    links = soup.select(selector)
-                    for link in links:
-                        href = link.get("href", "")
-                        if href and any(keyword in href for keyword in ["/freelancer/", "/profil/", "/profile/"]):
-                            # Make absolute URL using urllib.parse.urljoin
-                            if href.startswith("http"):
-                                full_url = href
-                            else:
-                                # urljoin handles base URL parsing automatically
-                                full_url = urllib.parse.urljoin(base_url, href)
-                            
-                            if full_url not in profile_links:
-                                profile_links.append(full_url)
-                
-                log("info", "Freelancer Portal: Profile gefunden", url=url, count=len(profile_links))
-                
-                # If no profiles found, stop pagination
-                if not profile_links:
-                    break
-                
-                # Extract details from each profile
-                for profile_url in profile_links:
-                    if url_seen(profile_url):
-                        continue
-                    
-                    await asyncio.sleep(3.0 + _jitter(0.5, 1.0))
-                    
-                    lead = await extract_generic_detail_async(profile_url, source_tag="freelancer_portal")
-                    if lead and lead.get("telefon"):
-                        leads.append(lead)
-                        log("info", "Freelancer Portal: Lead extrahiert", url=profile_url, has_phone=True)
-                        
-                        _mark_url_seen(profile_url, source="FreelancerPortal")
-                    else:
-                        log("debug", "Freelancer Portal: Keine Handynummer", url=profile_url)
-                
-            except Exception as e:
-                log("error", "Freelancer Portal: Fehler beim Crawlen", url=url, error=str(e))
-                break
-    
-    log("info", "Freelancer Portal: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def extract_freelancer_profile_async(profile_url: str, source_tag: str = "freelancer") -> Optional[Dict]:
-    """
-    Extrahiert Daten aus einem Freelancer-Profil.
-    
-    Args:
-        profile_url: URL zum Freelancer-Profil
-        source_tag: Tag für die Quelle (z.B. "freelancermap", "freelance_de")
-    
-    Returns:
-        Lead-Dict oder None
-    """
-    try:
-        r = await http_get_async(profile_url, timeout=HTTP_TIMEOUT)
-        if not r or r.status_code != 200:
-            return None
-        
-        html = r.text or ""
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Extract name
-        name = None
-        for selector in ['h1.profile-name', 'h1.freelancer-name', '.profile-header h1', 'h1']:
-            elem = soup.select_one(selector)
-            if elem:
-                name = elem.get_text(strip=True)
-                break
-        
-        if not name:
-            return None
-        
-        # Extract phone number
-        phone = None
-        phone_patterns = [
-            r'(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,10}',  # Mobile
-            r'(?:\+49|0)\s*\d{3,5}[\s\/\-]?\d{4,10}'  # Any phone
-        ]
-        
-        for pattern in phone_patterns:
-            phone_match = re.search(pattern, html)
-            if phone_match:
-                phone = phone_match.group(0)
-                break
-        
-        # If no phone found in HTML, try looking in specific elements
-        if not phone:
-            for selector in ['.contact-phone', '.phone', '[data-phone]', 'a[href^="tel:"]']:
-                elem = soup.select_one(selector)
-                if elem:
-                    phone_text = elem.get('data-phone') or elem.get('href', '').replace('tel:', '') or elem.get_text()
-                    if phone_text:
-                        phone = phone_text.strip()
-                        break
-        
-        if not phone:
-            # Phone numbers are required for lead qualification - profiles without
-            # contact information are not useful for this sales-focused scraper
-            return None
-        
-        # Extract skills/role
-        skills = []
-        for selector in ['.skills .skill', '.tag', '.badge']:
-            skill_elems = soup.select(selector)
-            for elem in skill_elems:
-                skill = elem.get_text(strip=True)
-                if skill and len(skill) < 50:
-                    skills.append(skill)
-        
-        role_guess = ", ".join(skills[:3]) if skills else "Freelancer"
-        
-        # Extract location/region
-        region = ""
-        for selector in ['.location', '.city', '[itemprop="addressLocality"]']:
-            elem = soup.select_one(selector)
-            if elem:
-                region = elem.get_text(strip=True)
-                break
-        
-        # Extract availability
-        availability = ""
-        for selector in ['.availability', '.verfuegbarkeit', '[data-availability]']:
-            elem = soup.select_one(selector)
-            if elem:
-                availability = elem.get_text(strip=True)
-                break
-        
-        # Score: Higher for profiles with mobile numbers
-        normalized_phone = normalize_phone(phone)
-        is_valid, phone_type = validate_phone(normalized_phone)
-        
-        score = 75
-        if phone_type == "mobile":
-            score = 85
-        
-        lead = {
-            "name": name,
-            "telefon": normalized_phone if is_valid else phone,
-            "phone_type": phone_type,
-            "email": "",
-            "role_guess": role_guess,
-            "quelle": profile_url,
-            "score": score,
-            "tags": f"{source_tag},freelancer,direct_crawl",
-            "lead_type": "freelancer",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": region,
-            "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
-            "opening_line": f"Verfügbarkeit: {availability}" if availability else "",
-        }
-        
-        return lead
-        
-    except Exception as e:
-        log("error", f"{source_tag}: Error extracting profile", url=profile_url, error=str(e))
-        return None
-
-
-async def crawl_freelancermap_async() -> List[Dict]:
-    """
-    Crawlt Freelancermap.de Profile.
-    Profile haben oft:
-    - Öffentliche Telefonnummer
-    - Verfügbarkeit
-    - Stundensatz
-    - Skills
-    """
-    if not DIRECT_CRAWL_SOURCES.get("freelancermap", False):
-        return []
-    
-    leads = []
-    
-    for url in FREELANCERMAP_URLS:
-        try:
-            log("info", "Freelancermap: Crawle Listing", url=url)
-            
-            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-            if not r or r.status_code != 200:
-                log("warn", "Freelancermap: Fetch failed", url=url, status=r.status_code if r else "None")
-                continue
-            
-            html = r.text or ""
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Extract profile links
-            profile_links = []
-            for profile_link in soup.select("a.profile-link, a[href*='/freelancer/']"):
-                href = profile_link.get("href", "")
-                if href:
-                    profile_url = urllib.parse.urljoin(url, href)
-                    if profile_url not in profile_links:
-                        profile_links.append(profile_url)
-            
-            log("info", "Freelancermap: Profile gefunden", count=len(profile_links))
-            
-            # Crawl individual profiles
-            for profile_url in profile_links[:MAX_PROFILES_PER_URL]:
-                if url_seen(profile_url):
-                    continue
-                
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))  # Rate limiting
-                
-                profile_data = await extract_freelancer_profile_async(profile_url, source_tag="freelancermap")
-                if profile_data and profile_data.get("telefon"):
-                    leads.append(profile_data)
-                    _mark_url_seen(profile_url, source="Freelancermap")
-                    log("info", "Freelancermap: Lead extrahiert", url=profile_url)
-            
-            await asyncio.sleep(3.0)  # Rate limiting between URLs
-            
-        except Exception as e:
-            log("error", "Freelancermap: Crawl error", url=url, error=str(e))
-    
-    log("info", "Freelancermap: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
-async def crawl_freelance_de_async() -> List[Dict]:
-    """
-    Crawlt Freelance.de Profile.
-    Profile haben oft öffentliche Kontaktdaten.
-    """
-    if not DIRECT_CRAWL_SOURCES.get("freelance_de", False):
-        return []
-    
-    leads = []
-    
-    for url in FREELANCE_DE_URLS:
-        try:
-            log("info", "Freelance.de: Crawle Listing", url=url)
-            
-            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-            if not r or r.status_code != 200:
-                log("warn", "Freelance.de: Fetch failed", url=url, status=r.status_code if r else "None")
-                continue
-            
-            html = r.text or ""
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Extract profile links
-            profile_links = []
-            for profile_link in soup.select("a[href*='/Freiberufler/'], a.profile-link, .freelancer-link"):
-                href = profile_link.get("href", "")
-                if href and "/Freiberufler/" in href:
-                    profile_url = urllib.parse.urljoin(url, href)
-                    if profile_url not in profile_links:
-                        profile_links.append(profile_url)
-            
-            log("info", "Freelance.de: Profile gefunden", count=len(profile_links))
-            
-            # Crawl individual profiles
-            for profile_url in profile_links[:MAX_PROFILES_PER_URL]:
-                if url_seen(profile_url):
-                    continue
-                
-                await asyncio.sleep(3.0 + _jitter(0.5, 1.0))  # Rate limiting
-                
-                profile_data = await extract_freelancer_profile_async(profile_url, source_tag="freelance_de")
-                if profile_data and profile_data.get("telefon"):
-                    leads.append(profile_data)
-                    _mark_url_seen(profile_url, source="Freelance.de")
-                    log("info", "Freelance.de: Lead extrahiert", url=profile_url)
-            
-            await asyncio.sleep(3.0)  # Rate limiting between URLs
-            
-        except Exception as e:
-            log("error", "Freelance.de: Crawl error", url=url, error=str(e))
-    
-    log("info", "Freelance.de: Crawling abgeschlossen", total_leads=len(leads))
-    return leads
-
-
 # =========================
 # Regex/Scoring/Enrichment
 # =========================
@@ -4671,388 +2455,6 @@ RETAIL_ROLES = [
     "kassierer", "servicekraft", "filialleiter", "shop manager", "baecker",
     "metzger", "floor manager", "call center", "telefonist", "promoter",
 ]
-
-
-# =========================
-# Parallel Portal Crawling
-# =========================
-
-def deduplicate_parallel_leads(leads: List[Dict]) -> List[Dict]:
-    """
-    Entfernt Duplikate die durch paralleles Crawling entstehen können.
-    Priorisiert nach: Telefon > URL > Name+Region
-    
-    Args:
-        leads: Liste von Lead-Dicts
-        
-    Returns:
-        Deduplizierte Liste von Lead-Dicts
-    """
-    seen_phones = set()
-    seen_urls = set()
-    unique_leads = []
-    
-    for lead in leads:
-        phone = lead.get("telefon", "").strip()
-        url = lead.get("quelle", "").strip()
-        
-        # Duplikat-Check
-        if phone and phone in seen_phones:
-            continue
-        if url and url in seen_urls:
-            continue
-        
-        if phone:
-            seen_phones.add(phone)
-        if url:
-            seen_urls.add(url)
-        
-        unique_leads.append(lead)
-    
-    log("debug", "Deduplizierung", 
-        input=len(leads), 
-        output=len(unique_leads), 
-        removed=len(leads) - len(unique_leads))
-    
-    return unique_leads
-
-
-async def crawl_all_portals_parallel() -> List[Dict]:
-    """
-    Crawlt ALLE aktivierten Portale gleichzeitig statt sequentiell.
-    
-    Vorher: Kleinanzeigen → Markt.de → Quoka → Kalaydo → Meinestadt (sequentiell)
-    Nachher: Alle 5 parallel, dann Ergebnisse zusammenführen
-    
-    Zeitersparnis: ~70% (von 20 Min auf 5-6 Min pro Run)
-    
-    Returns:
-        Zusammengeführte Liste aller Leads von allen Portalen
-    """
-    tasks = []
-    portal_names = []
-    
-    # Get active portals from learning engine
-    active_portals = get_active_portals()
-    
-    # Alle aktivierten Portale als parallele Tasks
-    if active_portals.get("kleinanzeigen", True):
-        tasks.append(crawl_kleinanzeigen_portal_async())
-        portal_names.append("Kleinanzeigen")
-    
-    if active_portals.get("markt_de", True):
-        tasks.append(crawl_markt_de_listings_async())
-        portal_names.append("Markt.de")
-    
-    if active_portals.get("quoka", True):
-        tasks.append(crawl_quoka_listings_async())
-        portal_names.append("Quoka")
-    
-    if active_portals.get("kalaydo", True):
-        tasks.append(crawl_kalaydo_listings_async())
-        portal_names.append("Kalaydo")
-    
-    if active_portals.get("meinestadt", True):
-        tasks.append(crawl_meinestadt_listings_async())
-        portal_names.append("Meinestadt")
-    
-    if active_portals.get("dhd24", True):
-        tasks.append(crawl_dhd24_listings_async())
-        portal_names.append("DHD24")
-    
-    if not tasks:
-        log("info", "Keine Portale für paralleles Crawling aktiviert")
-        return []
-    
-    log("info", "Starte paralleles Portal-Crawling", portals=len(tasks))
-    start_time = time.time()
-    
-    # Alle Tasks gleichzeitig ausführen
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Ergebnisse zusammenführen und Fehler loggen
-    all_leads = []
-    for i, result in enumerate(results):
-        portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
-        if isinstance(result, Exception):
-            log("error", f"{portal_name} fehlgeschlagen", error=str(result))
-            continue
-        if isinstance(result, list):
-            all_leads.extend(result)
-            log("debug", f"{portal_name} erfolgreich", leads=len(result))
-    
-    elapsed = time.time() - start_time
-    log("info", "Paralleles Crawling abgeschlossen", 
-        total_leads=len(all_leads), 
-        duration_sec=round(elapsed, 1),
-        portals_success=len([r for r in results if not isinstance(r, Exception)]))
-    
-    # Deduplizierung
-    unique_leads = deduplicate_parallel_leads(all_leads)
-    
-    return unique_leads
-
-
-async def crawl_portals_sequential() -> List[Dict]:
-    """
-    Fallback: Sequentielles Crawling aller Portale (alte Methode).
-    
-    Returns:
-        Liste aller Leads von allen Portalen
-    """
-    all_leads = []
-    
-    if DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
-        try:
-            leads = await crawl_kleinanzeigen_portal_async()
-            all_leads.extend(leads)
-            log("info", "Kleinanzeigen crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "Kleinanzeigen crawl failed (sequential)", error=str(e))
-    
-    if DIRECT_CRAWL_SOURCES.get("markt_de", True):
-        try:
-            leads = await crawl_markt_de_listings_async()
-            all_leads.extend(leads)
-            log("info", "Markt.de crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "Markt.de crawl failed (sequential)", error=str(e))
-    
-    if DIRECT_CRAWL_SOURCES.get("quoka", True):
-        try:
-            leads = await crawl_quoka_listings_async()
-            all_leads.extend(leads)
-            log("info", "Quoka crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "Quoka crawl failed (sequential)", error=str(e))
-    
-    if DIRECT_CRAWL_SOURCES.get("kalaydo", True):
-        try:
-            leads = await crawl_kalaydo_listings_async()
-            all_leads.extend(leads)
-            log("info", "Kalaydo crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "Kalaydo crawl failed (sequential)", error=str(e))
-    
-    if DIRECT_CRAWL_SOURCES.get("meinestadt", True):
-        try:
-            leads = await crawl_meinestadt_listings_async()
-            all_leads.extend(leads)
-            log("info", "Meinestadt crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "Meinestadt crawl failed (sequential)", error=str(e))
-    
-    if DIRECT_CRAWL_SOURCES.get("dhd24", True):
-        try:
-            leads = await crawl_dhd24_listings_async()
-            all_leads.extend(leads)
-            log("info", "DHD24 crawl complete (sequential)", count=len(leads))
-        except Exception as e:
-            log("error", "DHD24 crawl failed (sequential)", error=str(e))
-    
-    return all_leads
-
-
-async def crawl_portals_smart() -> List[Dict]:
-    """
-    Wählt automatisch zwischen parallel und sequentiell.
-    Bei Fehler im parallelen Modus: Fallback auf sequentiell.
-    Integriert Active Learning für Portal-Performance-Tracking.
-    
-    Returns:
-        Liste aller Leads von allen Portalen
-    """
-    # Initialize active learning engine (if available)
-    active_learning = None
-    if ActiveLearningEngine is not None:
-        try:
-            active_learning = ActiveLearningEngine(DB_PATH)
-        except Exception as e:
-            log("warn", "ActiveLearningEngine initialization failed, continuing without learning features", 
-                error=f"{type(e).__name__}: {str(e)}")
-    
-    # Get current run ID from database
-    con = db()
-    cur = con.cursor()
-    cur.execute("SELECT MAX(id) FROM runs")
-    run_id_row = cur.fetchone()
-    current_run_id = run_id_row[0] if run_id_row and run_id_row[0] else 0
-    con.close()
-    
-    if PARALLEL_PORTAL_CRAWL:
-        try:
-            leads = await crawl_all_portals_parallel_with_learning(active_learning, current_run_id)
-            return leads
-        except Exception as e:
-            log("warn", "Paralleles Crawling fehlgeschlagen, Fallback auf sequentiell", error=str(e))
-    
-    # Fallback: Sequentielles Crawling mit Learning
-    return await crawl_portals_sequential_with_learning(active_learning, current_run_id)
-
-
-async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
-    """
-    Crawlt ALLE aktivierten Portale gleichzeitig mit Active Learning Integration.
-    
-    Returns:
-        Zusammengeführte Liste aller Leads von allen Portalen
-    """
-    tasks = []
-    portal_names = []
-    portal_configs = []
-    
-    # Define portal configurations with their names
-    portal_config_list = [
-        ("kleinanzeigen", "Kleinanzeigen", crawl_kleinanzeigen_portal_async),
-        ("markt_de", "Markt.de", crawl_markt_de_listings_async),
-        ("quoka", "Quoka", crawl_quoka_listings_async),
-        ("kalaydo", "Kalaydo", crawl_kalaydo_listings_async),
-        ("meinestadt", "Meinestadt", crawl_meinestadt_listings_async),
-        ("dhd24", "DHD24", crawl_dhd24_listings_async),
-    ]
-    
-    # Check each portal with learning engine
-    for portal_key, portal_name, portal_func in portal_config_list:
-        if DIRECT_CRAWL_SOURCES.get(portal_key, False):
-            # Check if we should skip this portal based on learning
-            if False:   # DISABLED: Portal-Skipping
-                log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
-                continue
-            
-            tasks.append(portal_func())
-            portal_names.append(portal_name)
-            portal_configs.append(portal_key)
-    
-    if not tasks:
-        log("info", "Keine Portale für paralleles Crawling aktiviert")
-        return []
-    
-    log("info", "Starte paralleles Portal-Crawling mit Learning", portals=len(tasks))
-    start_time = time.time()
-    
-    # Alle Tasks gleichzeitig ausführen
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Ergebnisse zusammenführen und Learning-Metriken erfassen
-    all_leads = []
-    for i, result in enumerate(results):
-        portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
-        portal_key = portal_configs[i] if i < len(portal_configs) else f"unknown_{i}"
-        
-        if isinstance(result, Exception):
-            log("error", f"{portal_name} fehlgeschlagen", error=str(result))
-            # Record failure for learning (if learning engine available)
-            if learning_engine:
-                learning_engine.record_portal_result(
-                    portal=portal_key,
-                    urls_crawled=0,
-                    leads_found=0,
-                    leads_with_phone=0,
-                    run_id=run_id
-                )
-            continue
-        
-        if isinstance(result, list):
-            all_leads.extend(result)
-            
-            # Calculate metrics for learning
-            leads_with_phone = len([l for l in result if l.get('telefon')])
-            
-            # Record portal performance for learning (if learning engine available)
-            # Note: For direct portal crawling, we approximate URLs crawled as leads found
-            # This is a limitation since portal functions return leads, not crawl counts
-            # Success rate is calculated as leads_with_phone / leads_found for accuracy
-            if learning_engine:
-                learning_engine.record_portal_result(
-                    portal=portal_key,
-                    urls_crawled=len(result),  # Approximation: each lead represents a crawled URL
-                    leads_found=len(result),
-                    leads_with_phone=leads_with_phone,
-                    run_id=run_id
-                )
-            
-            log("debug", f"{portal_name} erfolgreich", 
-                leads=len(result), 
-                with_phone=leads_with_phone,
-                success_rate=f"{(leads_with_phone/max(1, len(result))*100):.1f}%")
-    
-    elapsed = time.time() - start_time
-    log("info", "Paralleles Crawling abgeschlossen", 
-        total_leads=len(all_leads), 
-        duration_sec=round(elapsed, 1),
-        portals_success=len([r for r in results if not isinstance(r, Exception)]))
-    
-    # Deduplizierung
-    unique_leads = deduplicate_parallel_leads(all_leads)
-    
-    return unique_leads
-
-
-async def crawl_portals_sequential_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
-    """
-    Fallback: Sequentielles Crawling aller Portale mit Active Learning.
-    
-    Returns:
-        Liste aller Leads von allen Portalen
-    """
-    all_leads = []
-    
-    # Define portal configurations
-    portal_configs = [
-        ("kleinanzeigen", "Kleinanzeigen", crawl_kleinanzeigen_portal_async),
-        ("markt_de", "Markt.de", crawl_markt_de_listings_async),
-        ("quoka", "Quoka", crawl_quoka_listings_async),
-        ("kalaydo", "Kalaydo", crawl_kalaydo_listings_async),
-        ("meinestadt", "Meinestadt", crawl_meinestadt_listings_async),
-        ("dhd24", "DHD24", crawl_dhd24_listings_async),
-    ]
-    
-    for portal_key, portal_name, portal_func in portal_configs:
-        if not DIRECT_CRAWL_SOURCES.get(portal_key, False):
-            continue
-        
-        # Check if we should skip this portal based on learning
-        if False:   # DISABLED: Portal-Skipping
-            log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
-            continue
-        
-        try:
-            leads = await portal_func()
-            all_leads.extend(leads)
-            
-            # Calculate metrics for learning
-            leads_with_phone = len([l for l in leads if l.get('telefon')])
-            
-            # Record portal performance (if learning engine available)
-            # Note: For direct portal crawling, we approximate URLs crawled as leads found
-            # This is a limitation since portal functions return leads, not crawl counts
-            # Success rate is calculated as leads_with_phone / leads_found for accuracy
-            if learning_engine:
-                learning_engine.record_portal_result(
-                    portal=portal_key,
-                    urls_crawled=len(leads),  # Approximation: each lead represents a crawled URL
-                    leads_found=len(leads),
-                    leads_with_phone=leads_with_phone,
-                    run_id=run_id
-                )
-            
-            log("info", f"{portal_name} crawl complete (sequential)", 
-                count=len(leads),
-                with_phone=leads_with_phone)
-        except Exception as e:
-            log("error", f"{portal_name} crawl failed (sequential)", error=str(e))
-            # Record failure (if learning engine available)
-            if learning_engine:
-                learning_engine.record_portal_result(
-                    portal=portal_key,
-                    urls_crawled=0,
-                    leads_found=0,
-                    leads_with_phone=0,
-                    run_id=run_id
-                )
-    
-    return all_leads
-
 
 def is_likely_human_name(text: str) -> bool:
     """Heuristic: 2-3 words, no digits, no company/ad markers."""
@@ -5674,41 +3076,6 @@ def _validate_name_heuristic(name: str) -> Tuple[bool, int, str]:
         return False, 85, "Enthält Zahlen"
     
     return True, 75, "Heuristik: wahrscheinlich echter Name"
-
-
-def _looks_like_company_name(name: str) -> bool:
-    """
-    Prüft ob Name wie eine Firma aussieht.
-    
-    Returns True für:
-        - "GmbH", "AG", "KG", "UG" im Namen
-        - "Team", "Vertrieb", "Sales" im Namen
-        - Nur ein Wort
-        - Enthält Zahlen
-    """
-    if not name:
-        return True
-    
-    company_indicators = [
-        "gmbh", "ag", "kg", "ug", "ltd", "inc", 
-        "team", "vertrieb", "sales", "group", "holding",
-        "firma", "unternehmen", "company"
-    ]
-    name_lower = name.lower()
-    
-    # Check for company indicators
-    if any(ind in name_lower for ind in company_indicators):
-        return True
-    
-    # Check for single word (not a full name)
-    if len(name.split()) < 2:
-        return True
-    
-    # Check for numbers
-    if re.search(r'\d', name):
-        return True
-    
-    return False
 
 
 async def validate_real_name_with_ai(name: str, context: str = "") -> Tuple[bool, int, str]:
@@ -6563,7 +3930,7 @@ def is_candidate_profile_text(text: str, url: str = "") -> bool:
         ]
         if any(social_url in url_lower for social_url in social_profile_urls):
             return True  # Social profiles are always accepted
-    
+def is_candidate_profile_text(text: str) -> bool:
     # Im Candidates-Modus: Alle Profile durchlassen (verhindert Text-basierte Job-Ad-Erkennung)
     if _is_candidates_mode():
         return True
@@ -7555,7 +4922,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             log("debug", "Candidate detected via wir suchen analysis - allowing", url=url, reason=wir_suchen_reason)
             # Continue processing - this is a candidate
         
-        if not is_candidate_profile_text(text, url):
+        if not is_candidate_profile_text(text):
             log("debug", "Kein Kandidatenprofil - skip", url=url)
             mark_url_seen(url, run_id)
             return (1, [])
@@ -8411,68 +5778,6 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
         return []
     return []
 
-
-def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
-    """
-    Wählt die besten Dorks basierend auf Learning + Extended Dorks
-    
-    Kombiniert:
-    - Top-Performer aus Learning (50%)
-    - Power-Dorks aus dorks_extended (25%)
-    - Zufällige neue Dorks zum Testen (25%)
-    - Social Media Dorks (Bonus)
-    
-    Args:
-        industry: Branche (z.B. "candidates", "vertrieb")
-        count: Anzahl der gewünschten Dorks
-    
-    Returns:
-        Liste der ausgewählten Dorks
-    """
-    dorks = []
-    
-    try:
-        # 1. Top-Performer aus Learning (50%)
-        if ActiveLearningEngine is not None:
-            learning = ActiveLearningEngine(DB_PATH)
-            best_dorks = learning.get_best_dorks(count // 2)
-            dorks.extend(best_dorks)
-        
-        # 2. Power-Dorks aus Extended (25%)
-        power_count = count // 4
-        dorks.extend(POWER_DORKS[:power_count])
-        
-        # 3. Zufällige neue Dorks zum Testen (25%)
-        random_count = count // 4
-        random_dorks = get_random_dorks(random_count)
-        dorks.extend(random_dorks)
-        
-        # 4. Social Media Dorks (Bonus - 5 Stück)
-        social_dorks = SOCIAL_MEDIA_DORKS[:5]
-        dorks.extend(social_dorks)
-        
-        # 5. Job Seeker Dorks für Candidates Mode
-        if industry and industry.lower() in ("candidates", "recruiter"):
-            job_seeker = JOB_SEEKER_DORKS[:10]
-            dorks.extend(job_seeker)
-        
-    except Exception as e:
-        log("warn", f"Error in get_smart_dorks_extended: {e}")
-        # Fallback: nur Power-Dorks und Job Seeker
-        dorks = POWER_DORKS[:count // 2] + JOB_SEEKER_DORKS[:count // 2]
-    
-    # Deduplizieren und begrenzen
-    seen = set()
-    unique_dorks = []
-    for dork in dorks:
-        dork_lower = dork.lower()
-        if dork_lower not in seen:
-            seen.add(dork_lower)
-            unique_dorks.append(dork)
-    
-    return unique_dorks[:count]
-
-
 # =========================
 # Export (CSV/XLSX append)
 # =========================
@@ -8876,123 +6181,6 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     _reset_metrics()
     _uilog(f"Run #{run_id} gestartet (Performance Mode: {perf_params.get('async_limit', 'N/A')} async)")
 
-    # Initialize active learning engine for dork tracking (if learning enabled)
-    active_learning_engine = None
-    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and globals().get("ActiveLearningEngine") is not None:
-        try:
-            active_learning_engine = ActiveLearningEngine(DB_PATH)
-            log("info", "Active Learning Engine initialisiert für Dork-Tracking")
-        except Exception as e:
-            log("warn", "Active Learning Engine konnte nicht initialisiert werden", error=str(e))
-
-    # Direct crawling from multiple sources (only in candidates/recruiter mode)
-    if _is_candidates_mode():
-        direct_crawl_leads = []
-        _uilog("Candidates-Modus: Starte paralleles Multi-Portal-Crawling")
-        log("info", "Starting parallel portal crawling", parallel_enabled=PARALLEL_PORTAL_CRAWL)
-        
-        # Multi-Portal crawling (Kleinanzeigen, Markt.de, Quoka, Kalaydo, Meinestadt, DHD24)
-        if run_flag and run_flag.get("running", True):
-            _uilog("Crawle alle Portale...")
-            try:
-                portal_leads = await crawl_portals_smart()
-                direct_crawl_leads.extend(portal_leads)
-                log("info", "Multi-portal crawl complete", count=len(portal_leads))
-            except Exception as e:
-                log("error", "Multi-portal crawl failed", error=str(e))
-        
-        # Freelancer Portals crawling (separat, da deaktiviert)
-        if DIRECT_CRAWL_SOURCES.get("freelancer_portals", True):
-            if run_flag and run_flag.get("running", True):
-                _uilog("Crawle Freelancer-Portale...")
-                try:
-                    freelancer_leads = await crawl_freelancer_portals_async()
-                    direct_crawl_leads.extend(freelancer_leads)
-                    log("info", "Freelancer portals crawl complete", count=len(freelancer_leads))
-                except Exception as e:
-                    log("error", "Freelancer portals crawl failed", error=str(e))
-        
-        # Freelancermap.de crawling (NEU)
-        if DIRECT_CRAWL_SOURCES.get("freelancermap", False):
-            if run_flag and run_flag.get("running", True):
-                _uilog("Crawle Freelancermap.de...")
-                try:
-                    freelancermap_leads = await crawl_freelancermap_async()
-                    direct_crawl_leads.extend(freelancermap_leads)
-                    log("info", "Freelancermap crawl complete", count=len(freelancermap_leads))
-                    _uilog(f"Freelancermap: {len(freelancermap_leads)} Leads extrahiert")
-                except Exception as e:
-                    log("error", "Freelancermap crawl failed", error=str(e))
-                    _uilog(f"Freelancermap Fehler: {str(e)}")
-        
-        # Freelance.de crawling (NEU)
-        if DIRECT_CRAWL_SOURCES.get("freelance_de", False):
-            if run_flag and run_flag.get("running", True):
-                _uilog("Crawle Freelance.de...")
-                try:
-                    freelance_de_leads = await crawl_freelance_de_async()
-                    direct_crawl_leads.extend(freelance_de_leads)
-                    log("info", "Freelance.de crawl complete", count=len(freelance_de_leads))
-                    _uilog(f"Freelance.de: {len(freelance_de_leads)} Leads extrahiert")
-                except Exception as e:
-                    log("error", "Freelance.de crawl failed", error=str(e))
-                    _uilog(f"Freelance.de Fehler: {str(e)}")
-        
-        # Insert collected leads from all sources
-        try:
-            if direct_crawl_leads:
-                log("info", "Direct crawl: Leads gefunden (alle Quellen)", count=len(direct_crawl_leads))
-                _uilog(f"Direct crawl: {len(direct_crawl_leads)} Leads extrahiert (alle Portale)")
-                
-                log("info", "Multi-Portal-Crawling abgeschlossen", leads=len(direct_crawl_leads))
-                _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
-                
-                # Telefonbuch-Enrichment für Leads ohne Telefon
-                if TELEFONBUCH_ENRICHMENT_ENABLED:
-                    leads_without_phone = [l for l in direct_crawl_leads if not l.get("telefon") and l.get("name") and l.get("region")]
-                    if leads_without_phone:
-                        log("info", "Starte Telefonbuch-Enrichment", count=len(leads_without_phone))
-                        _uilog(f"Telefonbuch-Enrichment: Prüfe {len(leads_without_phone)} Leads ohne Telefon...")
-                        
-                        try:
-                            enriched_leads = await enrich_leads_with_telefonbuch(leads_without_phone)
-                            
-                            # Update leads with enriched data using dictionary for O(1) lookup
-                            # Build lookup dictionary: key = (name, region), value = index
-                            lead_lookup = {}
-                            for i, lead in enumerate(direct_crawl_leads):
-                                if not lead.get("telefon") and lead.get("name") and lead.get("region"):
-                                    key = (lead.get("name"), lead.get("region"))
-                                    lead_lookup[key] = i
-                            
-                            enriched_count = 0
-                            for enriched_lead in enriched_leads:
-                                if enriched_lead.get("telefon"):
-                                    key = (enriched_lead.get("name"), enriched_lead.get("region"))
-                                    if key in lead_lookup:
-                                        direct_crawl_leads[lead_lookup[key]] = enriched_lead
-                                        enriched_count += 1
-                            
-                            log("info", "Telefonbuch-Enrichment abgeschlossen", enriched=enriched_count, checked=len(leads_without_phone))
-                            _uilog(f"Telefonbuch-Enrichment: {enriched_count} Leads mit Telefon angereichert")
-                        except Exception as e:
-                            log("error", "Telefonbuch-Enrichment fehlgeschlagen", error=str(e))
-                            _uilog(f"Telefonbuch-Enrichment Fehler: {str(e)}")
-                    else:
-                        log("info", "Telefonbuch-Enrichment: Alle Leads haben bereits Telefonnummern")
-                
-                # Insert collected leads from all sources
-                new_leads = insert_leads(direct_crawl_leads)
-                leads_new_total += len(new_leads)
-                
-                log("info", "Direct crawl: Neue Leads gespeichert", count=len(new_leads))
-                _uilog(f"Direct crawl: {len(new_leads)} neue Leads gespeichert")
-            else:
-                log("info", "Direct crawl: Keine Leads gefunden")
-                _uilog("Direct crawl: Keine Leads gefunden")
-        except Exception as e:
-            log("error", "Multi-Portal-Crawling failed", error=str(e))
-            _uilog(f"Multi-Portal-Crawling fehlgeschlagen: {str(e)}")
 
     try:
         for q in QUERIES:
@@ -9259,8 +6447,6 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 ]
             )
             if filtered:
-                # Enrich leads without phone numbers using telefonbuch
-                filtered = await enrich_leads_with_telefonbuch(filtered)
                 inserted = insert_leads(filtered)
                 if inserted:
                     append_csv(DEFAULT_CSV, inserted, ENH_FIELDS)
@@ -9271,18 +6457,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     # Learning mode: Track domain and query performance
                     if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
                         try:
-                            # Track query performance (old learning system)
+                            # Track query performance
                             _LEARNING_ENGINE.record_query_performance(q, len(inserted))
-                            
-                            # Track dork performance (active learning system)
-                            if active_learning_engine:
-                                leads_with_phone = len([l for l in inserted if l.get('telefon')])
-                                active_learning_engine.record_dork_result(
-                                    dork=q,
-                                    results=len(links),  # Total search results
-                                    leads_found=len(inserted),  # Leads actually inserted
-                                    leads_with_phone=leads_with_phone  # Leads with phone numbers
-                                )
                             
                             # Track domain success for each lead
                             domains_tracked = set()
@@ -9316,35 +6492,6 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             await asyncio.sleep(current_request_delay + _jitter(0.4,1.2))
 
         finish_run(run_id, total_links_checked, leads_new_total, "ok", metrics=dict(RUN_METRICS))
-        
-        # Post-run learning analysis
-        try:
-            from ai_learning_engine import ActiveLearningEngine
-            learning = ActiveLearningEngine()
-            summary = learning.get_learning_summary()
-            
-            _uilog("=== LEARNING REPORT ===")
-            _uilog(f"Portal Stats: {summary['portal_stats']}")
-            _uilog(f"Best Dorks: {summary['best_dorks']}")
-            _uilog(f"Learned Patterns: {summary['learned_patterns']}")
-            _uilog(f"Disabled Portals: {summary['disabled_portals']}")
-            
-            # Empfehlungen generieren
-            recommendations = []
-            for portal, stats in summary['portal_stats'].items():
-                if stats['avg_success'] < 1.0:
-                    recommendations.append(f"Portal {portal} hat nur {stats['avg_success']}% Erfolg")
-            
-            if recommendations:
-                _uilog(f"Learning Empfehlungen: {recommendations}")
-        except Exception as e:
-            log("debug", "Learning report failed", error=str(e))
-        # Run post-run learning analysis
-        try:
-            post_run_learning_analysis(run_id)
-        except Exception as e:
-            log("error", "Post-run learning analysis failed", error=str(e))
-        
         _uilog(f"Run #{run_id} beendet")
 
     except Exception as e:
@@ -9361,60 +6508,6 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         _CLIENT_SECURE=None
         _CLIENT_INSECURE=None
 
-
-
-def post_run_learning_analysis(run_id: int) -> None:
-    """
-    Analyze learning data after a run and make recommendations.
-    
-    This function:
-    1. Analyzes portal performance
-    2. Identifies best-performing dorks
-    3. Suggests portal configuration changes
-    4. Logs learning insights
-    
-    Args:
-        run_id: The ID of the completed run
-    """
-    if ActiveLearningEngine is None:
-        log("debug", "ActiveLearningEngine not available, skipping post-run analysis")
-        return
-        
-    try:
-        learning = ActiveLearningEngine(DB_PATH)
-        
-        # Get portal statistics
-        portal_stats = learning.get_portal_stats()
-        
-        if portal_stats:
-            log("info", "[LEARNING] Portal Performance Summary:")
-            for portal, stats in portal_stats.items():
-                log("info", f"  {portal}: {stats['total_with_phone']}/{stats['total_leads']} leads with phone "
-                          f"({stats['avg_success_rate']*100:.1f}% success rate over {stats['runs']} runs)")
-                
-                # Warn about poor performers
-                if stats['runs'] >= 3 and stats['avg_success_rate'] < 0.01:
-                    log("warn", f"[LEARNING] Portal {portal} has consistently poor performance - "
-                              f"consider disabling in DIRECT_CRAWL_SOURCES")
-        
-        # Get best dorks
-        best_dorks = learning.get_best_dorks(n=5)
-        if best_dorks:
-            log("info", f"[LEARNING] Top performing search queries: {', '.join(best_dorks[:3])}")
-        
-        # Get learning summary
-        summary = learning.get_learning_summary()
-        if summary:
-            log("info", f"[LEARNING] System has tracked {summary.get('total_portal_runs', 0)} portal runs, "
-                      f"{summary.get('phone_patterns_learned', 0)} phone patterns, "
-                      f"and {summary.get('core_dorks', 0)} core search queries")
-        
-        # Log any hosts in backoff
-        if summary.get('hosts_in_backoff', 0) > 0:
-            log("warn", f"[LEARNING] {summary.get('hosts_in_backoff')} hosts are currently in backoff period")
-    
-    except Exception as e:
-        log("error", "[LEARNING] Post-run analysis failed", error=str(e))
 
 
 # =========================
@@ -9581,9 +6674,6 @@ def parse_args():
         default="standard",
         help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
     )
-    ap.add_argument("--login", type=str, help="Manuell einloggen bei Portal (z.B. --login linkedin)")
-    ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions löschen")
-    ap.add_argument("--list-sessions", action="store_true", help="Alle Sessions anzeigen")
     return ap.parse_args()
 
 
@@ -9621,30 +6711,6 @@ if __name__ == "__main__":
         validate_config()
         init_db()
         migrate_db_unique_indexes()
-        
-        # Handle login-related commands
-        if args.login:
-            handler = get_login_handler()
-            handler.request_manual_login(args.login)
-            sys.exit(0)
-        
-        if args.clear_sessions:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute('DELETE FROM login_sessions')
-                conn.commit()
-            print("✅ Alle Sessions gelöscht")
-            sys.exit(0)
-        
-        if args.list_sessions:
-            handler = get_login_handler()
-            sessions = handler.get_all_sessions()
-            if sessions:
-                for s in sessions:
-                    status = "✅" if s['is_valid'] else "❌"
-                    print(f"{status} {s['portal']}: {s['logged_in_at']}")
-            else:
-                print("Keine Sessions vorhanden")
-            sys.exit(0)
         
         # Initialize mode
         mode = getattr(args, "mode", "standard")
