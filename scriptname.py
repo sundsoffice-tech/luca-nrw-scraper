@@ -120,6 +120,11 @@ from deduplication import (
     LeadDeduplicator,
     get_deduplicator,
 )
+from login_handler import (
+    LoginHandler,
+    get_login_handler,
+    check_and_handle_login,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -9499,6 +9504,9 @@ def parse_args():
         default="standard",
         help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
     )
+    ap.add_argument("--login", type=str, help="Manuell einloggen bei Portal (z.B. --login linkedin)")
+    ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions löschen")
+    ap.add_argument("--list-sessions", action="store_true", help="Alle Sessions anzeigen")
     return ap.parse_args()
 
 
@@ -9536,6 +9544,30 @@ if __name__ == "__main__":
         validate_config()
         init_db()
         migrate_db_unique_indexes()
+        
+        # Handle login-related commands
+        if args.login:
+            handler = get_login_handler()
+            handler.request_manual_login(args.login)
+            sys.exit(0)
+        
+        if args.clear_sessions:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute('DELETE FROM login_sessions')
+                conn.commit()
+            print("✅ Alle Sessions gelöscht")
+            sys.exit(0)
+        
+        if args.list_sessions:
+            handler = get_login_handler()
+            sessions = handler.get_all_sessions()
+            if sessions:
+                for s in sessions:
+                    status = "✅" if s['is_valid'] else "❌"
+                    print(f"{status} {s['portal']}: {s['logged_in_at']}")
+            else:
+                print("Keine Sessions vorhanden")
+            sys.exit(0)
         
         # Initialize mode
         mode = getattr(args, "mode", "standard")

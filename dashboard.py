@@ -344,6 +344,35 @@ def show_portal_comparison():
         print(f"  Fehler: {e}")
 
 
+def show_login_sessions():
+    """Zeigt gespeicherte Login-Sessions"""
+    print("\n🔐 LOGIN SESSIONS")
+    print("-" * 65)
+    try:
+        conn = get_connection()
+        rows = conn.execute('''
+            SELECT portal, logged_in_at, expires_at, is_valid 
+            FROM login_sessions
+            ORDER BY is_valid DESC, logged_in_at DESC
+        ''').fetchall()
+        
+        if rows:
+            for row in rows:
+                portal = row[0]
+                logged_in = row[1][:10] if row[1] else "?"
+                expires = row[2][:10] if row[2] else "?"
+                is_valid = row[3]
+                
+                status = "✅" if is_valid else "❌"
+                print(f"  {status} {portal:<20} Login: {logged_in}  Expires: {expires}")
+        else:
+            print("  Keine gespeicherten Sessions")
+            print("  → Sessions werden bei Bedarf automatisch erstellt")
+        conn.close()
+    except sqlite3.OperationalError:
+        print("  Session-Tabelle wird beim nächsten Login erstellt")
+
+
 def main():
     print_header()
     show_leads_stats()
@@ -352,6 +381,7 @@ def main():
     show_phone_patterns()
     show_host_backoff()
     show_disabled_portals()
+    show_login_sessions()
     show_run_history()
     show_dork_categories()
     show_dedup_stats()
