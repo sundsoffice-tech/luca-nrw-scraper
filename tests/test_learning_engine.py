@@ -559,6 +559,57 @@ class TestActiveLearningEngine:
         # Should skip
         assert active_learning.should_skip_portal("meinestadt") is True
     
+    def test_should_skip_portal_no_data(self, active_learning):
+        """Test that portals with no data are NOT skipped (should be tested)."""
+        # Don't record any data for this portal
+        # Should NOT skip (need to test new portals)
+        assert active_learning.should_skip_portal("new_portal") is False
+    
+    def test_should_skip_portal_insufficient_runs(self, active_learning):
+        """Test that portals with < 5 runs are NOT skipped even with poor performance."""
+        # Record only 3 runs with 0% success rate
+        for i in range(3):
+            active_learning.record_portal_result(
+                portal="test_portal",
+                urls_crawled=100,
+                leads_found=0,
+                leads_with_phone=0,
+                run_id=i
+            )
+        
+        # Should NOT skip (need at least 5 runs)
+        assert active_learning.should_skip_portal("test_portal") is False
+    
+    def test_should_skip_portal_marginal_performance(self, active_learning):
+        """Test that portals with 5-10% success rate are skipped."""
+        # Record 5 runs with 8% success rate
+        for i in range(5):
+            active_learning.record_portal_result(
+                portal="marginal_portal",
+                urls_crawled=100,
+                leads_found=8,
+                leads_with_phone=8,
+                run_id=i
+            )
+        
+        # Should skip (8% < 10% threshold)
+        assert active_learning.should_skip_portal("marginal_portal") is True
+    
+    def test_should_skip_portal_good_enough_performance(self, active_learning):
+        """Test that portals with >= 10% success rate are NOT skipped."""
+        # Record 5 runs with 12% success rate
+        for i in range(5):
+            active_learning.record_portal_result(
+                portal="decent_portal",
+                urls_crawled=100,
+                leads_found=12,
+                leads_with_phone=12,
+                run_id=i
+            )
+        
+        # Should NOT skip (12% >= 10% threshold)
+        assert active_learning.should_skip_portal("decent_portal") is False
+    
     def test_record_dork_result(self, active_learning):
         """Test recording dork/query performance."""
         dork = "site:kleinanzeigen.de vertrieb NRW"
