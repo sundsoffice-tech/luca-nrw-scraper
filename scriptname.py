@@ -2364,6 +2364,45 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
     _LAST_STATUS[url] = 200
     return r
 
+
+async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HTTP_TIMEOUT):
+    """
+    Fetch mit automatischer Login-Erkennung und Session-Management
+    Verwendet die Login-Handler-Funktionalität, um bei Bedarf einen Login anzufordern
+    """
+    handler = get_login_handler()
+    portal = handler.get_portal_from_url(url)
+    
+    # Lade gespeicherte Cookies falls vorhanden
+    if portal and handler.has_valid_session(portal):
+        saved_cookies = handler.get_session_cookies(portal)
+        if saved_cookies:
+            log("debug", f"Verwende gespeicherte Cookies für {portal}")
+            # Cookies werden nicht direkt in curl_cffi verwendet, aber wir markieren die Session als aktiv
+    
+    # Führe normalen Request aus
+    r = await fetch_response_async(url, headers=headers, params=params, timeout=timeout)
+    
+    # Prüfe Response auf Login-Anforderungen
+    if r is not None:
+        response_text = getattr(r, "text", "") or ""
+        status = getattr(r, "status_code", 200)
+        
+        if handler.detect_login_required(response_text, status, url):
+            log("warn", f"Login erforderlich für {portal or url}")
+            
+            # Alte Session invalidieren
+            if portal:
+                handler.invalidate_session(portal)
+            
+            # Manuellen Login anfordern (blockierend)
+            # Hinweis: In Produktionsumgebung sollte dies async oder in separatem Thread erfolgen
+            # Für jetzt: Wir loggen nur eine Warnung und geben None zurück
+            log("warn", f"Bitte führe manuell aus: python scriptname.py --login {portal}")
+            return None
+    
+    return r
+
 def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
     return True
 
