@@ -75,8 +75,8 @@ def test_record_portal_result(learning_engine, temp_db):
 
 def test_portal_auto_disable(learning_engine, temp_db):
     """Test that portals are automatically disabled after poor performance."""
-    # Record 3 runs with 0% success
-    for i in range(3):
+    # Record 5 runs with 0% success (increased from 3 to match new threshold)
+    for i in range(5):
         learning_engine.record_portal_result(
             portal="bad_portal",
             urls_crawled=10,
@@ -94,8 +94,8 @@ def test_portal_auto_disable(learning_engine, temp_db):
 
 def test_portal_with_errors(learning_engine, temp_db):
     """Test that portals with high error rates are disabled."""
-    # Record 3 runs with >50% errors
-    for i in range(3):
+    # Record 5 runs with >50% errors (increased from 3 to match new threshold)
+    for i in range(5):
         learning_engine.record_portal_result(
             portal="error_portal",
             urls_crawled=10,
@@ -109,6 +109,31 @@ def test_portal_with_errors(learning_engine, temp_db):
     should_skip, reason = learning_engine.should_skip_portal("error_portal")
     assert should_skip is True
     assert "Fehler" in reason or "error" in reason.lower()
+
+
+def test_portal_insufficient_runs_not_skipped(learning_engine, temp_db):
+    """Test that portals with < 5 runs are NOT skipped even with poor performance."""
+    # Record only 3 runs with 0% success
+    for i in range(3):
+        learning_engine.record_portal_result(
+            portal="new_portal",
+            urls_crawled=10,
+            leads_found=0,
+            leads_with_phone=0,
+            errors=0,
+            run_id=i
+        )
+    
+    # Should NOT be skipped (need at least 5 runs)
+    should_skip, reason = learning_engine.should_skip_portal("new_portal")
+    assert should_skip is False
+
+
+def test_portal_no_data_not_skipped(learning_engine, temp_db):
+    """Test that portals with no data are NOT skipped."""
+    # Don't record any data
+    should_skip, reason = learning_engine.should_skip_portal("completely_new_portal")
+    assert should_skip is False
 
 
 def test_get_portal_stats(learning_engine, temp_db):
