@@ -1382,6 +1382,10 @@ class ActiveLearningEngine:
         """
         Determine if a portal should be skipped based on historical performance.
         
+        Note: This is a simplified version that returns only bool.
+        The ai_learning_engine.ActiveLearningEngine returns Tuple[bool, str] with a reason.
+        scriptname.py uses the ai_learning_engine version.
+        
         Returns False (don't skip) if:
         - No data exists for the portal
         - Less than 5 runs recorded
