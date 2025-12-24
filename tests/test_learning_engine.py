@@ -581,7 +581,7 @@ class TestActiveLearningEngine:
         assert active_learning.should_skip_portal("test_portal") is False
     
     def test_should_skip_portal_marginal_performance(self, active_learning):
-        """Test that portals with 5-10% success rate are NOT skipped."""
+        """Test that portals with 5-10% success rate are skipped."""
         # Record 5 runs with 8% success rate
         for i in range(5):
             active_learning.record_portal_result(
@@ -592,8 +592,7 @@ class TestActiveLearningEngine:
                 run_id=i
             )
         
-        # Should NOT skip (8% >= threshold of 10% is close but below)
-        # Actually 8% < 10% so it should skip. Let me fix this test.
+        # Should skip (8% < 10% threshold)
         assert active_learning.should_skip_portal("marginal_portal") is True
     
     def test_should_skip_portal_good_enough_performance(self, active_learning):
