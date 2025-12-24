@@ -4862,8 +4862,14 @@ async def crawl_portals_smart() -> List[Dict]:
     Returns:
         Liste aller Leads von allen Portalen
     """
-    # Initialize active learning engine
-    active_learning = ActiveLearningEngine(DB_PATH)
+    # Initialize active learning engine (if available)
+    active_learning = None
+    if ActiveLearningEngine is not None:
+        try:
+            active_learning = ActiveLearningEngine(DB_PATH)
+        except Exception as e:
+            log("warn", "ActiveLearningEngine initialization failed, continuing without learning features", 
+                error=f"{type(e).__name__}: {str(e)}")
     
     # Get current run ID from database
     con = db()
@@ -4884,7 +4890,7 @@ async def crawl_portals_smart() -> List[Dict]:
     return await crawl_portals_sequential_with_learning(active_learning, current_run_id)
 
 
-async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearningEngine, run_id: int) -> List[Dict]:
+async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
     """
     Crawlt ALLE aktivierten Portale gleichzeitig mit Active Learning Integration.
     
@@ -4909,7 +4915,7 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearni
     for portal_key, portal_name, portal_func in portal_config_list:
         if DIRECT_CRAWL_SOURCES.get(portal_key, False):
             # Check if we should skip this portal based on learning
-            if learning_engine.should_skip_portal(portal_key):
+            if learning_engine and learning_engine.should_skip_portal(portal_key):
                 log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
                 continue
             
@@ -4935,14 +4941,15 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearni
         
         if isinstance(result, Exception):
             log("error", f"{portal_name} fehlgeschlagen", error=str(result))
-            # Record failure for learning
-            learning_engine.record_portal_result(
-                portal=portal_key,
-                urls_crawled=0,
-                leads_found=0,
-                leads_with_phone=0,
-                run_id=run_id
-            )
+            # Record failure for learning (if learning engine available)
+            if learning_engine:
+                learning_engine.record_portal_result(
+                    portal=portal_key,
+                    urls_crawled=0,
+                    leads_found=0,
+                    leads_with_phone=0,
+                    run_id=run_id
+                )
             continue
         
         if isinstance(result, list):
@@ -4951,17 +4958,18 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearni
             # Calculate metrics for learning
             leads_with_phone = len([l for l in result if l.get('telefon')])
             
-            # Record portal performance for learning
+            # Record portal performance for learning (if learning engine available)
             # Note: For direct portal crawling, we approximate URLs crawled as leads found
             # This is a limitation since portal functions return leads, not crawl counts
             # Success rate is calculated as leads_with_phone / leads_found for accuracy
-            learning_engine.record_portal_result(
-                portal=portal_key,
-                urls_crawled=len(result),  # Approximation: each lead represents a crawled URL
-                leads_found=len(result),
-                leads_with_phone=leads_with_phone,
-                run_id=run_id
-            )
+            if learning_engine:
+                learning_engine.record_portal_result(
+                    portal=portal_key,
+                    urls_crawled=len(result),  # Approximation: each lead represents a crawled URL
+                    leads_found=len(result),
+                    leads_with_phone=leads_with_phone,
+                    run_id=run_id
+                )
             
             log("debug", f"{portal_name} erfolgreich", 
                 leads=len(result), 
@@ -4980,7 +4988,7 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: ActiveLearni
     return unique_leads
 
 
-async def crawl_portals_sequential_with_learning(learning_engine: ActiveLearningEngine, run_id: int) -> List[Dict]:
+async def crawl_portals_sequential_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
     """
     Fallback: Sequentielles Crawling aller Portale mit Active Learning.
     
@@ -5004,7 +5012,7 @@ async def crawl_portals_sequential_with_learning(learning_engine: ActiveLearning
             continue
         
         # Check if we should skip this portal based on learning
-        if learning_engine.should_skip_portal(portal_key):
+        if learning_engine and learning_engine.should_skip_portal(portal_key):
             log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
             continue
         
@@ -5015,31 +5023,33 @@ async def crawl_portals_sequential_with_learning(learning_engine: ActiveLearning
             # Calculate metrics for learning
             leads_with_phone = len([l for l in leads if l.get('telefon')])
             
-            # Record portal performance
+            # Record portal performance (if learning engine available)
             # Note: For direct portal crawling, we approximate URLs crawled as leads found
             # This is a limitation since portal functions return leads, not crawl counts
             # Success rate is calculated as leads_with_phone / leads_found for accuracy
-            learning_engine.record_portal_result(
-                portal=portal_key,
-                urls_crawled=len(leads),  # Approximation: each lead represents a crawled URL
-                leads_found=len(leads),
-                leads_with_phone=leads_with_phone,
-                run_id=run_id
-            )
+            if learning_engine:
+                learning_engine.record_portal_result(
+                    portal=portal_key,
+                    urls_crawled=len(leads),  # Approximation: each lead represents a crawled URL
+                    leads_found=len(leads),
+                    leads_with_phone=leads_with_phone,
+                    run_id=run_id
+                )
             
             log("info", f"{portal_name} crawl complete (sequential)", 
                 count=len(leads),
                 with_phone=leads_with_phone)
         except Exception as e:
             log("error", f"{portal_name} crawl failed (sequential)", error=str(e))
-            # Record failure
-            learning_engine.record_portal_result(
-                portal=portal_key,
-                urls_crawled=0,
-                leads_found=0,
-                leads_with_phone=0,
-                run_id=run_id
-            )
+            # Record failure (if learning engine available)
+            if learning_engine:
+                learning_engine.record_portal_result(
+                    portal=portal_key,
+                    urls_crawled=0,
+                    leads_found=0,
+                    leads_with_phone=0,
+                    run_id=run_id
+                )
     
     return all_leads
 
@@ -8423,9 +8433,10 @@ def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
     
     try:
         # 1. Top-Performer aus Learning (50%)
-        learning = ActiveLearningEngine()
-        best_dorks = learning.get_best_dorks(count // 2)
-        dorks.extend(best_dorks)
+        if ActiveLearningEngine is not None:
+            learning = ActiveLearningEngine(DB_PATH)
+            best_dorks = learning.get_best_dorks(count // 2)
+            dorks.extend(best_dorks)
         
         # 2. Power-Dorks aus Extended (25%)
         power_count = count // 4
@@ -8867,7 +8878,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
     # Initialize active learning engine for dork tracking (if learning enabled)
     active_learning_engine = None
-    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and ActiveLearningEngine:
+    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and ActiveLearningEngine is not None:
         try:
             active_learning_engine = ActiveLearningEngine(DB_PATH)
             log("info", "Active Learning Engine initialisiert für Dork-Tracking")
@@ -9365,6 +9376,10 @@ def post_run_learning_analysis(run_id: int) -> None:
     Args:
         run_id: The ID of the completed run
     """
+    if ActiveLearningEngine is None:
+        log("debug", "ActiveLearningEngine not available, skipping post-run analysis")
+        return
+        
     try:
         learning = ActiveLearningEngine(DB_PATH)
         
