@@ -4868,7 +4868,8 @@ async def crawl_portals_smart() -> List[Dict]:
         try:
             active_learning = ActiveLearningEngine(DB_PATH)
         except Exception as e:
-            log("warn", "Could not initialize ActiveLearningEngine", error=str(e))
+            log("warn", "ActiveLearningEngine initialization failed, continuing without learning features", 
+                error=f"{type(e).__name__}: {str(e)}")
     
     # Get current run ID from database
     con = db()
@@ -8433,7 +8434,7 @@ def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
     try:
         # 1. Top-Performer aus Learning (50%)
         if ActiveLearningEngine is not None:
-            learning = ActiveLearningEngine()
+            learning = ActiveLearningEngine(DB_PATH)
             best_dorks = learning.get_best_dorks(count // 2)
             dorks.extend(best_dorks)
         
