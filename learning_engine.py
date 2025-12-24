@@ -1382,14 +1382,45 @@ class ActiveLearningEngine:
         """
         Determine if a portal should be skipped based on historical performance.
         
+        Returns False (don't skip) if:
+        - No data exists for the portal
+        - Less than 5 runs recorded
+        
+        Returns True (skip) only if:
+        - At least 5 runs recorded AND success rate < 10%
+        
         Args:
             portal: Portal name
             
         Returns:
             True if portal should be skipped, False otherwise
         """
-        avg_success = self._get_portal_avg_success(portal, last_n=5)
-        return avg_success < 0.01  # Less than 1% success rate
+        # Get metrics for last 5 runs
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute("""
+                    SELECT COUNT(*), AVG(success_rate) FROM (
+                        SELECT success_rate FROM learning_portal_metrics 
+                        WHERE portal = ? 
+                        ORDER BY timestamp DESC 
+                        LIMIT 5
+                    )
+                """, (portal,))
+                result = cur.fetchone()
+                
+                if result and result[0] is not None:
+                    num_runs = result[0]
+                    avg_success = result[1] if result[1] is not None else 1.0
+                    
+                    # Only skip if we have enough data (5+ runs) AND poor performance (<10%)
+                    if num_runs >= 5 and avg_success < 0.10:
+                        return True
+                
+                # Default: don't skip (test new portals or those with insufficient data)
+                return False
+        except Exception:
+            # On error, don't skip (safer to test than to miss opportunities)
+            return False
     
     def get_learned_phone_patterns(self) -> List[str]:
         """

@@ -136,12 +136,12 @@ class ActiveLearningEngine:
             ''', (portal,))
             row = cursor.fetchone()
             
-            if row and row[2] >= 3:  # Mindestens 3 Runs
+            if row and row[2] >= 5:  # Mindestens 5 Runs (erhöht von 3)
                 avg_success, total_leads, runs, total_errors = row
                 
-                # Deaktivieren wenn: 0% Erfolg ODER >50% Fehler
-                if avg_success < 0.01 or (total_errors and total_errors / runs > 0.5):
-                    reason = "0% Erfolgsrate" if avg_success < 0.01 else "Zu viele Fehler"
+                # Deaktivieren wenn: <10% Erfolg ODER >50% Fehler
+                if avg_success < 0.10 or (total_errors and total_errors / runs > 0.5):
+                    reason = f"{int(avg_success * 100)}% Erfolgsrate (< 10%)" if avg_success < 0.10 else "Zu viele Fehler"
                     conn.execute('''
                         INSERT OR REPLACE INTO learning_portal_config 
                         (portal, enabled, disabled_reason, last_updated)
