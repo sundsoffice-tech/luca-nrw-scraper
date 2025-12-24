@@ -545,7 +545,7 @@ DIRECT_CRAWL_SOURCES = {
     "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
     "dhd24": True,  # AKTIVIERT - Alternative zu meinestadt
     "freelancermap": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
-    "freelance_de": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
+    "freelance_de": False,  # DEAKTIVIERT - Server blockiert Requests (HTTP 403/Timeout)
 }
 
 # Portal-specific request delays (seconds) to avoid rate limiting
@@ -4915,9 +4915,11 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[Act
     for portal_key, portal_name, portal_func in portal_config_list:
         if DIRECT_CRAWL_SOURCES.get(portal_key, False):
             # Check if we should skip this portal based on learning
-            if False:   # DISABLED: Portal-Skipping
-                log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
-                continue
+            if learning_engine:
+                should_skip, reason = learning_engine.should_skip_portal(portal_key)
+                if should_skip:
+                    log("info", f"[LEARNING] Skipping {portal_name} ({reason})")
+                    continue
             
             tasks.append(portal_func())
             portal_names.append(portal_name)
@@ -5012,9 +5014,11 @@ async def crawl_portals_sequential_with_learning(learning_engine: Optional[Activ
             continue
         
         # Check if we should skip this portal based on learning
-        if False:   # DISABLED: Portal-Skipping
-            log("info", f"[LEARNING] Skipping {portal_name} (poor performance history)")
-            continue
+        if learning_engine:
+            should_skip, reason = learning_engine.should_skip_portal(portal_key)
+            if should_skip:
+                log("info", f"[LEARNING] Skipping {portal_name} ({reason})")
+                continue
         
         try:
             leads = await portal_func()
@@ -8878,7 +8882,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
     # Initialize active learning engine for dork tracking (if learning enabled)
     active_learning_engine = None
-    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and globals().get("ActiveLearningEngine") is not None:
+    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and ActiveLearningEngine is not None:
         try:
             active_learning_engine = ActiveLearningEngine(DB_PATH)
             log("info", "Active Learning Engine initialisiert für Dork-Tracking")
