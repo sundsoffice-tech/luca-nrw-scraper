@@ -26,7 +26,7 @@ def temp_db():
     yield path
     try:
         os.unlink(path)
-    except:
+    except OSError:
         pass
 
 

@@ -144,7 +144,7 @@ class LoginHandler:
                     exp_date = datetime.fromisoformat(expires_at)
                     if datetime.now() > exp_date:
                         return False
-                except:
+                except (ValueError, TypeError):
                     pass
             
             return bool(is_valid)
@@ -160,7 +160,7 @@ class LoginHandler:
             if result and result[0]:
                 try:
                     return json.loads(result[0])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     pass
         
         return None
@@ -289,7 +289,7 @@ class LoginHandler:
                 self.save_session(portal, cookies)
                 print(f"✅ Cookies gespeichert!")
                 return cookies
-            except:
+            except json.JSONDecodeError:
                 print("⚠️ Ungültiges JSON-Format, überspringe...")
         
         # Speichere leere Session (markiert als "versucht")
