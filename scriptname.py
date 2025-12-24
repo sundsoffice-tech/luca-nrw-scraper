@@ -124,6 +124,11 @@ from deduplication import (
     LeadDeduplicator,
     get_deduplicator,
 )
+from login_handler import (
+    LoginHandler,
+    get_login_handler,
+    check_and_handle_login,
+)
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -2361,6 +2366,45 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
         log("warn", "Nicht-200 beim Abruf – skip", url=url, status=status)
         return None
     _LAST_STATUS[url] = 200
+    return r
+
+
+async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HTTP_TIMEOUT):
+    """
+    Fetch mit automatischer Login-Erkennung und Session-Management
+    Verwendet die Login-Handler-Funktionalität, um bei Bedarf einen Login anzufordern
+    """
+    handler = get_login_handler()
+    portal = handler.get_portal_from_url(url)
+    
+    # Lade gespeicherte Cookies falls vorhanden
+    if portal and handler.has_valid_session(portal):
+        saved_cookies = handler.get_session_cookies(portal)
+        if saved_cookies:
+            log("debug", f"Verwende gespeicherte Cookies für {portal}")
+            # Cookies werden nicht direkt in curl_cffi verwendet, aber wir markieren die Session als aktiv
+    
+    # Führe normalen Request aus
+    r = await fetch_response_async(url, headers=headers, params=params, timeout=timeout)
+    
+    # Prüfe Response auf Login-Anforderungen
+    if r is not None:
+        response_text = getattr(r, "text", "") or ""
+        status = getattr(r, "status_code", 200)
+        
+        if handler.detect_login_required(response_text, status, url):
+            log("warn", f"Login erforderlich für {portal or url}")
+            
+            # Alte Session invalidieren
+            if portal:
+                handler.invalidate_session(portal)
+            
+            # Manuellen Login anfordern (blockierend)
+            # Hinweis: In Produktionsumgebung sollte dies async oder in separatem Thread erfolgen
+            # Für jetzt: Wir loggen nur eine Warnung und geben None zurück
+            log("warn", f"Bitte führe manuell aus: python scriptname.py --login {portal}")
+            return None
+    
     return r
 
 def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
@@ -9522,6 +9566,9 @@ def parse_args():
         default="standard",
         help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
     )
+    ap.add_argument("--login", type=str, help="Manuell einloggen bei Portal (z.B. --login linkedin)")
+    ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions löschen")
+    ap.add_argument("--list-sessions", action="store_true", help="Alle Sessions anzeigen")
     return ap.parse_args()
 
 
@@ -9559,6 +9606,30 @@ if __name__ == "__main__":
         validate_config()
         init_db()
         migrate_db_unique_indexes()
+        
+        # Handle login-related commands
+        if args.login:
+            handler = get_login_handler()
+            handler.request_manual_login(args.login)
+            sys.exit(0)
+        
+        if args.clear_sessions:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute('DELETE FROM login_sessions')
+                conn.commit()
+            print("✅ Alle Sessions gelöscht")
+            sys.exit(0)
+        
+        if args.list_sessions:
+            handler = get_login_handler()
+            sessions = handler.get_all_sessions()
+            if sessions:
+                for s in sessions:
+                    status = "✅" if s['is_valid'] else "❌"
+                    print(f"{status} {s['portal']}: {s['logged_in_at']}")
+            else:
+                print("Keine Sessions vorhanden")
+            sys.exit(0)
         
         # Initialize mode
         mode = getattr(args, "mode", "standard")

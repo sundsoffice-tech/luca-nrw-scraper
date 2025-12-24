@@ -7,4 +7,5 @@ scraper.db
 *.csv
 # Secrets
 .env
-
+# Login sessions (contains user cookies)
+sessions/
