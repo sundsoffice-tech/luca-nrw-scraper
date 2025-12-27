@@ -118,37 +118,29 @@ ALLOWED_LEAD_SOURCES = [
     'kleinanzeigen.de',
     'quoka.de',
     'markt.de',
+    'dhd24.com',
+    'dhd24.de',  # Alternative TLD
     'kalaydo.de',
     'meinestadt.de',
-    'dhd24.com',
     'ebay-kleinanzeigen.de',  # old domain
+    'arbeitsagentur.de',
+    'monster.de',
+    'freelancermap.de',
+    'freelance.de',
+    'xing.com',
+    'linkedin.com',
+    'indeed.com',
+    'stepstone.de',
 ]
 
-# These domains are ALWAYS blocked
+# These domains are ALWAYS blocked (mostly news/irrelevant sites)
 BLOCKED_DOMAINS = [
-    # Social Media
+    # Social Media (not professional profiles)
     'facebook.com',
     'tiktok.com',
     'snapchat.com',
     'instagram.com',
     'twitter.com',
-    'linkedin.com',
-    'xing.com',
-    
-    # Job Portals (job offers, not job seekers)
-    'stepstone.de',
-    'indeed.com',
-    'monster.de',
-    'jobs.de',
-    'jobware.de',
-    'stellenanzeigen.de',
-    
-    # Company/Corporate sites
-    'karriere.',
-    'jobs.',
-    '/karriere',
-    '/jobs',
-    '/stellenangebote',
     
     # PDFs and Documents
     '.pdf',
@@ -327,6 +319,9 @@ def validate_lead_before_insert(lead: dict) -> Tuple[bool, str]:
     """
     Validates a lead BEFORE inserting into the database.
     
+    IMPORTANT: Telefonnummer ist wichtiger als Name!
+    Phone number is mandatory, name is optional and can be enriched later.
+    
     Args:
         lead: Lead dictionary to validate
         
@@ -335,7 +330,7 @@ def validate_lead_before_insert(lead: dict) -> Tuple[bool, str]:
         - is_valid: True if lead passes all validations
         - reason: String describing why lead was rejected (or "OK" if valid)
     """
-    # 1. Validate phone
+    # 1. Validate phone (MANDATORY)
     phone = lead.get('telefon')
     if not validate_phone_number(phone):
         return False, f"Ungültige Telefonnummer: {phone}"
@@ -343,16 +338,28 @@ def validate_lead_before_insert(lead: dict) -> Tuple[bool, str]:
     # 2. Validate source
     source = lead.get('quelle')
     if not is_valid_lead_source(source):
+        # If phone is valid, accept anyway but note the source issue
+        if phone and validate_phone_number(phone):
+            return True, "OK (Quelle unbekannt aber Telefon gültig)"
         return False, f"Nicht erlaubte Quelle: {source}"
     
-    # 3. Validate name
-    name = lead.get('name')
+    # 3. Validate name (OPTIONAL - can be enriched later)
+    name = lead.get('name', '').strip()
+    if not name or name in ["_probe_", "Unknown Candidate", "unknown", ""]:
+        # Name is missing/invalid - mark for enrichment but accept the lead
+        lead['name'] = ""
+        lead['name_pending_enrichment'] = True
+        return True, "OK (Name fehlt - wird später angereichert)"
+    
     if not validate_lead_name(name):
-        return False, f"Ungültiger Name: {name}"
+        # Name is present but invalid - try to keep lead anyway
+        lead['name'] = ""
+        lead['name_pending_enrichment'] = True
+        return True, "OK (Name ungültig - wird ersetzt)"
     
     # 4. Validate lead type (only candidates)
     lead_type = lead.get('lead_type', '')
-    if lead_type and lead_type not in ('candidate', 'kandidat'):
+    if lead_type and lead_type not in ('candidate', 'kandidat', ''):
         return False, f"Falscher Lead-Type: {lead_type}"
     
     return True, "OK"
