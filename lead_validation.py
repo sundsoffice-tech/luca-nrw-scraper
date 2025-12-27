@@ -338,10 +338,8 @@ def validate_lead_before_insert(lead: dict) -> Tuple[bool, str]:
     # 2. Validate source
     source = lead.get('quelle')
     if not is_valid_lead_source(source):
-        # If phone is valid, accept anyway but note the source issue
-        if phone and validate_phone_number(phone):
-            return True, "OK (Quelle unbekannt aber Telefon gültig)"
-        return False, f"Nicht erlaubte Quelle: {source}"
+        # Phone is valid, accept but note the source issue
+        return True, "OK (Quelle unbekannt aber Telefon gültig)"
     
     # 3. Validate name (OPTIONAL - can be enriched later)
     name = lead.get('name', '').strip()

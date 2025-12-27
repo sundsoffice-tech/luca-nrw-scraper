@@ -276,8 +276,9 @@ class PhonebookLookup:
                 "confidence": 0.85,
                 "phone": phone
             }
-        except Exception as e:
-            # Silent failure - we'll try other sources
+        except (requests.RequestException, Exception) as e:
+            # Log error for debugging if needed, but continue with other sources
+            print(f"[DEBUG] Lookup failed for {source['name']}: {type(e).__name__}", file=sys.stderr)
             return None
     
     def lookup_all_sources(self, phone: str) -> Optional[Dict]:
@@ -294,12 +295,11 @@ class PhonebookLookup:
             Dict with name, address, source, confidence or None if not found
         """
         for source in self.SOURCES:
-            # Check cache first for this specific source
+            # Use existing rate limiting
+            self._rate_limit()
             result = self._lookup_source(phone, source)
             if result and result.get("name"):
                 return result
-            # Rate limit between sources
-            time.sleep(2)
         return None
     
     def lookup_dastelefonbuch(self, phone: str) -> Optional[Dict]:

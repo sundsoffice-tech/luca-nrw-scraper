@@ -20,6 +20,14 @@ import re
 from typing import List, Dict, Optional
 from datetime import datetime
 
+# Import phonebook lookup at module level for better testability
+try:
+    from phonebook_lookup import PhonebookLookup
+    PHONEBOOK_AVAILABLE = True
+except ImportError:
+    PhonebookLookup = None
+    PHONEBOOK_AVAILABLE = False
+
 
 def normalize_phone(phone: str) -> str:
     """
@@ -130,14 +138,8 @@ async def enrich_leads_pipeline(leads: List[Dict]) -> List[Dict]:
     Returns:
         List of enriched and deduplicated leads
     """
-    try:
-        from phonebook_lookup import PhonebookLookup
-    except ImportError:
-        # Phonebook lookup not available
-        PhonebookLookup = None
-    
     enriched = []
-    phonebook = PhonebookLookup() if PhonebookLookup else None
+    phonebook = PhonebookLookup() if PHONEBOOK_AVAILABLE and PhonebookLookup else None
     
     for lead in leads:
         # 1. Name enrichment via phonebook
