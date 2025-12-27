@@ -104,10 +104,11 @@ from phone_patterns import (
 )
 # Phonebook reverse lookup for leads with phone but no name
 try:
-    from phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup
+    from phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup, BAD_NAMES
 except ImportError:
     enrich_lead_with_phonebook = None
     PhonebookLookup = None
+    BAD_NAMES = ["_probe_", "", None, "Unknown Candidate"]
 # New modules for extended functionality
 from dorks_extended import (
     get_all_dorks,
@@ -1815,12 +1816,10 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             # This enriches leads where we have a phone number but the name is missing or invalid
             if enrich_lead_with_phonebook is not None:
                 current_name = r.get('name', '')
-                # Check if name is missing or looks invalid (placeholder, ad title, etc.)
-                bad_names = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
-                            "Gastronomie", "Verkäufer", "Mitarbeiter", "Thekenverkäufer"]
+                # Use shared bad names list from phonebook_lookup module
                 needs_enrichment = (
                     not current_name or 
-                    current_name in bad_names or 
+                    current_name in BAD_NAMES or 
                     len(current_name) < 3 or
                     not any(c.isalpha() for c in current_name)
                 )

@@ -22,7 +22,7 @@ def test_phonebook_import():
 def test_scriptname_imports_phonebook():
     """Test that scriptname.py imports phonebook_lookup."""
     # Read scriptname.py and check for the import
-    with open('scriptname.py', 'r') as f:
+    with open('scriptname.py', 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Check that phonebook_lookup is imported
@@ -32,7 +32,7 @@ def test_scriptname_imports_phonebook():
 def test_insert_leads_with_phonebook_enrichment():
     """Test that insert_leads function includes phonebook enrichment logic."""
     # Read scriptname.py and check for the enrichment code
-    with open('scriptname.py', 'r') as f:
+    with open('scriptname.py', 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Check that it includes phonebook enrichment

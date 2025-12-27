@@ -16,6 +16,7 @@ import requests
 import sqlite3
 import time
 import re
+import urllib.parse
 from typing import Optional, Dict
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -32,6 +33,10 @@ CREATE TABLE IF NOT EXISTS phone_lookup_cache (
     raw_response TEXT
 )
 """
+
+# List of invalid/placeholder names that should trigger enrichment
+BAD_NAMES = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
+             "Gastronomie", "Verkäufer", "Mitarbeiter", "Thekenverkäufer"]
 
 
 class PhonebookLookup:
@@ -145,8 +150,9 @@ class PhonebookLookup:
         # Format number for German sites
         clean = self._format_phone_for_german_sites(phone)
         
-        # Reverse search URL
-        url = f"https://www.dastelefonbuch.de/R%C3%BCckw%C3%A4rts-Suche/{clean}"
+        # Reverse search URL - encode the phone number properly
+        encoded_phone = urllib.parse.quote(clean)
+        url = f"https://www.dastelefonbuch.de/R%C3%BCckw%C3%A4rts-Suche/{encoded_phone}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -183,8 +189,14 @@ class PhonebookLookup:
                     "source": "dastelefonbuch",
                     "confidence": 0.9
                 }
+        except requests.RequestException as e:
+            # Network or HTTP-related errors
+            import sys
+            print(f"[WARN] DasTelefonbuch lookup failed for {phone}: {e}", file=sys.stderr)
         except Exception as e:
-            print(f"[WARN] DasTelefonbuch lookup failed for {phone}: {e}")
+            # Other unexpected errors
+            import sys
+            print(f"[ERROR] Unexpected error in DasTelefonbuch lookup for {phone}: {e}", file=sys.stderr)
         
         return None
     
@@ -203,8 +215,12 @@ class PhonebookLookup:
         # Format number for German sites
         clean = self._format_phone_for_german_sites(phone)
         
-        # Reverse search URL for DasÖrtliche
-        url = f"https://www.dasoertliche.de/Controller?form_name=search_inv&ph={clean}"
+        # Reverse search URL for DasÖrtliche - use proper URL encoding
+        params = urllib.parse.urlencode({
+            'form_name': 'search_inv',
+            'ph': clean
+        })
+        url = f"https://www.dasoertliche.de/Controller?{params}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
@@ -246,8 +262,14 @@ class PhonebookLookup:
                         "source": "dasoertliche",
                         "confidence": 0.85
                     }
+        except requests.RequestException as e:
+            # Network or HTTP-related errors
+            import sys
+            print(f"[WARN] DasÖrtliche lookup failed for {phone}: {e}", file=sys.stderr)
         except Exception as e:
-            print(f"[WARN] DasÖrtliche lookup failed for {phone}: {e}")
+            # Other unexpected errors
+            import sys
+            print(f"[ERROR] Unexpected error in DasÖrtliche lookup for {phone}: {e}", file=sys.stderr)
         
         return None
     
@@ -319,13 +341,9 @@ def enrich_lead_with_phonebook(lead: dict, lookup: PhonebookLookup = None) -> di
     phone = lead.get("telefon", "")
     current_name = lead.get("name", "")
     
-    # List of invalid/placeholder names that should be replaced
-    bad_names = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
-                 "Gastronomie", "Verkäufer", "Mitarbeiter"]
-    
-    # Check if name needs enrichment
+    # Check if name needs enrichment using shared constant
     needs_enrichment = False
-    if not current_name or current_name in bad_names:
+    if not current_name or current_name in BAD_NAMES:
         needs_enrichment = True
     elif len(current_name) < 3:  # Too short to be a real name
         needs_enrichment = True
@@ -342,7 +360,8 @@ def enrich_lead_with_phonebook(lead: dict, lookup: PhonebookLookup = None) -> di
                 lead["private_address"] = result.get("address", "")
             # Tag the source
             lead["name_source"] = result.get("source", "phonebook")
-            print(f"[OK] Lead enriched: {phone} -> {result['name']}")
+            import sys
+            print(f"[OK] Lead enriched: {phone} -> {result['name']}", file=sys.stderr)
     
     return lead
 
