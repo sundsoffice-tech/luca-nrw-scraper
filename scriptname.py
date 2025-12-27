@@ -108,7 +108,9 @@ try:
 except ImportError:
     enrich_lead_with_phonebook = None
     PhonebookLookup = None
-    BAD_NAMES = ["_probe_", "", None, "Unknown Candidate"]
+    # Fallback BAD_NAMES if phonebook module not available
+    BAD_NAMES = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
+                 "Gastronomie", "Verkäufer", "Mitarbeiter", "Thekenverkäufer"]
 # New modules for extended functionality
 from dorks_extended import (
     get_all_dorks,

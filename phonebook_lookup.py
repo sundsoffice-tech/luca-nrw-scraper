@@ -16,6 +16,7 @@ import requests
 import sqlite3
 import time
 import re
+import sys
 import urllib.parse
 from typing import Optional, Dict
 from bs4 import BeautifulSoup
@@ -191,11 +192,9 @@ class PhonebookLookup:
                 }
         except requests.RequestException as e:
             # Network or HTTP-related errors
-            import sys
             print(f"[WARN] DasTelefonbuch lookup failed for {phone}: {e}", file=sys.stderr)
         except Exception as e:
             # Other unexpected errors
-            import sys
             print(f"[ERROR] Unexpected error in DasTelefonbuch lookup for {phone}: {e}", file=sys.stderr)
         
         return None
@@ -264,11 +263,9 @@ class PhonebookLookup:
                     }
         except requests.RequestException as e:
             # Network or HTTP-related errors
-            import sys
             print(f"[WARN] DasÖrtliche lookup failed for {phone}: {e}", file=sys.stderr)
         except Exception as e:
             # Other unexpected errors
-            import sys
             print(f"[ERROR] Unexpected error in DasÖrtliche lookup for {phone}: {e}", file=sys.stderr)
         
         return None
@@ -360,7 +357,6 @@ def enrich_lead_with_phonebook(lead: dict, lookup: PhonebookLookup = None) -> di
                 lead["private_address"] = result.get("address", "")
             # Tag the source
             lead["name_source"] = result.get("source", "phonebook")
-            import sys
             print(f"[OK] Lead enriched: {phone} -> {result['name']}", file=sys.stderr)
     
     return lead
