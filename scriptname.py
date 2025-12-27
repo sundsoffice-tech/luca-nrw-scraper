@@ -102,6 +102,12 @@ from phone_patterns import (
     get_best_phone_number,
     extract_whatsapp_number,
 )
+# Phonebook reverse lookup for leads with phone but no name
+try:
+    from phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup
+except ImportError:
+    enrich_lead_with_phonebook = None
+    PhonebookLookup = None
 # New modules for extended functionality
 from dorks_extended import (
     get_all_dorks,
@@ -1804,6 +1810,29 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 normalized = normalize_phone_number(phone)
                 if normalized:
                     r['telefon'] = normalized
+            
+            # STEP 2.5: Reverse phonebook lookup for leads with phone but no/invalid name
+            # This enriches leads where we have a phone number but the name is missing or invalid
+            if enrich_lead_with_phonebook is not None:
+                current_name = r.get('name', '')
+                # Check if name is missing or looks invalid (placeholder, ad title, etc.)
+                bad_names = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
+                            "Gastronomie", "Verkäufer", "Mitarbeiter", "Thekenverkäufer"]
+                needs_enrichment = (
+                    not current_name or 
+                    current_name in bad_names or 
+                    len(current_name) < 3 or
+                    not any(c.isalpha() for c in current_name)
+                )
+                
+                if needs_enrichment and r.get('telefon'):
+                    try:
+                        r = enrich_lead_with_phonebook(r)
+                        if r.get('name'):
+                            log("info", "Lead enriched via reverse phonebook", 
+                                phone=r.get('telefon', '')[:8]+"...", name=r['name'])
+                    except Exception as e:
+                        log("warn", "Phonebook reverse lookup failed", error=str(e))
             
             # STEP 3: Extract real person name from raw text
             name = r.get('name')
