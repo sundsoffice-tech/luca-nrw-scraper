@@ -276,8 +276,8 @@ class PerplexityLearning:
         
         row = cur.fetchone()
         if row:
-            stats["total"] = row[0]
-            stats["with_results"] = row[1]
+            stats["total"] = row[0] if row[0] else 0
+            stats["with_results"] = row[1] if row[1] else 0
             stats["avg_leads_per_query"] = row[2] if row[2] else 0
             stats["total_leads"] = row[3] if row[3] else 0
         
