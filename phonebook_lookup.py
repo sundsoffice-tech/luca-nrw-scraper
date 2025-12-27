@@ -44,13 +44,60 @@ class PhonebookLookup:
     """
     Reverse phone lookup using German phonebook services.
     
-    Searches for the owner of a phone number by querying:
+    Searches for the owner of a phone number by querying multiple sources:
     - DasTelefonbuch.de reverse search
     - DasÖrtliche.de reverse search
+    - 11880.com
+    - GoYellow.de
+    - Klicktel.de
     
     Results are cached in SQLite to minimize repeated queries.
     Rate limiting ensures we don't overwhelm the services.
     """
+    
+    # Source configurations with URLs and CSS selectors
+    SOURCES = [
+        {
+            "name": "dastelefonbuch",
+            "url_template": "https://www.dastelefonbuch.de/R%C3%BCckw%C3%A4rts-Suche/{phone}",
+            "selectors": {
+                "name": [".vcard .fn", ".entry-name", "h2.name", ".hititem .name", ".name"],
+                "address": [".adr", ".address", ".street-address", ".entry-address"]
+            }
+        },
+        {
+            "name": "dasoertliche", 
+            "url_template": "https://www.dasoertliche.de/Controller?form_name=search_inv&ph={phone}",
+            "selectors": {
+                "name": [".hit__name", ".name", "h2", ".entry-name", ".vcard-name"],
+                "address": [".hit__address", ".address", ".street", ".adr"]
+            }
+        },
+        {
+            "name": "11880",
+            "url_template": "https://www.11880.com/suche/{phone}/deutschland",
+            "selectors": {
+                "name": [".entry-title", ".result-name", "h3", ".name"],
+                "address": [".entry-address", ".result-address", ".address"]
+            }
+        },
+        {
+            "name": "goyellow",
+            "url_template": "https://www.goyellow.de/suche/telefon/{phone}",
+            "selectors": {
+                "name": [".entry-name", ".result-title", ".name"],
+                "address": [".entry-address", ".address"]
+            }
+        },
+        {
+            "name": "klicktel",
+            "url_template": "https://www.klicktel.de/rueckwaertssuche/{phone}",
+            "selectors": {
+                "name": [".result-name", ".entry-title", ".name"],
+                "address": [".result-address", ".address"]
+            }
+        }
+    ]
     
     def __init__(self, db_path: str = "scraper.db"):
         """
@@ -61,7 +108,7 @@ class PhonebookLookup:
         """
         self.db_path = db_path
         self.last_request = 0
-        self.min_delay = 3.0  # Seconds between requests
+        self.min_delay = 2.0  # Seconds between requests (reduced from 3.0)
         self._init_cache()
     
     def _init_cache(self):
@@ -135,6 +182,125 @@ class PhonebookLookup:
         # Remove spaces and common separators
         clean = clean.replace(" ", "").replace("-", "").replace("/", "")
         return clean
+    
+    def _get_headers(self) -> dict:
+        """Generate realistic browser headers for requests."""
+        return {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
+        }
+    
+    def _is_valid_name(self, name: str) -> bool:
+        """
+        Validates if name is a real person name (not a company or placeholder).
+        
+        Args:
+            name: Name to validate
+            
+        Returns:
+            True if valid person name, False otherwise
+        """
+        if not name or len(name) < 3:
+            return False
+        
+        # Block company indicators
+        invalid_patterns = [
+            "gmbh", "ag", "kg", "ohg", "ug", "mbh",
+            "keine angabe", "unbekannt", "privat",
+            "telefon", "mobil", "handy",
+            "keine einträge", "nicht gefunden", "no entries",
+            "firma", "company", "unternehmen"
+        ]
+        name_lower = name.lower()
+        if any(p in name_lower for p in invalid_patterns):
+            return False
+        
+        # Must have at least 2 words (first name and last name)
+        words = [w for w in name.split() if len(w) > 1]
+        return len(words) >= 2
+    
+    def _lookup_source(self, phone: str, source: dict) -> Optional[Dict]:
+        """
+        Query a single phonebook source.
+        
+        Args:
+            phone: Phone number to lookup
+            source: Source configuration dict
+            
+        Returns:
+            Dict with name, address, source, confidence or None
+        """
+        clean_phone = self._format_phone_for_german_sites(phone)
+        url = source["url_template"].format(phone=clean_phone)
+        
+        try:
+            resp = requests.get(url, headers=self._get_headers(), timeout=10)
+            if resp.status_code != 200:
+                return None
+            
+            soup = BeautifulSoup(resp.text, "html.parser")
+            
+            # Try multiple selectors to find name
+            name = None
+            for selector in source["selectors"].get("name", []):
+                elem = soup.select_one(selector)
+                if elem:
+                    candidate_name = elem.get_text(strip=True)
+                    # Clean up name
+                    candidate_name = re.sub(r'\s+', ' ', candidate_name).strip()
+                    if self._is_valid_name(candidate_name):
+                        name = candidate_name
+                        break
+            
+            if not name:
+                return None
+            
+            # Try to extract address
+            address = ""
+            for selector in source["selectors"].get("address", []):
+                elem = soup.select_one(selector)
+                if elem:
+                    address = elem.get_text(strip=True)
+                    address = re.sub(r'\s+', ' ', address).strip()
+                    break
+            
+            return {
+                "name": name,
+                "address": address,
+                "source": source["name"],
+                "confidence": 0.85,
+                "phone": phone
+            }
+        except (requests.RequestException, Exception) as e:
+            # Log error for debugging if needed, but continue with other sources
+            print(f"[DEBUG] Lookup failed for {source['name']}: {type(e).__name__}", file=sys.stderr)
+            return None
+    
+    def lookup_all_sources(self, phone: str) -> Optional[Dict]:
+        """
+        Try all phonebook sources until a name is found.
+        
+        This method iterates through all configured sources and returns
+        the first successful result.
+        
+        Args:
+            phone: Phone number to lookup
+            
+        Returns:
+            Dict with name, address, source, confidence or None if not found
+        """
+        for source in self.SOURCES:
+            # Use existing rate limiting
+            self._rate_limit()
+            result = self._lookup_source(phone, source)
+            if result and result.get("name"):
+                return result
+        return None
     
     def lookup_dastelefonbuch(self, phone: str) -> Optional[Dict]:
         """
@@ -274,7 +440,8 @@ class PhonebookLookup:
         """
         Main lookup function: Find owner of phone number.
         
-        Checks cache first, then tries multiple phonebook sources.
+        Checks cache first, then tries all phonebook sources using the
+        new multi-source lookup system.
         Results are cached to avoid repeated queries.
         
         Args:
@@ -297,17 +464,8 @@ class PhonebookLookup:
             # If cached result had no name, we already tried, so return None
             return None
         
-        # Try different sources
-        result = None
-        
-        # 1. Try DasTelefonbuch first (usually has better data)
-        result = self.lookup_dastelefonbuch(phone)
-        if result and result.get("name"):
-            self._save_cache(phone, result)
-            return result
-        
-        # 2. Try DasÖrtliche as fallback
-        result = self.lookup_dasoertliche(phone)
+        # Try all sources using the new multi-source system
+        result = self.lookup_all_sources(phone)
         if result and result.get("name"):
             self._save_cache(phone, result)
             return result
