@@ -115,6 +115,9 @@ from phone_extractor import (
     get_best_phone,
     is_valid_phone as is_valid_phone_enhanced,
 )
+from browser_extractor import (
+    extract_phone_with_browser,
+)
 from social_scraper import (
     SOCIAL_MEDIA_DORKS,
     SocialMediaScraper,
@@ -3466,16 +3469,27 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
         
         # Only create lead if we found at least one mobile number
         if not phones:
-            log("debug", "No mobile numbers found in ad", url=url)
-            # Record failure for learning
-            if _LEARNING_ENGINE:
-                _LEARNING_ENGINE.learn_from_failure(
-                    url=url,
-                    html_content=html,
-                    reason="no_mobile_number_found",
-                    visible_phones=[]
-                )
-            return None
+            log("debug", "No mobile numbers found in ad, trying browser extraction", url=url)
+            # Fallback: Browser-based extraction for JS-hidden numbers
+            try:
+                browser_phone = extract_phone_with_browser(url, portal='kleinanzeigen')
+                if browser_phone:
+                    phones.append(browser_phone)
+                    log("info", "Browser extraction successful", url=url)
+            except Exception as e:
+                log("debug", "Browser extraction failed", url=url, error=str(e))
+            
+            # If still no phones found, return None
+            if not phones:
+                # Record failure for learning
+                if _LEARNING_ENGINE:
+                    _LEARNING_ENGINE.learn_from_failure(
+                        url=url,
+                        html_content=html,
+                        reason="no_mobile_number_found",
+                        visible_phones=[]
+                    )
+                return None
         
         # Use first mobile number found
         main_phone = phones[0]
@@ -4133,14 +4147,35 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
         
         # Only create lead if we found at least one mobile number
         if not phones:
-            if _LEARNING_ENGINE:
-                _LEARNING_ENGINE.learn_from_failure(
-                    url=url,
-                    html_content=html,
-                    reason=f"{source_tag}_no_mobile_found",
-                    visible_phones=[]
-                )
-            return None
+            log("debug", f"{source_tag}: No mobile numbers found, trying browser extraction", url=url)
+            # Fallback: Browser-based extraction for JS-hidden numbers
+            try:
+                # Detect portal from source_tag or URL
+                portal_map = {
+                    'markt_de': 'markt_de',
+                    'quoka': 'quoka',
+                    'dhd24': 'dhd24',
+                    'kalaydo': 'generic',
+                    'meinestadt': 'generic',
+                }
+                portal = portal_map.get(source_tag, 'generic')
+                browser_phone = extract_phone_with_browser(url, portal=portal)
+                if browser_phone:
+                    phones.append(browser_phone)
+                    log("info", f"{source_tag}: Browser extraction successful", url=url)
+            except Exception as e:
+                log("debug", f"{source_tag}: Browser extraction failed", url=url, error=str(e))
+            
+            # If still no phones found, return None
+            if not phones:
+                if _LEARNING_ENGINE:
+                    _LEARNING_ENGINE.learn_from_failure(
+                        url=url,
+                        html_content=html,
+                        reason=f"{source_tag}_no_mobile_found",
+                        visible_phones=[]
+                    )
+                return None
         
         # Use first mobile number found
         main_phone = phones[0]
