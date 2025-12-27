@@ -3475,7 +3475,7 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
                 browser_phone = extract_phone_with_browser(url, portal='kleinanzeigen')
                 if browser_phone:
                     phones.append(browser_phone)
-                    log("info", "Browser extraction successful", url=url, phone=browser_phone[:8]+"...")
+                    log("info", "Browser extraction successful", url=url)
             except Exception as e:
                 log("debug", "Browser extraction failed", url=url, error=str(e))
             
@@ -4162,7 +4162,7 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
                 browser_phone = extract_phone_with_browser(url, portal=portal)
                 if browser_phone:
                     phones.append(browser_phone)
-                    log("info", f"{source_tag}: Browser extraction successful", url=url, phone=browser_phone[:8]+"...")
+                    log("info", f"{source_tag}: Browser extraction successful", url=url)
             except Exception as e:
                 log("debug", f"{source_tag}: Browser extraction failed", url=url, error=str(e))
             

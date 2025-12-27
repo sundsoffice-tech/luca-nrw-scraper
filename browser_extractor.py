@@ -72,6 +72,11 @@ BUTTON_SELECTORS = {
 _last_request_time = 0
 _min_request_interval = 5.0  # seconds
 
+# Timing constants for browser operations
+PAGE_LOAD_WAIT = 2  # seconds to wait after page loads
+AJAX_WAIT = 3  # seconds to wait after clicking button for AJAX response
+BUTTON_WAIT = 3  # seconds to wait for button to be clickable
+
 
 def _setup_chrome_options() -> Options:
     """
@@ -167,7 +172,7 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
         driver.get(url)
         
         # Wait for page to load
-        time.sleep(2)
+        time.sleep(PAGE_LOAD_WAIT)
         
         # Try to find and click the phone reveal button
         button_clicked = False
@@ -175,12 +180,12 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
             try:
                 if selector.startswith("//"):
                     # XPath selector
-                    button = WebDriverWait(driver, 3).until(
+                    button = WebDriverWait(driver, BUTTON_WAIT).until(
                         EC.element_to_be_clickable((By.XPATH, selector))
                     )
                 else:
                     # CSS selector
-                    button = WebDriverWait(driver, 3).until(
+                    button = WebDriverWait(driver, BUTTON_WAIT).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                     )
                 
@@ -190,7 +195,7 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
                 button_clicked = True
                 
                 # Wait for AJAX response
-                time.sleep(3)
+                time.sleep(AJAX_WAIT)
                 break
                 
             except (TimeoutException, NoSuchElementException):
@@ -210,7 +215,7 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
         if phones:
             best_phone = get_best_phone(phones)
             if best_phone:
-                logging.info(f"Browser extraction: Successfully extracted phone from {url}: {best_phone[:8]}...")
+                logging.info(f"Browser extraction: Successfully extracted phone from {url}")
                 return best_phone
         
         logging.debug(f"Browser extraction: No phone number found in HTML after button click")
