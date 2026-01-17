@@ -1942,11 +1942,42 @@ def build_queries(
 def is_denied(url: str) -> bool:
     p = urllib.parse.urlparse(url)
     host = (p.netloc or "").lower()
+    
     # Normalisieren: www./m. abschneiden
     if host.startswith("www."):
         host = host[4:]
     if host.startswith("m."):
         host = host[2:]
+
+    # NEU: Im talent_hunt Modus Social-Profile und Team-Seiten ERLAUBEN
+    if _is_talent_hunt_mode():
+        url_lower = url.lower()
+        talent_hunt_allowed_patterns = [
+            "linkedin.com/in/",
+            "xing.com/profile/",
+            "xing.com/profiles/",
+            "/team",
+            "/unser-team",
+            "/mitarbeiter",
+            "/ansprechpartner",
+        ]
+        talent_hunt_allowed_hosts = [
+            "cdh.de",
+            "ihk.de", 
+            "freelancermap.de",
+            "gulp.de",
+            "freelance.de",
+            "twago.de",
+        ]
+        
+        # Prüfe URL-Patterns
+        if any(pattern in url_lower for pattern in talent_hunt_allowed_patterns):
+            return False  # Nicht blockieren!
+        
+        # Prüfe spezielle Hosts für talent_hunt
+        for allowed_host in talent_hunt_allowed_hosts:
+            if host == allowed_host or host.endswith("." + allowed_host):
+                return False  # Nicht blockieren!
 
     if host in SOCIAL_HOSTS:
         return False
@@ -1963,14 +1994,15 @@ def is_denied(url: str) -> bool:
     if host in {"ruhr-uni-bochum.de"}:
         return True
 
-    # NEU: NRW-Rauschen — IHK/HWK/Bildung
-    if host.endswith(".ihk.de") or host.startswith(("ihk-", "hwk-")):
-        return True
-    if any(k in host for k in (
-        "schule", "berufskolleg", "weiterbildung", "bildungszentrum",
-        "akademie", "bbw-", "bfw-", "leb-"
-    )):
-        return True
+    # NEU: NRW-Rauschen — IHK/HWK/Bildung (aber nur wenn NICHT talent_hunt)
+    if not _is_talent_hunt_mode():
+        if host.endswith(".ihk.de") or host.startswith(("ihk-", "hwk-")):
+            return True
+        if any(k in host for k in (
+            "schule", "berufskolleg", "weiterbildung", "bildungszentrum",
+            "akademie", "bbw-", "bfw-", "leb-"
+        )):
+            return True
 
     # NEU: Jobportale/Aggregatoren (ziehen Budget, liefern selten direkte tel/mail/wa)
     PORTAL_HOST_HINTS = (
@@ -2887,14 +2919,55 @@ def _matches_hostlist(host: str, blocked: set[str]) -> bool:
 
 
 def _is_candidates_mode() -> bool:
-    """Check if we're in candidates/recruiter/talent_hunt mode based on INDUSTRY env var."""
+    """Check if we're in candidates/recruiter mode (NOT talent_hunt!) based on INDUSTRY env var."""
     industry = str(os.getenv("INDUSTRY", "")).lower()
-    return "recruiter" in industry or "candidates" in industry or "talent_hunt" in industry
+    # talent_hunt is NOT candidates mode - it looks for active salespeople, not job seekers
+    if "talent_hunt" in industry:
+        return False
+    return "recruiter" in industry or "candidates" in industry
 
 def _is_talent_hunt_mode() -> bool:
     """Check if we're in talent_hunt mode - looking for active sales professionals."""
     industry = str(os.getenv("INDUSTRY", "")).lower()
     return "talent_hunt" in industry
+
+
+def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
+    """
+    Erkennt Lead-Type für talent_hunt Modus.
+    Unterscheidet zwischen aktiven Vertriebsprofis und Jobsuchenden.
+    """
+    url_lower = url.lower()
+    text_lower = (text or "").lower()
+    
+    # LinkedIn/Xing Profile ohne #opentowork = aktive Vertriebler
+    if "linkedin.com/in/" in url_lower or "xing.com/profile" in url_lower:
+        # Prüfe ob die Person aktiv Arbeit sucht
+        job_seeking_signals = ["#opentowork", "open to work", "offen für", "suche stelle", "auf jobsuche"]
+        if any(signal in text_lower for signal in job_seeking_signals):
+            return "candidate"  # Jobsuchender
+        else:
+            return "active_salesperson"  # Aktiver Vertriebler
+    
+    # Team-Seiten von Firmen
+    if any(pattern in url_lower for pattern in ["/team", "/mitarbeiter", "/ansprechpartner", "/unser-team", "/about", "/ueber-uns"]):
+        return "team_member"
+    
+    # Freelancer-Portale
+    if any(portal in url_lower for portal in ["freelancermap.de", "gulp.de", "freelance.de", "twago.de"]):
+        return "freelancer"
+    
+    # HR-Kontakte (wertvoll für Empfehlungen)
+    hr_keywords = ["hr", "recruiting", "personal", "human resources", "personalreferent"]
+    if any(keyword in text_lower for keyword in hr_keywords):
+        return "hr_contact"
+    
+    # Handelsvertreter-Register
+    if "cdh.de" in url_lower or "handelsvertreter" in text_lower:
+        return "active_salesperson"
+    
+    # Fallback: Behalte existierenden lead_type
+    return lead.get("lead_type", "")
 
 
 def is_candidate_url(url: Optional[str]) -> Optional[bool]:
@@ -5349,6 +5422,13 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             "ai_summary": ai_summary,
             "lead_type": ai_lead_type or lt,
         }
+                # Im talent_hunt Modus: Lead-Type anhand URL und Text erkennen
+                if _is_talent_hunt_mode():
+                    detected_type = _detect_lead_type_talent_hunt(url, text, enriched)
+                    if detected_type:
+                        enriched["lead_type"] = detected_type
+                        log("debug", "Talent hunt lead type detected", url=url, type=detected_type)
+                
                 enriched["confidence_score"] = _confidence(enriched)
                 enriched["data_quality"] = _quality(enriched)
                 drop, drop_reason = should_drop_lead(
@@ -5638,6 +5718,13 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             "ai_summary": ai_summary,
             "lead_type": ai_lead_type or lt,
         }
+        # Im talent_hunt Modus: Lead-Type anhand URL und Text erkennen
+        if _is_talent_hunt_mode():
+            detected_type = _detect_lead_type_talent_hunt(url, text, enriched)
+            if detected_type:
+                enriched["lead_type"] = detected_type
+                log("debug", "Talent hunt lead type detected", url=url, type=detected_type)
+        
         enriched["confidence_score"] = _confidence(enriched)
         enriched["data_quality"] = _quality(enriched)
         drop, drop_reason = should_drop_lead(
@@ -6605,12 +6692,18 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
 
                 return role_hit or company_hit or url_hit
 
-            # NUR Kandidaten exportieren, wenn wir im Recruiter/Candidates-Modus sind
+            # NUR Kandidaten exportieren, wenn wir im Recruiter/Candidates-Modus sind (NICHT talent_hunt)
             # CRITICAL FIX: Also check for "candidates" in addition to "recruiter"
             industry_env = os.getenv("INDUSTRY", "").lower()
-            if "recruiter" in str(QUERIES).lower() or "candidates" in str(QUERIES).lower() or industry_env in ("recruiter", "candidates"):
+            if _is_candidates_mode() and not _is_talent_hunt_mode():
                 collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
                 log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
+            elif _is_talent_hunt_mode():
+                # Im talent_hunt Modus: Alle Lead-Types erlauben, besonders:
+                # - active_salesperson, team_member, freelancer, hr_contact
+                allowed_types = ("active_salesperson", "team_member", "freelancer", "hr_contact", "candidate", "company", "contact", None, "")
+                collected_rows = [r for r in collected_rows if r.get("lead_type", "") in allowed_types or not r.get("lead_type")]
+                log("info", "Talent-Hunt Filter: Alle Vertriebler-Typen erlaubt", remaining=len(collected_rows))
 
             filtered = _dedup_run(
                 [
