@@ -200,6 +200,23 @@
 
 {% block extra_js %}
 <script>
+// CSRF Token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
+
 // State
 let currentLead = null;
 let timerInterval = null;
@@ -324,6 +341,7 @@ async function logCall(outcome) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
             },
             body: JSON.stringify(data)
         });
@@ -334,11 +352,13 @@ async function logCall(outcome) {
             addRecentCall(currentLead, outcome);
             loadNextLead();
         } else {
-            alert('Fehler beim Speichern des Anrufs');
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = errorData.detail || errorData.error || 'Fehler beim Speichern des Anrufs';
+            alert(`Fehler: ${errorMsg}`);
         }
     } catch (error) {
         console.error('Error logging call:', error);
-        alert('Fehler beim Speichern');
+        alert('Netzwerkfehler: Konnte Anruf nicht speichern. Bitte erneut versuchen.');
     }
 }
 
