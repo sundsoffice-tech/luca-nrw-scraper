@@ -19,5 +19,5 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # path('api/', include('leads.urls')),  # Will be activated in PR #1d
+    path('api/', include('leads.urls')),
 ]
