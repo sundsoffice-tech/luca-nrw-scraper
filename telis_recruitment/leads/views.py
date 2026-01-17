@@ -1,9 +1,11 @@
 import csv
 import io
+import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.db import models, transaction
+from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -270,3 +272,64 @@ def api_health(request):
         'status': 'ok',
         'service': 'telis-recruitment-api'
     })
+
+
+def landing_page(request):
+    """Landing Page View"""
+    return render(request, 'landing/index.html')
+
+
+@csrf_exempt
+@require_POST
+def opt_in(request):
+    """
+    Opt-In API Endpoint für Landing Page.
+    Erstellt einen neuen Lead mit Source: landing_page
+    """
+    try:
+        data = json.loads(request.body)
+        
+        name = (data.get('name') or '').strip()
+        email = (data.get('email') or '').strip()
+        telefon = (data.get('telefon') or '').strip() or None
+        
+        if not name:
+            return JsonResponse({'error': 'Name ist erforderlich'}, status=400)
+        if not email:
+            return JsonResponse({'error': 'E-Mail ist erforderlich'}, status=400)
+        
+        # Check for duplicates
+        existing = Lead.objects.filter(email=email).first()
+        if existing:
+            # Update interest if already exists
+            if existing.source != Lead.Source.LANDING_PAGE:
+                existing.source_detail = f'Re-Opt-In von {existing.source}'
+            existing.interest_level = max(existing.interest_level, 3)
+            existing.save()
+            return JsonResponse({
+                'success': True,
+                'message': 'Willkommen zurück!',
+                'lead_id': existing.id
+            })
+        
+        # Create new lead
+        lead = Lead.objects.create(
+            name=name[:255],
+            email=email,
+            telefon=telefon,
+            source=Lead.Source.LANDING_PAGE,
+            status=Lead.Status.NEW,
+            quality_score=70,  # Landing page leads start with higher score
+            interest_level=3,  # They opted in, so medium-high interest
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Danke! Wir melden uns bald.',
+            'lead_id': lead.id
+        }, status=201)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Ungültige Anfrage'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

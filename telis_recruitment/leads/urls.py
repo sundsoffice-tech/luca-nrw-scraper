@@ -11,4 +11,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('import-csv/', views.import_csv, name='import-csv'),
     path('health/', views.api_health, name='api-health'),
+    path('opt-in/', views.opt_in, name='opt-in'),
 ]
