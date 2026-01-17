@@ -147,11 +147,21 @@ class Command(BaseCommand):
                 self.stdout.write('📊 Force-Modus: Alle Leads werden neu geprüft\n')
             
             # Query leads from scraper.db (only new ones if incremental)
-            query = """
-                SELECT 
-                    id, name, rolle, email, telefon, quelle, score, tags, region,
-                    role_guess, lead_type, company_name, location_specific,
-                    confidence_score, social_profile_url, last_updated
+            # First check what columns exist
+            cursor.execute("PRAGMA table_info(leads)")
+            available_columns = [row[1] for row in cursor.fetchall()]
+            
+            # Build dynamic column list based on available columns
+            columns_to_select = []
+            for col in ['id', 'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 
+                       'tags', 'region', 'role_guess', 'lead_type', 'company_name', 
+                       'location_specific', 'confidence_score', 'social_profile_url', 
+                       'last_updated']:
+                if col in available_columns:
+                    columns_to_select.append(col)
+            
+            query = f"""
+                SELECT {', '.join(columns_to_select)}
                 FROM leads
                 WHERE id > ?
                 ORDER BY id ASC
@@ -193,14 +203,15 @@ class Command(BaseCommand):
                 
                 # Update sync status
                 if not dry_run and (imported > 0 or updated > 0):
-                    if sync_status:
+                    try:
+                        sync_status = SyncStatus.objects.get(source='scraper_db')
                         sync_status.last_sync_at = timezone.now()
                         sync_status.last_lead_id = max_lead_id
                         sync_status.leads_imported += imported
                         sync_status.leads_updated += updated
                         sync_status.leads_skipped += skipped
                         sync_status.save()
-                    else:
+                    except SyncStatus.DoesNotExist:
                         SyncStatus.objects.create(
                             source='scraper_db',
                             last_sync_at=timezone.now(),
