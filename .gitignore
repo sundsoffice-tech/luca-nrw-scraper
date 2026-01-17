@@ -12,3 +12,4 @@ sessions/
 # Test files
 test_browser_integration.py
 test_browser_e2e.py
+scraper_test.db
