@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 LUCA Control Center - Main Dashboard Application
+
+⚠️ DEPRECATED: This Flask dashboard is being replaced by the Django CRM system.
+New location: /telis_recruitment/ - Access at /crm/scraper/
+
+This file is kept for reference but is no longer actively maintained.
+For new features, please use the Django CRM at http://localhost:8000/crm/scraper/
 """
 
 import os
