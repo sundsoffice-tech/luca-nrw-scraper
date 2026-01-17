@@ -4,14 +4,18 @@
 
 This document describes the self-learning lead validation system implemented to ensure only high-quality leads with mobile contact information are saved, while filtering out job postings and other low-quality content.
 
+⭐ **NEW: Talent Hunt Mode** - See [TALENT_HUNT_MODE.md](TALENT_HUNT_MODE.md) for details on the new mode that finds active sales professionals (not job seekers) and uses different validation rules.
+
 ## Core Rules
 
-### 1. Mobile-Only Validation ✅ CRITICAL
+### 1. Mobile-Only Validation ✅ CRITICAL (Relaxed in Talent Hunt Mode)
 
 **RULE: Only mobile numbers qualify as valid leads.**
 
-- **Landline numbers alone**: REJECTED
-- **Email-only contacts**: REJECTED  
+⭐ **EXCEPTION IN TALENT HUNT MODE**: Landline numbers and email contacts are also accepted when searching for active professionals.
+
+- **Landline numbers alone**: REJECTED (except in talent_hunt mode)
+- **Email-only contacts**: REJECTED (except in talent_hunt mode)
 - **Mobile numbers**: ACCEPTED (only valid lead type)
 
 **Implementation:**
@@ -34,9 +38,15 @@ if not is_mobile_number(normalized_phone):
     return _drop("not_mobile_number")
 ```
 
-### 2. Job Posting Detection ✅ CRITICAL
+### 2. Job Posting Detection ✅ CRITICAL (Intelligence Extraction in Talent Hunt Mode)
 
 **RULE: Job postings (Stellenanzeigen) must NEVER be saved as leads - even with mobile numbers!**
+
+⭐ **NEW IN TALENT HUNT MODE**: Job postings are no longer discarded but used for competitive intelligence:
+- Extract company information
+- Identify HR contacts for referrals
+- Track competitor hiring activity
+- Analyze salary/benefits offerings
 
 Job postings are company advertisements for hiring, not actual sales leads. They must be filtered out to maintain lead database quality.
 
@@ -47,6 +57,7 @@ Job postings are company advertisements for hiring, not actual sales leads. They
 
 **Implementation:**
 - Function: `is_job_posting()` in `learning_engine.py` (lines 407-520)
+- New Function: `extract_competitor_intel()` in `learning_engine.py` ⭐
 - Checked BEFORE lead saving in:
   - `should_drop_lead()` (line 2167)
   - `insert_leads()` (line 613)
@@ -57,6 +68,10 @@ Job postings are company advertisements for hiring, not actual sales leads. They
 ```python
 # CRITICAL: Check for job postings first - NEVER save as lead
 if is_job_posting(url=page_url, title=title, snippet=lead.get("opening_line", ""), content=text):
+    # NEW: In talent_hunt mode, extract competitive intelligence
+    if _is_talent_hunt_mode():
+        intel = extract_competitor_intel(url, title, snippet, text)
+        # Store intelligence for later analysis
     return _drop("job_posting")
 ```
 
