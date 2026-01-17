@@ -1942,7 +1942,6 @@ def build_queries(
 def is_denied(url: str) -> bool:
     p = urllib.parse.urlparse(url)
     host = (p.netloc or "").lower()
-    path = (p.path or "").lower()
     
     # Normalisieren: www./m. abschneiden
     if host.startswith("www."):
