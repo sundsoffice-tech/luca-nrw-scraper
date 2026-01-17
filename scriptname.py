@@ -9808,9 +9808,9 @@ def parse_args():
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
     ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
-    ap.add_argument("--industry", choices=["all","recruiter","candidates"] + list(INDUSTRY_ORDER),
+    ap.add_argument("--industry", choices=["all","recruiter","candidates","talent_hunt"] + list(INDUSTRY_ORDER),
                 default=os.getenv("INDUSTRY","all"),
-                help="Branche für diesen Run (Standard: all)")
+                help="Branche für diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
     ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
                     help="Queries pro Branche in diesem Run (Standard: 6)")
     ap.add_argument("--daterestrict", type=str, default=os.getenv("DATE_RESTRICT",""),
