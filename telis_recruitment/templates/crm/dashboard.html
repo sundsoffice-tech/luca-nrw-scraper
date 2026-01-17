@@ -1,5 +1,11 @@
 {% extends 'crm/base.html' %}
+{% load static %}
 {% block title %}Dashboard - TELIS CRM{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
 
 {% block content %}
 <!-- Welcome Message -->
@@ -16,7 +22,7 @@
     </p>
 </div>
 
-<!-- KPI Cards -->
+<!-- KPI Cards with Real-time Data -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <!-- Total Leads -->
     <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
@@ -24,15 +30,14 @@
             <div class="text-3xl">👥</div>
             <div class="text-xs text-gray-400">Gesamt</div>
         </div>
-        <div class="text-2xl font-bold text-gray-100 mb-1">
+        <div class="text-2xl font-bold text-gray-100 mb-1" id="total-leads-value">
             {{ stats.total|default:0 }}
         </div>
         <div class="text-sm text-gray-400">
             Leads im System
         </div>
         <div class="mt-3 flex items-center text-xs">
-            <span class="text-green-400">+{{ stats.today|default:0 }}</span>
-            <span class="text-gray-500 ml-1">heute</span>
+            <span class="text-green-400" id="total-leads-sub">+{{ stats.today|default:0 }} heute</span>
         </div>
     </div>
 
@@ -42,14 +47,14 @@
             <div class="text-3xl">📞</div>
             <div class="text-xs text-gray-400">Heute</div>
         </div>
-        <div class="text-2xl font-bold text-gray-100 mb-1">
+        <div class="text-2xl font-bold text-gray-100 mb-1" id="calls-today-value">
             {{ stats.calls_today|default:0 }}
         </div>
         <div class="text-sm text-gray-400">
             Anrufe getätigt
         </div>
         <div class="mt-3 flex items-center text-xs">
-            <span class="text-gray-500">Durchschnitt: {{ stats.avg_calls|default:12 }}/Tag</span>
+            <span class="text-gray-500" id="calls-today-sub">Durchschnitt: 12/Tag</span>
         </div>
     </div>
 
@@ -59,14 +64,14 @@
             <div class="text-3xl">📈</div>
             <div class="text-xs text-gray-400">Performance</div>
         </div>
-        <div class="text-2xl font-bold text-gray-100 mb-1">
-            {{ stats.conversion_rate|default:"12.5" }}%
+        <div class="text-2xl font-bold text-gray-100 mb-1" id="conversion-rate-value">
+            12.5%
         </div>
         <div class="text-sm text-gray-400">
             Conversion Rate
         </div>
         <div class="mt-3 flex items-center text-xs">
-            <span class="text-green-400">↑ 2.3%</span>
+            <span class="text-green-400" id="conversion-rate-sub">↑ 2.3%</span>
             <span class="text-gray-500 ml-1">vs. letzte Woche</span>
         </div>
     </div>
@@ -77,93 +82,145 @@
             <div class="text-3xl">🔥</div>
             <div class="text-xs text-gray-400">Priorität</div>
         </div>
-        <div class="text-2xl font-bold text-primary mb-1">
+        <div class="text-2xl font-bold text-primary mb-1" id="hot-leads-value">
             {{ stats.hot_leads|default:0 }}
         </div>
         <div class="text-sm text-gray-400">
             Hot Leads
         </div>
         <div class="mt-3 flex items-center text-xs">
-            <span class="text-primary">Score ≥ 80</span>
+            <span class="text-primary" id="hot-leads-sub">Score ≥ 80</span>
         </div>
     </div>
 </div>
 
-<!-- Coming Soon Section -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <!-- Quick Actions -->
-    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
-        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
-            <span class="text-2xl mr-2">⚡</span>
-            Schnellaktionen
-        </h2>
-        <div class="space-y-3">
-            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
-                <span class="flex items-center">
-                    <span class="text-xl mr-3">📞</span>
-                    Nächsten Lead anrufen
-                </span>
-                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
-            </button>
-            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
-                <span class="flex items-center">
-                    <span class="text-xl mr-3">➕</span>
-                    Neuen Lead hinzufügen
-                </span>
-                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
-            </button>
-            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
-                <span class="flex items-center">
-                    <span class="text-xl mr-3">📊</span>
-                    Tagesbericht erstellen
-                </span>
-                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
-            </button>
+<!-- Charts & Activity Feed -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Left Column: Charts (2/3 width) -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Lead Trend Chart -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                <span class="text-2xl mr-2">📊</span>
+                Lead-Trend (7 Tage)
+            </h2>
+            <div style="height: 250px;">
+                <canvas id="leadTrendChart"></canvas>
+            </div>
         </div>
+
+        <!-- Status & Source Distribution -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Status Distribution -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-lg font-bold text-gray-100 mb-4">Status-Verteilung</h2>
+                <div style="height: 200px;">
+                    <canvas id="statusDistChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Source Distribution -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-lg font-bold text-gray-100 mb-4">Quellen-Verteilung</h2>
+                <div style="height: 200px;">
+                    <canvas id="sourceDistChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Performers (Manager/Admin only) -->
+        {% if user_role == 'Admin' or user_role == 'Manager' %}
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                <span class="text-2xl mr-2">🏆</span>
+                Top Performers
+            </h2>
+            <div id="team-performance">
+                <div class="text-center py-8 text-gray-500">
+                    <div class="animate-pulse">Lädt...</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <!-- Recent Activity -->
-    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
-        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
-            <span class="text-2xl mr-2">📋</span>
-            Letzte Aktivitäten
-        </h2>
-        <div class="space-y-3 text-gray-400">
-            <div class="p-3 bg-dark-900 rounded-lg">
-                <p class="text-sm">📊 Dashboard wird geladen...</p>
-                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
-            </div>
-            <div class="p-3 bg-dark-900 rounded-lg">
-                <p class="text-sm">🔔 Benachrichtigungen werden geladen...</p>
-                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
-            </div>
-            <div class="p-3 bg-dark-900 rounded-lg">
-                <p class="text-sm">⏰ Termine werden geladen...</p>
-                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
+    <!-- Right Column: Activity Feed (1/3 width) -->
+    <div class="lg:col-span-1">
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 sticky top-6">
+            <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                <span class="text-2xl mr-2">📋</span>
+                Letzte Aktivitäten
+            </h2>
+            <div id="activity-feed" class="space-y-3 max-h-[600px] overflow-y-auto">
+                <div class="text-center py-8 text-gray-500">
+                    <div class="animate-pulse">Lädt...</div>
+                </div>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <a href="{% url 'crm-leads' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
+        <div class="flex items-center">
+            <span class="text-3xl mr-4">👥</span>
+            <div>
+                <h3 class="text-lg font-bold text-gray-100 mb-1">Lead-Verwaltung</h3>
+                <p class="text-sm text-gray-400">Alle Leads anzeigen und verwalten</p>
+            </div>
+        </div>
+    </a>
+
+    <button class="w-full bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150 text-left">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <span class="text-3xl mr-4">📞</span>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100 mb-1">Nächsten Lead anrufen</h3>
+                    <p class="text-sm text-gray-400">Telefon-Modul öffnen</p>
+                </div>
+            </div>
+            <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+        </div>
+    </button>
+
+    <button class="w-full bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150 text-left">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <span class="text-3xl mr-4">📊</span>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100 mb-1">Tagesbericht</h3>
+                    <p class="text-sm text-gray-400">Report erstellen</p>
+                </div>
+            </div>
+            <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+        </div>
+    </button>
 </div>
 
 <!-- Info Banner -->
-<div class="mt-8 bg-primary/10 border border-primary/30 rounded-lg p-6">
+<div class="bg-primary/10 border border-primary/30 rounded-lg p-6">
     <div class="flex items-start">
         <div class="text-3xl mr-4">🚀</div>
         <div>
-            <h3 class="text-lg font-bold text-primary mb-2">CRM Phase 1 - Grundgerüst</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">CRM Phase 2 - Live Dashboard</h3>
             <p class="text-gray-300 text-sm">
-                Das TELIS CRM System befindet sich im Aufbau. Die Benutzerrollen sind aktiv und das Dashboard-Grundgerüst steht.
-                In den nächsten Phasen werden weitere Features wie Lead-Verwaltung, Telefonie und Reports hinzugefügt.
+                Das Dashboard zeigt nun Echtzeit-KPIs, interaktive Charts und eine Aktivitätsfeed.
+                Weitere Features wie Lead-Verwaltung, Telefonie und Reports werden kontinuierlich hinzugefügt.
             </p>
             <div class="mt-4 flex flex-wrap gap-2">
-                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Benutzerrollen</span>
-                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Login/Logout</span>
-                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Dashboard</span>
-                <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Lead-Verwaltung</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Echtzeit-KPIs</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Interactive Charts</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Aktivitätsfeed</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Lead-Verwaltung</span>
                 <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Telefonie</span>
                 <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Reports</span>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Load Dashboard JavaScript -->
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

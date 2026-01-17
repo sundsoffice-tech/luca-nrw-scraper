@@ -1,0 +1,602 @@
+/**
+ * TELIS CRM Lead Management JavaScript
+ * Handles filtering, sorting, pagination, and lead detail views
+ */
+
+// State
+let allLeads = [];
+let filteredLeads = [];
+let currentPage = 1;
+let perPage = 25;
+let sortField = 'created_at';
+let sortDirection = 'desc';
+let selectedLeads = new Set();
+
+// Status badges
+const STATUS_BADGES = {
+    'NEW': { label: '🟢 Neu', class: 'bg-green-500/20 text-green-400' },
+    'CONTACTED': { label: '🔵 Kontaktiert', class: 'bg-blue-500/20 text-blue-400' },
+    'VOICEMAIL': { label: '🟡 Voicemail', class: 'bg-yellow-500/20 text-yellow-400' },
+    'INTERESTED': { label: '🟡 Interessiert', class: 'bg-yellow-500/20 text-yellow-400' },
+    'INTERVIEW': { label: '🟣 Interview', class: 'bg-purple-500/20 text-purple-400' },
+    'HIRED': { label: '🟢 Eingestellt', class: 'bg-emerald-500/20 text-emerald-400' },
+    'NOT_INTERESTED': { label: '🔴 Kein Interesse', class: 'bg-red-500/20 text-red-400' },
+    'INVALID': { label: '⚫ Ungültig', class: 'bg-gray-500/20 text-gray-400' },
+};
+
+/**
+ * Initialize on page load
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    loadLeads();
+    initializeFilters();
+    initializePagination();
+    initializeSelectionHandlers();
+});
+
+/**
+ * Load leads from API
+ */
+async function loadLeads() {
+    try {
+        const response = await fetch('/api/leads/');
+        if (!response.ok) throw new Error('Failed to load leads');
+        
+        allLeads = await response.json();
+        filteredLeads = [...allLeads];
+        
+        applySorting();
+        renderLeads();
+        updatePagination();
+    } catch (error) {
+        console.error('Error loading leads:', error);
+        document.getElementById('leads-tbody').innerHTML = `
+            <tr><td colspan="8" class="px-4 py-8 text-center text-red-400">
+                Fehler beim Laden der Leads. Bitte versuchen Sie es später erneut.
+            </td></tr>
+        `;
+    }
+}
+
+/**
+ * Initialize filter inputs
+ */
+function initializeFilters() {
+    const searchInput = document.getElementById('search-input');
+    const statusFilter = document.getElementById('status-filter');
+    const sourceFilter = document.getElementById('source-filter');
+    const scoreFilter = document.getElementById('score-filter');
+    
+    // Debounce search input
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            applyFilters();
+        }, 300);
+    });
+    
+    statusFilter.addEventListener('change', applyFilters);
+    sourceFilter.addEventListener('change', applyFilters);
+    scoreFilter.addEventListener('change', applyFilters);
+    
+    // Sort headers
+    document.querySelectorAll('[data-sort]').forEach(header => {
+        header.addEventListener('click', function() {
+            const field = this.dataset.sort;
+            if (sortField === field) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortField = field;
+                sortDirection = 'desc';
+            }
+            applySorting();
+            renderLeads();
+        });
+    });
+    
+    // Export button
+    document.getElementById('export-btn').addEventListener('click', exportLeads);
+}
+
+/**
+ * Apply filters to leads
+ */
+function applyFilters() {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const statusValue = document.getElementById('status-filter').value;
+    const sourceValue = document.getElementById('source-filter').value;
+    const scoreValue = document.getElementById('score-filter').value;
+    
+    filteredLeads = allLeads.filter(lead => {
+        // Search filter
+        if (searchTerm) {
+            const searchableText = [
+                lead.name,
+                lead.email,
+                lead.telefon,
+                lead.company
+            ].filter(Boolean).join(' ').toLowerCase();
+            
+            if (!searchableText.includes(searchTerm)) return false;
+        }
+        
+        // Status filter
+        if (statusValue && lead.status !== statusValue) return false;
+        
+        // Source filter
+        if (sourceValue && lead.source !== sourceValue) return false;
+        
+        // Score filter
+        if (scoreValue) {
+            const score = lead.quality_score || 0;
+            if (scoreValue === 'hot' && score < 80) return false;
+            if (scoreValue === 'medium' && (score < 50 || score >= 80)) return false;
+            if (scoreValue === 'low' && score >= 50) return false;
+        }
+        
+        return true;
+    });
+    
+    currentPage = 1;
+    applySorting();
+    renderLeads();
+    updatePagination();
+}
+
+/**
+ * Apply sorting to filtered leads
+ */
+function applySorting() {
+    filteredLeads.sort((a, b) => {
+        let valA, valB;
+        
+        switch (sortField) {
+            case 'name':
+                valA = (a.name || '').toLowerCase();
+                valB = (b.name || '').toLowerCase();
+                break;
+            case 'status':
+                valA = a.status || '';
+                valB = b.status || '';
+                break;
+            case 'score':
+                valA = a.quality_score || 0;
+                valB = b.quality_score || 0;
+                break;
+            case 'created':
+                valA = new Date(a.created_at);
+                valB = new Date(b.created_at);
+                break;
+            default:
+                valA = a.created_at;
+                valB = b.created_at;
+        }
+        
+        if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+/**
+ * Render leads in table
+ */
+function renderLeads() {
+    const tbody = document.getElementById('leads-tbody');
+    const start = (currentPage - 1) * perPage;
+    const end = start + perPage;
+    const leadsToShow = filteredLeads.slice(start, end);
+    
+    if (leadsToShow.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">
+                Keine Leads gefunden. Versuchen Sie andere Filter.
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = leadsToShow.map(lead => {
+        const statusBadge = STATUS_BADGES[lead.status] || STATUS_BADGES['NEW'];
+        const scoreStars = Math.min(5, Math.floor(lead.quality_score / 20));
+        const scoreColor = lead.quality_score >= 80 ? 'text-primary' : 
+                          lead.quality_score >= 50 ? 'text-yellow-400' : 'text-gray-500';
+        
+        return `
+            <tr class="hover:bg-dark-700/30 transition">
+                <td class="px-4 py-3">
+                    <input type="checkbox" class="lead-checkbox rounded" data-lead-id="${lead.id}">
+                </td>
+                <td class="px-4 py-3">
+                    <div class="text-gray-300 font-medium">${escapeHtml(lead.name)}</div>
+                    ${lead.company ? `<div class="text-xs text-gray-500">${escapeHtml(lead.company)}</div>` : ''}
+                </td>
+                <td class="px-4 py-3">
+                    ${lead.telefon ? `<div class="text-sm text-gray-300">📞 ${escapeHtml(lead.telefon)}</div>` : ''}
+                    ${lead.email ? `<div class="text-xs text-gray-500">📧 ${escapeHtml(lead.email)}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="inline-block px-2 py-1 rounded text-xs ${statusBadge.class}">
+                        ${statusBadge.label}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <div class="${scoreColor}">
+                        ${'⭐'.repeat(scoreStars)}${'☆'.repeat(5 - scoreStars)}
+                    </div>
+                    <div class="text-xs text-gray-500">${lead.quality_score}</div>
+                </td>
+                <td class="px-4 py-3 text-center text-gray-400 text-sm">
+                    ${getSourceLabel(lead.source)}
+                </td>
+                <td class="px-4 py-3 text-center text-gray-400 text-xs">
+                    ${formatDate(lead.created_at)}
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <div class="flex items-center justify-center space-x-2">
+                        <button onclick="viewLeadDetail(${lead.id})" class="text-primary hover:text-primary/80 text-lg" title="Details anzeigen">
+                            👁️
+                        </button>
+                        <button onclick="editLead(${lead.id})" class="text-gray-400 hover:text-gray-300 text-lg" title="Bearbeiten">
+                            ✏️
+                        </button>
+                        <button onclick="callLead(${lead.id})" class="text-cyan-400 hover:text-cyan-300 text-lg" title="Anrufen">
+                            📞
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Reinitialize checkboxes
+    document.querySelectorAll('.lead-checkbox').forEach(cb => {
+        cb.checked = selectedLeads.has(parseInt(cb.dataset.leadId));
+        cb.addEventListener('change', handleLeadSelection);
+    });
+}
+
+/**
+ * Initialize pagination controls
+ */
+function initializePagination() {
+    document.getElementById('prev-page').addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderLeads();
+            updatePagination();
+        }
+    });
+    
+    document.getElementById('next-page').addEventListener('click', () => {
+        const totalPages = Math.ceil(filteredLeads.length / perPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderLeads();
+            updatePagination();
+        }
+    });
+    
+    document.getElementById('per-page').addEventListener('change', function() {
+        perPage = parseInt(this.value);
+        currentPage = 1;
+        renderLeads();
+        updatePagination();
+    });
+}
+
+/**
+ * Update pagination display
+ */
+function updatePagination() {
+    const total = filteredLeads.length;
+    const totalPages = Math.ceil(total / perPage);
+    const start = Math.min((currentPage - 1) * perPage + 1, total);
+    const end = Math.min(currentPage * perPage, total);
+    
+    document.getElementById('showing-from').textContent = start;
+    document.getElementById('showing-to').textContent = end;
+    document.getElementById('total-leads').textContent = total;
+    
+    // Enable/disable buttons
+    document.getElementById('prev-page').disabled = currentPage === 1;
+    document.getElementById('next-page').disabled = currentPage === totalPages || totalPages === 0;
+    
+    // Page numbers
+    const pageNumbers = document.getElementById('page-numbers');
+    pageNumbers.innerHTML = '';
+    
+    // Show max 5 page numbers
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = `px-3 py-1 rounded transition ${
+            i === currentPage 
+                ? 'bg-primary text-white' 
+                : 'bg-dark-800 hover:bg-dark-700 text-gray-300'
+        }`;
+        btn.onclick = () => {
+            currentPage = i;
+            renderLeads();
+            updatePagination();
+        };
+        pageNumbers.appendChild(btn);
+    }
+}
+
+/**
+ * Initialize selection handlers
+ */
+function initializeSelectionHandlers() {
+    document.getElementById('select-all').addEventListener('change', function() {
+        const isChecked = this.checked;
+        document.querySelectorAll('.lead-checkbox').forEach(cb => {
+            cb.checked = isChecked;
+            const leadId = parseInt(cb.dataset.leadId);
+            if (isChecked) {
+                selectedLeads.add(leadId);
+            } else {
+                selectedLeads.delete(leadId);
+            }
+        });
+        updateBulkActions();
+    });
+}
+
+/**
+ * Handle individual lead selection
+ */
+function handleLeadSelection(event) {
+    const leadId = parseInt(event.target.dataset.leadId);
+    if (event.target.checked) {
+        selectedLeads.add(leadId);
+    } else {
+        selectedLeads.delete(leadId);
+    }
+    updateBulkActions();
+}
+
+/**
+ * Update bulk actions display
+ */
+function updateBulkActions() {
+    const bulkActions = document.getElementById('bulk-actions');
+    const count = selectedLeads.size;
+    
+    if (count > 0) {
+        bulkActions.classList.remove('hidden');
+        document.getElementById('selected-count').textContent = count;
+    } else {
+        bulkActions.classList.add('hidden');
+    }
+}
+
+/**
+ * View lead detail in slide-over
+ */
+async function viewLeadDetail(leadId) {
+    const overlay = document.getElementById('lead-detail-overlay');
+    const panel = document.getElementById('lead-detail-panel');
+    
+    overlay.classList.remove('hidden');
+    setTimeout(() => {
+        panel.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Load lead details
+    try {
+        const response = await fetch(`/api/leads/${leadId}/`);
+        if (!response.ok) throw new Error('Failed to load lead');
+        
+        const lead = await response.json();
+        
+        const statusBadge = STATUS_BADGES[lead.status] || STATUS_BADGES['NEW'];
+        const scorePercent = lead.quality_score;
+        const scoreBarWidth = `${scorePercent}%`;
+        
+        panel.innerHTML = `
+            <div class="p-6">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <button onclick="closeLeadDetail()" class="text-gray-400 hover:text-gray-300">
+                        ← Zurück
+                    </button>
+                    <button onclick="editLead(${lead.id})" class="text-primary hover:text-primary/80">
+                        ✏️ Bearbeiten
+                    </button>
+                </div>
+                
+                <!-- Lead Info -->
+                <h2 class="text-2xl font-bold text-gray-100 mb-4">${escapeHtml(lead.name)}</h2>
+                
+                <!-- Score Bar -->
+                <div class="mb-4">
+                    <div class="flex items-center justify-between text-sm text-gray-400 mb-2">
+                        <span>📊 Score</span>
+                        <span class="font-bold text-primary">${lead.quality_score}</span>
+                    </div>
+                    <div class="w-full bg-dark-700 rounded-full h-2">
+                        <div class="bg-primary h-2 rounded-full transition-all" style="width: ${scoreBarWidth}"></div>
+                    </div>
+                </div>
+                
+                <!-- Status -->
+                <div class="mb-6">
+                    <span class="text-sm text-gray-400">📌 Status:</span>
+                    <span class="inline-block ml-2 px-3 py-1 rounded ${statusBadge.class}">
+                        ${statusBadge.label}
+                    </span>
+                </div>
+                
+                <!-- Contact Info -->
+                <div class="space-y-3 mb-6 pb-6 border-b border-dark-700">
+                    ${lead.telefon ? `
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">📞 ${escapeHtml(lead.telefon)}</span>
+                        <button onclick="callLead(${lead.id})" class="px-3 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded text-sm">
+                            Anrufen
+                        </button>
+                    </div>
+                    ` : ''}
+                    ${lead.email ? `
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">📧 ${escapeHtml(lead.email)}</span>
+                        <button class="px-3 py-1 bg-primary/20 hover:bg-primary/30 text-primary rounded text-sm">
+                            Email
+                        </button>
+                    </div>
+                    ` : ''}
+                    ${lead.company ? `<div class="text-gray-300">🏢 ${escapeHtml(lead.company)}</div>` : ''}
+                    ${lead.location ? `<div class="text-gray-300">📍 ${escapeHtml(lead.location)}</div>` : ''}
+                    ${lead.linkedin_url ? `<div><a href="${escapeHtml(lead.linkedin_url)}" target="_blank" class="text-primary hover:underline">🔗 LinkedIn</a></div>` : ''}
+                    ${lead.xing_url ? `<div><a href="${escapeHtml(lead.xing_url)}" target="_blank" class="text-primary hover:underline">🔗 XING</a></div>` : ''}
+                </div>
+                
+                <!-- Timeline -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-gray-100 mb-3">📋 TIMELINE</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="p-3 bg-dark-900 rounded">
+                            <div class="text-gray-300">🆕 Lead erstellt</div>
+                            <div class="text-xs text-gray-500 mt-1">${formatDateTime(lead.created_at)}</div>
+                        </div>
+                        ${lead.last_called_at ? `
+                        <div class="p-3 bg-dark-900 rounded">
+                            <div class="text-gray-300">📞 Letzter Anruf</div>
+                            <div class="text-xs text-gray-500 mt-1">${formatDateTime(lead.last_called_at)}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <!-- Notes -->
+                <div>
+                    <h3 class="text-lg font-bold text-gray-100 mb-3">📝 NOTIZEN</h3>
+                    ${lead.notes ? `
+                    <div class="p-3 bg-dark-900 rounded text-gray-300 text-sm mb-3">
+                        ${escapeHtml(lead.notes)}
+                    </div>
+                    ` : ''}
+                    <textarea 
+                        placeholder="Notiz hinzufügen..." 
+                        class="w-full px-3 py-2 bg-dark-900 border border-dark-700 rounded text-gray-300 text-sm"
+                        rows="3"
+                    ></textarea>
+                    <button class="mt-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded text-sm">
+                        Notiz speichern
+                    </button>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading lead detail:', error);
+        panel.innerHTML = `
+            <div class="p-6">
+                <div class="text-red-400">Fehler beim Laden der Lead-Details</div>
+                <button onclick="closeLeadDetail()" class="mt-4 px-4 py-2 bg-dark-700 text-gray-300 rounded">
+                    Schließen
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Close lead detail slide-over
+ */
+function closeLeadDetail() {
+    const overlay = document.getElementById('lead-detail-overlay');
+    const panel = document.getElementById('lead-detail-panel');
+    
+    panel.classList.add('translate-x-full');
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+    }, 300);
+}
+
+/**
+ * Edit lead (placeholder)
+ */
+function editLead(leadId) {
+    alert(`Lead ${leadId} bearbeiten - Coming Soon`);
+}
+
+/**
+ * Call lead (placeholder)
+ */
+function callLead(leadId) {
+    alert(`Lead ${leadId} anrufen - Coming Soon (öffnet Telefon-Dashboard)`);
+}
+
+/**
+ * Export leads to CSV
+ */
+function exportLeads() {
+    // Create CSV content
+    const headers = ['Name', 'Email', 'Telefon', 'Firma', 'Status', 'Score', 'Quelle', 'Erstellt'];
+    const rows = filteredLeads.map(lead => [
+        lead.name,
+        lead.email || '',
+        lead.telefon || '',
+        lead.company || '',
+        lead.status,
+        lead.quality_score,
+        lead.source,
+        lead.created_at
+    ]);
+    
+    let csv = headers.join(',') + '\n';
+    rows.forEach(row => {
+        csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+    });
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `telis_leads_${new Date().toISOString().split('T')[0]}.csv`);
+    link.click();
+}
+
+// Helper functions
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('de-DE', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+}
+
+function getSourceLabel(source) {
+    const labels = {
+        'scraper': 'Scraper',
+        'landing_page': 'Landing',
+        'manual': 'Manuell',
+        'referral': 'Empfehlung'
+    };
+    return labels[source] || source;
+}
