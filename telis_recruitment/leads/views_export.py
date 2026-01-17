@@ -267,7 +267,7 @@ def export_leads_excel(request):
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except (TypeError, AttributeError):
                     pass
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column[0].column_letter].width = adjusted_width

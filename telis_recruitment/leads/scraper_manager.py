@@ -123,11 +123,12 @@ class ScraperManager:
             self.current_run_id = run.id
             
             # Build command
-            # Look for scriptname_backup.py (as mentioned in requirements)
+            # Look for scraper script - configurable via environment variable
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            script_path = os.path.join(project_root, 'scriptname_backup.py')
+            script_name = os.getenv('SCRAPER_SCRIPT', 'scriptname_backup.py')
+            script_path = os.path.join(project_root, script_name)
             
-            # Fallback to scriptname.py if backup doesn't exist
+            # Fallback to scriptname.py if configured script doesn't exist
             if not os.path.exists(script_path):
                 script_path = os.path.join(project_root, 'scriptname.py')
             

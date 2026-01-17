@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .scraper_manager import get_manager
 from .models import ScraperRun, ScraperConfig
-from .permissions import IsAdmin
+from .permissions import IsAdmin, CanControlScraper
 import logging
 
 logger = logging.getLogger(__name__)
