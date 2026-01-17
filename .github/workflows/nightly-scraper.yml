@@ -2,7 +2,8 @@ name: Nightly Scraper Run
 
 on:
   schedule:
-    # Täglich um 03:00 CET (02:00 UTC im Winter, 01:00 UTC im Sommer)
+    # Täglich um 02:00 UTC (entspricht 03:00 CET im Winter, 04:00 CEST im Sommer)
+    # Hinweis: Für 03:00 CET ganzjährig (inkl. Sommerzeit) wäre '0 1 * * *' nötig
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
@@ -103,7 +104,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: leads-xlsx-${{ github.run_number }}
+          name: leads-xlsx-${{ github.run_number }}-${{ github.run_attempt }}
           path: vertrieb_kontakte.xlsx
           if-no-files-found: ignore
           retention-days: 30

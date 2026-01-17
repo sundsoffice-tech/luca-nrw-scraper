@@ -11,7 +11,7 @@ Das Projekt verwendet GitHub Actions für:
 
 ### 1. Nightly Scraper (`nightly-scraper.yml`)
 
-**Zeitplan**: Täglich um 03:00 CET (02:00 UTC)
+**Zeitplan**: Täglich um 02:00 UTC (03:00 CET im Winter, 04:00 CEST im Sommer)
 
 **Was passiert**:
 1. Python Dependencies werden installiert
