@@ -9089,8 +9089,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("info", msg, **k)
 
     init_db()
-    # Declare ActiveLearningEngine as global to prevent UnboundLocalError (see line 9125)
-    # when accessing it before any local assignment in the function
+    # Declare ActiveLearningEngine as global to prevent UnboundLocalError
+    # when accessing it in the ACTIVE_MODE_CONFIG learning check below
     global _seen_urls_cache, ActiveLearningEngine
     _seen_urls_cache = set()
     con = None
