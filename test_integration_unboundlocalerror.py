@@ -84,8 +84,13 @@ def test_actual_function_signature():
     print("=" * 70)
     
     try:
-        # Read the actual file
-        script_path = os.path.join(os.path.dirname(__file__), 'scriptname.py')
+        # Read the actual file - handle both running from repo root and from tests dir
+        script_dir = os.path.dirname(__file__)
+        if os.path.basename(script_dir) == 'tests':
+            script_path = os.path.join(os.path.dirname(script_dir), 'scriptname.py')
+        else:
+            script_path = os.path.join(script_dir, 'scriptname.py')
+        
         with open(script_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
