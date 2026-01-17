@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.db import models, transaction
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
@@ -470,3 +471,68 @@ def trigger_sync(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ===============================
+# CRM Views
+# ===============================
+
+def get_user_role(user):
+    """Helper function to get user's role name"""
+    if not user.is_authenticated:
+        return None
+    
+    # Check for superuser
+    if user.is_superuser:
+        return 'Admin'
+    
+    # Get first group (primary role)
+    group = user.groups.first()
+    if group:
+        return group.name
+    
+    return 'Benutzer'
+
+
+def get_dashboard_stats(user):
+    """Get dashboard statistics for the user"""
+    from django.db.models import Count, Avg
+    from django.utils import timezone
+    
+    today = timezone.now().date()
+    
+    # Base queryset (filter by assigned_to for Telefonisten)
+    user_role = get_user_role(user)
+    if user_role == 'Telefonist':
+        leads_queryset = Lead.objects.filter(assigned_to=user)
+    else:
+        leads_queryset = Lead.objects.all()
+    
+    total = leads_queryset.count()
+    today_count = leads_queryset.filter(created_at__date=today).count()
+    
+    # Hot leads count
+    hot_leads = leads_queryset.filter(quality_score__gte=80, interest_level__gte=3).count()
+    
+    # Call stats (simplified for now)
+    calls_today = CallLog.objects.filter(called_at__date=today).count()
+    
+    return {
+        'total': total,
+        'today': today_count,
+        'hot_leads': hot_leads,
+        'calls_today': calls_today,
+    }
+
+
+@login_required
+def crm_dashboard(request):
+    """
+    Main CRM dashboard for logged-in users.
+    Shows overview statistics and quick actions.
+    """
+    context = {
+        'user_role': get_user_role(request.user),
+        'stats': get_dashboard_stats(request.user),
+    }
+    return render(request, 'crm/dashboard.html', context)

@@ -1,0 +1,169 @@
+{% extends 'crm/base.html' %}
+{% block title %}Dashboard - TELIS CRM{% endblock %}
+
+{% block content %}
+<!-- Welcome Message -->
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-100 mb-2">
+        Willkommen, {{ user.get_full_name|default:user.username }}! 👋
+    </h1>
+    <p class="text-gray-400">
+        {% if user_role %}
+            Sie sind angemeldet als <span class="text-primary font-semibold">{{ user_role }}</span>
+        {% else %}
+            Hier ist eine Übersicht Ihrer Aktivitäten
+        {% endif %}
+    </p>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Leads -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
+        <div class="flex items-center justify-between mb-4">
+            <div class="text-3xl">👥</div>
+            <div class="text-xs text-gray-400">Gesamt</div>
+        </div>
+        <div class="text-2xl font-bold text-gray-100 mb-1">
+            {{ stats.total|default:0 }}
+        </div>
+        <div class="text-sm text-gray-400">
+            Leads im System
+        </div>
+        <div class="mt-3 flex items-center text-xs">
+            <span class="text-green-400">+{{ stats.today|default:0 }}</span>
+            <span class="text-gray-500 ml-1">heute</span>
+        </div>
+    </div>
+
+    <!-- Calls Today -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
+        <div class="flex items-center justify-between mb-4">
+            <div class="text-3xl">📞</div>
+            <div class="text-xs text-gray-400">Heute</div>
+        </div>
+        <div class="text-2xl font-bold text-gray-100 mb-1">
+            {{ stats.calls_today|default:0 }}
+        </div>
+        <div class="text-sm text-gray-400">
+            Anrufe getätigt
+        </div>
+        <div class="mt-3 flex items-center text-xs">
+            <span class="text-gray-500">Durchschnitt: {{ stats.avg_calls|default:12 }}/Tag</span>
+        </div>
+    </div>
+
+    <!-- Conversion Rate -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
+        <div class="flex items-center justify-between mb-4">
+            <div class="text-3xl">📈</div>
+            <div class="text-xs text-gray-400">Performance</div>
+        </div>
+        <div class="text-2xl font-bold text-gray-100 mb-1">
+            {{ stats.conversion_rate|default:"12.5" }}%
+        </div>
+        <div class="text-sm text-gray-400">
+            Conversion Rate
+        </div>
+        <div class="mt-3 flex items-center text-xs">
+            <span class="text-green-400">↑ 2.3%</span>
+            <span class="text-gray-500 ml-1">vs. letzte Woche</span>
+        </div>
+    </div>
+
+    <!-- Hot Leads -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary/50 transition duration-150">
+        <div class="flex items-center justify-between mb-4">
+            <div class="text-3xl">🔥</div>
+            <div class="text-xs text-gray-400">Priorität</div>
+        </div>
+        <div class="text-2xl font-bold text-primary mb-1">
+            {{ stats.hot_leads|default:0 }}
+        </div>
+        <div class="text-sm text-gray-400">
+            Hot Leads
+        </div>
+        <div class="mt-3 flex items-center text-xs">
+            <span class="text-primary">Score ≥ 80</span>
+        </div>
+    </div>
+</div>
+
+<!-- Coming Soon Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Quick Actions -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+            <span class="text-2xl mr-2">⚡</span>
+            Schnellaktionen
+        </h2>
+        <div class="space-y-3">
+            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
+                <span class="flex items-center">
+                    <span class="text-xl mr-3">📞</span>
+                    Nächsten Lead anrufen
+                </span>
+                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+            </button>
+            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
+                <span class="flex items-center">
+                    <span class="text-xl mr-3">➕</span>
+                    Neuen Lead hinzufügen
+                </span>
+                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+            </button>
+            <button class="w-full flex items-center justify-between p-3 bg-dark-900 hover:bg-dark-700 rounded-lg transition duration-150 text-gray-400">
+                <span class="flex items-center">
+                    <span class="text-xl mr-3">📊</span>
+                    Tagesbericht erstellen
+                </span>
+                <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+            <span class="text-2xl mr-2">📋</span>
+            Letzte Aktivitäten
+        </h2>
+        <div class="space-y-3 text-gray-400">
+            <div class="p-3 bg-dark-900 rounded-lg">
+                <p class="text-sm">📊 Dashboard wird geladen...</p>
+                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
+            </div>
+            <div class="p-3 bg-dark-900 rounded-lg">
+                <p class="text-sm">🔔 Benachrichtigungen werden geladen...</p>
+                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
+            </div>
+            <div class="p-3 bg-dark-900 rounded-lg">
+                <p class="text-sm">⏰ Termine werden geladen...</p>
+                <p class="text-xs text-gray-500 mt-1">Coming Soon</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Info Banner -->
+<div class="mt-8 bg-primary/10 border border-primary/30 rounded-lg p-6">
+    <div class="flex items-start">
+        <div class="text-3xl mr-4">🚀</div>
+        <div>
+            <h3 class="text-lg font-bold text-primary mb-2">CRM Phase 1 - Grundgerüst</h3>
+            <p class="text-gray-300 text-sm">
+                Das TELIS CRM System befindet sich im Aufbau. Die Benutzerrollen sind aktiv und das Dashboard-Grundgerüst steht.
+                In den nächsten Phasen werden weitere Features wie Lead-Verwaltung, Telefonie und Reports hinzugefügt.
+            </p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Benutzerrollen</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Login/Logout</span>
+                <span class="text-xs px-3 py-1 bg-green-900/30 text-green-400 rounded-full">✓ Dashboard</span>
+                <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Lead-Verwaltung</span>
+                <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Telefonie</span>
+                <span class="text-xs px-3 py-1 bg-yellow-900/30 text-yellow-400 rounded-full">○ Reports</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
