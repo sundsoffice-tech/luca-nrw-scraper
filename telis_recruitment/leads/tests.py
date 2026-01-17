@@ -1315,3 +1315,213 @@ class OptInAPITest(TestCase):
         data = response.json()
         self.assertIn('error', data)
 
+
+# ==========================
+# Brevo Integration Tests
+# ==========================
+
+class BrevoIntegrationTest(TestCase):
+    """Tests for Brevo email integration"""
+    
+    def test_brevo_module_imports_without_sdk(self):
+        """Test that Brevo module imports gracefully without SDK installed"""
+        from leads.services import brevo
+        
+        # Module should import successfully
+        self.assertIsNotNone(brevo)
+        
+        # Should have BREVO_AVAILABLE flag
+        self.assertIsInstance(brevo.BREVO_AVAILABLE, bool)
+    
+    def test_brevo_graceful_degradation(self):
+        """Test that Brevo functions return False/None when SDK not available"""
+        from leads.services import brevo
+        
+        # Mock BREVO_AVAILABLE to False
+        original_available = brevo.BREVO_AVAILABLE
+        try:
+            brevo.BREVO_AVAILABLE = False
+            
+            # get_brevo_config should return None
+            config = brevo.get_brevo_config()
+            self.assertIsNone(config)
+            
+            # create_or_update_contact should return False
+            result = brevo.create_or_update_contact('test@example.com', {'VORNAME': 'Test'})
+            self.assertFalse(result)
+            
+            # send_transactional_email should return None
+            message_id = brevo.send_transactional_email('test@example.com', 'Test', 1)
+            self.assertIsNone(message_id)
+            
+        finally:
+            brevo.BREVO_AVAILABLE = original_available
+    
+    def test_signal_does_not_break_without_brevo(self):
+        """Test that lead creation works even when Brevo is not configured"""
+        from django.conf import settings
+        
+        # Temporarily remove Brevo API key
+        original_api_key = getattr(settings, 'BREVO_API_KEY', None)
+        try:
+            settings.BREVO_API_KEY = None
+            
+            # Create a landing page lead
+            lead = Lead.objects.create(
+                name='Signal Test User',
+                email='signaltest@example.com',
+                source=Lead.Source.LANDING_PAGE,
+                quality_score=70,
+                interest_level=3
+            )
+            
+            # Lead should be created successfully
+            self.assertIsNotNone(lead.id)
+            self.assertEqual(lead.email, 'signaltest@example.com')
+            
+        finally:
+            settings.BREVO_API_KEY = original_api_key
+
+
+class BrevoWebhookTest(TestCase):
+    """Tests for Brevo webhook endpoint"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.url = '/api/webhooks/brevo/'
+        self.lead = Lead.objects.create(
+            name='Webhook Test Lead',
+            email='webhook@example.com',
+            source=Lead.Source.LANDING_PAGE
+        )
+    
+    def test_webhook_email_opened(self):
+        """Test webhook for email opened event"""
+        data = {
+            'event': 'opened',
+            'email': 'webhook@example.com'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['event'], 'opened')
+        
+        # Verify lead was updated
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.email_opens, 1)
+    
+    def test_webhook_email_clicked(self):
+        """Test webhook for email clicked event"""
+        data = {
+            'event': 'click',
+            'email': 'webhook@example.com'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify lead was updated
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.email_clicks, 1)
+    
+    def test_webhook_hard_bounce(self):
+        """Test webhook for hard bounce event"""
+        data = {
+            'event': 'hard_bounce',
+            'email': 'webhook@example.com'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify lead status was updated
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.Status.INVALID)
+        self.assertIn('Hard Bounce', self.lead.notes)
+    
+    def test_webhook_unsubscribed(self):
+        """Test webhook for unsubscribe event"""
+        self.lead.interest_level = 5
+        self.lead.save()
+        
+        data = {
+            'event': 'unsubscribed',
+            'email': 'webhook@example.com'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify lead interest was set to 0
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.interest_level, 0)
+        self.assertIn('Abgemeldet', self.lead.notes)
+    
+    def test_webhook_missing_email(self):
+        """Test webhook with missing email"""
+        data = {
+            'event': 'opened'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        result = response.json()
+        self.assertIn('error', result)
+    
+    def test_webhook_lead_not_found(self):
+        """Test webhook for non-existent lead"""
+        data = {
+            'event': 'opened',
+            'email': 'nonexistent@example.com'
+        }
+        
+        response = self.client.post(
+            self.url,
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result['status'], 'ignored')
+        self.assertEqual(result['reason'], 'lead_not_found')
+    
+    def test_webhook_invalid_json(self):
+        """Test webhook with invalid JSON"""
+        response = self.client.post(
+            self.url,
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        result = response.json()
+        self.assertIn('error', result)
+
