@@ -1,0 +1,99 @@
+name: Manual CSV Import
+
+on:
+  workflow_dispatch:
+    inputs:
+      csv_url:
+        description: 'URL to CSV file (optional, uses latest artifact if empty)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run (no actual import)'
+        required: false
+        default: false
+        type: boolean
+      force_update:
+        description: 'Force update existing leads'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  import:
+    name: Import CSV to Django
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r telis_recruitment/requirements.txt
+      
+      - name: Download CSV from URL
+        if: github.event.inputs.csv_url != ''
+        run: |
+          curl -L "${{ github.event.inputs.csv_url }}" -o vertrieb_kontakte.csv
+          echo "Downloaded CSV from URL"
+      
+      - name: Download latest artifact
+        if: github.event.inputs.csv_url == ''
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: nightly-scraper.yml
+          name: leads-*
+          path: .
+          search_artifacts: true
+        continue-on-error: true
+      
+      - name: Check CSV exists
+        id: check_csv
+        run: |
+          if [ -f "vertrieb_kontakte.csv" ]; then
+            echo "csv_exists=true" >> $GITHUB_OUTPUT
+            LEAD_COUNT=$(tail -n +2 vertrieb_kontakte.csv | wc -l)
+            echo "Found CSV with $LEAD_COUNT leads"
+          else
+            echo "csv_exists=false" >> $GITHUB_OUTPUT
+            echo "No CSV file found"
+            exit 1
+          fi
+      
+      - name: Run Import
+        if: steps.check_csv.outputs.csv_exists == 'true'
+        env:
+          DJANGO_SETTINGS_MODULE: telis.settings
+          SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'github-actions-temp-key' }}
+          DEBUG: 'False'
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd telis_recruitment
+          
+          # Build command
+          CMD="python manage.py import_scraper_csv ../vertrieb_kontakte.csv"
+          
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            CMD="$CMD --dry-run"
+          fi
+          
+          if [ "${{ github.event.inputs.force_update }}" == "true" ]; then
+            CMD="$CMD --force-update"
+          fi
+          
+          # Run migrations
+          python manage.py migrate --no-input
+          
+          # Run import
+          echo "Running: $CMD"
+          $CMD
