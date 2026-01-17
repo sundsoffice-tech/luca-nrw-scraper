@@ -9089,7 +9089,9 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("info", msg, **k)
 
     init_db()
-    global _seen_urls_cache
+    # Declare ActiveLearningEngine as global to prevent UnboundLocalError
+    # when accessing it in the ACTIVE_MODE_CONFIG learning check below
+    global _seen_urls_cache, ActiveLearningEngine
     _seen_urls_cache = set()
     con = None
     try:
@@ -9561,24 +9563,24 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         
         # Post-run learning analysis
         try:
-            from ai_learning_engine import ActiveLearningEngine
-            learning = ActiveLearningEngine()
-            summary = learning.get_learning_summary()
-            
-            _uilog("=== LEARNING REPORT ===")
-            _uilog(f"Portal Stats: {summary['portal_stats']}")
-            _uilog(f"Best Dorks: {summary['best_dorks']}")
-            _uilog(f"Learned Patterns: {summary['learned_patterns']}")
-            _uilog(f"Disabled Portals: {summary['disabled_portals']}")
-            
-            # Empfehlungen generieren
-            recommendations = []
-            for portal, stats in summary['portal_stats'].items():
-                if stats['avg_success'] < 1.0:
-                    recommendations.append(f"Portal {portal} hat nur {stats['avg_success']}% Erfolg")
-            
-            if recommendations:
-                _uilog(f"Learning Empfehlungen: {recommendations}")
+            if ActiveLearningEngine is not None:
+                learning = ActiveLearningEngine()
+                summary = learning.get_learning_summary()
+                
+                _uilog("=== LEARNING REPORT ===")
+                _uilog(f"Portal Stats: {summary['portal_stats']}")
+                _uilog(f"Best Dorks: {summary['best_dorks']}")
+                _uilog(f"Learned Patterns: {summary['learned_patterns']}")
+                _uilog(f"Disabled Portals: {summary['disabled_portals']}")
+                
+                # Empfehlungen generieren
+                recommendations = []
+                for portal, stats in summary['portal_stats'].items():
+                    if stats['avg_success'] < 1.0:
+                        recommendations.append(f"Portal {portal} hat nur {stats['avg_success']}% Erfolg")
+                
+                if recommendations:
+                    _uilog(f"Learning Empfehlungen: {recommendations}")
         except Exception as e:
             log("debug", "Learning report failed", error=str(e))
         # Run post-run learning analysis
