@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 import io
 import csv
+import json
 import tempfile
 from pathlib import Path
 from .models import Lead, CallLog, EmailLog
@@ -1157,4 +1158,160 @@ class ImportScraperCSVCommandTest(TestCase):
         # Check output mentions Latin-1
         output = out.getvalue()
         self.assertIn('Latin-1', output)
+
+
+# ==========================
+# Landing Page Tests
+# ==========================
+
+class LandingPageTest(TestCase):
+    """Tests for landing page"""
+    
+    def test_landing_page_loads(self):
+        """Test that landing page loads successfully"""
+        response = self.client.get('/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'TELIS Recruitment')
+        self.assertContains(response, 'VERDIENE BIS ZU €7000/MONAT')
+        self.assertContains(response, 'JETZT STARTEN')
+
+
+class OptInAPITest(TestCase):
+    """Tests for opt-in API endpoint"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.url = '/api/opt-in/'
+    
+    def test_opt_in_creates_lead(self):
+        """Test that opt-in creates a new lead"""
+        data = {
+            'name': 'Test User',
+            'email': 'test@example.com',
+            'telefon': '0123456789'
+        }
+        
+        response = self.client.post(
+            self.url, 
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('lead_id', data)
+        
+        # Verify lead was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.name, 'Test User')
+        self.assertEqual(lead.email, 'test@example.com')
+        self.assertEqual(lead.telefon, '0123456789')
+        self.assertEqual(lead.source, Lead.Source.LANDING_PAGE)
+        self.assertEqual(lead.status, Lead.Status.NEW)
+        self.assertEqual(lead.quality_score, 70)
+        self.assertEqual(lead.interest_level, 3)
+    
+    def test_opt_in_without_phone(self):
+        """Test that opt-in works without phone number"""
+        data = {
+            'name': 'Test User',
+            'email': 'test@example.com',
+        }
+        
+        response = self.client.post(
+            self.url, 
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 201)
+        
+        # Verify lead was created without phone
+        lead = Lead.objects.first()
+        self.assertIsNone(lead.telefon)
+    
+    def test_opt_in_duplicate_email(self):
+        """Test that duplicate email updates existing lead"""
+        # Create existing lead
+        existing = Lead.objects.create(
+            name='Existing User',
+            email='test@example.com',
+            source=Lead.Source.SCRAPER,
+            quality_score=50,
+            interest_level=1
+        )
+        
+        data = {
+            'name': 'Test User',
+            'email': 'test@example.com',
+            'telefon': '0123456789'
+        }
+        
+        response = self.client.post(
+            self.url, 
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['message'], 'Willkommen zurück!')
+        
+        # Verify no duplicate was created
+        self.assertEqual(Lead.objects.count(), 1)
+        
+        # Verify lead was updated
+        existing.refresh_from_db()
+        self.assertEqual(existing.interest_level, 3)
+        self.assertIn('Re-Opt-In', existing.source_detail)
+    
+    def test_opt_in_missing_name(self):
+        """Test that opt-in requires name"""
+        data = {
+            'email': 'test@example.com',
+        }
+        
+        response = self.client.post(
+            self.url, 
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn('error', data)
+        self.assertIn('Name', data['error'])
+    
+    def test_opt_in_missing_email(self):
+        """Test that opt-in requires email"""
+        data = {
+            'name': 'Test User',
+        }
+        
+        response = self.client.post(
+            self.url, 
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn('error', data)
+        self.assertIn('E-Mail', data['error'])
+    
+    def test_opt_in_invalid_json(self):
+        """Test that opt-in handles invalid JSON"""
+        response = self.client.post(
+            self.url, 
+            data='invalid json',
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn('error', data)
 
