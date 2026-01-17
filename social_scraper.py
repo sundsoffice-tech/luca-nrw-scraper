@@ -61,33 +61,37 @@ class SocialMediaScraper:
     
     def build_linkedin_search_urls(self) -> List[str]:
         """
-        LinkedIn Job-Sucher URLs
+        LinkedIn Active Professional URLs (NOT job seekers)
         
         Returns:
-            Liste der LinkedIn Such-URLs
+            Liste der LinkedIn Such-URLs für aktive Vertriebler
         """
         return [
             # NRW ist Geo-URN 101282230
-            "https://www.linkedin.com/search/results/people/?keywords=vertrieb%20offen%20f%C3%BCr%20angebote&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
-            "https://www.linkedin.com/search/results/people/?keywords=sales%20open%20to%20work&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
-            "https://www.linkedin.com/search/results/people/?keywords=au%C3%9Fendienst%20suche%20job&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
-            "https://www.linkedin.com/search/results/people/?keywords=key%20account%20manager%20offen&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
+            # NEUE STRATEGIE: Aktive Vertriebler OHNE #opentowork
+            "https://www.linkedin.com/search/results/people/?keywords=account%20manager&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
+            "https://www.linkedin.com/search/results/people/?keywords=sales%20manager&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
+            "https://www.linkedin.com/search/results/people/?keywords=vertriebsleiter&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
+            "https://www.linkedin.com/search/results/people/?keywords=key%20account%20manager&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
+            "https://www.linkedin.com/search/results/people/?keywords=business%20development&origin=GLOBAL_SEARCH_HEADER&geoUrn=%5B%22101282230%22%5D",
         ]
     
     # ==================== XING ====================
     
     def build_xing_search_urls(self) -> List[str]:
         """
-        XING Kandidaten-Suche
+        XING Active Professional Search (NOT job seekers)
         
         Returns:
-            Liste der XING Such-URLs
+            Liste der XING Such-URLs für aktive Vertriebler
         """
         return [
-            "https://www.xing.com/search/members?keywords=vertrieb%20auf%20jobsuche&location=Nordrhein-Westfalen",
-            "https://www.xing.com/search/members?keywords=sales%20offen%20f%C3%BCr%20angebote&location=NRW",
-            "https://www.xing.com/search/members?keywords=au%C3%9Fendienst%20suche%20position&location=Nordrhein-Westfalen",
-            "https://www.xing.com/search/members?keywords=vertriebsmitarbeiter%20verf%C3%BCgbar&location=NRW",
+            # NEUE STRATEGIE: Aktive Vertriebler in Position
+            "https://www.xing.com/search/members?keywords=vertriebsleiter&location=Nordrhein-Westfalen",
+            "https://www.xing.com/search/members?keywords=account%20manager&location=NRW",
+            "https://www.xing.com/search/members?keywords=sales%20manager&location=Nordrhein-Westfalen",
+            "https://www.xing.com/search/members?keywords=handelsvertreter&location=NRW",
+            "https://www.xing.com/search/members?keywords=au%C3%9Fendienst&location=Nordrhein-Westfalen",
         ]
     
     # ==================== TELEGRAM ====================

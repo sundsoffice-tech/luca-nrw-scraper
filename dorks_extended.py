@@ -2,7 +2,8 @@
 """
 Erweiterte Dork-Sammlung für maximale Lead-Generierung
 
-Diese Datei enthält über 100 spezialisierte Google Dorks für:
+Diese Datei enthält spezialisierte Google Dorks für:
+- Talent Hunt (aktive Vertriebler finden)
 - Direkte Stellengesuche
 - Site-spezifische Suchen
 - URL-Pattern Suchen
@@ -14,72 +15,75 @@ import random
 from typing import List, Dict
 
 
-# Basis-Dorks für Stellengesuche
+# ══════════════════════════════════════════════════════════════
+# NEUE KATEGORIE: TALENT HUNT DORKS (Aktive Vertriebler)
+# ══════════════════════════════════════════════════════════════
+
+TALENT_HUNT_DORKS = [
+    # LinkedIn Profiles - OHNE #opentowork
+    'site:linkedin.com/in "Account Manager" "NRW" -"#opentowork"',
+    'site:linkedin.com/in "Sales Manager" "Düsseldorf" -"#opentowork"',
+    'site:linkedin.com/in "Vertriebsleiter" "NRW" -"open to work"',
+    'site:linkedin.com/in "Key Account" "Deutschland" -"#opentowork"',
+    'site:linkedin.com/in "Business Development" "NRW" -"#opentowork"',
+    
+    # Xing Profiles
+    'site:xing.com/profile "Vertriebsmitarbeiter" "NRW" kontakt',
+    'site:xing.com/profile "Handelsvertreter" "Nordrhein-Westfalen"',
+    'site:xing.com/profile "Sales Representative" "Deutschland"',
+    'site:xing.com/profile "Account Manager" telefon',
+    
+    # Team-Seiten
+    'intitle:"Unser Team" "Vertrieb" "NRW" kontakt',
+    'intitle:"Team" "Sales" telefon',
+    '"Ansprechpartner Vertrieb" telefon NRW',
+    'inurl:team "Vertriebsleiter" kontakt',
+    'inurl:mitarbeiter "Account Manager" email',
+]
+
+TEAM_PAGE_DORKS = [
+    'intitle:"Unser Team" "Vertrieb" kontakt',
+    'intitle:"Team" "Sales" ("Düsseldorf" OR "Köln")',
+    '"Ansprechpartner Vertrieb" telefon',
+    '"Ihr Ansprechpartner" "Außendienst" kontakt',
+    'inurl:team "Vertriebsleiter" telefon',
+    'inurl:mitarbeiter "Sales" email',
+    'inurl:about "Vertrieb" kontakt',
+]
+
+LINKEDIN_PROFILE_DORKS = [
+    'site:linkedin.com/in "Sales Manager" "Germany" -"#opentowork"',
+    'site:linkedin.com/in "Account Manager" "NRW" -"open to work"',
+    'site:linkedin.com/in "Vertriebsleiter" "Deutschland" -"#opentowork"',
+    'site:linkedin.com/in "Business Development" -"#opentowork"',
+    'site:linkedin.com/in "Key Account Manager" "NRW" -"open to work"',
+    'site:linkedin.com/in "Regional Sales" "Deutschland" -"#opentowork"',
+]
+
+FREELANCER_DORKS = [
+    'site:freelancermap.de "Vertrieb" "verfügbar" kontakt',
+    'site:gulp.de "Sales" "freiberuflich" telefon',
+    'site:twago.de "Vertriebsprofi" kontakt',
+    'site:freelance.de "Handelsvertreter" "selbstständig"',
+]
+
+HANDELSVERTRETER_REGISTRY_DORKS = [
+    'site:cdh.de "Handelsvertreter" "NRW" kontakt',
+    'site:handelskammer.de "Handelsvertreter" telefon',
+    '"Handelsvertreterregister" NRW kontakt',
+    'site:ihk.de "Handelsvertreter" "Vertretung" kontakt',
+]
+
+# ══════════════════════════════════════════════════════════════
+# MINIMIERTE JOB SEEKER DORKS (nur Top-Performer behalten)
+# ══════════════════════════════════════════════════════════════
+
+# Basis-Dorks für Stellengesuche - REDUZIERT
 JOB_SEEKER_DORKS = [
-    # Direkte Stellengesuche
-    '"suche arbeit" telefon NRW',
-    '"suche job" kontakt Nordrhein-Westfalen',
-    '"suche stelle" mobil vertrieb',
-    '"arbeit gesucht" telefonnummer',
-    '"verfügbar ab sofort" kontakt vertrieb',
-    '"auf jobsuche" telefon NRW',
-    
-    # Mit Ortsangaben - Düsseldorf
-    '"suche arbeit" telefon Düsseldorf',
-    '"suche arbeit" mobil Düsseldorf',
-    '"arbeit gesucht" kontakt Düsseldorf',
-    
-    # Mit Ortsangaben - Köln
-    '"suche arbeit" telefon Köln',
-    '"suche arbeit" mobil Köln',
-    '"arbeit gesucht" kontakt Köln',
-    
-    # Mit Ortsangaben - Dortmund
-    '"suche arbeit" telefon Dortmund',
-    '"suche arbeit" mobil Dortmund',
-    
-    # Mit Ortsangaben - Essen
-    '"suche arbeit" telefon Essen',
-    '"suche arbeit" mobil Essen',
-    
-    # Mit Ortsangaben - Duisburg
-    '"suche arbeit" telefon Duisburg',
-    
-    # Mit Ortsangaben - Bochum
-    '"suche arbeit" telefon Bochum',
-    
-    # Mit Ortsangaben - Wuppertal
-    '"suche arbeit" telefon Wuppertal',
-    
-    # Mit Ortsangaben - Bielefeld
-    '"suche arbeit" telefon Bielefeld',
-    
-    # Mit Ortsangaben - Münster
-    '"suche arbeit" telefon Münster',
-    
-    # Mit Ortsangaben - Bonn
-    '"suche arbeit" telefon Bonn',
-    
-    # Branchen-spezifisch
-    '"vertriebserfahrung" "suche neue herausforderung" kontakt',
-    '"sales manager" "offen für angebote" telefon',
-    '"key account" stellengesuch mobil',
-    '"außendienst" "suche position" telefon',
-    '"kundenberater" stellengesuch kontakt',
-    
-    # Qualifikations-basiert
-    '"kaufmännische ausbildung" "suche arbeit" telefon',
-    '"berufserfahrung" "suche stelle" mobil NRW',
-    '"führerschein klasse b" stellengesuch telefon',
-    
-    # Verfügbarkeit
-    '"ab sofort verfügbar" telefon vertrieb',
-    '"kurzfristig verfügbar" kontakt NRW',
-    '"flexible arbeitszeiten" stellengesuch mobil',
-    
-    # Gehaltsvorstellung (zeigt ernsthafte Kandidaten)
-    '"gehaltsvorstellung" stellengesuch telefon NRW',
-    '"verhandlungsbasis" "suche stelle" kontakt',
+    # Nur die Top-Performer-Dorks behalten
+    'site:kleinanzeigen.de/s-stellengesuche "vertrieb" "NRW"',
+    'site:kleinanzeigen.de/s-stellengesuche "sales" telefon',
+    'site:kleinanzeigen.de/s-stellengesuche "außendienst"',
 ]
 
 # Site-spezifische Dorks

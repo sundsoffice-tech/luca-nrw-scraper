@@ -1092,12 +1092,65 @@ def is_mobile_number(phone: str) -> bool:
     return False
 
 
+def extract_competitor_intel(url: str = "", title: str = "", snippet: str = "", content: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Extract competitive intelligence from job postings instead of discarding them.
+    
+    Job postings reveal:
+    - Which companies are hiring (potential sources for unhappy salespeople)
+    - What conditions they offer
+    - HR contacts for referrals
+    
+    Args:
+        url: Page URL
+        title: Page or snippet title
+        snippet: Search result snippet
+        content: Full page content
+    
+    Returns:
+        Dict with competitor intelligence or None if not a job posting
+    """
+    if not is_job_posting(url, title, snippet, content):
+        return None
+    
+    intel = {
+        "type": "competitor_intel",
+        "url": url,
+        "title": title,
+        "is_job_posting": True,
+    }
+    
+    # Extract company name from URL or title
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc if url else ""
+    intel["company_domain"] = domain
+    
+    # Extract salary/benefits hints
+    combined = ' '.join([title or '', snippet or '', content[:1000] if content else ''])
+    combined_lower = combined.lower()
+    
+    if any(term in combined_lower for term in ["gehalt", "vergütung", "€", "eur", "provision"]):
+        intel["has_salary_info"] = True
+    
+    if any(term in combined_lower for term in ["firmenwagen", "dienstwagen", "homeoffice"]):
+        intel["has_benefits"] = True
+    
+    # Extract HR contact hints
+    import re
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    emails = re.findall(email_pattern, combined)
+    if emails:
+        intel["hr_emails"] = emails[:3]  # Keep first 3
+    
+    return intel
+
+
 def is_job_posting(url: str = "", title: str = "", snippet: str = "", content: str = "") -> bool:
     """
     Detect if content is a job posting/advertisement.
     
-    Job postings should NEVER be saved as leads, even if they contain mobile numbers.
-    This is a critical filter that must be applied before lead saving.
+    NOTE: In talent_hunt mode, job postings are used for competitive intelligence
+    rather than being completely filtered out.
     
     Args:
         url: Page URL
@@ -1122,10 +1175,10 @@ def is_job_posting(url: str = "", title: str = "", snippet: str = "", content: s
         # German
         'wir suchen', 'stellenanzeige', 'bewerbung', 'job-id', 
         'arbeitsort', 'eintrittsdatum', '(m/w/d)', '(w/m/d)', '(d/m/w)',
-        'vollzeit', 'teilzeit', 'ab sofort', 'bewerben sie sich',
+        'vollzeit', 'teilzeit', 'bewerben sie sich',
         'ihr profil', 'ihre aufgaben', 'wir bieten', 'benefits',
-        'firmenwagen', 'unbefristete', 'befristete', 'gehalt',
-        'karrierestufe', 'berufserfahrung', 'anstellungsart',
+        'firmenwagen', 'unbefristete', 'befristete',
+        'karrierestufe', 'anstellungsart',
         'online bewerben', 'jetzt bewerben', 'bewerbungsunterlagen',
         'anschreiben', 'lebenslauf einreichen', 'bewerber',
         # English
@@ -1171,15 +1224,14 @@ def is_job_posting(url: str = "", title: str = "", snippet: str = "", content: s
     # Check content signals (need multiple hits to be sure)
     signal_count = sum(1 for signal in JOB_CONTENT_SIGNALS if signal in combined)
     
-    # If we find 3+ job signals, it's likely a job posting
-    if signal_count >= 3:
+    # Increased threshold to 4+ to be less aggressive (was 3)
+    if signal_count >= 4:
         return True
     
     # Special case: very strong single indicators
     strong_indicators = [
         'stellenanzeige', 'job-id:', 'bewerben sie sich jetzt',
-        'online bewerben', 'jetzt bewerben', 'apply now',
-        'submit application', 'bewerbungsformular'
+        'online bewerben', 'bewerbungsformular'
     ]
     if any(indicator in combined for indicator in strong_indicators):
         return True
