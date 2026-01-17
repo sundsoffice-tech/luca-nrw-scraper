@@ -43,7 +43,12 @@ class LeadViewSet(viewsets.ModelViewSet):
         # Filter by minimum score
         min_score = self.request.query_params.get('min_score')
         if min_score:
-            queryset = queryset.filter(quality_score__gte=int(min_score))
+            try:
+                min_score_int = int(min_score)
+                queryset = queryset.filter(quality_score__gte=min_score_int)
+            except (ValueError, TypeError):
+                # Invalid min_score value, ignore the filter
+                pass
         
         # Filter by has phone
         has_phone = self.request.query_params.get('has_phone')
@@ -112,7 +117,7 @@ class LeadViewSet(viewsets.ModelViewSet):
             'duration_seconds': request.data.get('duration_seconds', 0),
             'interest_level': request.data.get('interest_level', 0),
             'notes': request.data.get('notes', ''),
-            'called_by': request.user.id if request.user.is_authenticated else None,
+            'called_by': request.user.id,
         })
         
         if serializer.is_valid():
@@ -173,6 +178,7 @@ def import_csv(request):
     """
     CSV-Import Endpoint für Scraper-Daten.
     Erwartet: POST mit file-Upload
+    Note: CSRF exempt for automated scraper access. Consider adding API key authentication.
     """
     try:
         if 'file' not in request.FILES:
@@ -204,8 +210,15 @@ def import_csv(request):
                     if not existing and telefon:
                         existing = Lead.objects.filter(telefon=telefon).first()
                     
+                    # Parse and validate score
+                    try:
+                        score_value = row.get('score', 50)
+                        new_score = int(score_value) if score_value else 50
+                        new_score = max(0, min(100, new_score))  # Clamp to 0-100 range
+                    except (ValueError, TypeError):
+                        new_score = 50  # Default score if invalid
+                    
                     if existing:
-                        new_score = int(row.get('score', 50) or 50)
                         if new_score > existing.quality_score:
                             existing.quality_score = new_score
                             existing.save()
@@ -223,7 +236,7 @@ def import_csv(request):
                             telefon=telefon,
                             source=Lead.Source.SCRAPER,
                             source_url=(row.get('quelle') or '')[:200] or None,
-                            quality_score=int(row.get('score', 50) or 50),
+                            quality_score=new_score,
                             lead_type=lead_type,
                             company=(row.get('company_name') or row.get('firma') or '')[:255] or None,
                             role=(row.get('rolle') or row.get('position') or '')[:255] or None,
