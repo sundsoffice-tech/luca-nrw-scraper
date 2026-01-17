@@ -2,14 +2,16 @@ from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core.management import call_command
+from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 import io
 import csv
 import json
 import tempfile
+import sqlite3
 from pathlib import Path
-from .models import Lead, CallLog, EmailLog
+from .models import Lead, CallLog, EmailLog, SyncStatus
 
 
 class LeadModelTest(TestCase):
@@ -698,6 +700,621 @@ class HealthCheckAPITest(APITestCase):
         data = response.json()
         self.assertEqual(data['status'], 'ok')
         self.assertEqual(data['service'], 'telis-recruitment-api')
+
+
+class ImportScraperCSVCommandTest(TestCase):
+    """Tests for import_scraper_csv management command"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create a temporary directory for test CSV files
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+    
+    def tearDown(self):
+        """Clean up temporary files"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+
+class SyncStatusModelTest(TestCase):
+    """Tests for SyncStatus model"""
+    
+    def test_sync_status_creation(self):
+        """Test that a sync status can be created"""
+        sync_status = SyncStatus.objects.create(
+            source='scraper_db',
+            last_sync_at=timezone.now(),
+            last_lead_id=100,
+            leads_imported=50,
+            leads_updated=10,
+            leads_skipped=5
+        )
+        
+        self.assertEqual(sync_status.source, 'scraper_db')
+        self.assertEqual(sync_status.last_lead_id, 100)
+        self.assertEqual(sync_status.leads_imported, 50)
+        self.assertEqual(sync_status.leads_updated, 10)
+        self.assertEqual(sync_status.leads_skipped, 5)
+    
+    def test_sync_status_str(self):
+        """Test the string representation of sync status"""
+        now = timezone.now()
+        sync_status = SyncStatus.objects.create(
+            source='scraper_db',
+            last_sync_at=now,
+            last_lead_id=50
+        )
+        
+        expected = f"scraper_db (letzter Sync: {now})"
+        self.assertEqual(str(sync_status), expected)
+    
+    def test_sync_status_unique_source(self):
+        """Test that source is unique"""
+        SyncStatus.objects.create(
+            source='scraper_db',
+            last_sync_at=timezone.now(),
+            last_lead_id=50
+        )
+        
+        # Try to create another with same source
+        with self.assertRaises(Exception):
+            SyncStatus.objects.create(
+                source='scraper_db',
+                last_sync_at=timezone.now(),
+                last_lead_id=100
+            )
+    
+    def test_sync_status_ordering(self):
+        """Test that sync statuses are ordered by last_sync_at descending"""
+        from datetime import timedelta
+        
+        now = timezone.now()
+        old_sync = SyncStatus.objects.create(
+            source='source_old',
+            last_sync_at=now - timedelta(days=1),
+            last_lead_id=50
+        )
+        
+        new_sync = SyncStatus.objects.create(
+            source='source_new',
+            last_sync_at=now,
+            last_lead_id=100
+        )
+        
+        sync_list = list(SyncStatus.objects.all())
+        self.assertEqual(sync_list[0], new_sync)  # Most recent first
+        self.assertEqual(sync_list[1], old_sync)
+
+
+class ImportScraperDBCommandTest(TestCase):
+    """Tests for import_scraper_db management command"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create a temporary directory for test database
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+        self.test_db_path = self.temp_path / 'test_scraper.db'
+    
+    def tearDown(self):
+        """Clean up temporary files"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    def _create_test_scraper_db(self, leads_data):
+        """Helper to create a test scraper database"""
+        conn = sqlite3.connect(str(self.test_db_path))
+        cursor = conn.cursor()
+        
+        # Create leads table with scraper schema
+        cursor.execute("""
+            CREATE TABLE leads(
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                rolle TEXT,
+                email TEXT,
+                telefon TEXT,
+                quelle TEXT,
+                score INT,
+                tags TEXT,
+                region TEXT,
+                role_guess TEXT,
+                lead_type TEXT,
+                company_name TEXT,
+                location_specific TEXT,
+                confidence_score INT,
+                social_profile_url TEXT,
+                last_updated TEXT
+            )
+        """)
+        
+        # Insert test data
+        for lead in leads_data:
+            cursor.execute("""
+                INSERT INTO leads (
+                    id, name, rolle, email, telefon, quelle, score, tags, region,
+                    role_guess, lead_type, company_name, location_specific,
+                    confidence_score, social_profile_url, last_updated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                lead.get('id'),
+                lead.get('name'),
+                lead.get('rolle'),
+                lead.get('email'),
+                lead.get('telefon'),
+                lead.get('quelle'),
+                lead.get('score', 50),
+                lead.get('tags'),
+                lead.get('region'),
+                lead.get('role_guess'),
+                lead.get('lead_type'),
+                lead.get('company_name'),
+                lead.get('location_specific'),
+                lead.get('confidence_score'),
+                lead.get('social_profile_url'),
+                lead.get('last_updated')
+            ))
+        
+        conn.commit()
+        conn.close()
+    
+    def test_import_new_leads_from_db(self):
+        """Test importing new leads from scraper.db"""
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Max Mustermann',
+                'email': 'max@example.com',
+                'telefon': '0123456789',
+                'score': 85,
+                'company_name': 'Test GmbH',
+                'role_guess': 'Vertriebsleiter',
+                'location_specific': 'Köln',
+                'lead_type': 'active_salesperson',
+                'quelle': 'https://example.com/profile',
+            },
+            {
+                'id': 2,
+                'name': 'Anna Schmidt',
+                'email': 'anna@example.com',
+                'telefon': '0987654321',
+                'score': 70,
+                'company_name': 'Demo AG',
+                'role_guess': 'Sales Manager',
+                'lead_type': 'candidate',
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify leads were created
+        self.assertEqual(Lead.objects.count(), 2)
+        
+        lead1 = Lead.objects.get(email='max@example.com')
+        self.assertEqual(lead1.name, 'Max Mustermann')
+        self.assertEqual(lead1.quality_score, 85)
+        self.assertEqual(lead1.source, Lead.Source.SCRAPER)
+        self.assertEqual(lead1.company, 'Test GmbH')
+        self.assertEqual(lead1.role, 'Vertriebsleiter')
+        self.assertEqual(lead1.location, 'Köln')
+        self.assertEqual(lead1.lead_type, Lead.LeadType.ACTIVE_SALESPERSON)
+        
+        lead2 = Lead.objects.get(email='anna@example.com')
+        self.assertEqual(lead2.name, 'Anna Schmidt')
+        self.assertEqual(lead2.quality_score, 70)
+        self.assertEqual(lead2.lead_type, Lead.LeadType.CANDIDATE)
+        
+        # Check sync status was created
+        sync_status = SyncStatus.objects.get(source='scraper_db')
+        self.assertEqual(sync_status.last_lead_id, 2)
+        self.assertEqual(sync_status.leads_imported, 2)
+        self.assertEqual(sync_status.leads_updated, 0)
+        
+        # Check output
+        output = out.getvalue()
+        self.assertIn('🆕 NEU:', output)
+        self.assertIn('✅ Import abgeschlossen', output)
+    
+    def test_import_deduplication_by_email(self):
+        """Test deduplication by email"""
+        # Create existing lead
+        Lead.objects.create(
+            name='Existing Lead',
+            email='test@example.com',
+            quality_score=50
+        )
+        
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Updated Lead',
+                'email': 'test@example.com',
+                'score': 80,
+                'company_name': 'New Company'
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify lead was updated
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 80)
+        self.assertEqual(lead.company, 'New Company')
+        
+        # Check output shows update
+        output = out.getvalue()
+        self.assertIn('🔄 UPDATE:', output)
+    
+    def test_import_deduplication_by_phone(self):
+        """Test deduplication by phone number"""
+        # Create existing lead
+        Lead.objects.create(
+            name='Existing Lead',
+            telefon='0123456789',
+            quality_score=50
+        )
+        
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Updated Lead',
+                'telefon': '0123456789',
+                'score': 75
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify lead was updated
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 75)
+    
+    def test_import_skip_lower_score(self):
+        """Test that lower scores don't update existing leads"""
+        # Create existing lead with high score
+        Lead.objects.create(
+            name='High Score Lead',
+            email='test@example.com',
+            quality_score=90
+        )
+        
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Lower Score',
+                'email': 'test@example.com',
+                'score': 60
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify lead was not updated
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 90)
+    
+    def test_import_force_mode(self):
+        """Test force mode reimports all leads"""
+        # Create existing lead
+        existing = Lead.objects.create(
+            name='Existing',
+            email='test@example.com',
+            quality_score=50
+        )
+        
+        # Create sync status
+        SyncStatus.objects.create(
+            source='scraper_db',
+            last_sync_at=timezone.now(),
+            last_lead_id=1,
+            leads_imported=1
+        )
+        
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Existing',
+                'email': 'test@example.com',
+                'score': 80
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command with force
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), '--force', stdout=out)
+        
+        # Verify lead was updated even though last_lead_id was already 1
+        lead = Lead.objects.get(email='test@example.com')
+        self.assertEqual(lead.quality_score, 80)
+        
+        # Check output
+        output = out.getvalue()
+        self.assertIn('Force-Modus', output)
+    
+    def test_import_dry_run(self):
+        """Test dry-run mode doesn't save changes"""
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Dry Run Lead',
+                'email': 'dryrun@example.com',
+                'score': 75
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command with dry-run
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), '--dry-run', stdout=out)
+        
+        # Verify no leads were created
+        self.assertEqual(Lead.objects.count(), 0)
+        
+        # Verify no sync status was created
+        self.assertEqual(SyncStatus.objects.count(), 0)
+        
+        # Check output shows dry run
+        output = out.getvalue()
+        self.assertIn('DRY RUN', output)
+    
+    def test_import_incremental(self):
+        """Test incremental import only imports new leads"""
+        # First import
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'Lead 1',
+                'email': 'lead1@example.com',
+                'score': 70
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        self.assertEqual(Lead.objects.count(), 1)
+        
+        # Add more leads to database
+        conn = sqlite3.connect(str(self.test_db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO leads (id, name, email, score)
+            VALUES (2, 'Lead 2', 'lead2@example.com', 80)
+        """)
+        conn.commit()
+        conn.close()
+        
+        # Second import (incremental)
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Should only import the new lead
+        self.assertEqual(Lead.objects.count(), 2)
+        
+        output = out.getvalue()
+        self.assertIn('Letzter Sync:', output)
+        self.assertIn('Lead-ID: 1', output)
+    
+    def test_import_skip_no_contact(self):
+        """Test that leads without email or phone are skipped"""
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'No Contact',
+                'score': 80
+            },
+            {
+                'id': 2,
+                'name': 'Has Email',
+                'email': 'valid@example.com',
+                'score': 70
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify only lead with contact was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.name, 'Has Email')
+    
+    def test_import_linkedin_url(self):
+        """Test LinkedIn URL extraction"""
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'LinkedIn User',
+                'email': 'linkedin@example.com',
+                'social_profile_url': 'https://linkedin.com/in/testuser',
+                'score': 75
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify LinkedIn URL was extracted
+        lead = Lead.objects.first()
+        self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/testuser')
+        self.assertIsNone(lead.xing_url)
+    
+    def test_import_xing_url(self):
+        """Test XING URL extraction"""
+        test_leads = [
+            {
+                'id': 1,
+                'name': 'XING User',
+                'email': 'xing@example.com',
+                'social_profile_url': 'https://xing.com/profile/testuser',
+                'score': 75
+            }
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify XING URL was extracted
+        lead = Lead.objects.first()
+        self.assertEqual(lead.xing_url, 'https://xing.com/profile/testuser')
+        self.assertIsNone(lead.linkedin_url)
+    
+    def test_import_lead_type_mapping(self):
+        """Test lead type mapping from scraper to Django"""
+        test_leads = [
+            {'id': 1, 'name': 'Lead 1', 'email': 'lead1@example.com', 'lead_type': 'active_salesperson'},
+            {'id': 2, 'name': 'Lead 2', 'email': 'lead2@example.com', 'lead_type': 'candidate'},
+            {'id': 3, 'name': 'Lead 3', 'email': 'lead3@example.com', 'lead_type': 'freelancer'},
+            {'id': 4, 'name': 'Lead 4', 'email': 'lead4@example.com', 'lead_type': 'unknown_type'},
+        ]
+        
+        self._create_test_scraper_db(test_leads)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_db', '--db', str(self.test_db_path), stdout=out)
+        
+        # Verify lead types were mapped correctly
+        lead1 = Lead.objects.get(email='lead1@example.com')
+        self.assertEqual(lead1.lead_type, Lead.LeadType.ACTIVE_SALESPERSON)
+        
+        lead2 = Lead.objects.get(email='lead2@example.com')
+        self.assertEqual(lead2.lead_type, Lead.LeadType.CANDIDATE)
+        
+        lead3 = Lead.objects.get(email='lead3@example.com')
+        self.assertEqual(lead3.lead_type, Lead.LeadType.FREELANCER)
+        
+        # Unknown type should default to UNKNOWN
+        lead4 = Lead.objects.get(email='lead4@example.com')
+        self.assertEqual(lead4.lead_type, Lead.LeadType.UNKNOWN)
+    
+    def test_import_nonexistent_file(self):
+        """Test error handling for non-existent file"""
+        from django.core.management.base import CommandError
+        
+        with self.assertRaises(CommandError) as context:
+            call_command('import_scraper_db', '--db', '/nonexistent/scraper.db')
+        
+        self.assertIn('nicht gefunden', str(context.exception))
+
+
+class TriggerSyncAPITest(APITestCase):
+    """Tests for trigger_sync API endpoint"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('trigger-sync')
+        
+        # Create a temporary test database
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+        self.test_db_path = self.temp_path / 'test_scraper.db'
+        
+        # Create test database
+        conn = sqlite3.connect(str(self.test_db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE leads(
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                score INT
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO leads (id, name, email, score)
+            VALUES (1, 'Test Lead', 'test@example.com', 75)
+        """)
+        conn.commit()
+        conn.close()
+    
+    def tearDown(self):
+        """Clean up temporary files"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    def test_trigger_sync_success(self):
+        """Test successful sync trigger"""
+        response = self.client.post(
+            self.url,
+            {'db_path': str(self.test_db_path)},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertIn('message', response.data)
+        self.assertIn('sync_status', response.data)
+        
+        # Verify lead was imported
+        self.assertEqual(Lead.objects.count(), 1)
+        
+        # Verify sync status
+        sync_status = SyncStatus.objects.get(source='scraper_db')
+        self.assertEqual(sync_status.leads_imported, 1)
+    
+    def test_trigger_sync_requires_authentication(self):
+        """Test that sync endpoint requires authentication"""
+        self.client.force_authenticate(user=None)
+        response = self.client.post(self.url, {}, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_trigger_sync_with_force(self):
+        """Test sync with force parameter"""
+        # First sync
+        self.client.post(
+            self.url,
+            {'db_path': str(self.test_db_path)},
+            format='json'
+        )
+        
+        # Second sync with force
+        response = self.client.post(
+            self.url,
+            {'db_path': str(self.test_db_path), 'force': True},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
 
 
 class ImportScraperCSVCommandTest(TestCase):

@@ -13,4 +13,5 @@ urlpatterns = [
     path('health/', views.api_health, name='api-health'),
     path('opt-in/', views.opt_in, name='opt-in'),
     path('webhooks/brevo/', views.brevo_webhook, name='brevo-webhook'),
+    path('sync/', views.trigger_sync, name='trigger-sync'),
 ]
