@@ -239,3 +239,46 @@ class EmailLog(models.Model):
     
     def __str__(self):
         return f"{self.lead.name} - {self.get_email_type_display()}"
+
+
+class SyncStatus(models.Model):
+    """Tracks sync status between scraper.db and Django"""
+    
+    source = models.CharField(
+        max_length=50, 
+        unique=True,
+        verbose_name="Quelle",
+        help_text="z.B. 'scraper_db'"
+    )
+    last_sync_at = models.DateTimeField(
+        verbose_name="Letzter Sync",
+        help_text="Zeitpunkt des letzten erfolgreichen Syncs"
+    )
+    last_lead_id = models.IntegerField(
+        default=0,
+        verbose_name="Letzte Lead-ID",
+        help_text="ID des letzten importierten Leads aus der Quelle"
+    )
+    leads_imported = models.IntegerField(
+        default=0,
+        verbose_name="Leads importiert",
+        help_text="Anzahl der insgesamt importierten Leads"
+    )
+    leads_updated = models.IntegerField(
+        default=0,
+        verbose_name="Leads aktualisiert",
+        help_text="Anzahl der aktualisierten Leads"
+    )
+    leads_skipped = models.IntegerField(
+        default=0,
+        verbose_name="Leads übersprungen",
+        help_text="Anzahl der übersprungenen Leads"
+    )
+    
+    class Meta:
+        verbose_name = "Sync-Status"
+        verbose_name_plural = "Sync-Status"
+        ordering = ['-last_sync_at']
+    
+    def __str__(self):
+        return f"{self.source} (letzter Sync: {self.last_sync_at})"

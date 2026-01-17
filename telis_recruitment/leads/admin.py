@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.db.models import Count
 from django.http import HttpResponse
 import csv
-from .models import Lead, CallLog, EmailLog
+from .models import Lead, CallLog, EmailLog, SyncStatus
 
 
 class CallLogInline(admin.TabularInline):
@@ -250,6 +250,84 @@ class EmailLogAdmin(admin.ModelAdmin):
         if obj.clicked_at:
             return format_html('<span style="color: #22c55e;">✓ {}</span>', obj.clicked_at.strftime('%d.%m. %H:%M'))
         return format_html('<span style="color: #9ca3af;">-</span>')
+
+
+@admin.register(SyncStatus)
+class SyncStatusAdmin(admin.ModelAdmin):
+    """Admin for SyncStatus - shows sync history and statistics"""
+    
+    list_display = [
+        'source',
+        'last_sync_badge',
+        'last_lead_id',
+        'total_imported',
+        'total_updated',
+        'total_skipped'
+    ]
+    
+    readonly_fields = [
+        'source',
+        'last_sync_at',
+        'last_lead_id',
+        'leads_imported',
+        'leads_updated',
+        'leads_skipped'
+    ]
+    
+    def has_add_permission(self, request):
+        """Prevent manual creation"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion"""
+        return False
+    
+    @admin.display(description='Letzter Sync')
+    def last_sync_badge(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        now = timezone.now()
+        diff = now - obj.last_sync_at
+        
+        # Color based on freshness
+        if diff < timedelta(hours=1):
+            color = '#22c55e'  # Green - recent
+            icon = '🟢'
+        elif diff < timedelta(hours=6):
+            color = '#eab308'  # Yellow - somewhat recent
+            icon = '🟡'
+        else:
+            color = '#ef4444'  # Red - old
+            icon = '🔴'
+        
+        return format_html(
+            '{} <span style="color: {}; font-weight: 500;">{}</span>',
+            icon,
+            color,
+            obj.last_sync_at.strftime('%d.%m.%Y %H:%M:%S')
+        )
+    
+    @admin.display(description='Importiert')
+    def total_imported(self, obj):
+        return format_html(
+            '<span style="color: #22c55e; font-weight: 500;">🆕 {}</span>',
+            obj.leads_imported
+        )
+    
+    @admin.display(description='Aktualisiert')
+    def total_updated(self, obj):
+        return format_html(
+            '<span style="color: #3b82f6; font-weight: 500;">🔄 {}</span>',
+            obj.leads_updated
+        )
+    
+    @admin.display(description='Übersprungen')
+    def total_skipped(self, obj):
+        return format_html(
+            '<span style="color: #6b7280;">⏭️  {}</span>',
+            obj.leads_skipped
+        )
 
 
 # Admin Site Customization

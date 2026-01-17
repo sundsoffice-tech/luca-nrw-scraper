@@ -7,11 +7,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.db import models, transaction
 from django.shortcuts import render
+from django.core.management import call_command
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from .models import Lead, CallLog, EmailLog
+from .models import Lead, CallLog, EmailLog, SyncStatus
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
 
 logger = logging.getLogger(__name__)
@@ -412,3 +413,60 @@ def brevo_webhook(request):
     except Exception as e:
         logger.error(f"Brevo Webhook Fehler: {e}")
         return JsonResponse({'error': str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def trigger_sync(request):
+    """
+    Triggert einen manuellen Sync vom Scraper.
+    
+    Optional parameters:
+    - force: Boolean - Force reimport all leads (default: false)
+    - db_path: String - Custom path to scraper.db (optional)
+    """
+    try:
+        force = request.data.get('force', False)
+        db_path = request.data.get('db_path', None)
+        
+        # Build command arguments
+        args = []
+        if db_path:
+            args.extend(['--db', db_path])
+        if force:
+            args.append('--force')
+        
+        # Call the management command
+        from io import StringIO
+        out = StringIO()
+        
+        call_command('import_scraper_db', *args, stdout=out)
+        
+        output = out.getvalue()
+        
+        # Get updated sync status
+        try:
+            sync_status = SyncStatus.objects.get(source='scraper_db')
+            sync_data = {
+                'last_sync_at': sync_status.last_sync_at.isoformat(),
+                'last_lead_id': sync_status.last_lead_id,
+                'total_imported': sync_status.leads_imported,
+                'total_updated': sync_status.leads_updated,
+                'total_skipped': sync_status.leads_skipped,
+            }
+        except SyncStatus.DoesNotExist:
+            sync_data = None
+        
+        return Response({
+            'success': True,
+            'message': 'Sync erfolgreich abgeschlossen',
+            'output': output,
+            'sync_status': sync_data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f'Sync error: {str(e)}', exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
