@@ -332,4 +332,8 @@ def opt_in(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Ungültige Anfrage'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        # Log the full exception for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Opt-in error: {str(e)}', exc_info=True)
+        return JsonResponse({'error': 'Ein Fehler ist aufgetreten. Bitte versuche es später erneut.'}, status=500)
