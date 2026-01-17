@@ -1,9 +1,13 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from django.urls import reverse
+from django.core.management import call_command
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 import io
+import csv
+import tempfile
+from pathlib import Path
 from .models import Lead, CallLog, EmailLog
 
 
@@ -693,4 +697,464 @@ class HealthCheckAPITest(APITestCase):
         data = response.json()
         self.assertEqual(data['status'], 'ok')
         self.assertEqual(data['service'], 'telis-recruitment-api')
+
+
+class ImportScraperCSVCommandTest(TestCase):
+    """Tests for import_scraper_csv management command"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create a temporary directory for test CSV files
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+    
+    def tearDown(self):
+        """Clean up temporary files"""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+    
+    def _create_csv_file(self, filename, rows, delimiter=','):
+        """Helper to create a test CSV file"""
+        filepath = self.temp_path / filename
+        with open(filepath, 'w', encoding='utf-8', newline='') as f:
+            if rows:
+                writer = csv.DictWriter(f, fieldnames=rows[0].keys(), delimiter=delimiter)
+                writer.writeheader()
+                writer.writerows(rows)
+        return str(filepath)
+    
+    def test_import_new_leads(self):
+        """Test importing new leads from CSV"""
+        csv_data = [
+            {
+                'name': 'Max Mustermann',
+                'email': 'max@example.com',
+                'telefon': '0123456789',
+                'score': '85',
+                'company_name': 'Test GmbH',
+                'rolle': 'Vertriebsleiter',
+                'region': 'Köln'
+            },
+            {
+                'name': 'Anna Schmidt',
+                'email': 'anna@example.com',
+                'telefon': '0987654321',
+                'score': '70',
+                'company_name': 'Demo AG',
+                'rolle': 'Sales Manager'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_leads.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify leads were created
+        self.assertEqual(Lead.objects.count(), 2)
+        
+        lead1 = Lead.objects.get(email='max@example.com')
+        self.assertEqual(lead1.name, 'Max Mustermann')
+        self.assertEqual(lead1.quality_score, 85)
+        self.assertEqual(lead1.source, Lead.Source.SCRAPER)
+        self.assertEqual(lead1.company, 'Test GmbH')
+        self.assertEqual(lead1.role, 'Vertriebsleiter')
+        self.assertEqual(lead1.location, 'Köln')
+        
+        lead2 = Lead.objects.get(email='anna@example.com')
+        self.assertEqual(lead2.name, 'Anna Schmidt')
+        self.assertEqual(lead2.quality_score, 70)
+        
+        # Check output
+        output = out.getvalue()
+        self.assertIn('🆕 Neu importiert: 2', output)
+        self.assertIn('✅ Import abgeschlossen', output)
+    
+    def test_import_with_semicolon_delimiter(self):
+        """Test CSV import with semicolon delimiter"""
+        csv_data = [
+            {
+                'name': 'Test User',
+                'email': 'test@example.com',
+                'score': '60'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_semicolon.csv', csv_data, delimiter=';')
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.name, 'Test User')
+    
+    def test_import_duplicate_email(self):
+        """Test deduplication by email"""
+        # Create existing lead
+        Lead.objects.create(
+            name='Existing Lead',
+            email='test@example.com',
+            quality_score=50
+        )
+        
+        csv_data = [
+            {
+                'name': 'Updated Lead',
+                'email': 'test@example.com',
+                'score': '80'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_duplicate.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was updated (higher score)
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 80)
+        
+        # Check output shows update
+        output = out.getvalue()
+        self.assertIn('🔄 Aktualisiert:   1', output)
+    
+    def test_import_duplicate_phone(self):
+        """Test deduplication by phone number"""
+        # Create existing lead
+        Lead.objects.create(
+            name='Existing Lead',
+            telefon='0123456789',
+            quality_score=50
+        )
+        
+        csv_data = [
+            {
+                'name': 'Updated Lead',
+                'telefon': '0123456789',
+                'score': '75'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_duplicate_phone.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was updated
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 75)
+    
+    def test_import_skip_lower_score(self):
+        """Test that lower scores are skipped without force-update"""
+        # Create existing lead with high score
+        Lead.objects.create(
+            name='High Score Lead',
+            email='test@example.com',
+            quality_score=90
+        )
+        
+        csv_data = [
+            {
+                'name': 'Lower Score',
+                'email': 'test@example.com',
+                'score': '60'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_lower_score.csv', csv_data)
+        
+        # Run the command without force-update
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was not updated
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 90)
+        
+        # Check output shows skipped
+        output = out.getvalue()
+        self.assertIn('⏭️  Übersprungen:   1', output)
+    
+    def test_import_force_update(self):
+        """Test force-update flag updates even with lower score"""
+        # Create existing lead
+        Lead.objects.create(
+            name='Existing Lead',
+            email='test@example.com',
+            quality_score=90
+        )
+        
+        csv_data = [
+            {
+                'name': 'Updated Lead',
+                'email': 'test@example.com',
+                'score': '60'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_force.csv', csv_data)
+        
+        # Run the command with force-update
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, force_update=True, stdout=out)
+        
+        # Verify lead was updated despite lower score
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 60)
+    
+    def test_import_dry_run(self):
+        """Test dry-run mode doesn't save changes"""
+        csv_data = [
+            {
+                'name': 'Dry Run Lead',
+                'email': 'dryrun@example.com',
+                'score': '75'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_dryrun.csv', csv_data)
+        
+        # Run the command with dry-run
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, dry_run=True, stdout=out)
+        
+        # Verify no leads were created
+        self.assertEqual(Lead.objects.count(), 0)
+        
+        # Check output shows dry run
+        output = out.getvalue()
+        self.assertIn('DRY RUN', output)
+    
+    def test_import_field_mapping(self):
+        """Test German field name mapping"""
+        csv_data = [
+            {
+                'Name': 'Test Person',
+                'E-Mail': 'person@example.com',
+                'Telefon': '0123456789',
+                'Score': '85',
+                'Firma': 'Test Firma',
+                'Position': 'Manager',
+                'Standort': 'Berlin'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_german.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was created with mapped fields
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.name, 'Test Person')
+        self.assertEqual(lead.email, 'person@example.com')
+        self.assertEqual(lead.company, 'Test Firma')
+        self.assertEqual(lead.role, 'Manager')
+        self.assertEqual(lead.location, 'Berlin')
+    
+    def test_import_score_clamping(self):
+        """Test that scores are clamped to 0-100 range"""
+        csv_data = [
+            {
+                'name': 'High Score',
+                'email': 'high@example.com',
+                'score': '150'
+            },
+            {
+                'name': 'Low Score',
+                'email': 'low@example.com',
+                'score': '-10'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_clamp.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify scores are clamped
+        lead_high = Lead.objects.get(email='high@example.com')
+        self.assertEqual(lead_high.quality_score, 100)
+        
+        lead_low = Lead.objects.get(email='low@example.com')
+        self.assertEqual(lead_low.quality_score, 0)
+    
+    def test_import_skip_no_contact(self):
+        """Test that rows without email or phone are skipped"""
+        csv_data = [
+            {
+                'name': 'No Contact',
+                'email': '',
+                'telefon': '',
+                'score': '80'
+            },
+            {
+                'name': 'Has Email',
+                'email': 'valid@example.com',
+                'telefon': '',
+                'score': '70'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_no_contact.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify only lead with contact was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.name, 'Has Email')
+    
+    def test_import_linkedin_url(self):
+        """Test LinkedIn URL extraction"""
+        csv_data = [
+            {
+                'name': 'LinkedIn User',
+                'email': 'linkedin@example.com',
+                'social_profile_url': 'https://linkedin.com/in/testuser',
+                'score': '75'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_linkedin.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify LinkedIn URL was extracted
+        lead = Lead.objects.first()
+        self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/testuser')
+        self.assertIsNone(lead.xing_url)
+    
+    def test_import_xing_url(self):
+        """Test XING URL extraction"""
+        csv_data = [
+            {
+                'name': 'XING User',
+                'email': 'xing@example.com',
+                'social_profile_url': 'https://xing.com/profile/testuser',
+                'score': '75'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_xing.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify XING URL was extracted
+        lead = Lead.objects.first()
+        self.assertEqual(lead.xing_url, 'https://xing.com/profile/testuser')
+        self.assertIsNone(lead.linkedin_url)
+    
+    def test_import_invalid_score(self):
+        """Test handling of invalid score values"""
+        csv_data = [
+            {
+                'name': 'Invalid Score',
+                'email': 'invalid@example.com',
+                'score': 'not_a_number'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_invalid_score.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify lead was created with default score
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 50)
+    
+    def test_import_nonexistent_file(self):
+        """Test error handling for non-existent file"""
+        from django.core.management.base import CommandError
+        
+        with self.assertRaises(CommandError) as context:
+            call_command('import_scraper_csv', '/nonexistent/file.csv')
+        
+        self.assertIn('nicht gefunden', str(context.exception))
+    
+    def test_import_update_partial_fields(self):
+        """Test that update only fills missing fields"""
+        # Create existing lead with some fields
+        Lead.objects.create(
+            name='Existing',
+            email='test@example.com',
+            quality_score=50,
+            company='Old Company'
+        )
+        
+        csv_data = [
+            {
+                'name': 'Updated',
+                'email': 'test@example.com',
+                'score': '80',
+                'company_name': 'New Company',
+                'rolle': 'New Role',
+                'region': 'New Region'
+            }
+        ]
+        
+        csv_path = self._create_csv_file('test_partial.csv', csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', csv_path, stdout=out)
+        
+        # Verify company was NOT updated (already had value)
+        # but role and location were added
+        lead = Lead.objects.first()
+        self.assertEqual(lead.quality_score, 80)
+        self.assertEqual(lead.company, 'Old Company')  # Not updated
+        self.assertEqual(lead.role, 'New Role')  # Added
+        self.assertEqual(lead.location, 'New Region')  # Added
+    
+    def test_import_latin1_encoding(self):
+        """Test Latin-1 encoding fallback"""
+        csv_data = [
+            {
+                'name': 'Müller Größe',
+                'email': 'mueller@example.com',
+                'score': '75'
+            }
+        ]
+        
+        # Create CSV file with Latin-1 encoding
+        filepath = self.temp_path / 'test_latin1.csv'
+        with open(filepath, 'w', encoding='latin-1', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', str(filepath), stdout=out)
+        
+        # Verify lead was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.email, 'mueller@example.com')
+        
+        # Check output mentions Latin-1
+        output = out.getvalue()
+        self.assertIn('Latin-1', output)
 
