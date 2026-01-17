@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import logging
+from io import StringIO
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
@@ -437,7 +438,6 @@ def trigger_sync(request):
             args.append('--force')
         
         # Call the management command
-        from io import StringIO
         out = StringIO()
         
         call_command('import_scraper_db', *args, stdout=out)

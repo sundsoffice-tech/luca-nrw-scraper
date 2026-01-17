@@ -243,13 +243,20 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f'     {error}'))
         self.stdout.write('=' * 50 + '\n')
     
+    def _clean_field(self, value):
+        """Helper to clean and normalize field values"""
+        if not value:
+            return None
+        cleaned = str(value).strip()
+        return cleaned if cleaned else None
+    
     def _process_lead(self, row, dry_run):
         """Process a single lead from scraper.db"""
         
-        # Extract and clean fields
-        email = (row.get('email') or '').strip() or None
-        telefon = (row.get('telefon') or '').strip() or None
-        name = (row.get('name') or 'Unbekannt').strip()
+        # Extract and clean fields using helper
+        email = self._clean_field(row.get('email'))
+        telefon = self._clean_field(row.get('telefon'))
+        name = self._clean_field(row.get('name')) or 'Unbekannt'
         
         # Skip if no contact info
         if not email and not telefon:
@@ -267,19 +274,19 @@ class Command(BaseCommand):
         lead_type = self.LEAD_TYPE_MAPPING.get(lead_type_raw, Lead.LeadType.UNKNOWN)
         
         # Extract role (prefer role_guess over rolle)
-        role = (row.get('role_guess') or row.get('rolle') or '').strip() or None
+        role = self._clean_field(row.get('role_guess') or row.get('rolle'))
         
         # Extract location (prefer location_specific over region)
-        location = (row.get('location_specific') or row.get('region') or '').strip() or None
+        location = self._clean_field(row.get('location_specific') or row.get('region'))
         
         # Extract company
-        company = (row.get('company_name') or '').strip() or None
+        company = self._clean_field(row.get('company_name'))
         
         # Extract source URL
-        source_url = (row.get('quelle') or '').strip() or None
+        source_url = self._clean_field(row.get('quelle'))
         
         # Extract social profile URLs
-        social_profile_url = (row.get('social_profile_url') or '').strip() or None
+        social_profile_url = self._clean_field(row.get('social_profile_url'))
         linkedin_url = None
         xing_url = None
         
