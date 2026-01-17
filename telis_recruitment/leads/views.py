@@ -360,6 +360,13 @@ def brevo_webhook(request):
     - hard_bounce: Email unzustellbar
     - unsubscribed: Abgemeldet
     """
+    def append_note(lead, note_text):
+        """Helper function to append notes to lead"""
+        if lead.notes:
+            lead.notes = f"{lead.notes}\n{note_text}"
+        else:
+            lead.notes = note_text
+    
     try:
         data = json.loads(request.body)
         
@@ -388,13 +395,13 @@ def brevo_webhook(request):
             
         elif event == 'hard_bounce':
             lead.status = Lead.Status.INVALID
-            lead.notes = (lead.notes or '') + f"\n[Brevo] Hard Bounce: Email unzustellbar"
+            append_note(lead, "[Brevo] Hard Bounce: Email unzustellbar")
             lead.save(update_fields=['status', 'notes'])
             logger.warning(f"Brevo: Hard Bounce für {email}")
             
         elif event == 'unsubscribed':
             lead.interest_level = 0
-            lead.notes = (lead.notes or '') + f"\n[Brevo] Abgemeldet"
+            append_note(lead, "[Brevo] Abgemeldet")
             lead.save(update_fields=['interest_level', 'notes'])
             logger.info(f"Brevo: Abmeldung von {email}")
         

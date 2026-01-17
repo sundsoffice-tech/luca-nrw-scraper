@@ -170,6 +170,18 @@ SCRAPER_PATH = os.getenv('SCRAPER_PATH', '../')
 # Brevo (Sendinblue) Settings
 # ==========================
 BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
-BREVO_DEFAULT_LIST_ID = int(os.getenv('BREVO_DEFAULT_LIST_ID', 0)) or None
-BREVO_LANDING_PAGE_LIST_ID = int(os.getenv('BREVO_LANDING_PAGE_LIST_ID', 0)) or None
-BREVO_WELCOME_TEMPLATE_ID = int(os.getenv('BREVO_WELCOME_TEMPLATE_ID', 0)) or None
+
+# Helper function to get optional integer from env
+def _get_optional_int(env_var: str) -> int:
+    """Get optional integer from environment variable, returns None if not set or empty"""
+    value = os.getenv(env_var)
+    if value:
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+BREVO_DEFAULT_LIST_ID = _get_optional_int('BREVO_DEFAULT_LIST_ID')
+BREVO_LANDING_PAGE_LIST_ID = _get_optional_int('BREVO_LANDING_PAGE_LIST_ID')
+BREVO_WELCOME_TEMPLATE_ID = _get_optional_int('BREVO_WELCOME_TEMPLATE_ID')

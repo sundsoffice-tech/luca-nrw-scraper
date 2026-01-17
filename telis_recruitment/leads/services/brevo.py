@@ -179,6 +179,9 @@ def sync_lead_to_brevo(lead) -> bool:
     if not lead.email:
         return False
     
+    # Import Lead model here to avoid circular imports
+    from ..models import Lead as LeadModel
+    
     # Name aufteilen
     name_parts = (lead.name or "").split(" ", 1)
     vorname = name_parts[0] if name_parts else ""
@@ -200,7 +203,7 @@ def sync_lead_to_brevo(lead) -> bool:
         list_ids.append(default_list_id)
     
     # Landing Page Leads in separate Liste
-    if lead.source == 'landing_page':
+    if lead.source == LeadModel.Source.LANDING_PAGE:
         landing_list_id = getattr(settings, 'BREVO_LANDING_PAGE_LIST_ID', None)
         if landing_list_id:
             list_ids.append(landing_list_id)
