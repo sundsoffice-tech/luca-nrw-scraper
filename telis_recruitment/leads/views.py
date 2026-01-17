@@ -113,10 +113,13 @@ class LeadViewSet(viewsets.ModelViewSet):
             'funnel': funnel,
         })
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def log_call(self, request, pk=None):
         """Anruf protokollieren"""
         lead = self.get_object()
+        
+        # For anonymous users, set called_by to None
+        called_by_id = request.user.id if request.user.is_authenticated else None
         
         serializer = CallLogSerializer(data={
             'lead': lead.id,
@@ -124,7 +127,7 @@ class LeadViewSet(viewsets.ModelViewSet):
             'duration_seconds': request.data.get('duration_seconds', 0),
             'interest_level': request.data.get('interest_level', 0),
             'notes': request.data.get('notes', ''),
-            'called_by': request.user.id,
+            'called_by': called_by_id,
         })
         
         if serializer.is_valid():
@@ -137,7 +140,7 @@ class LeadViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def next_to_call(self, request):
         """Nächster Lead zum Anrufen (für Telefon-Dashboard)"""
         lead = Lead.objects.filter(
@@ -277,6 +280,11 @@ def api_health(request):
 def landing_page(request):
     """Landing Page View"""
     return render(request, 'landing/index.html')
+
+
+def phone_dashboard(request):
+    """Telefon Dashboard View"""
+    return render(request, 'phone/dashboard.html')
 
 
 @csrf_exempt
