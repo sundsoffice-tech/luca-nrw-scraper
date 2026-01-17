@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
@@ -12,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Lead, CallLog, EmailLog
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
+
+logger = logging.getLogger(__name__)
 
 
 # Constants
@@ -341,7 +344,64 @@ def opt_in(request):
         return JsonResponse({'error': 'Ungültige Anfrage'}, status=400)
     except Exception as e:
         # Log the full exception for debugging
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f'Opt-in error: {str(e)}', exc_info=True)
         return JsonResponse({'error': 'Ein Fehler ist aufgetreten. Bitte versuche es später erneut.'}, status=500)
+
+
+@csrf_exempt
+@require_POST
+def brevo_webhook(request):
+    """
+    Webhook-Endpoint für Brevo Email-Events (opens, clicks, etc.)
+    
+    Brevo sendet Events wie:
+    - opened: Email wurde geöffnet
+    - click: Link wurde geklickt
+    - hard_bounce: Email unzustellbar
+    - unsubscribed: Abgemeldet
+    """
+    try:
+        data = json.loads(request.body)
+        
+        event = data.get('event')
+        email = data.get('email')
+        
+        if not email:
+            return JsonResponse({'error': 'Email fehlt'}, status=400)
+        
+        # Lead finden
+        lead = Lead.objects.filter(email=email).first()
+        if not lead:
+            logger.warning(f"Brevo Webhook: Lead nicht gefunden für {email}")
+            return JsonResponse({'status': 'ignored', 'reason': 'lead_not_found'})
+        
+        # Event verarbeiten
+        if event == 'opened':
+            lead.email_opens += 1
+            lead.save(update_fields=['email_opens'])
+            logger.info(f"Brevo: Email geöffnet von {email}")
+            
+        elif event == 'click':
+            lead.email_clicks += 1
+            lead.save(update_fields=['email_clicks'])
+            logger.info(f"Brevo: Link geklickt von {email}")
+            
+        elif event == 'hard_bounce':
+            lead.status = Lead.Status.INVALID
+            lead.notes = (lead.notes or '') + f"\n[Brevo] Hard Bounce: Email unzustellbar"
+            lead.save(update_fields=['status', 'notes'])
+            logger.warning(f"Brevo: Hard Bounce für {email}")
+            
+        elif event == 'unsubscribed':
+            lead.interest_level = 0
+            lead.notes = (lead.notes or '') + f"\n[Brevo] Abgemeldet"
+            lead.save(update_fields=['interest_level', 'notes'])
+            logger.info(f"Brevo: Abmeldung von {email}")
+        
+        return JsonResponse({'status': 'ok', 'event': event})
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logger.error(f"Brevo Webhook Fehler: {e}")
+        return JsonResponse({'error': str(e)}, status=500)

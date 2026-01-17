@@ -165,3 +165,11 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Scraper Configuration
 SCRAPER_PATH = os.getenv('SCRAPER_PATH', '../')
+
+# ==========================
+# Brevo (Sendinblue) Settings
+# ==========================
+BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
+BREVO_DEFAULT_LIST_ID = int(os.getenv('BREVO_DEFAULT_LIST_ID', 0)) or None
+BREVO_LANDING_PAGE_LIST_ID = int(os.getenv('BREVO_LANDING_PAGE_LIST_ID', 0)) or None
+BREVO_WELCOME_TEMPLATE_ID = int(os.getenv('BREVO_WELCOME_TEMPLATE_ID', 0)) or None
