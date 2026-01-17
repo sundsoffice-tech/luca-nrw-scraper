@@ -282,3 +282,145 @@ class SyncStatus(models.Model):
     
     def __str__(self):
         return f"{self.source} (letzter Sync: {self.last_sync_at})"
+
+
+class ScraperRun(models.Model):
+    """
+    Tracks individual scraper runs for monitoring and history.
+    """
+    
+    class Status(models.TextChoices):
+        RUNNING = 'running', 'Läuft'
+        COMPLETED = 'completed', 'Abgeschlossen'
+        FAILED = 'failed', 'Fehlgeschlagen'
+        STOPPED = 'stopped', 'Gestoppt'
+    
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name="Gestartet am")
+    finished_at = models.DateTimeField(null=True, blank=True, verbose_name="Beendet am")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.RUNNING,
+        verbose_name="Status"
+    )
+    
+    # Results
+    leads_found = models.IntegerField(default=0, verbose_name="Leads gefunden")
+    leads_saved = models.IntegerField(default=0, verbose_name="Leads gespeichert")
+    leads_rejected = models.IntegerField(default=0, verbose_name="Leads abgelehnt")
+    
+    # Configuration snapshot
+    config_snapshot = models.JSONField(default=dict, verbose_name="Konfiguration")
+    
+    # Logs
+    logs = models.TextField(default='', blank=True, verbose_name="Logs")
+    
+    # Process info
+    pid = models.IntegerField(null=True, blank=True, verbose_name="Prozess-ID")
+    
+    # Started by
+    started_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Gestartet von"
+    )
+    
+    class Meta:
+        ordering = ['-started_at']
+        verbose_name = "Scraper-Lauf"
+        verbose_name_plural = "Scraper-Läufe"
+    
+    def __str__(self):
+        return f"Run #{self.id} - {self.get_status_display()} ({self.started_at})"
+    
+    @property
+    def duration_seconds(self):
+        """Calculate duration in seconds"""
+        if self.finished_at:
+            return (self.finished_at - self.started_at).total_seconds()
+        elif self.status == self.Status.RUNNING:
+            from django.utils import timezone
+            return (timezone.now() - self.started_at).total_seconds()
+        return 0
+
+
+class ScraperConfig(models.Model):
+    """
+    Singleton model for scraper configuration.
+    Only one instance should exist.
+    """
+    
+    # Basic scoring settings
+    min_score = models.IntegerField(
+        default=40,
+        verbose_name="Minimaler Score",
+        help_text="Minimaler Qualitäts-Score für Leads (0-100)"
+    )
+    
+    # Scraper behavior
+    max_results_per_domain = models.IntegerField(
+        default=3,
+        verbose_name="Max. Ergebnisse pro Domain",
+        help_text="Maximale Anzahl von Ergebnissen pro Domain"
+    )
+    
+    request_timeout = models.IntegerField(
+        default=12,
+        verbose_name="Request Timeout (Sekunden)",
+        help_text="Timeout für HTTP-Requests in Sekunden"
+    )
+    
+    pool_size = models.IntegerField(
+        default=10,
+        verbose_name="Pool-Größe",
+        help_text="Anzahl paralleler Worker"
+    )
+    
+    internal_depth_per_domain = models.IntegerField(
+        default=2,
+        verbose_name="Interne Tiefe pro Domain",
+        help_text="Wie tief interne Links verfolgt werden sollen"
+    )
+    
+    # Flags
+    allow_pdf = models.BooleanField(
+        default=True,
+        verbose_name="PDFs erlauben",
+        help_text="PDF-Dateien crawlen"
+    )
+    
+    allow_insecure_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Unsichere SSL-Verbindungen erlauben",
+        help_text="Selbstsignierte SSL-Zertifikate akzeptieren"
+    )
+    
+    # Timestamps
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Aktualisiert von"
+    )
+    
+    class Meta:
+        verbose_name = "Scraper-Konfiguration"
+        verbose_name_plural = "Scraper-Konfigurationen"
+    
+    def __str__(self):
+        return f"Scraper Config (Score >= {self.min_score})"
+    
+    @classmethod
+    def get_config(cls):
+        """Get or create the singleton config instance"""
+        config, created = cls.objects.get_or_create(pk=1)
+        return config
+    
+    def save(self, *args, **kwargs):
+        """Ensure only one instance exists"""
+        self.pk = 1
+        super().save(*args, **kwargs)
