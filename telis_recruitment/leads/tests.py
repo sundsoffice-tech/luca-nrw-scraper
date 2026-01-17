@@ -2423,3 +2423,203 @@ class CRMDashboardTest(TestCase):
         # Admin sections should either not exist or be hidden
         # Since we conditionally render them based on user role, they won't be in the HTML
         self.assertNotIn('Administration', content)
+
+
+class DashboardAPITest(APITestCase):
+    """Tests for Dashboard API endpoints"""
+    
+    def setUp(self):
+        """Set up test data"""
+        # Create user groups
+        from django.contrib.auth.models import Group
+        admin_group = Group.objects.create(name='Admin')
+        manager_group = Group.objects.create(name='Manager')
+        telefonist_group = Group.objects.create(name='Telefonist')
+        
+        # Create users
+        self.admin = User.objects.create_user(username='admin', password='admin123')
+        self.admin.groups.add(admin_group)
+        
+        self.manager = User.objects.create_user(username='manager', password='manager123')
+        self.manager.groups.add(manager_group)
+        
+        self.telefonist = User.objects.create_user(username='telefonist', password='telefonist123')
+        self.telefonist.groups.add(telefonist_group)
+        
+        # Create test leads
+        for i in range(10):
+            Lead.objects.create(
+                name=f'Lead {i}',
+                email=f'lead{i}@example.com',
+                telefon=f'012345678{i}',
+                status=Lead.Status.NEW if i < 5 else Lead.Status.CONTACTED,
+                source=Lead.Source.SCRAPER if i < 7 else Lead.Source.LANDING_PAGE,
+                quality_score=50 + (i * 5),
+                assigned_to=self.telefonist if i < 5 else self.admin
+            )
+        
+        # Create some call logs
+        lead = Lead.objects.first()
+        CallLog.objects.create(
+            lead=lead,
+            outcome=CallLog.Outcome.CONNECTED,
+            duration_seconds=120,
+            called_by=self.telefonist
+        )
+    
+    def test_dashboard_stats_requires_authentication(self):
+        """Test that dashboard stats endpoint requires authentication"""
+        url = '/crm/api/dashboard-stats/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_dashboard_stats_for_admin(self):
+        """Test dashboard stats endpoint for admin user"""
+        self.client.force_authenticate(user=self.admin)
+        url = '/crm/api/dashboard-stats/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Check response structure
+        self.assertIn('leads_total', response.data)
+        self.assertIn('leads_today', response.data)
+        self.assertIn('calls_today', response.data)
+        self.assertIn('conversion_rate', response.data)
+        self.assertIn('hot_leads', response.data)
+        self.assertIn('trend_7_days', response.data)
+        self.assertIn('status_distribution', response.data)
+        self.assertIn('source_distribution', response.data)
+        
+        # Admin sees all leads
+        self.assertEqual(response.data['leads_total'], 10)
+    
+    def test_dashboard_stats_for_telefonist(self):
+        """Test dashboard stats endpoint for telefonist user (filtered)"""
+        self.client.force_authenticate(user=self.telefonist)
+        url = '/crm/api/dashboard-stats/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Telefonist only sees assigned leads
+        self.assertEqual(response.data['leads_total'], 5)
+    
+    def test_activity_feed_requires_authentication(self):
+        """Test that activity feed endpoint requires authentication"""
+        url = '/crm/api/activity-feed/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_activity_feed_returns_recent_activities(self):
+        """Test activity feed returns recent activities"""
+        self.client.force_authenticate(user=self.admin)
+        url = '/crm/api/activity-feed/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        
+        # Should have at least one activity (call log created in setUp)
+        if len(response.data) > 0:
+            activity = response.data[0]
+            self.assertIn('type', activity)
+            self.assertIn('icon', activity)
+            self.assertIn('message', activity)
+            self.assertIn('timestamp', activity)
+            self.assertIn('time_ago', activity)
+    
+    def test_team_performance_requires_authentication(self):
+        """Test that team performance endpoint requires authentication"""
+        url = '/crm/api/team-performance/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_team_performance_for_admin(self):
+        """Test team performance endpoint for admin user"""
+        self.client.force_authenticate(user=self.admin)
+        url = '/crm/api/team-performance/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, list)
+        
+        # Should have telefonist in the list
+        if len(response.data) > 0:
+            perf = response.data[0]
+            self.assertIn('user_id', perf)
+            self.assertIn('username', perf)
+            self.assertIn('calls_today', perf)
+            self.assertIn('conversions_week', perf)
+    
+    def test_team_performance_forbidden_for_telefonist(self):
+        """Test team performance endpoint is forbidden for telefonist"""
+        self.client.force_authenticate(user=self.telefonist)
+        url = '/crm/api/team-performance/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_team_performance_allowed_for_manager(self):
+        """Test team performance endpoint is allowed for manager"""
+        self.client.force_authenticate(user=self.manager)
+        url = '/crm/api/team-performance/'
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class LeadManagementViewTest(TestCase):
+    """Tests for Lead Management Views"""
+    
+    def setUp(self):
+        """Set up test data"""
+        from django.contrib.auth.models import Group
+        admin_group = Group.objects.create(name='Admin')
+        
+        self.admin = User.objects.create_user(username='admin', password='admin123')
+        self.admin.groups.add(admin_group)
+        
+        self.lead = Lead.objects.create(
+            name='Test Lead',
+            email='test@example.com',
+            telefon='0123456789',
+            status=Lead.Status.NEW,
+            quality_score=75
+        )
+    
+    def test_crm_leads_view_requires_login(self):
+        """Test that leads view requires login"""
+        response = self.client.get('/crm/leads/')
+        
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/', response.url)
+    
+    def test_crm_leads_view_for_authenticated_user(self):
+        """Test that authenticated users can access leads view"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get('/crm/leads/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'crm/leads.html')
+    
+    def test_crm_lead_detail_requires_login(self):
+        """Test that lead detail view requires login"""
+        response = self.client.get(f'/crm/leads/{self.lead.id}/')
+        
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/', response.url)
+    
+    def test_crm_lead_detail_for_authenticated_user(self):
+        """Test that authenticated users can access lead detail"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get(f'/crm/leads/{self.lead.id}/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('lead', response.context)
+        self.assertEqual(response.context['lead'], self.lead)
