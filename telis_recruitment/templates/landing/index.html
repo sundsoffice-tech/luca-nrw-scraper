@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}TELIS Recruitment - Verdiene bis zu €7000/Monat{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-dark-800 border-b border-dark-700 py-4">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🎯</span>
+                <span class="text-xl font-bold text-primary">TELIS</span>
+                <span class="text-gray-400">Recruitment</span>
+            </div>
+            <div class="hidden md:flex items-center space-x-2 text-sm">
+                <span class="text-green-400">●</span>
+                <span class="text-gray-300">{{ stats.hired_this_week|default:45 }} Einstellungen diese Woche</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <main class="flex-1 flex items-center justify-center py-12 px-4">
+        <div class="max-w-4xl w-full">
+            <div class="text-center mb-10">
+                <h1 class="text-4xl md:text-5xl font-bold mb-4">
+                    <span class="text-primary">🚀 VERDIENE BIS ZU €7000/MONAT</span>
+                </h1>
+                <p class="text-xl text-gray-300 mb-6">
+                    Du verdienst schnell, flexibel, mit voller Unterstützung
+                </p>
+                <div class="flex flex-wrap justify-center gap-4 text-sm">
+                    <span class="flex items-center text-green-400">
+                        <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        Verifiziert
+                    </span>
+                    <span class="flex items-center text-green-400">
+                        <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        Schneller Start
+                    </span>
+                    <span class="flex items-center text-green-400">
+                        <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        Garantiert
+                    </span>
+                </div>
+            </div>
+
+            <!-- Opt-In Form -->
+            <div class="bg-dark-800 rounded-2xl p-8 shadow-2xl border border-dark-700 max-w-md mx-auto pulse-glow">
+                <form id="opt-in-form" class="space-y-5">
+                    {% csrf_token %}
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-300 mb-2">Dein Name</label>
+                        <input type="text" id="name" name="name" required
+                            class="w-full px-4 py-3 rounded-lg bg-dark-900 border border-dark-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                            placeholder="Max Mustermann">
+                    </div>
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">Deine E-Mail</label>
+                        <input type="email" id="email" name="email" required
+                            class="w-full px-4 py-3 rounded-lg bg-dark-900 border border-dark-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                            placeholder="max@beispiel.de">
+                    </div>
+                    <div>
+                        <label for="telefon" class="block text-sm font-medium text-gray-300 mb-2">Deine Telefonnummer <span class="text-gray-500">(optional)</span></label>
+                        <input type="tel" id="telefon" name="telefon"
+                            class="w-full px-4 py-3 rounded-lg bg-dark-900 border border-dark-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                            placeholder="+49 123 456789">
+                    </div>
+                    <button type="submit" id="submit-btn"
+                        class="w-full py-4 px-6 bg-primary hover:bg-cyan-400 text-dark-900 font-bold rounded-lg transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary focus:ring-offset-dark-800">
+                        JETZT STARTEN →
+                    </button>
+                    <p class="text-xs text-gray-500 text-center">
+                        Durch Klick akzeptierst du unsere <a href="#" class="text-primary hover:underline">AGB</a> und <a href="#" class="text-primary hover:underline">Datenschutzerklärung</a>
+                    </p>
+                </form>
+
+                <!-- Success Message (hidden by default) -->
+                <div id="success-message" class="hidden text-center py-8">
+                    <div class="text-5xl mb-4">🎉</div>
+                    <h3 class="text-2xl font-bold text-primary mb-2">Danke!</h3>
+                    <p class="text-gray-300">Wir rufen dich morgen an.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Benefits Section -->
+    <section class="bg-dark-800 py-16 border-t border-dark-700">
+        <div class="container mx-auto px-4">
+            <h2 class="text-2xl font-bold text-center mb-10 text-gray-200">WARUM UNS WÄHLEN?</h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
+                <div class="bg-dark-900 p-6 rounded-xl border border-dark-700">
+                    <div class="text-3xl mb-3">👥</div>
+                    <h3 class="font-bold text-primary mb-2">Persönliche Unterstützung</h3>
+                    <p class="text-gray-400 text-sm">Dedizierter Manager für dich. Bei Fragen immer erreichbar.</p>
+                </div>
+                <div class="bg-dark-900 p-6 rounded-xl border border-dark-700">
+                    <div class="text-3xl mb-3">📱</div>
+                    <h3 class="font-bold text-primary mb-2">Täglich neue Leads</h3>
+                    <p class="text-gray-400 text-sm">50-100 neue Leads pro Tag. Beste Qualität garantiert.</p>
+                </div>
+                <div class="bg-dark-900 p-6 rounded-xl border border-dark-700">
+                    <div class="text-3xl mb-3">⏰</div>
+                    <h3 class="font-bold text-primary mb-2">Flexible Zeiten</h3>
+                    <p class="text-gray-400 text-sm">Dein Tempo, deine Zeit. Keine festen Stunden.</p>
+                </div>
+                <div class="bg-dark-900 p-6 rounded-xl border border-dark-700">
+                    <div class="text-3xl mb-3">💰</div>
+                    <h3 class="font-bold text-primary mb-2">Verdiene sofort</h3>
+                    <p class="text-gray-400 text-sm">€3000-7000/Monat möglich. Provisionsbasiert.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-dark-900 py-6 border-t border-dark-700">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>© 2026 TELIS Recruitment | <a href="#" class="hover:text-primary">Impressum</a> | <a href="#" class="hover:text-primary">Datenschutz</a></p>
+        </div>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('opt-in-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const btn = document.getElementById('submit-btn');
+    const form = this;
+    const successMsg = document.getElementById('success-message');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btn.textContent = 'Wird gesendet...';
+    
+    const formData = {
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        telefon: document.getElementById('telefon').value || null,
+    };
+    
+    try {
+        const response = await fetch('/api/opt-in/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Show success message
+            form.classList.add('hidden');
+            successMsg.classList.remove('hidden');
+        } else {
+            alert(data.error || 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+            btn.disabled = false;
+            btn.textContent = 'JETZT STARTEN →';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Verbindungsfehler. Bitte versuche es erneut.');
+        btn.disabled = false;
+        btn.textContent = 'JETZT STARTEN →';
+    }
+});
+</script>
+{% endblock %}
