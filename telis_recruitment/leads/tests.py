@@ -2597,7 +2597,7 @@ class LeadManagementViewTest(TestCase):
         
         # Should redirect to login
         self.assertEqual(response.status_code, 302)
-        self.assertIn('/auth/login/', response.url)
+        self.assertIn('/login/', response.url)
     
     def test_crm_leads_view_for_authenticated_user(self):
         """Test that authenticated users can access leads view"""
@@ -2613,7 +2613,7 @@ class LeadManagementViewTest(TestCase):
         
         # Should redirect to login
         self.assertEqual(response.status_code, 302)
-        self.assertIn('/auth/login/', response.url)
+        self.assertIn('/login/', response.url)
     
     def test_crm_lead_detail_for_authenticated_user(self):
         """Test that authenticated users can access lead detail"""
