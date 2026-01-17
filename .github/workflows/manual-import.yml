@@ -52,7 +52,7 @@ jobs:
       
       - name: Download latest artifact
         if: github.event.inputs.csv_url == ''
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v6
         with:
           workflow: nightly-scraper.yml
           name: leads-*
