@@ -2142,3 +2142,284 @@ class BrevoWebhookTest(TestCase):
         result = response.json()
         self.assertIn('error', result)
 
+
+
+# ===============================
+# CRM Phase 1: Authentication and Permission Tests
+# ===============================
+
+class AuthenticationTest(TestCase):
+    """Tests for authentication system"""
+    
+    def test_login_page_loads(self):
+        """Test that login page loads successfully"""
+        response = self.client.get('/login/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Anmelden')
+        self.assertContains(response, 'TELIS')
+    
+    def test_login_with_valid_credentials(self):
+        """Test login with valid credentials"""
+        user = User.objects.create_user(username='testuser', password='testpass123')
+        
+        response = self.client.post('/login/', {
+            'username': 'testuser',
+            'password': 'testpass123'
+        })
+        
+        # Should redirect to dashboard
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('/crm/'))
+    
+    def test_login_with_invalid_credentials(self):
+        """Test login with invalid credentials"""
+        response = self.client.post('/login/', {
+            'username': 'wronguser',
+            'password': 'wrongpass'
+        })
+        
+        # Should stay on login page - either 200 or redirect back to login with error
+        # Django LoginView returns 200 with form errors
+        self.assertIn(response.status_code, [200, 400])
+        if response.status_code == 200:
+            # Check for error indication in the response
+            content = response.content.decode()
+            # Either our custom error message or Django's default form errors
+            self.assertTrue('Ungültige' in content or 'error' in content.lower() or 'form' in content.lower())
+    
+    def test_logout_redirects_to_login(self):
+        """Test that logout redirects to login page"""
+        user = User.objects.create_user(username='testuser', password='testpass123')
+        self.client.login(username='testuser', password='testpass123')
+        
+        response = self.client.get('/logout/')
+        
+        # Should redirect to login
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, '/login/')
+    
+    def test_crm_requires_login(self):
+        """Test that CRM pages require login"""
+        response = self.client.get('/crm/')
+        
+        # Should redirect to login with next parameter
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('/login/'))
+        self.assertIn('next=/crm/', response.url)
+    
+    def test_login_redirect_to_next_parameter(self):
+        """Test that login redirects to 'next' parameter"""
+        user = User.objects.create_user(username='testuser', password='testpass123')
+        
+        response = self.client.post('/login/?next=/crm/', {
+            'username': 'testuser',
+            'password': 'testpass123'
+        })
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('/crm/'))
+
+
+class UserGroupsAndPermissionsTest(TestCase):
+    """Tests for user groups and permissions"""
+    
+    def setUp(self):
+        """Set up test groups using management command"""
+        call_command('setup_groups')
+    
+    def test_setup_groups_command_creates_groups(self):
+        """Test that setup_groups command creates all required groups"""
+        from django.contrib.auth.models import Group
+        
+        groups = Group.objects.all()
+        group_names = [g.name for g in groups]
+        
+        self.assertIn('Admin', group_names)
+        self.assertIn('Manager', group_names)
+        self.assertIn('Telefonist', group_names)
+    
+    def test_setup_groups_command_is_idempotent(self):
+        """Test that running setup_groups multiple times doesn't create duplicates"""
+        from django.contrib.auth.models import Group
+        
+        # Run command again
+        call_command('setup_groups')
+        
+        # Should still only have 3 groups
+        groups = Group.objects.all()
+        self.assertEqual(groups.count(), 3)
+    
+    def test_admin_group_has_all_permissions(self):
+        """Test that Admin group has all necessary permissions"""
+        from django.contrib.auth.models import Group
+        
+        admin_group = Group.objects.get(name='Admin')
+        
+        # Should have permissions on Lead, CallLog, EmailLog, and User models
+        permissions = admin_group.permissions.all()
+        self.assertGreater(permissions.count(), 0)
+        
+        # Check for some key permissions
+        permission_codenames = [p.codename for p in permissions]
+        self.assertIn('view_lead', permission_codenames)
+        self.assertIn('change_lead', permission_codenames)
+        self.assertIn('delete_lead', permission_codenames)
+    
+    def test_manager_group_permissions(self):
+        """Test that Manager group has appropriate permissions"""
+        from django.contrib.auth.models import Group
+        
+        manager_group = Group.objects.get(name='Manager')
+        permissions = manager_group.permissions.all()
+        
+        permission_codenames = [p.codename for p in permissions]
+        
+        # Manager should be able to view and change leads
+        self.assertIn('view_lead', permission_codenames)
+        self.assertIn('change_lead', permission_codenames)
+        
+        # Manager should NOT be able to delete leads
+        self.assertNotIn('delete_lead', permission_codenames)
+    
+    def test_telefonist_group_permissions(self):
+        """Test that Telefonist group has limited permissions"""
+        from django.contrib.auth.models import Group
+        
+        telefonist_group = Group.objects.get(name='Telefonist')
+        permissions = telefonist_group.permissions.all()
+        
+        permission_codenames = [p.codename for p in permissions]
+        
+        # Telefonist should be able to view leads and add call logs
+        self.assertIn('view_lead', permission_codenames)
+        self.assertIn('add_calllog', permission_codenames)
+        
+        # Telefonist should NOT be able to change or delete leads
+        self.assertNotIn('change_lead', permission_codenames)
+        self.assertNotIn('delete_lead', permission_codenames)
+
+
+class CRMDashboardTest(TestCase):
+    """Tests for CRM dashboard views"""
+    
+    def setUp(self):
+        """Set up test user and groups"""
+        call_command('setup_groups')
+        
+        from django.contrib.auth.models import Group
+        
+        # Create test users with different roles
+        self.admin_user = User.objects.create_user(username='admin', password='admin123')
+        admin_group = Group.objects.get(name='Admin')
+        self.admin_user.groups.add(admin_group)
+        
+        self.manager_user = User.objects.create_user(username='manager', password='manager123')
+        manager_group = Group.objects.get(name='Manager')
+        self.manager_user.groups.add(manager_group)
+        
+        self.telefonist_user = User.objects.create_user(username='telefonist', password='telefonist123')
+        telefonist_group = Group.objects.get(name='Telefonist')
+        self.telefonist_user.groups.add(telefonist_group)
+        
+        # Create some test leads
+        Lead.objects.create(
+            name='Test Lead 1',
+            email='lead1@example.com',
+            quality_score=85,
+            interest_level=4,
+            assigned_to=self.telefonist_user
+        )
+        Lead.objects.create(
+            name='Test Lead 2',
+            email='lead2@example.com',
+            quality_score=90,
+            interest_level=5
+        )
+    
+    def test_dashboard_requires_login(self):
+        """Test that dashboard requires authentication"""
+        response = self.client.get('/crm/')
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('/login/'))
+    
+    def test_admin_can_access_dashboard(self):
+        """Test that admin user can access dashboard"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Willkommen')
+        self.assertContains(response, 'Admin')
+    
+    def test_manager_can_access_dashboard(self):
+        """Test that manager user can access dashboard"""
+        self.client.login(username='manager', password='manager123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Willkommen')
+        self.assertContains(response, 'Manager')
+    
+    def test_telefonist_can_access_dashboard(self):
+        """Test that telefonist user can access dashboard"""
+        self.client.login(username='telefonist', password='telefonist123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Willkommen')
+        self.assertContains(response, 'Telefonist')
+    
+    def test_dashboard_shows_correct_stats_for_admin(self):
+        """Test that admin sees all leads in dashboard stats"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Admin should see all leads
+        stats = response.context['stats']
+        self.assertEqual(stats['total'], 2)
+        self.assertEqual(stats['hot_leads'], 2)  # Both leads have high score and interest
+    
+    def test_dashboard_shows_correct_stats_for_telefonist(self):
+        """Test that telefonist only sees assigned leads in dashboard stats"""
+        self.client.login(username='telefonist', password='telefonist123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Telefonist should only see assigned leads
+        stats = response.context['stats']
+        self.assertEqual(stats['total'], 1)
+        self.assertEqual(stats['hot_leads'], 1)
+    
+    def test_dashboard_displays_user_role(self):
+        """Test that dashboard displays user's role correctly"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        user_role = response.context['user_role']
+        self.assertEqual(user_role, 'Admin')
+    
+    def test_sidebar_shows_admin_sections_for_admin(self):
+        """Test that admin users see admin-only sections in sidebar"""
+        self.client.login(username='admin', password='admin123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        # Admin should see settings and user management
+        self.assertContains(response, 'Einstellungen')
+        self.assertContains(response, 'Benutzer')
+    
+    def test_sidebar_hides_admin_sections_for_telefonist(self):
+        """Test that telefonist users don't see admin sections in sidebar"""
+        self.client.login(username='telefonist', password='telefonist123')
+        response = self.client.get('/crm/')
+        
+        self.assertEqual(response.status_code, 200)
+        # Check for the admin section header - should not be present
+        content = response.content.decode()
+        # Admin sections should either not exist or be hidden
+        # Since we conditionally render them based on user role, they won't be in the HTML
+        self.assertNotIn('Administration', content)

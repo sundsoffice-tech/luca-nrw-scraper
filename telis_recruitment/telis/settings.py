@@ -185,3 +185,11 @@ def _get_optional_int(env_var: str) -> int:
 BREVO_DEFAULT_LIST_ID = _get_optional_int('BREVO_DEFAULT_LIST_ID')
 BREVO_LANDING_PAGE_LIST_ID = _get_optional_int('BREVO_LANDING_PAGE_LIST_ID')
 BREVO_WELCOME_TEMPLATE_ID = _get_optional_int('BREVO_WELCOME_TEMPLATE_ID')
+
+
+# ==========================
+# Authentication Settings
+# ==========================
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'crm-dashboard'
+LOGOUT_REDIRECT_URL = 'login'

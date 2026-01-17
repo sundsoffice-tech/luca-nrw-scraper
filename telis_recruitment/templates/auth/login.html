@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}Login - TELIS CRM{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <!-- Logo and Header -->
+        <div class="text-center">
+            <div class="flex justify-center items-center space-x-3 mb-4">
+                <span class="text-5xl">🎯</span>
+                <div class="text-left">
+                    <h1 class="text-3xl font-bold text-primary">TELIS</h1>
+                    <p class="text-gray-400 text-sm">CRM System</p>
+                </div>
+            </div>
+            <h2 class="mt-6 text-2xl font-bold text-gray-100">
+                Anmelden
+            </h2>
+            <p class="mt-2 text-sm text-gray-400">
+                Zugriff auf Ihr Dashboard
+            </p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="bg-dark-800 rounded-lg shadow-xl p-8 border border-dark-700">
+            <form method="post" class="space-y-6" action="{% url 'login' %}">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                <div class="bg-red-900/20 border border-red-700 text-red-400 px-4 py-3 rounded relative" role="alert">
+                    <span class="block sm:inline">
+                        {% if form.non_field_errors %}
+                            {{ form.non_field_errors.0 }}
+                        {% else %}
+                            Ungültige Anmeldedaten. Bitte versuchen Sie es erneut.
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
+                <!-- Username/Email Field -->
+                <div>
+                    <label for="id_username" class="block text-sm font-medium text-gray-300 mb-2">
+                        Benutzername oder E-Mail
+                    </label>
+                    <input 
+                        type="text" 
+                        name="username" 
+                        id="id_username"
+                        required
+                        autocomplete="username"
+                        class="appearance-none relative block w-full px-3 py-3 border border-dark-700 bg-dark-900 placeholder-gray-500 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150"
+                        placeholder="max.mustermann"
+                        {% if form.username.value %}value="{{ form.username.value }}"{% endif %}
+                    >
+                </div>
+
+                <!-- Password Field -->
+                <div>
+                    <label for="id_password" class="block text-sm font-medium text-gray-300 mb-2">
+                        Passwort
+                    </label>
+                    <input 
+                        type="password" 
+                        name="password" 
+                        id="id_password"
+                        required
+                        autocomplete="current-password"
+                        class="appearance-none relative block w-full px-3 py-3 border border-dark-700 bg-dark-900 placeholder-gray-500 text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150"
+                        placeholder="••••••••"
+                    >
+                </div>
+
+                <!-- Remember Me -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input 
+                            id="remember_me" 
+                            name="remember_me" 
+                            type="checkbox"
+                            class="h-4 w-4 text-primary focus:ring-primary border-dark-700 rounded bg-dark-900"
+                        >
+                        <label for="remember_me" class="ml-2 block text-sm text-gray-300">
+                            Angemeldet bleiben
+                        </label>
+                    </div>
+
+                    <!-- Future: Forgot Password Link -->
+                    <!--
+                    <div class="text-sm">
+                        <a href="#" class="font-medium text-primary hover:text-cyan-400 transition duration-150">
+                            Passwort vergessen?
+                        </a>
+                    </div>
+                    -->
+                </div>
+
+                <!-- Hidden field for redirect -->
+                {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
+
+                <!-- Submit Button -->
+                <div>
+                    <button 
+                        type="submit"
+                        class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition duration-150 shadow-lg hover:shadow-xl"
+                    >
+                        <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                            <!-- Lock Icon -->
+                            <svg class="h-5 w-5 text-cyan-300 group-hover:text-cyan-200 transition duration-150" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                            </svg>
+                        </span>
+                        Anmelden
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Footer Note -->
+        <div class="text-center text-sm text-gray-500">
+            <p>TELIS Recruitment System</p>
+            <p class="mt-1">Sichere Authentifizierung</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Subtle glow animation for the form */
+    @keyframes subtle-glow {
+        0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.1); }
+        50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.15); }
+    }
+    .bg-dark-800 {
+        animation: subtle-glow 4s infinite;
+    }
+</style>
+{% endblock %}
