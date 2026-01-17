@@ -1,0 +1,380 @@
+{% extends 'base.html' %}
+{% block title %}Telefon Dashboard - TELIS{% endblock %}
+
+{% block extra_head %}
+<style>
+    .status-btn { @apply px-4 py-2 rounded-lg font-medium transition transform hover:scale-105; }
+    .status-btn.active { @apply ring-2 ring-offset-2 ring-offset-dark-900; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-dark-800 border-b border-dark-700 py-4">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <a href="/" class="flex items-center space-x-3">
+                    <span class="text-2xl">🎯</span>
+                    <span class="text-xl font-bold text-primary">TELIS</span>
+                </a>
+                <span class="text-gray-500">|</span>
+                <span class="text-gray-300">📞 Telefon Dashboard</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="session-stats" class="text-sm text-gray-400">
+                    <span>Heute: <span id="calls-today" class="text-primary font-bold">0</span> Anrufe</span>
+                </div>
+                <a href="/admin/" class="text-gray-400 hover:text-primary">Admin</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 container mx-auto px-4 py-8">
+        <!-- Current Lead Card -->
+        <div id="lead-card" class="bg-dark-800 rounded-2xl p-8 border border-dark-700 max-w-4xl mx-auto mb-8">
+            <!-- Loading State -->
+            <div id="loading-state" class="text-center py-12">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p class="text-gray-400">Lade nächsten Lead...</p>
+            </div>
+
+            <!-- No Leads State -->
+            <div id="no-leads-state" class="hidden text-center py-12">
+                <div class="text-5xl mb-4">🎉</div>
+                <h2 class="text-2xl font-bold text-primary mb-2">Keine Leads verfügbar</h2>
+                <p class="text-gray-400 mb-6">Alle Leads wurden bearbeitet oder haben keine Telefonnummer.</p>
+                <button onclick="loadNextLead()" class="px-6 py-3 bg-primary text-dark-900 rounded-lg font-bold hover:bg-cyan-400 transition">
+                    Erneut prüfen
+                </button>
+            </div>
+
+            <!-- Lead Content -->
+            <div id="lead-content" class="hidden">
+                <!-- Lead Header -->
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <div class="flex items-center space-x-3 mb-2">
+                            <h2 id="lead-name" class="text-3xl font-bold text-white">Max Mustermann</h2>
+                            <span id="lead-score" class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">Score: 85</span>
+                        </div>
+                        <div class="flex items-center space-x-4 text-gray-400">
+                            <span id="lead-type" class="flex items-center">
+                                <span class="mr-1">👤</span>
+                                <span>Aktiver Vertriebler</span>
+                            </span>
+                            <span id="lead-source" class="flex items-center">
+                                <span class="mr-1">📍</span>
+                                <span>Scraper</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div id="call-count" class="text-sm text-gray-500">Anrufe: 0</div>
+                        <div id="lead-status" class="text-sm text-yellow-400">Status: Neu</div>
+                    </div>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="grid md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-dark-900 rounded-xl p-6 border border-dark-700">
+                        <h3 class="text-sm font-medium text-gray-400 mb-3">KONTAKT</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">📞 Telefon</span>
+                                <a id="lead-phone" href="tel:+49123456789" class="text-2xl font-bold text-primary hover:text-cyan-300">
+                                    +49 123 456789
+                                </a>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">✉️ Email</span>
+                                <span id="lead-email" class="text-gray-300">max@example.com</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">🏢 Firma</span>
+                                <span id="lead-company" class="text-gray-300">Test GmbH</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">💼 Position</span>
+                                <span id="lead-role" class="text-gray-300">Vertriebsleiter</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Call Timer -->
+                    <div class="bg-dark-900 rounded-xl p-6 border border-dark-700">
+                        <h3 class="text-sm font-medium text-gray-400 mb-3">ANRUF-TIMER</h3>
+                        <div class="text-center">
+                            <div id="call-timer" class="text-5xl font-mono font-bold text-primary mb-4">00:00</div>
+                            <div class="flex justify-center space-x-3">
+                                <button id="start-timer-btn" onclick="startTimer()" 
+                                    class="px-6 py-3 bg-green-500 hover:bg-green-400 text-white rounded-lg font-bold transition">
+                                    ▶️ Start
+                                </button>
+                                <button id="stop-timer-btn" onclick="stopTimer()" 
+                                    class="hidden px-6 py-3 bg-red-500 hover:bg-red-400 text-white rounded-lg font-bold transition">
+                                    ⏹️ Stop
+                                </button>
+                                <button onclick="resetTimer()" 
+                                    class="px-4 py-3 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition">
+                                    🔄
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Call Result Buttons -->
+                <div class="mb-8">
+                    <h3 class="text-sm font-medium text-gray-400 mb-4">ERGEBNIS WÄHLEN</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <button onclick="logCall('CONNECTED')" class="status-btn bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30">
+                            ✅ Erreicht
+                        </button>
+                        <button onclick="logCall('VOICEMAIL')" class="status-btn bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/30">
+                            📱 Voicemail
+                        </button>
+                        <button onclick="logCall('NO_ANSWER')" class="status-btn bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30">
+                            📵 Keine Antwort
+                        </button>
+                        <button onclick="logCall('BUSY')" class="status-btn bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30">
+                            🔴 Besetzt
+                        </button>
+                        <button onclick="logCall('WRONG_NUMBER')" class="status-btn bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 border border-gray-500/30">
+                            ❌ Falsche Nr.
+                        </button>
+                        <button onclick="logCall('CALLBACK')" class="status-btn bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30">
+                            📅 Rückruf
+                        </button>
+                        <button onclick="logCall('INTERESTED')" class="status-btn bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30">
+                            🔥 Interessiert
+                        </button>
+                        <button onclick="logCall('NOT_INTERESTED')" class="status-btn bg-slate-500/20 text-slate-400 hover:bg-slate-500/30 border border-slate-500/30">
+                            👎 Kein Interesse
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interest Level -->
+                <div class="mb-8">
+                    <h3 class="text-sm font-medium text-gray-400 mb-4">INTERESSE-LEVEL</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="setInterest(1)" id="interest-1" class="w-12 h-12 rounded-lg bg-dark-700 hover:bg-red-500/30 text-2xl transition">😐</button>
+                        <button onclick="setInterest(2)" id="interest-2" class="w-12 h-12 rounded-lg bg-dark-700 hover:bg-orange-500/30 text-2xl transition">🤔</button>
+                        <button onclick="setInterest(3)" id="interest-3" class="w-12 h-12 rounded-lg bg-dark-700 hover:bg-yellow-500/30 text-2xl transition">😊</button>
+                        <button onclick="setInterest(4)" id="interest-4" class="w-12 h-12 rounded-lg bg-dark-700 hover:bg-green-500/30 text-2xl transition">😃</button>
+                        <button onclick="setInterest(5)" id="interest-5" class="w-12 h-12 rounded-lg bg-dark-700 hover:bg-emerald-500/30 text-2xl transition">🔥</button>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="mb-8">
+                    <h3 class="text-sm font-medium text-gray-400 mb-4">NOTIZEN</h3>
+                    <textarea id="call-notes" rows="3" 
+                        class="w-full px-4 py-3 rounded-lg bg-dark-900 border border-dark-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Notizen zum Gespräch..."></textarea>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-between items-center">
+                    <button onclick="skipLead()" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg transition">
+                        ⏭️ Überspringen
+                    </button>
+                    <button onclick="loadNextLead()" id="next-lead-btn" class="px-8 py-4 bg-primary hover:bg-cyan-400 text-dark-900 font-bold rounded-lg transition transform hover:scale-105">
+                        NÄCHSTER LEAD →
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Previous Calls -->
+        <div class="max-w-4xl mx-auto">
+            <h3 class="text-lg font-bold text-gray-300 mb-4">Letzte Anrufe heute</h3>
+            <div id="recent-calls" class="space-y-2">
+                <p class="text-gray-500 text-sm">Noch keine Anrufe heute.</p>
+            </div>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// State
+let currentLead = null;
+let timerInterval = null;
+let timerSeconds = 0;
+let selectedInterest = 0;
+let callsToday = 0;
+
+// Timer Functions
+function startTimer() {
+    document.getElementById('start-timer-btn').classList.add('hidden');
+    document.getElementById('stop-timer-btn').classList.remove('hidden');
+    timerInterval = setInterval(() => {
+        timerSeconds++;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function stopTimer() {
+    document.getElementById('start-timer-btn').classList.remove('hidden');
+    document.getElementById('stop-timer-btn').classList.add('hidden');
+    clearInterval(timerInterval);
+}
+
+function resetTimer() {
+    stopTimer();
+    timerSeconds = 0;
+    updateTimerDisplay();
+}
+
+function updateTimerDisplay() {
+    const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+    const secs = (timerSeconds % 60).toString().padStart(2, '0');
+    document.getElementById('call-timer').textContent = `${mins}:${secs}`;
+}
+
+// Interest Level
+function setInterest(level) {
+    selectedInterest = level;
+    for (let i = 1; i <= 5; i++) {
+        const btn = document.getElementById(`interest-${i}`);
+        if (i <= level) {
+            btn.classList.add('ring-2', 'ring-primary');
+        } else {
+            btn.classList.remove('ring-2', 'ring-primary');
+        }
+    }
+}
+
+// Load Next Lead
+async function loadNextLead() {
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('no-leads-state').classList.add('hidden');
+    document.getElementById('lead-content').classList.add('hidden');
+    
+    resetTimer();
+    selectedInterest = 0;
+    document.getElementById('call-notes').value = '';
+    for (let i = 1; i <= 5; i++) {
+        document.getElementById(`interest-${i}`).classList.remove('ring-2', 'ring-primary');
+    }
+    
+    try {
+        const response = await fetch('/api/leads/next_to_call/');
+        
+        if (response.status === 404) {
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('no-leads-state').classList.remove('hidden');
+            return;
+        }
+        
+        const lead = await response.json();
+        currentLead = lead;
+        displayLead(lead);
+    } catch (error) {
+        console.error('Error loading lead:', error);
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('no-leads-state').classList.remove('hidden');
+    }
+}
+
+function displayLead(lead) {
+    document.getElementById('loading-state').classList.add('hidden');
+    document.getElementById('lead-content').classList.remove('hidden');
+    
+    document.getElementById('lead-name').textContent = lead.name || 'Unbekannt';
+    document.getElementById('lead-score').textContent = `Score: ${lead.quality_score}`;
+    document.getElementById('lead-score').className = `px-3 py-1 rounded-full text-sm font-medium ${
+        lead.quality_score >= 80 ? 'bg-green-500/20 text-green-400' :
+        lead.quality_score >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
+        'bg-red-500/20 text-red-400'
+    }`;
+    
+    document.getElementById('lead-type').querySelector('span:last-child').textContent = lead.lead_type_display || 'Unbekannt';
+    document.getElementById('lead-source').querySelector('span:last-child').textContent = lead.source_display || 'Unbekannt';
+    document.getElementById('lead-status').textContent = `Status: ${lead.status_display || 'Neu'}`;
+    document.getElementById('call-count').textContent = `Anrufe: ${lead.call_count || 0}`;
+    
+    const phoneLink = document.getElementById('lead-phone');
+    phoneLink.textContent = lead.telefon || '-';
+    phoneLink.href = `tel:${lead.telefon}`;
+    
+    document.getElementById('lead-email').textContent = lead.email || '-';
+    document.getElementById('lead-company').textContent = lead.company || '-';
+    document.getElementById('lead-role').textContent = lead.role || '-';
+}
+
+// Log Call
+async function logCall(outcome) {
+    if (!currentLead) return;
+    
+    stopTimer();
+    
+    const data = {
+        outcome: outcome,
+        duration_seconds: timerSeconds,
+        interest_level: selectedInterest,
+        notes: document.getElementById('call-notes').value
+    };
+    
+    try {
+        const response = await fetch(`/api/leads/${currentLead.id}/log_call/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            callsToday++;
+            document.getElementById('calls-today').textContent = callsToday;
+            addRecentCall(currentLead, outcome);
+            loadNextLead();
+        } else {
+            alert('Fehler beim Speichern des Anrufs');
+        }
+    } catch (error) {
+        console.error('Error logging call:', error);
+        alert('Fehler beim Speichern');
+    }
+}
+
+function skipLead() {
+    loadNextLead();
+}
+
+function addRecentCall(lead, outcome) {
+    const container = document.getElementById('recent-calls');
+    if (container.querySelector('p')) {
+        container.innerHTML = '';
+    }
+    
+    const outcomeColors = {
+        'CONNECTED': 'text-green-400',
+        'VOICEMAIL': 'text-yellow-400',
+        'NO_ANSWER': 'text-orange-400',
+        'INTERESTED': 'text-emerald-400',
+        'NOT_INTERESTED': 'text-slate-400',
+    };
+    
+    const div = document.createElement('div');
+    div.className = 'bg-dark-800 rounded-lg p-3 flex justify-between items-center border border-dark-700';
+    div.innerHTML = `
+        <span class="text-gray-300">${lead.name}</span>
+        <span class="${outcomeColors[outcome] || 'text-gray-400'}">${outcome}</span>
+    `;
+    container.insertBefore(div, container.firstChild);
+    
+    // Keep only last 5
+    while (container.children.length > 5) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', loadNextLead);
+</script>
+{% endblock %}

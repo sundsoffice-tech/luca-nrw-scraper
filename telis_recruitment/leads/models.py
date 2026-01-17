@@ -143,12 +143,14 @@ class CallLog(models.Model):
     )
     
     class Outcome(models.TextChoices):
-        CONNECTED = 'CONNECTED', 'Verbunden'
+        CONNECTED = 'CONNECTED', 'Erreicht'
         VOICEMAIL = 'VOICEMAIL', 'Voicemail'
-        BUSY = 'BUSY', 'Besetzt'
         NO_ANSWER = 'NO_ANSWER', 'Keine Antwort'
+        BUSY = 'BUSY', 'Besetzt'
         WRONG_NUMBER = 'WRONG_NUMBER', 'Falsche Nummer'
-        CALLBACK_REQUESTED = 'CALLBACK_REQUESTED', 'Rückruf gewünscht'
+        CALLBACK = 'CALLBACK', 'Rückruf vereinbart'
+        INTERESTED = 'INTERESTED', 'Interessiert'
+        NOT_INTERESTED = 'NOT_INTERESTED', 'Kein Interesse'
     
     outcome = models.CharField(
         max_length=20, 
