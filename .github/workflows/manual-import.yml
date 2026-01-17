@@ -25,6 +25,9 @@ jobs:
   import:
     name: Import CSV to Django
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # For artifact download
     
     steps:
       - name: Checkout repository
