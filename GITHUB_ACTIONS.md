@@ -14,15 +14,15 @@ Das Projekt verwendet GitHub Actions für:
 **Zeitplan**: Täglich um 03:00 CET (02:00 UTC)
 
 **Was passiert**:
-1. Chrome + ChromeDriver werden installiert
-2. Scraper läuft im Headless-Modus
+1. Python Dependencies werden installiert
+2. Scraper läuft mit `--once` Flag
 3. CSV wird erstellt
 4. Django Import Command wird ausgeführt
 5. CSV wird als Artifact gespeichert (30 Tage)
 
 **Manueller Trigger**:
 - Gehe zu Actions → Nightly Scraper Run → Run workflow
-- Optional: `max_pages` und `dry_run` Parameter setzen
+- Optional: `qpi` (Queries Per Industry), `industry` (all/recruiter/candidates/talent_hunt) und `dry_run` Parameter setzen
 
 **Secrets benötigt**:
 - `DJANGO_SECRET_KEY` (optional, für Produktion)
@@ -71,7 +71,7 @@ Artifacts werden 30 Tage aufbewahrt.
 
 ### Scraper schlägt fehl
 1. Prüfe Logs im Actions-Tab
-2. Chrome/ChromeDriver Version prüfen
+2. Scraper Dependencies prüfen
 3. Manuell mit `dry_run=true` testen
 
 ### Import schlägt fehl
