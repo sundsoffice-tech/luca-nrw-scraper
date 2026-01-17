@@ -1760,6 +1760,139 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"sales" "alumni" "NRW" "kontakt"',
         '"vertrieb" "absolvent" "suche stelle"',
     ],
+    "talent_hunt": [
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 1: LINKEDIN PROFILES (OHNE #opentowork - aktive Vertriebler!)
+        # ══════════════════════════════════════════════════════════════
+        
+        # LinkedIn Profile - Aktive Account Manager
+        'site:linkedin.com/in "Account Manager" "NRW" -"#opentowork"',
+        'site:linkedin.com/in "Sales Manager" ("Düsseldorf" OR "Köln" OR "Dortmund") -"#opentowork"',
+        'site:linkedin.com/in "Vertriebsleiter" "Nordrhein-Westfalen" -"open to work"',
+        'site:linkedin.com/in "Key Account" "NRW" "Jahre Erfahrung" -"#opentowork"',
+        'site:linkedin.com/in "Außendienst" ("NRW" OR "Ruhrgebiet") -"open to work"',
+        'site:linkedin.com/in "Business Development" "NRW" -"#opentowork"',
+        'site:linkedin.com/in "Senior Sales" "Deutschland" -"#opentowork"',
+        'site:linkedin.com/in "Vertriebsmitarbeiter" "Köln" -"open to work"',
+        'site:linkedin.com/in "Regional Sales" "NRW" -"#opentowork"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 2: XING PROFILE (Aktive Vertriebler)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Xing Profile - Etablierte Vertriebler
+        'site:xing.com/profile "Vertriebsmitarbeiter" "NRW"',
+        'site:xing.com/profile "Handelsvertreter" "Nordrhein-Westfalen"',
+        'site:xing.com/profile "Sales Representative" "Deutschland"',
+        'site:xing.com/profile "Außendienstmitarbeiter" kontakt',
+        'site:xing.com/profile "Account Manager" "Düsseldorf"',
+        'site:xing.com/profile "Key Account" "Köln" "Berufserfahrung"',
+        'site:xing.com/profile "Vertriebsleiter" "Dortmund"',
+        'site:xing.com/profile "Sales Director" "NRW"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 3: HANDELSVERTRETER-REGISTER & VERBÄNDE
+        # ══════════════════════════════════════════════════════════════
+        
+        # Offizielle Register
+        'site:cdh.de "Handelsvertreter" "NRW" kontakt',
+        'site:handelskammer.de "Handelsvertreter" telefon',
+        '"Handelsvertreterregister" NRW kontakt email',
+        'site:ihk.de "Handelsvertreter" "Vertretung" kontakt',
+        'site:bdvi.de "Mitglied" "NRW" kontakt',
+        '"Verband deutscher Handelsvertreter" NRW',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 4: FIRMEN-TEAM-SEITEN (Dort sind Vertriebler gelistet!)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Team-Seiten mit Vertriebs-Kontakten
+        'intitle:"Unser Team" "Vertrieb" "NRW" kontakt',
+        'intitle:"Team" "Sales" ("Düsseldorf" OR "Köln") telefon',
+        '"Ansprechpartner Vertrieb" telefon NRW',
+        '"Ihr Ansprechpartner" "Außendienst" kontakt',
+        'inurl:team "Vertriebsleiter" telefon',
+        'inurl:mitarbeiter "Account Manager" email',
+        'intitle:"Unser Team" "Key Account" kontakt',
+        '"Team Vertrieb" telefon NRW',
+        'inurl:about "Sales Team" kontakt',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 5: FREELANCER-PORTALE (Aktive Vertriebler)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Freiberufler-Profile
+        'site:freelancermap.de "Vertrieb" "verfügbar" kontakt',
+        'site:gulp.de "Sales" "freiberuflich" telefon',
+        'site:twago.de "Vertriebsprofi" kontakt',
+        'site:freelance.de "Handelsvertreter" "selbstständig"',
+        'site:freelancermap.de "Business Development" "verfügbar"',
+        'site:gulp.de "Account Manager" "freiberuflich"',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 6: LEBENSLAUF-DATENBANKEN (Sichtbare Profile)
+        # ══════════════════════════════════════════════════════════════
+        
+        # PDF Lebensläufe mit Kontaktdaten
+        'filetype:pdf "Lebenslauf" "Vertriebserfahrung" "NRW"',
+        'filetype:pdf "CV" "Sales Manager" "Düsseldorf"',
+        'filetype:pdf "Außendienst" "Berufserfahrung" kontakt',
+        'filetype:pdf "Vertrieb" "Key Account" telefon NRW',
+        'filetype:pdf "Sales Representative" "Germany" email',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 7: BRANCHENSPEZIFISCHE VERTRIEBLER
+        # ══════════════════════════════════════════════════════════════
+        
+        # Solar/Energie Vertriebler
+        'site:linkedin.com/in "Solar" "Vertrieb" "NRW" -"#opentowork"',
+        'site:xing.com/profile "Photovoltaik" "Vertrieb" kontakt',
+        '"Energieberater" "Vertrieb" kontakt NRW',
+        'site:linkedin.com/in "Erneuerbare Energien" "Sales" "Deutschland" -"#opentowork"',
+        
+        # Versicherung Vertriebler
+        'site:linkedin.com/in "Versicherung" "Außendienst" "NRW" -"#opentowork"',
+        'site:xing.com/profile "Versicherungsvertrieb" kontakt',
+        '"Versicherungsmakler" "selbstständig" kontakt NRW',
+        
+        # Telekommunikation Vertriebler
+        'site:linkedin.com/in "Telekommunikation" "Sales" "NRW" -"#opentowork"',
+        'site:xing.com/profile "Telekom" "Vertrieb" kontakt',
+        '"Mobilfunk" "Vertrieb" kontakt NRW',
+        
+        # Automotive Vertriebler
+        'site:linkedin.com/in "Automotive" "Sales" "NRW" -"#opentowork"',
+        'site:xing.com/profile "Autoverkäufer" kontakt',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 8: MESSE-/EVENT-TEILNEHMER (Vertriebler gehen zu Messen!)
+        # ══════════════════════════════════════════════════════════════
+        
+        # Messe-Ansprechpartner
+        '"Messestand" "Vertrieb" "Ansprechpartner" NRW',
+        'site:xing.com/events "Vertrieb" "NRW" teilnehmer',
+        '"Messe Düsseldorf" "Sales" "Kontakt"',
+        '"IHK Veranstaltung" "Vertrieb" telefon',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 9: UNTERNEHMENSWEBSEITEN - KONTAKTSEITEN
+        # ══════════════════════════════════════════════════════════════
+        
+        # Kontakt-Seiten mit Vertriebs-Ansprechpartnern
+        'inurl:kontakt "Vertrieb" telefon NRW',
+        'inurl:contact "Sales" email NRW',
+        '"Vertriebsleitung" kontakt telefon',
+        '"Sales Manager" "direkt erreichen" telefon',
+        
+        # ══════════════════════════════════════════════════════════════
+        # KATEGORIE 10: GESCHÄFTSFÜHRER MIT VERTRIEBSHINTERGRUND
+        # ══════════════════════════════════════════════════════════════
+        
+        # Geschäftsführer/Inhaber mit Sales-Background
+        'site:linkedin.com/in "Geschäftsführer" "ehemals Vertrieb" "NRW" -"#opentowork"',
+        'site:xing.com/profile "Inhaber" "Handelsvertreter" kontakt',
+        '"Selbstständiger Vertriebsprofi" kontakt NRW',
+    ],
 }
 
 # NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
@@ -1789,11 +1922,11 @@ def build_queries(
 ) -> List[str]:
     """
     Build a compact set of high-precision Handelsvertreter dorks.
-    If candidates/recruiter mode is selected, use INDUSTRY_QUERIES["candidates"] instead.
+    If candidates/recruiter/talent_hunt mode is selected, use INDUSTRY_QUERIES accordingly.
     """
-    # CRITICAL FIX: Use candidates queries when in candidates/recruiter mode
-    if selected_industry and selected_industry.lower() in ("candidates", "recruiter"):
-        base = INDUSTRY_QUERIES.get("candidates", [])
+    # CRITICAL FIX: Use appropriate queries based on mode
+    if selected_industry and selected_industry.lower() in ("candidates", "recruiter", "talent_hunt"):
+        base = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
         queries = list(dict.fromkeys(base))
         random.shuffle(queries)
         cap = min(max(1, per_industry_limit), len(queries))
@@ -2754,9 +2887,14 @@ def _matches_hostlist(host: str, blocked: set[str]) -> bool:
 
 
 def _is_candidates_mode() -> bool:
-    """Check if we're in candidates/recruiter mode based on INDUSTRY env var."""
+    """Check if we're in candidates/recruiter/talent_hunt mode based on INDUSTRY env var."""
     industry = str(os.getenv("INDUSTRY", "")).lower()
-    return "recruiter" in industry or "candidates" in industry
+    return "recruiter" in industry or "candidates" in industry or "talent_hunt" in industry
+
+def _is_talent_hunt_mode() -> bool:
+    """Check if we're in talent_hunt mode - looking for active sales professionals."""
+    industry = str(os.getenv("INDUSTRY", "")).lower()
+    return "talent_hunt" in industry
 
 
 def is_candidate_url(url: Optional[str]) -> Optional[bool]:
@@ -4260,8 +4398,42 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         score -= 40
     if is_public_context:
         score -= 40
-    if is_hr_or_press:
+    
+    # NEW: In talent_hunt mode, HR contacts are valuable (not penalized)
+    # In other modes, penalize HR/press contacts
+    if not _is_talent_hunt_mode() and is_hr_or_press:
         score -= 30
+    
+    # NEW: Talent Hunt Mode Boosts (active salespeople, not job seekers)
+    if _is_talent_hunt_mode():
+        # Boost for LinkedIn/Xing profiles WITHOUT #opentowork
+        if any(social in u for social in ["linkedin.com/in/", "xing.com/profile/"]):
+            if "#opentowork" not in t_lower and "open to work" not in t_lower:
+                score += 30
+                reasons.append("active_profile_no_jobseek")
+        
+        # Boost for team page URLs
+        if any(path in u for path in ["/team", "/mitarbeiter", "/unser-team", "/about", "/kontakt"]):
+            score += 20
+            reasons.append("team_page")
+        
+        # Boost for years of experience (active professionals)
+        exp_match = re.search(r'(\d+)\+?\s*jahre', t_lower)
+        if exp_match:
+            years = int(exp_match.group(1))
+            exp_boost = min(years * 3, 15)  # Max +15 for experience
+            score += exp_boost
+            reasons.append(f"experience_{years}y")
+        
+        # Remove boost for job seeking signals in talent hunt
+        if any(kw in t_lower for kw in ["suche job", "stellengesuch", "arbeit gesucht", "auf jobsuche"]):
+            score -= 10  # Actually penalize job seeking in talent hunt mode
+            reasons.append("job_seeking_penalty")
+        
+        # Boost for freelancer/independent profiles
+        if any(kw in t_lower for kw in ["freiberuflich", "selbstständig", "handelsvertreter"]):
+            score += 15
+            reasons.append("independent_professional")
 
     return max(0, min(int(score), 100))
 
