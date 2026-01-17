@@ -184,3 +184,118 @@ class EmailLogModelTest(TestCase):
         email_logs = list(EmailLog.objects.all())
         self.assertEqual(email_logs[0], email2)  # Most recent first
         self.assertEqual(email_logs[1], email1)
+
+
+class AdminIntegrationTest(TestCase):
+    """Tests for admin integration"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_superuser(
+            username='admin', 
+            email='admin@example.com',
+            password='adminpass'
+        )
+        self.lead = Lead.objects.create(
+            name='Admin Test Lead',
+            email='test@example.com',
+            telefon='0123456789',
+            status=Lead.Status.NEW,
+            quality_score=85,
+            interest_level=3
+        )
+    
+    def test_admin_registered(self):
+        """Test that admin classes are registered"""
+        from django.contrib import admin
+        from .models import Lead, CallLog, EmailLog
+        
+        self.assertTrue(admin.site.is_registered(Lead))
+        self.assertTrue(admin.site.is_registered(CallLog))
+        self.assertTrue(admin.site.is_registered(EmailLog))
+    
+    def test_lead_admin_display_methods(self):
+        """Test that custom display methods work"""
+        from django.contrib import admin
+        from .admin import LeadAdmin
+        
+        admin_instance = LeadAdmin(Lead, admin.site)
+        
+        # Test status_badge - check it contains status display and has color styling
+        badge = admin_instance.status_badge(self.lead)
+        self.assertIn(self.lead.get_status_display(), badge)
+        self.assertIn('background-color:', badge)
+        self.assertIn('#', badge)  # Contains hex color
+        
+        # Test source_badge - check it contains source display and has an icon
+        source = admin_instance.source_badge(self.lead)
+        self.assertIn(self.lead.get_source_display(), source)
+        # Check for presence of emoji characters (icons)
+        self.assertTrue(any(ord(c) > 127 for c in source))
+        
+        # Test quality_bar - check it contains the score and has color styling
+        quality = admin_instance.quality_bar(self.lead)
+        self.assertIn('85', quality)
+        self.assertIn('background:', quality)
+        self.assertIn('#', quality)  # Contains hex color
+        
+        # Test interest_badge - check star count matches interest level
+        interest = admin_instance.interest_badge(self.lead)
+        self.assertIn('⭐', interest)
+        self.assertEqual(interest.count('⭐'), 3)
+    
+    def test_calllog_admin_display_methods(self):
+        """Test CallLog admin display methods"""
+        from django.contrib import admin
+        from .admin import CallLogAdmin
+        
+        call_log = CallLog.objects.create(
+            lead=self.lead,
+            outcome=CallLog.Outcome.CONNECTED,
+            duration_seconds=125,
+            interest_level=4,
+            called_by=self.user
+        )
+        
+        admin_instance = CallLogAdmin(CallLog, admin.site)
+        
+        # Test outcome_badge - check it contains outcome and has color styling
+        badge = admin_instance.outcome_badge(call_log)
+        self.assertIn(call_log.get_outcome_display(), badge)
+        self.assertIn('background-color:', badge)
+        self.assertIn('#', badge)  # Contains hex color
+        
+        # Test duration_display
+        duration = admin_instance.duration_display(call_log)
+        self.assertEqual(duration, '2:05')
+        
+        # Test interest_display
+        interest = admin_instance.interest_display(call_log)
+        self.assertEqual(interest.count('⭐'), 4)
+    
+    def test_emaillog_admin_display_methods(self):
+        """Test EmailLog admin display methods"""
+        from django.contrib import admin
+        from .admin import EmailLogAdmin
+        from django.utils import timezone
+        
+        email_log = EmailLog.objects.create(
+            lead=self.lead,
+            email_type=EmailLog.EmailType.WELCOME,
+            subject='Welcome Email',
+            opened_at=timezone.now()
+        )
+        
+        admin_instance = EmailLogAdmin(EmailLog, admin.site)
+        
+        # Test email_type_badge
+        badge = admin_instance.email_type_badge(email_log)
+        self.assertIn('👋', badge)
+        
+        # Test opened_badge
+        opened = admin_instance.opened_badge(email_log)
+        self.assertIn('✓', opened)
+        
+        # Test clicked_badge (not clicked)
+        clicked = admin_instance.clicked_badge(email_log)
+        self.assertIn('-', clicked)
