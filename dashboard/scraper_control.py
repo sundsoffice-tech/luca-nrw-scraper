@@ -53,7 +53,7 @@ class ScraperController:
         
         Args:
             params: Dictionary of scraper parameters
-                - industry: str (recruiter, candidates, all)
+                - industry: str (recruiter, candidates, talent_hunt, all)
                 - qpi: int (queries per industry)
                 - mode: str (standard, headhunter, aggressive, snippet_only, learning)
                 - smart: bool

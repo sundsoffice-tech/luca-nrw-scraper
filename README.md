@@ -7,6 +7,9 @@ Zweck: NRW-Vertriebsleads automatisch finden, bewerten, exportieren.
 # Single run with specific parameters
 python scriptname.py --once --industry recruiter --qpi 6 --daterestrict d30
 
+# Talent Hunt Mode (NEW - Find active sales professionals)
+python scriptname.py --once --industry talent_hunt --qpi 15
+
 # Start scraper with basic UI
 python scriptname.py --ui
 ```
