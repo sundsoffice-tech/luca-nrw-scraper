@@ -505,8 +505,11 @@ def get_dashboard_stats(user):
     user_role = get_user_role(user)
     if user_role == 'Telefonist':
         leads_queryset = Lead.objects.filter(assigned_to=user)
+        # Filter calls to only those made by this user
+        calls_queryset = CallLog.objects.filter(called_by=user, called_at__date=today)
     else:
         leads_queryset = Lead.objects.all()
+        calls_queryset = CallLog.objects.filter(called_at__date=today)
     
     total = leads_queryset.count()
     today_count = leads_queryset.filter(created_at__date=today).count()
@@ -514,8 +517,8 @@ def get_dashboard_stats(user):
     # Hot leads count
     hot_leads = leads_queryset.filter(quality_score__gte=80, interest_level__gte=3).count()
     
-    # Call stats (simplified for now)
-    calls_today = CallLog.objects.filter(called_at__date=today).count()
+    # Call stats
+    calls_today = calls_queryset.count()
     
     return {
         'total': total,

@@ -89,7 +89,9 @@
                 </a>
                 
                 <!-- Manager/Admin only -->
-                {% if user.groups.all.0.name == 'Admin' or user.groups.all.0.name == 'Manager' %}
+                {% if user.groups.exists %}
+                    {% with first_group=user.groups.first %}
+                        {% if first_group.name == 'Admin' or first_group.name == 'Manager' %}
                 <div class="px-4 py-2 mt-2">
                     <div class="text-xs text-gray-500 uppercase font-semibold">Management</div>
                 </div>
@@ -99,10 +101,14 @@
                     <span>Reports</span>
                     <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
+                        {% endif %}
+                    {% endwith %}
                 {% endif %}
                 
                 <!-- Admin only -->
-                {% if user.groups.all.0.name == 'Admin' %}
+                {% if user.groups.exists %}
+                    {% with first_group=user.groups.first %}
+                        {% if first_group.name == 'Admin' %}
                 <div class="px-4 py-2 mt-2">
                     <div class="text-xs text-gray-500 uppercase font-semibold">Administration</div>
                 </div>
@@ -118,6 +124,8 @@
                     <span>Benutzer</span>
                     <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
+                        {% endif %}
+                    {% endwith %}
                 {% endif %}
             </nav>
 
@@ -130,8 +138,8 @@
                     <div class="flex-1 min-w-0">
                         <p class="text-sm font-medium text-gray-200 truncate">{{ user.get_full_name|default:user.username }}</p>
                         <p class="text-xs text-gray-400">
-                            {% if user.groups.all %}
-                                {{ user.groups.all.0.name }}
+                            {% if user.groups.exists %}
+                                {{ user.groups.first.name }}
                             {% else %}
                                 Benutzer
                             {% endif %}
