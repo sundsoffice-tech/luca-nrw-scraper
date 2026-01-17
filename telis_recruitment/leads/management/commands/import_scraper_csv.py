@@ -105,10 +105,37 @@ class Command(BaseCommand):
             # Try with different encoding
             try:
                 with open(csv_path, 'r', encoding='latin-1') as f:
-                    reader = csv.DictReader(f)
+                    # Detect delimiter
+                    sample = f.read(1024)
+                    f.seek(0)
+                    
+                    if ';' in sample and ',' not in sample:
+                        delimiter = ';'
+                    else:
+                        delimiter = ','
+                    
+                    reader = csv.DictReader(f, delimiter=delimiter)
                     rows = list(reader)
                     self.stdout.write(self.style.WARNING('📝 Datei mit Latin-1 Encoding gelesen'))
-                    # Process rows same as above...
+                    self.stdout.write(f'📊 Gefunden: {len(rows)} Zeilen\n')
+                    
+                    with transaction.atomic():
+                        for i, row in enumerate(rows, 1):
+                            try:
+                                result = self._process_row(row, i, dry_run, force_update)
+                                if result == 'imported':
+                                    imported += 1
+                                elif result == 'updated':
+                                    updated += 1
+                                else:
+                                    skipped += 1
+                            except Exception as e:
+                                errors.append(f'Zeile {i}: {str(e)}')
+                                self.stdout.write(self.style.ERROR(f'  ❌ [{i}] FEHLER: {str(e)}'))
+                        
+                        if dry_run:
+                            # Rollback bei dry run
+                            transaction.set_rollback(True)
             except Exception as e:
                 raise CommandError(f'Fehler beim Lesen der Datei: {e}')
         
@@ -155,10 +182,14 @@ class Command(BaseCommand):
                     # Update other fields if better data
                     if not existing.company and row.get('company_name'):
                         existing.company = row.get('company_name')[:255]
-                    if not existing.role and row.get('rolle'):
-                        existing.role = row.get('rolle')[:255]
-                    if not existing.location and row.get('region'):
-                        existing.location = row.get('region')[:255]
+                    if not existing.role:
+                        role = (row.get('rolle') or row.get('position') or row.get('Position') or '')
+                        if role:
+                            existing.role = role[:255]
+                    if not existing.location:
+                        location = (row.get('region') or row.get('standort') or row.get('Standort') or '')
+                        if location:
+                            existing.location = location[:255]
                     existing.save()
                 self.stdout.write(self.style.WARNING(
                     f'  🔄 [{index}] UPDATE: {name} (Score: {existing.quality_score} → {score})'

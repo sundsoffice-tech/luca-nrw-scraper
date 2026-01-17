@@ -1127,4 +1127,34 @@ class ImportScraperCSVCommandTest(TestCase):
         self.assertEqual(lead.company, 'Old Company')  # Not updated
         self.assertEqual(lead.role, 'New Role')  # Added
         self.assertEqual(lead.location, 'New Region')  # Added
+    
+    def test_import_latin1_encoding(self):
+        """Test Latin-1 encoding fallback"""
+        csv_data = [
+            {
+                'name': 'Müller Größe',
+                'email': 'mueller@example.com',
+                'score': '75'
+            }
+        ]
+        
+        # Create CSV file with Latin-1 encoding
+        filepath = self.temp_path / 'test_latin1.csv'
+        with open(filepath, 'w', encoding='latin-1', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=csv_data[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_data)
+        
+        # Run the command
+        out = io.StringIO()
+        call_command('import_scraper_csv', str(filepath), stdout=out)
+        
+        # Verify lead was created
+        self.assertEqual(Lead.objects.count(), 1)
+        lead = Lead.objects.first()
+        self.assertEqual(lead.email, 'mueller@example.com')
+        
+        # Check output mentions Latin-1
+        output = out.getvalue()
+        self.assertIn('Latin-1', output)
 
