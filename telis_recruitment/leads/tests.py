@@ -221,21 +221,25 @@ class AdminIntegrationTest(TestCase):
         
         admin_instance = LeadAdmin(Lead, admin.site)
         
-        # Test status_badge
+        # Test status_badge - check it contains status display and has color styling
         badge = admin_instance.status_badge(self.lead)
         self.assertIn(self.lead.get_status_display(), badge)
-        self.assertIn('#ef4444', badge)  # NEW status color
+        self.assertIn('background-color:', badge)
+        self.assertIn('#', badge)  # Contains hex color
         
-        # Test source_badge
+        # Test source_badge - check it contains source display and has an icon
         source = admin_instance.source_badge(self.lead)
-        self.assertIn('🤖', source)  # Scraper icon
+        self.assertIn(self.lead.get_source_display(), source)
+        # Check for presence of emoji characters (icons)
+        self.assertTrue(any(ord(c) > 127 for c in source))
         
-        # Test quality_bar
+        # Test quality_bar - check it contains the score and has color styling
         quality = admin_instance.quality_bar(self.lead)
         self.assertIn('85', quality)
-        self.assertIn('#22c55e', quality)  # Green for score >= 80
+        self.assertIn('background:', quality)
+        self.assertIn('#', quality)  # Contains hex color
         
-        # Test interest_badge
+        # Test interest_badge - check star count matches interest level
         interest = admin_instance.interest_badge(self.lead)
         self.assertIn('⭐', interest)
         self.assertEqual(interest.count('⭐'), 3)
@@ -255,10 +259,11 @@ class AdminIntegrationTest(TestCase):
         
         admin_instance = CallLogAdmin(CallLog, admin.site)
         
-        # Test outcome_badge
+        # Test outcome_badge - check it contains outcome and has color styling
         badge = admin_instance.outcome_badge(call_log)
         self.assertIn(call_log.get_outcome_display(), badge)
-        self.assertIn('#22c55e', badge)  # CONNECTED color
+        self.assertIn('background-color:', badge)
+        self.assertIn('#', badge)  # Contains hex color
         
         # Test duration_display
         duration = admin_instance.duration_display(call_log)

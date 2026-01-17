@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count
+from django.http import HttpResponse
+import csv
 from .models import Lead, CallLog, EmailLog
 
 
@@ -152,12 +154,10 @@ class LeadAdmin(admin.ModelAdmin):
     
     @admin.action(description='📥 Als CSV exportieren')
     def export_selected_csv(self, request, queryset):
-        import csv
-        from django.http import HttpResponse
-        
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="leads_export.csv"'
-        response.write('\ufeff'.encode('utf-8'))  # BOM for Excel
+        # Add UTF-8 BOM (Byte Order Mark) for proper Unicode character display in Excel
+        response.write('\ufeff'.encode('utf-8'))
         
         writer = csv.writer(response)
         writer.writerow(['Name', 'Email', 'Telefon', 'Status', 'Score', 'Quelle', 'Lead-Typ', 'Firma', 'Interesse', 'Anrufe', 'Erstellt'])
