@@ -1,0 +1,97 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'telis_recruitment/**'
+      - '.github/workflows/django-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'telis_recruitment/**'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r telis_recruitment/requirements.txt
+      
+      - name: Run migrations
+        env:
+          SECRET_KEY: 'test-secret-key-for-ci'
+          DEBUG: 'True'
+          ALLOWED_HOSTS: 'localhost,127.0.0.1'
+        run: |
+          cd telis_recruitment
+          python manage.py migrate --no-input
+      
+      - name: Run tests
+        env:
+          SECRET_KEY: 'test-secret-key-for-ci'
+          DEBUG: 'True'
+          ALLOWED_HOSTS: 'localhost,127.0.0.1'
+        run: |
+          cd telis_recruitment
+          python manage.py test --verbosity=2
+      
+      - name: Check for migration issues
+        env:
+          SECRET_KEY: 'test-secret-key-for-ci'
+          DEBUG: 'True'
+        run: |
+          cd telis_recruitment
+          python manage.py makemigrations --check --dry-run
+
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install linters
+        run: |
+          pip install flake8 black isort
+      
+      - name: Run flake8
+        run: |
+          # Critical errors should fail the build
+          flake8 telis_recruitment --count --select=E9,F63,F7,F82 --show-source --statistics
+          
+          # Warnings only (doesn't fail build)
+          flake8 telis_recruitment --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+      
+      - name: Check Black formatting
+        run: |
+          # Check formatting but don't fail build (informational only)
+          black --check --diff telis_recruitment || echo "⚠️ Black formatting issues found (non-blocking)"
+        continue-on-error: true
