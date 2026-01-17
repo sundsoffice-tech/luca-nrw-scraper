@@ -12,6 +12,11 @@ from .models import Lead, CallLog, EmailLog
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
 
 
+# Constants
+DEFAULT_QUALITY_SCORE = 50
+MAX_ERROR_REPORTS = 10
+
+
 class LeadViewSet(viewsets.ModelViewSet):
     queryset = Lead.objects.all()
     serializer_class = LeadSerializer
@@ -212,11 +217,11 @@ def import_csv(request):
                     
                     # Parse and validate score
                     try:
-                        score_value = row.get('score', 50)
-                        new_score = int(score_value) if score_value else 50
+                        score_value = row.get('score', DEFAULT_QUALITY_SCORE)
+                        new_score = int(score_value) if score_value else DEFAULT_QUALITY_SCORE
                         new_score = max(0, min(100, new_score))  # Clamp to 0-100 range
                     except (ValueError, TypeError):
-                        new_score = 50  # Default score if invalid
+                        new_score = DEFAULT_QUALITY_SCORE  # Default score if invalid
                     
                     if existing:
                         if new_score > existing.quality_score:
@@ -251,7 +256,7 @@ def import_csv(request):
             'imported': imported,
             'updated': updated,
             'skipped': skipped,
-            'errors': errors[:10],
+            'errors': errors[:MAX_ERROR_REPORTS],
         })
     
     except Exception as e:
