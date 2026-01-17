@@ -539,3 +539,307 @@ def crm_dashboard(request):
         'stats': get_dashboard_stats(request.user),
     }
     return render(request, 'crm/dashboard.html', context)
+
+
+@login_required
+def crm_leads(request):
+    """
+    Lead management view with filtering and bulk actions.
+    """
+    context = {
+        'user_role': get_user_role(request.user),
+    }
+    return render(request, 'crm/leads.html', context)
+
+
+@login_required
+def crm_lead_detail(request, pk):
+    """
+    Lead detail view (slide-over panel).
+    """
+    from django.shortcuts import get_object_or_404
+    lead = get_object_or_404(Lead, pk=pk)
+    
+    # Check permissions for Telefonist
+    user_role = get_user_role(request.user)
+    if user_role == 'Telefonist' and lead.assigned_to != request.user:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Sie haben keine Berechtigung, diesen Lead zu sehen.")
+    
+    context = {
+        'lead': lead,
+        'user_role': user_role,
+    }
+    return render(request, 'crm/lead_detail.html', context)
+
+
+# ===============================
+# Dashboard API Endpoints
+# ===============================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    """
+    Real-time KPIs for dashboard.
+    Returns comprehensive statistics including trends and distributions.
+    """
+    from django.db.models import Count, Avg, Q
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    user = request.user
+    user_role = get_user_role(user)
+    
+    # Base queryset (filter by assigned_to for Telefonisten)
+    if user_role == 'Telefonist':
+        leads_queryset = Lead.objects.filter(assigned_to=user)
+        calls_queryset = CallLog.objects.filter(called_by=user)
+    else:
+        leads_queryset = Lead.objects.all()
+        calls_queryset = CallLog.objects.all()
+    
+    now = timezone.now()
+    today = now.date()
+    week_ago = now - timedelta(days=7)
+    last_week_start = now - timedelta(days=14)
+    
+    # Basic stats
+    total_leads = leads_queryset.count()
+    leads_today = leads_queryset.filter(created_at__date=today).count()
+    calls_today = calls_queryset.filter(called_at__date=today).count()
+    hot_leads = leads_queryset.filter(quality_score__gte=80).count()
+    
+    # Conversion rate (leads that reached INTERVIEW or HIRED status)
+    converted_leads = leads_queryset.filter(
+        status__in=[Lead.Status.INTERVIEW, Lead.Status.HIRED]
+    ).count()
+    conversion_rate = round((converted_leads / total_leads * 100), 1) if total_leads > 0 else 0
+    
+    # Previous week conversion for comparison
+    prev_week_leads = leads_queryset.filter(
+        created_at__gte=last_week_start, 
+        created_at__lt=week_ago
+    ).count()
+    prev_week_converted = leads_queryset.filter(
+        status__in=[Lead.Status.INTERVIEW, Lead.Status.HIRED],
+        created_at__gte=last_week_start,
+        created_at__lt=week_ago
+    ).count()
+    prev_conversion_rate = round((prev_week_converted / prev_week_leads * 100), 1) if prev_week_leads > 0 else 0
+    conversion_change = round(conversion_rate - prev_conversion_rate, 1)
+    
+    # 7-day trend data
+    trend_7_days = []
+    for i in range(6, -1, -1):
+        date = today - timedelta(days=i)
+        new_leads = leads_queryset.filter(created_at__date=date).count()
+        conversions = leads_queryset.filter(
+            status__in=[Lead.Status.INTERVIEW, Lead.Status.HIRED],
+            updated_at__date=date
+        ).count()
+        trend_7_days.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'label': date.strftime('%d.%m'),
+            'new_leads': new_leads,
+            'conversions': conversions
+        })
+    
+    # Status distribution
+    status_dist = leads_queryset.values('status').annotate(count=Count('id')).order_by('-count')
+    status_distribution = {
+        item['status']: {
+            'count': item['count'],
+            'label': dict(Lead.Status.choices).get(item['status'], item['status'])
+        }
+        for item in status_dist
+    }
+    
+    # Source distribution
+    source_dist = leads_queryset.values('source').annotate(count=Count('id')).order_by('-count')
+    source_distribution = {
+        item['source']: {
+            'count': item['count'],
+            'label': dict(Lead.Source.choices).get(item['source'], item['source']),
+            'percentage': round((item['count'] / total_leads * 100), 1) if total_leads > 0 else 0
+        }
+        for item in source_dist
+    }
+    
+    # Average calls per day (last 7 days)
+    avg_calls = calls_queryset.filter(called_at__gte=week_ago).count() / 7
+    
+    return Response({
+        'leads_total': total_leads,
+        'leads_today': leads_today,
+        'calls_today': calls_today,
+        'conversion_rate': conversion_rate,
+        'conversion_change': conversion_change,
+        'hot_leads': hot_leads,
+        'avg_calls_per_day': round(avg_calls, 1),
+        'trend_7_days': trend_7_days,
+        'status_distribution': status_distribution,
+        'source_distribution': source_distribution,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def activity_feed(request):
+    """
+    Recent activities for dashboard feed.
+    Shows latest calls, status changes, and new leads.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    user = request.user
+    user_role = get_user_role(user)
+    
+    # Filter by user for Telefonisten
+    if user_role == 'Telefonist':
+        call_logs = CallLog.objects.filter(called_by=user)
+        leads_queryset = Lead.objects.filter(assigned_to=user)
+    else:
+        call_logs = CallLog.objects.all()
+        leads_queryset = Lead.objects.all()
+    
+    activities = []
+    now = timezone.now()
+    
+    # Recent calls (last 20)
+    recent_calls = call_logs.select_related('lead', 'called_by').order_by('-called_at')[:20]
+    for call in recent_calls:
+        time_diff = now - call.called_at
+        activities.append({
+            'type': 'call',
+            'icon': '📞',
+            'message': f"{call.called_by.get_full_name() or call.called_by.username} hat {call.lead.name} angerufen",
+            'detail': call.get_outcome_display(),
+            'timestamp': call.called_at.isoformat(),
+            'time_ago': _format_time_ago(time_diff),
+            'lead_id': call.lead.id,
+        })
+    
+    # Recent status changes (infer from updated leads with status != NEW)
+    recent_status_changes = leads_queryset.exclude(
+        status=Lead.Status.NEW
+    ).order_by('-updated_at')[:10]
+    for lead in recent_status_changes:
+        time_diff = now - lead.updated_at
+        activities.append({
+            'type': 'status_change',
+            'icon': '✅',
+            'message': f'Lead "{lead.name}" → {lead.get_status_display()}',
+            'detail': f'Score: {lead.quality_score}',
+            'timestamp': lead.updated_at.isoformat(),
+            'time_ago': _format_time_ago(time_diff),
+            'lead_id': lead.id,
+        })
+    
+    # New leads (last 10)
+    new_leads = leads_queryset.order_by('-created_at')[:10]
+    for lead in new_leads:
+        time_diff = now - lead.created_at
+        if time_diff.total_seconds() < 86400:  # Only show if less than 24h old
+            activities.append({
+                'type': 'new_lead',
+                'icon': '🆕',
+                'message': f'Neuer Lead: {lead.name}',
+                'detail': f'Quelle: {lead.get_source_display()}',
+                'timestamp': lead.created_at.isoformat(),
+                'time_ago': _format_time_ago(time_diff),
+                'lead_id': lead.id,
+            })
+    
+    # Sort all activities by timestamp (most recent first)
+    activities.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    # Return top 20
+    return Response(activities[:20])
+
+
+def _format_time_ago(time_diff):
+    """Helper to format timedelta as human-readable string"""
+    seconds = int(time_diff.total_seconds())
+    if seconds < 60:
+        return "gerade eben"
+    elif seconds < 3600:
+        minutes = seconds // 60
+        return f"vor {minutes} Minute{'n' if minutes != 1 else ''}"
+    elif seconds < 86400:
+        hours = seconds // 3600
+        return f"vor {hours} Stunde{'n' if hours != 1 else ''}"
+    else:
+        days = seconds // 86400
+        return f"vor {days} Tag{'en' if days != 1 else ''}"
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def team_performance(request):
+    """
+    Team performance statistics for Manager/Admin.
+    Shows per-user call and conversion stats.
+    """
+    from django.db.models import Count, Avg, Q
+    from django.utils import timezone
+    from django.contrib.auth.models import User
+    from datetime import timedelta
+    
+    user_role = get_user_role(request.user)
+    
+    # Only Manager and Admin can access this
+    if user_role not in ['Admin', 'Manager']:
+        return Response(
+            {'error': 'Keine Berechtigung'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    now = timezone.now()
+    today = now.date()
+    week_start = now - timedelta(days=7)
+    
+    # Get all users with Telefonist role
+    telefonist_group = User.objects.filter(groups__name='Telefonist')
+    
+    performance_data = []
+    
+    for user in telefonist_group:
+        # Calls today
+        calls_today = CallLog.objects.filter(
+            called_by=user,
+            called_at__date=today
+        ).count()
+        
+        # Conversions this week (leads moved to INTERVIEW or HIRED)
+        conversions_week = Lead.objects.filter(
+            assigned_to=user,
+            status__in=[Lead.Status.INTERVIEW, Lead.Status.HIRED],
+            updated_at__gte=week_start
+        ).count()
+        
+        # Average call duration
+        avg_duration = CallLog.objects.filter(
+            called_by=user,
+            called_at__gte=week_start
+        ).aggregate(avg=Avg('duration_seconds'))['avg'] or 0
+        
+        # Total assigned leads
+        assigned_leads = Lead.objects.filter(assigned_to=user).count()
+        
+        performance_data.append({
+            'user_id': user.id,
+            'username': user.username,
+            'full_name': user.get_full_name() or user.username,
+            'calls_today': calls_today,
+            'conversions_week': conversions_week,
+            'avg_duration_seconds': round(avg_duration),
+            'avg_duration_formatted': f"{int(avg_duration // 60)}:{int(avg_duration % 60):02d}",
+            'assigned_leads': assigned_leads,
+        })
+    
+    # Sort by calls today (descending)
+    performance_data.sort(key=lambda x: x['calls_today'], reverse=True)
+    
+    return Response(performance_data)
