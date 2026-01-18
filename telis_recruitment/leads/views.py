@@ -19,15 +19,21 @@ import os
 import threading
 import sqlite3
 import re
+from datetime import timedelta
 from pathlib import Path
 
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Avg, Count, F, Q
 from django_ratelimit.decorators import ratelimit
+from django.utils import timezone
+from django.utils.timesince import timesince
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes
@@ -37,6 +43,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from .models import Lead, CallLog, EmailLog
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
+from .permissions import IsManager, IsTelefonist
 from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT
 
 logger = logging.getLogger(__name__)
@@ -767,8 +774,289 @@ def trigger_sync(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# CRM helpers and dashboard views
+_CONVERTED_STATUSES = {
+    Lead.Status.INTERESTED,
+    Lead.Status.INTERVIEW,
+    Lead.Status.HIRED,
+}
+
+_TEAM_PERFORMANCE_GROUPS = ['Admin', 'Manager', 'Telefonist']
+
+
+def _get_leads_queryset_for_user(user):
+    """Return leads that the current user is allowed to see."""
+    if not user.is_authenticated:
+        return Lead.objects.none()
+    if user.is_superuser or user.groups.filter(name__in=['Admin', 'Manager']).exists():
+        return Lead.objects.all()
+    return Lead.objects.filter(assigned_to=user)
+
+
+def _get_user_role(user):
+    """Simplified role name for CRM templates."""
+    if user.is_superuser or user.groups.filter(name='Admin').exists():
+        return 'Admin'
+    if user.groups.filter(name='Manager').exists():
+        return 'Manager'
+    if user.groups.filter(name='Telefonist').exists():
+        return 'Telefonist'
+    return None
+
+
+def _format_duration(seconds):
+    """Format duration seconds into human-friendly string."""
+    total_seconds = int(seconds or 0)
+    minutes, secs = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def _format_time_ago(timestamp):
+    """Return a localized human readable 'time ago' string."""
+    if not timestamp:
+        return ''
+    return f"vor {timesince(timestamp, timezone.now())}"
+
+
+def _build_dashboard_stats(user):
+    """Build data for the dashboard KPIs, charts and tables."""
+    leads_qs = _get_leads_queryset_for_user(user)
+    total_leads = leads_qs.count()
+    today = timezone.localdate()
+    week_start_date = today - timedelta(days=6)
+    prev_week_start = today - timedelta(days=13)
+    prev_week_end = today - timedelta(days=7)
+
+    leads_today = leads_qs.filter(created_at__date=today).count()
+    hot_leads = leads_qs.filter(quality_score__gte=80, interest_level__gte=3).count()
+
+    calls_today = CallLog.objects.filter(
+        lead__in=leads_qs,
+        called_at__date=today
+    ).count()
+
+    calls_last_week = CallLog.objects.filter(
+        lead__in=leads_qs,
+        called_at__date__gte=week_start_date
+    ).count()
+    avg_calls_per_day = round(calls_last_week / 7, 1) if calls_last_week else 0
+
+    conversions_current = leads_qs.filter(
+        status__in=_CONVERTED_STATUSES,
+        created_at__date__gte=week_start_date,
+        created_at__date__lte=today
+    ).count()
+    conversions_previous = leads_qs.filter(
+        status__in=_CONVERTED_STATUSES,
+        created_at__date__gte=prev_week_start,
+        created_at__date__lte=prev_week_end
+    ).count()
+    conversion_change = conversions_current - conversions_previous
+    conversion_rate = round((conversions_current / total_leads) * 100, 1) if total_leads else 0
+
+    trend_7_days = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        day_leads = leads_qs.filter(created_at__date=day).count()
+        day_conversions = leads_qs.filter(
+            created_at__date=day,
+            status__in=_CONVERTED_STATUSES
+        ).count()
+        trend_7_days.append({
+            'label': day.strftime('%d.%m'),
+            'new_leads': day_leads,
+            'conversions': day_conversions
+        })
+
+    status_rows = leads_qs.values('status').annotate(count=Count('id'))
+    status_map = {row['status']: row['count'] for row in status_rows}
+    status_distribution = {
+        key: {
+            'label': label,
+            'count': status_map.get(key, 0)
+        }
+        for key, label in Lead.Status.choices
+    }
+
+    source_rows = leads_qs.values('source').annotate(count=Count('id'))
+    source_map = {row['source']: row['count'] for row in source_rows}
+    source_distribution = {}
+    for key, label in Lead.Source.choices:
+        count = source_map.get(key, 0)
+        percentage = round((count / total_leads) * 100, 1) if total_leads else 0
+        source_distribution[key] = {
+            'label': label,
+            'count': count,
+            'percentage': percentage
+        }
+
+    return {
+        'leads_total': total_leads,
+        'leads_today': leads_today,
+        'calls_today': calls_today,
+        'avg_calls_per_day': avg_calls_per_day,
+        'conversion_rate': conversion_rate,
+        'conversion_change': conversion_change,
+        'hot_leads': hot_leads,
+        'trend_7_days': trend_7_days,
+        'status_distribution': status_distribution,
+        'source_distribution': source_distribution,
+    }
+
+
+def _build_activity_feed(leads_qs, limit=12):
+    """Construct a combined activity feed from calls and emails."""
+    lead_ids = leads_qs.values_list('id', flat=True)
+    calls = CallLog.objects.filter(
+        lead_id__in=lead_ids
+    ).select_related('lead', 'called_by').order_by('-called_at')[:limit * 2]
+    emails = EmailLog.objects.filter(
+        lead_id__in=lead_ids
+    ).select_related('lead').order_by('-sent_at')[:limit * 2]
+
+    activities = []
+    for log in calls:
+        actor = log.called_by.get_full_name() if log.called_by else None
+        actor = actor or (log.called_by.username if log.called_by else 'Team')
+        activities.append({
+            'type': 'call',
+            'icon': '📞',
+            'message': f"Anruf {log.get_outcome_display().lower()} mit {log.lead.name}",
+            'detail': f"{actor} • {log.get_outcome_display()}",
+            'lead_id': log.lead_id,
+            'timestamp': log.called_at.isoformat(),
+            '_ts': log.called_at,
+            'time_ago': _format_time_ago(log.called_at)
+        })
+
+    for log in emails:
+        activities.append({
+            'type': 'email',
+            'icon': '✉️',
+            'message': f"E-Mail {log.get_email_type_display().lower()} an {log.lead.name}",
+            'detail': log.subject or log.get_email_type_display(),
+            'lead_id': log.lead_id,
+            'timestamp': log.sent_at.isoformat(),
+            '_ts': log.sent_at,
+            'time_ago': _format_time_ago(log.sent_at)
+        })
+
+    activities.sort(key=lambda entry: entry['_ts'], reverse=True)
+    cleaned = []
+    for entry in activities[:limit]:
+        entry.pop('_ts', None)
+        cleaned.append(entry)
+    return cleaned
+
+
+def _build_team_performance():
+    """Aggregate team performance metrics for Admin/Managers."""
+    week_start = timezone.now() - timedelta(days=6)
+    today = timezone.localdate()
+    users = User.objects.filter(
+        Q(groups__name__in=_TEAM_PERFORMANCE_GROUPS) | Q(is_superuser=True)
+    ).distinct()
+
+    performers = []
+    for user in users:
+        calls_today = CallLog.objects.filter(
+            called_by=user,
+            called_at__date=today
+        ).count()
+        conversions_week = Lead.objects.filter(
+            assigned_to=user,
+            status__in=_CONVERTED_STATUSES,
+            updated_at__gte=week_start
+        ).count()
+        avg_duration = CallLog.objects.filter(
+            called_by=user,
+            called_at__gte=week_start
+        ).aggregate(avg=Avg('duration_seconds'))['avg'] or 0
+        performers.append({
+            'user_id': user.id,
+            'username': user.username,
+            'full_name': user.get_full_name() or user.username,
+            'calls_today': calls_today,
+            'conversions_week': conversions_week,
+            'avg_duration_formatted': _format_duration(avg_duration),
+        })
+
+    performers.sort(key=lambda perf: (
+        -perf['calls_today'],
+        -perf['conversions_week'],
+        perf['full_name']
+    ))
+    return performers
+
+
+@login_required(login_url='crm-login')
+def crm_dashboard(request):
+    """
+    CRM dashboard template view.
+    Loads KPI cards and allows the client-side JS to populate charts.
+    """
+    stats = _build_dashboard_stats(request.user)
+    return render(request, 'crm/dashboard.html', {
+        'user_role': _get_user_role(request.user),
+        'stats': {
+            'total': stats['leads_total'],
+            'today': stats['leads_today'],
+            'calls_today': stats['calls_today'],
+            'hot_leads': stats['hot_leads'],
+        }
+    })
+
+
+@login_required(login_url='crm-login')
+def crm_leads(request):
+    """Render the CRM lead management page."""
+    return render(request, 'crm/leads.html', {
+        'user_role': _get_user_role(request.user)
+    })
+
+
+@login_required(login_url='crm-login')
+def crm_lead_detail(request, pk):
+    """Render a single lead detail panel for CRM users."""
+    leads_qs = _get_leads_queryset_for_user(request.user)
+    lead = get_object_or_404(leads_qs, pk=pk)
+    return render(request, 'crm/lead_detail.html', {
+        'lead': lead,
+        'user_role': _get_user_role(request.user)
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsTelefonist])
+def dashboard_stats(request):
+    """Return the dashboard statistics used by Chart.js + KPI cards."""
+    stats = _build_dashboard_stats(request.user)
+    return Response(stats, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsTelefonist])
+def activity_feed(request):
+    """Return recent activities (calls + emails) for the CRM feed."""
+    leads_qs = _get_leads_queryset_for_user(request.user)
+    feed = _build_activity_feed(leads_qs)
+    return Response(feed, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsManager])
+def team_performance(request):
+    """Return aggregated team performance metrics (Admin/Manager only)."""
+    performers = _build_team_performance()
+    return Response(performers, status=status.HTTP_200_OK)
+
+
 # Template views for public pages
-from django.shortcuts import render
 
 
 def landing_page(request):
@@ -777,7 +1065,17 @@ def landing_page(request):
     
     Public page for lead opt-in.
     """
-    return render(request, 'leads/landing_page.html')
+    week_start = timezone.now() - timedelta(days=7)
+    hired_this_week = Lead.objects.filter(
+        status=Lead.Status.HIRED,
+        updated_at__gte=week_start
+    ).count()
+
+    return render(request, 'leads/landing_page.html', {
+        'stats': {
+            'hired_this_week': hired_this_week
+        }
+    })
 
 
 def phone_dashboard(request):

@@ -2484,7 +2484,7 @@ class AuthenticationTest(TestCase):
         
         # Should redirect to login
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, '/login/')
+        self.assertEqual(response.url, '/crm/login/')
     
     def test_crm_requires_login(self):
         """Test that CRM pages require login"""
@@ -2492,7 +2492,7 @@ class AuthenticationTest(TestCase):
         
         # Should redirect to login with next parameter
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.url.startswith('/login/'))
+        self.assertTrue(response.url.startswith('/crm/login/'))
         self.assertIn('next=/crm/', response.url)
     
     def test_login_redirect_to_next_parameter(self):
@@ -2628,7 +2628,7 @@ class CRMDashboardTest(TestCase):
         """Test that dashboard requires authentication"""
         response = self.client.get('/crm/')
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.url.startswith('/login/'))
+        self.assertTrue(response.url.startswith('/crm/login/'))
     
     def test_admin_can_access_dashboard(self):
         """Test that admin user can access dashboard"""

@@ -193,6 +193,6 @@ BREVO_WEBHOOK_SECRET = os.getenv('BREVO_WEBHOOK_SECRET', None)
 # ==========================
 # Authentication Settings
 # ==========================
-LOGIN_URL = 'login'
+LOGIN_URL = 'crm-login'
 LOGIN_REDIRECT_URL = 'crm-dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+LOGOUT_REDIRECT_URL = 'crm-login'
