@@ -18,7 +18,15 @@ diagnose_run.log
 *.db.bak
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
 data/
+
+# Specific database files - NEVER commit these!
+scraper.db
+leads.db
+craper.db
 
 # Exports (CSV files, but keep examples)
 *.csv
