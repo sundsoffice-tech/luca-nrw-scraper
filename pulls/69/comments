@@ -1,0 +1,54 @@
+## 🐛 Syntax-Fehler gefunden - CI schlägt deshalb fehl!
+
+In der Datei `telis_recruitment/leads/views.py` ist ein **Syntax-Fehler** in der `opt_in()` Funktion (Zeilen 292-293):
+
+### ❌ Aktueller fehlerhafter Code:
+```python
+@csrf_exempt
+@require_POST
+@ratelimit(key='ip', rate=API_RATE_LIMIT_OPT_IN, method='POST')
+def opt_in(request):
+    """
+    Opt-In API Endpoint for Landing Page.
+    
+    Creates a new lead with source: landing_page.
+    Rate limited to prevent spam/abuse.
+    """
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return JsonResponse({
+            'error': 'Too many requests. Please try again in a few minutes.'
+        }, status=429)
+    Erstellt einen neuen Lead mit Source: landing_page   # ❌ SYNTAX ERROR!
+    """                                                   # ❌ Ungültiger Docstring
+    try:
+```
+
+### ✅ Korrektur - bitte diese Zeilen entfernen:
+```diff
+- Erstellt einen neuen Lead mit Source: landing_page
+- """
+```
+
+Der alte deutsche Docstring-Text wurde versehentlich nicht vollständig entfernt und steht jetzt als ungültiger Python-Code im Funktionskörper.
+
+### 🔧 So sollte es aussehen:
+```python
+def opt_in(request):
+    """
+    Opt-In API Endpoint for Landing Page.
+    
+    Creates a new lead with source: landing_page.
+    Rate limited to prevent spam/abuse.
+    """
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return JsonResponse({
+            'error': 'Too many requests. Please try again in a few minutes.'
+        }, status=429)
+    try:
+        data = json.loads(request.body)
+        # ...
+```
+
+Nach dieser Korrektur sollten beide CI-Checks (Code Quality + Run Tests) erfolgreich durchlaufen! ✅
