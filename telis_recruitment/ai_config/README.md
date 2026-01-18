@@ -99,41 +99,175 @@ cost = calculate_cost('OpenAI', 'gpt-4o-mini', 100, 50)
 
 ## Integration with Existing Code
 
-The loader functions are designed to be imported by existing scraper modules:
+The loader functions are designed to be imported by existing scraper modules. The following modules have been integrated with `ai_config`:
 
-- `learning_engine.py`
-- `ai_learning_engine.py`
-- `perplexity_learning.py`
-- `luca_scraper/config.py`
+### Integrated Scraper Modules
 
-Instead of hardcoded AI parameters, these modules can now use:
+#### 1. `learning_engine.py` (Root Level)
+Self-learning engine that tracks and optimizes lead generation patterns.
+
+**Integration Features:**
+- Optional import with graceful fallback
+- Loads AI config on initialization
+- Uses config for temperature, max_tokens, and model selection
+- Logs info when Django config is available vs. fallback
+
+**Usage Pattern:**
+```python
+from learning_engine import LearningEngine
+
+engine = LearningEngine(db_path="scraper.db")
+# Automatically uses ai_config when available
+# Falls back to defaults when Django not configured
+```
+
+#### 2. `ai_learning_engine.py` (Root Level)
+Active learning system for portal performance tracking and dork optimization.
+
+**Integration Features:**
+- Optional import with graceful fallback
+- Loads AI config on initialization
+- Ready for AI-driven improvements
+- Logs config source (Django DB vs. fallback)
+
+**Usage Pattern:**
+```python
+from ai_learning_engine import ActiveLearningEngine
+
+engine = ActiveLearningEngine(db_path="scraper.db")
+# Automatically uses ai_config when available
+```
+
+#### 3. `perplexity_learning.py` (Root Level)
+Learning engine for Perplexity search optimization.
+
+**Integration Features:**
+- Optional import with graceful fallback
+- Loads general AI config and Perplexity-specific config from Django
+- Retrieves Perplexity provider API URL and model settings
+- Falls back to environment variables and defaults
+
+**Usage Pattern:**
+```python
+from perplexity_learning import PerplexityLearning
+
+pplx = PerplexityLearning(db_path="scraper.db")
+# Uses Perplexity config from Django AIProvider/AIModel when available
+# Falls back to PERPLEXITY_API_KEY env variable
+```
+
+#### 4. `adaptive_system.py` (Root Level)
+Adaptive search system coordinating metrics and dork selection.
+
+**Integration Features:**
+- Optional import with graceful fallback
+- Loads AI config on initialization
+- Ready for AI-driven adaptive strategies
+- Logs config source for debugging
+
+**Usage Pattern:**
+```python
+from adaptive_system import AdaptiveSearchSystem
+
+system = AdaptiveSearchSystem(
+    all_dorks=dork_list,
+    metrics_db_path="metrics.db"
+)
+# Automatically uses ai_config when available
+```
+
+#### 5. `luca_scraper/config.py` (Central Configuration)
+Central configuration module with priority-based config loading.
+
+**Integration Features:**
+- `get_config()` function with 3-tier priority:
+  1. Django DB via ai_config (highest priority)
+  2. Environment variables (medium priority)
+  3. Hardcoded defaults (fallback)
+- Optional import with graceful fallback
+- Documented priority order in docstrings
+
+**Usage Pattern:**
+```python
+from luca_scraper.config import get_config
+
+# Get full config
+config = get_config()
+temperature = config['temperature']
+model = config['default_model']
+
+# Get specific parameter
+temp = get_config('temperature')
+model = get_config('default_model')
+```
+
+### Generic Integration Pattern
+
+All integrated modules follow this pattern:
 
 ```python
-from ai_config.loader import (
-    get_ai_config,
-    get_prompt,
-    log_usage,
-    check_budget
-)
-
-# Get dynamic configuration
-config = get_ai_config()
-
-# Check budget before making requests
-allowed, budget_info = check_budget()
-if allowed:
-    # Make AI request...
-    
-    # Log usage after request
-    log_usage(
-        provider=config['default_provider'],
-        model=config['default_model'],
-        tokens_prompt=prompt_tokens,
-        tokens_completion=completion_tokens,
-        cost=total_cost,
-        latency_ms=request_time,
-        success=True
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config,
+        get_prompt,
+        log_usage,
+        check_budget
     )
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    # Fallback defaults when ai_config is not available
+    def get_ai_config():
+        return {
+            'temperature': 0.3,
+            'max_tokens': 4000,
+            'default_provider': 'OpenAI',
+            'default_model': 'gpt-4o-mini',
+            # ... other defaults
+        }
+    
+    def get_prompt(slug: str):
+        return None
+    
+    def log_usage(*args, **kwargs):
+        pass
+    
+    def check_budget():
+        return True, {...}
+
+# In class __init__:
+self.ai_config = get_ai_config()
+if AI_CONFIG_AVAILABLE:
+    logger.info(f"AI config loaded from Django DB")
+else:
+    logger.info("AI config using fallback defaults")
+```
+
+### Backwards Compatibility
+
+**All scraper modules remain backwards compatible:**
+- Running without Django installed/configured works seamlessly
+- `scriptname.py --once` continues to work standalone
+- No database required for basic operation
+- Graceful degradation to environment variables and hardcoded defaults
+
+### Configuration Priority (luca_scraper/config.py)
+
+The `get_config()` function implements a 3-tier priority system:
+
+1. **Django DB** (Highest Priority): Values from `AIConfig` model via `ai_config.loader`
+2. **Environment Variables** (Medium Priority): `AI_TEMPERATURE`, `AI_MAX_TOKENS`, `AI_MODEL`, `AI_PROVIDER`
+3. **Hardcoded Defaults** (Fallback): Sensible defaults for standalone operation
+
+Example:
+```python
+# Priority 1: Django DB (if available)
+# Priority 2: Environment variable AI_TEMPERATURE=0.5
+# Priority 3: Default 0.3
+
+temperature = get_config('temperature')  # Returns highest priority value
 ```
 
 ## Default Data

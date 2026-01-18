@@ -2,10 +2,14 @@
 """
 Adaptive System Integration Module
 Provides high-level interface for the phase-based adaptive search system.
+
+Integrates with Django ai_config app when available for DB-driven AI configuration.
+Falls back gracefully to default constants when Django is not available.
 """
 
 import os
 from typing import Dict, List, Optional, Tuple
+import logging
 
 from metrics import get_metrics_store, MetricsStore
 from adaptive_dorks import AdaptiveDorkSelector
@@ -13,11 +17,59 @@ from wasserfall import WasserfallManager
 from cache import get_query_cache, get_url_seen_set, QueryCache, URLSeenSet
 from reporting import ReportGenerator
 
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config,
+        get_prompt,
+        log_usage,
+        check_budget
+    )
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    # Fallback defaults when ai_config is not available
+    def get_ai_config():
+        return {
+            'temperature': 0.3,
+            'top_p': 1.0,
+            'max_tokens': 4000,
+            'learning_rate': 0.01,
+            'daily_budget': 5.0,
+            'monthly_budget': 150.0,
+            'confidence_threshold': 0.35,
+            'retry_limit': 2,
+            'timeout_seconds': 30,
+            'default_provider': 'OpenAI',
+            'default_model': 'gpt-4o-mini',
+        }
+    
+    def get_prompt(slug: str):
+        return None
+    
+    def log_usage(*args, **kwargs):
+        pass
+    
+    def check_budget():
+        return True, {
+            'daily_spent': 0.0,
+            'daily_budget': 5.0,
+            'daily_remaining': 5.0,
+            'monthly_spent': 0.0,
+            'monthly_budget': 150.0,
+            'monthly_remaining': 150.0,
+        }
+
+logger = logging.getLogger(__name__)
+
 
 class AdaptiveSearchSystem:
     """
     High-level interface for the adaptive search system.
     Coordinates metrics, dork selection, wasserfall modes, and caching.
+    
+    Integrates with Django ai_config app when available for configuration management.
     """
     
     def __init__(
@@ -38,6 +90,15 @@ class AdaptiveSearchSystem:
             url_seen_ttl: TTL for URL seen set in seconds (default 7d)
             initial_mode: Initial Wasserfall mode
         """
+        # Load AI configuration (from Django DB if available, else defaults)
+        self.ai_config = get_ai_config()
+        if AI_CONFIG_AVAILABLE:
+            logger.info(f"Adaptive system using AI config from Django DB: "
+                       f"provider={self.ai_config.get('default_provider')}, "
+                       f"model={self.ai_config.get('default_model')}")
+        else:
+            logger.info("Adaptive system using fallback AI config (Django not available)")
+        
         # Initialize components
         self.metrics = get_metrics_store(metrics_db_path)
         self.dork_selector = AdaptiveDorkSelector(
