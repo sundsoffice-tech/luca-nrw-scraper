@@ -90,7 +90,7 @@ class Command(BaseCommand):
         self.stdout.write('\n' + '='*60)
         self.stdout.write('Adding superusers to Admin group...')
         from django.contrib.auth.models import User
-        superusers = User.objects.filter(is_superuser=True)
+        superusers = User.objects.filter(is_superuser=True).prefetch_related('groups')
         superusers_added = 0
         for superuser in superusers:
             if not superuser.groups.filter(name='Admin').exists():

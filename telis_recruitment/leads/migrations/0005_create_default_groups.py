@@ -74,7 +74,7 @@ def create_groups_and_assign_superusers(apps, schema_editor):
     telefonist_group.permissions.set(telefonist_permissions)
     
     # === ADD SUPERUSERS TO ADMIN GROUP ===
-    superusers = User.objects.filter(is_superuser=True)
+    superusers = User.objects.filter(is_superuser=True).prefetch_related('groups')
     for superuser in superusers:
         if not superuser.groups.filter(name='Admin').exists():
             superuser.groups.add(admin_group)
