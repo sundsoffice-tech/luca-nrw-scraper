@@ -20,8 +20,9 @@ DB_PATH = Path(_DB_PATH_STR)
 # Thread-local storage for database connections
 _db_local = threading.local()
 
-# Global flag for schema initialization
+# Global flag for schema initialization with thread lock
 _DB_READY = False
+_DB_READY_LOCK = threading.Lock()
 
 
 def db() -> sqlite3.Connection:
@@ -37,28 +38,31 @@ def db() -> sqlite3.Connection:
         _db_local.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         _db_local.conn.row_factory = sqlite3.Row
     
-    # Initialize schema if not already done
+    # Initialize schema if not already done (thread-safe)
     if not _DB_READY:
-        _ensure_schema(_db_local.conn)
-        
-        # Initialize dashboard schema if available
-        try:
-            from dashboard.db_schema import (
-                ensure_dashboard_schema,
-                initialize_default_search_modes,
-                initialize_default_settings
-            )
-            ensure_dashboard_schema(_db_local.conn)
-            initialize_default_search_modes(_db_local.conn)
-            initialize_default_settings(_db_local.conn)
-        except ImportError:
-            # Dashboard module not available - this is expected
-            pass
-        except Exception as e:
-            # Log other errors but don't fail
-            print(f"Warning: Could not initialize dashboard schema: {e}")
-        
-        _DB_READY = True
+        with _DB_READY_LOCK:
+            # Double-check pattern to avoid multiple initializations
+            if not _DB_READY:
+                _ensure_schema(_db_local.conn)
+                
+                # Initialize dashboard schema if available
+                try:
+                    from dashboard.db_schema import (
+                        ensure_dashboard_schema,
+                        initialize_default_search_modes,
+                        initialize_default_settings
+                    )
+                    ensure_dashboard_schema(_db_local.conn)
+                    initialize_default_search_modes(_db_local.conn)
+                    initialize_default_settings(_db_local.conn)
+                except ImportError:
+                    # Dashboard module not available - this is expected
+                    pass
+                except Exception as e:
+                    # Log other errors but don't fail
+                    print(f"Warning: Could not initialize dashboard schema: {e}")
+                
+                _DB_READY = True
     
     return _db_local.conn
 

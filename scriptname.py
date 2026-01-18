@@ -1405,7 +1405,7 @@ def db():
     """Thread-safe database connection. Uses luca_scraper.database if available."""
     if _LUCA_SCRAPER_AVAILABLE:
         return _db()
-    # Fallback to original implementation
+    # Fallback: Use inline implementation when luca_scraper not available
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     global _DB_READY, _LEARNING_ENGINE
@@ -1435,7 +1435,7 @@ def init_db():
     """Initialize database. Uses luca_scraper.database if available."""
     if _LUCA_SCRAPER_AVAILABLE:
         return _init_db()
-    # Fallback to original implementation
+    # Fallback: Use inline implementation when luca_scraper not available
     con = db()
     con.close()
 
