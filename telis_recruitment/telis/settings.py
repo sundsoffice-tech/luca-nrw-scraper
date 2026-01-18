@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'leads.apps.LeadsConfig',
     'scraper_control',
+    'ai_config',
 ]
 
 MIDDLEWARE = [
