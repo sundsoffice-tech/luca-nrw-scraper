@@ -41,11 +41,15 @@ urlpatterns = [
     # Pages app (builder interface - staff only)
     path('crm/pages/', include('pages.urls')),
     
+    # Email Templates (web interface)
+    path('crm/email-templates/', include('email_templates.urls')),
+    
     # CRM (protected)
     path('crm/', include('leads.crm_urls')),
     
     # API
     path('api/', include('leads.urls')),
+    path('api/email-templates/', include('email_templates.api_urls')),
     
     # Django Admin
     path('admin/', admin.site.urls),

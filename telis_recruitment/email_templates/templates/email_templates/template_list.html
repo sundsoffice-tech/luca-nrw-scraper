@@ -1,0 +1,57 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Email Templates{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Email Templates</h1>
+        <a href="{% url 'admin:email_templates_emailtemplate_add' %}" 
+           class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded">
+            Neues Template
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for template in templates %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {{ template.name }}
+                </h3>
+                {% if template.ai_generated %}
+                <span class="text-cyan-600">🤖</span>
+                {% endif %}
+            </div>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">
+                <strong>Kategorie:</strong> {{ template.get_category_display }}
+            </p>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">
+                <strong>Betreff:</strong> {{ template.subject|truncatewords:10 }}
+            </p>
+            
+            <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                <strong>Versendet:</strong> {{ template.send_count }}x
+            </p>
+            
+            <div class="flex gap-2">
+                <a href="{% url 'email_templates:template-editor' template.slug %}" 
+                   class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-center py-2 rounded">
+                    Bearbeiten
+                </a>
+                <a href="{% url 'email_templates:template-preview' template.slug %}" 
+                   class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-center py-2 rounded">
+                    Vorschau
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-3 text-center text-gray-600 dark:text-gray-400 py-12">
+            Noch keine Templates vorhanden. Erstelle dein erstes Template!
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

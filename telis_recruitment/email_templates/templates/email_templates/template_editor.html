@@ -1,0 +1,44 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Template Editor - {{ template.name }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-6">
+        <a href="{% url 'email_templates:template-list' %}" 
+           class="text-cyan-600 hover:text-cyan-700">← Zurück zur Liste</a>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+        {{ template.name }}
+    </h1>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Bearbeite das Template im Django Admin oder nutze die API für programmatischen Zugriff.
+        </p>
+        
+        <div class="mb-6">
+            <h3 class="font-semibold mb-2">Verfügbare Variablen:</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for var in sample_variables.keys %}
+                <span class="bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded text-sm">
+                    {{"{"}}{{ var }}{{"}"}}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex gap-4">
+            <a href="{% url 'admin:email_templates_emailtemplate_change' template.id %}" 
+               class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded">
+                Im Admin bearbeiten
+            </a>
+            <a href="{% url 'email_templates:template-preview' template.slug %}" 
+               class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-2 rounded">
+                Vorschau ansehen
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
