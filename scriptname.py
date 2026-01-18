@@ -311,6 +311,18 @@ try:
         parse_args as _parse_args,
         validate_config as _validate_config,
     )
+    # Phase 4 imports - Crawlers
+    from luca_scraper.crawlers import (
+        crawl_kleinanzeigen_listings_async as _crawl_kleinanzeigen_listings_async,
+        extract_kleinanzeigen_detail_async as _extract_kleinanzeigen_detail_async,
+        crawl_kleinanzeigen_portal_async as _crawl_kleinanzeigen_portal_async,
+        crawl_markt_de_listings_async as _crawl_markt_de_listings_async,
+        crawl_quoka_listings_async as _crawl_quoka_listings_async,
+        crawl_kalaydo_listings_async as _crawl_kalaydo_listings_async,
+        crawl_meinestadt_listings_async as _crawl_meinestadt_listings_async,
+        extract_generic_detail_async as _extract_generic_detail_async,
+        _mark_url_seen as _mark_url_seen_helper,
+    )
     _LUCA_SCRAPER_AVAILABLE = True
 except ImportError as e:
     # Fallback: luca_scraper not available, use inline definitions
@@ -3742,6 +3754,8 @@ async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 
     Crawl Kleinanzeigen listing pages directly (not via Google) and extract all ad links.
     Supports pagination (page 1, 2, 3...).
     
+    Wrapper function that calls the modular crawler implementation.
+    
     Args:
         listing_url: Base URL for the listing (e.g., https://www.kleinanzeigen.de/s-stellengesuche/...)
         max_pages: Maximum number of pages to crawl (default: 5)
@@ -3749,86 +3763,24 @@ async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 
     Returns:
         List of ad detail URLs
     """
-    if not ENABLE_KLEINANZEIGEN:
-        return []
-    
-    ad_links: List[str] = []
-    seen_urls = set()
-    page_num = 1  # Initialize before loop
-    
-    for page_num in range(1, max_pages + 1):
-        # Build URL with page parameter, properly handling existing query params
-        if page_num == 1:
-            url = listing_url
-        else:
-            # Parse URL and add page parameter
-            parsed = urllib.parse.urlparse(listing_url)
-            params = urllib.parse.parse_qs(parsed.query)
-            params['page'] = [str(page_num)]
-            new_query = urllib.parse.urlencode(params, doseq=True)
-            url = urllib.parse.urlunparse(parsed._replace(query=new_query))
-        
-        try:
-            # Use configured delay for kleinanzeigen portal
-            if page_num > 1:
-                delay = PORTAL_DELAYS.get("kleinanzeigen", 3.0)
-                await asyncio.sleep(delay + _jitter(0.5, 1.0))
-            
-            log("info", "Crawling Kleinanzeigen listing", url=url, page=page_num)
-            
-            r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-            if not r or r.status_code != 200:
-                log("warn", "Failed to fetch listing page", url=url, status=r.status_code if r else "None")
-                break
-            
-            html = r.text or ""
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Extract ad links from listing
-            page_links = 0
-            for art in soup.select("li.ad-listitem article.aditem"):
-                # Try data-href first
-                href = art.get("data-href") or ""
-                if not href:
-                    # Fallback to anchor tag
-                    a_tag = art.find("a", href=True)
-                    if a_tag:
-                        href = a_tag.get("href", "")
-                
-                if not href or "/s-anzeige/" not in href:
-                    continue
-                
-                # Build full URL using the base URL from the listing
-                parsed_listing = urllib.parse.urlparse(listing_url)
-                base_url = f"{parsed_listing.scheme}://{parsed_listing.netloc}"
-                full_url = urllib.parse.urljoin(base_url, href)
-                norm_url = _normalize_for_dedupe(full_url)
-                
-                if norm_url in seen_urls:
-                    continue
-                
-                seen_urls.add(norm_url)
-                ad_links.append(full_url)
-                page_links += 1
-            
-            log("info", "Extracted ad links from page", page=page_num, count=page_links)
-            
-            # If no links found, we've reached the end
-            if page_links == 0:
-                log("info", "No more ads found, stopping pagination", page=page_num)
-                break
-                
-        except Exception as e:
-            log("error", "Error crawling listing page", url=url, error=str(e))
-            break
-    
-    log("info", "Completed Kleinanzeigen listing crawl", total_ads=len(ad_links), pages=page_num)
-    return ad_links
+    return await _crawl_kleinanzeigen_listings_async(
+        listing_url=listing_url,
+        max_pages=max_pages,
+        http_get_func=http_get_async,
+        log_func=log,
+        normalize_func=_normalize_for_dedupe,
+        ENABLE_KLEINANZEIGEN=ENABLE_KLEINANZEIGEN,
+        HTTP_TIMEOUT=HTTP_TIMEOUT,
+        PORTAL_DELAYS=PORTAL_DELAYS,
+        jitter_func=_jitter,
+    )
 
 
 async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any]]:
     """
     Crawl individual Kleinanzeigen ad detail page and extract contact information.
+    
+    Wrapper function that calls the modular crawler implementation.
     
     Args:
         url: URL of the ad detail page
@@ -3836,185 +3788,43 @@ async def extract_kleinanzeigen_detail_async(url: str) -> Optional[Dict[str, Any
     Returns:
         Dict with lead data or None if extraction failed
     """
-    try:
-        r = await http_get_async(url, timeout=HTTP_TIMEOUT)
-        if not r or r.status_code != 200:
-            log("debug", "Failed to fetch detail page", url=url, status=r.status_code if r else "None")
-            return None
-        
-        html = r.text or ""
-        soup = BeautifulSoup(html, "html.parser")
-        
-        # Extract title
-        title_elem = soup.select_one("h1#viewad-title, h1.boxedarticle--title")
-        title = title_elem.get_text(" ", strip=True) if title_elem else ""
-        
-        # Extract description
-        desc_elem = soup.select_one("#viewad-description-text, .boxedarticle--description")
-        description = desc_elem.get_text(" ", strip=True) if desc_elem else ""
-        
-        # Combine text for extraction
-        full_text = f"{title} {description}"
-        
-        # Extract mobile phone numbers using advanced patterns
-        phones = []
-        
-        # Standard extraction with existing regex
-        phone_matches = MOBILE_RE.findall(full_text)
-        for phone_match in phone_matches:
-            normalized = normalize_phone(phone_match)
-            if normalized:
-                is_valid, phone_type = validate_phone(normalized)
-                if is_valid and is_mobile_number(normalized):
-                    phones.append(normalized)
-        
-        # Enhanced extraction using phone_patterns module
-        if not phones:
-            log("debug", "Standard extraction failed, trying advanced patterns", url=url)
-            try:
-                extraction_results = extract_all_phone_patterns(html, full_text)
-                best_phone = get_best_phone_number(extraction_results)
-                if best_phone:
-                    normalized = normalize_phone(best_phone)
-                    if normalized and is_mobile_number(normalized):
-                        phones.append(normalized)
-                        log("info", "Advanced pattern extraction found phone", 
-                            url=url, phone=normalized[:8]+"...")
-                        # Record this pattern success
-                        if _LEARNING_ENGINE:
-                            _LEARNING_ENGINE.record_phone_pattern(
-                                pattern="advanced_extraction",
-                                pattern_type="enhanced",
-                                example=normalized[:8]+"..."
-                            )
-                        # NEW: Learn phone pattern for AI Learning Engine
-                        try:
-                            from ai_learning_engine import ActiveLearningEngine
-                            learning = ActiveLearningEngine()
-                            learning.learn_phone_pattern(best_phone, normalized, "kleinanzeigen")
-                        except Exception:
-                            pass  # Learning is optional
-            except Exception as e:
-                log("debug", "Advanced phone extraction failed", error=str(e))
-        
-        # Extract email
-        email = ""
-        email_matches = EMAIL_RE.findall(full_text)
-        if email_matches:
-            email = email_matches[0]
-        
-        # Extract WhatsApp link using enhanced extraction
-        whatsapp = ""
-        try:
-            wa_number = extract_whatsapp_number(html)
-            if wa_number:
-                normalized_wa = normalize_phone(wa_number)
-                if normalized_wa and is_mobile_number(normalized_wa):
-                    whatsapp = normalized_wa
-                    if normalized_wa not in phones:
-                        phones.append(normalized_wa)
-                        log("info", "WhatsApp link extraction found phone", 
-                            url=url, phone=normalized_wa[:8]+"...")
-        except Exception:
-            pass
-        
-        # Fallback: Try old WhatsApp link extraction
-        if not whatsapp:
-            wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
-            if wa_link:
-                wa_href = wa_link.get("href", "")
-                # Extract phone from WhatsApp link
-                wa_phone = re.sub(r'\D', '', wa_href)
-                if wa_phone:
-                    wa_normalized = "+" + wa_phone
-                    is_valid, phone_type = validate_phone(wa_normalized)
-                    if is_valid and is_mobile_number(wa_normalized):
-                        whatsapp = wa_normalized
-                        if wa_normalized not in phones:
-                            phones.append(wa_normalized)
-        
-        # Extract location/region
-        location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
-        location = location_elem.get_text(" ", strip=True) if location_elem else ""
-        
-        # Extract name (from title or text)
-        # Use the enhanced name extractor which handles various patterns
-        name = extract_name_enhanced(full_text)
-        
-        # Only create lead if we found at least one mobile number
-        if not phones:
-            log("debug", "No mobile numbers found in ad, trying browser extraction", url=url)
-            # Fallback: Browser-based extraction for JS-hidden numbers
-            try:
-                browser_phone = extract_phone_with_browser(url, portal='kleinanzeigen')
-                if browser_phone:
-                    phones.append(browser_phone)
-                    log("info", "Browser extraction successful", url=url)
-            except Exception as e:
-                log("debug", "Browser extraction failed", url=url, error=str(e))
-            
-            # If still no phones found, return None
-            if not phones:
-                # Record failure for learning
-                if _LEARNING_ENGINE:
-                    _LEARNING_ENGINE.learn_from_failure(
-                        url=url,
-                        html_content=html,
-                        reason="no_mobile_number_found",
-                        visible_phones=[]
-                    )
-                return None
-        
-        # Use first mobile number found
-        main_phone = phones[0]
-        
-        # Build lead data
-        lead = {
-            "name": name or "",
-            "rolle": "Vertrieb",  # Default role
-            "email": email,
-            "telefon": main_phone,
-            "quelle": url,
-            "score": 85,  # High score for direct Kleinanzeigen finds
-            "tags": "kleinanzeigen,candidate,mobile,direct_crawl",
-            "lead_type": "candidate",
-            "phone_type": "mobile",
-            "opening_line": title[:200] if title else "",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": location if location else "",
-            "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
-        }
-        
-        log("info", "Extracted lead from Kleinanzeigen ad", url=url, has_phone=bool(main_phone), has_email=bool(email))
-        return lead
-        
-    except Exception as e:
-        log("error", "Error extracting Kleinanzeigen detail", url=url, error=str(e))
-        return None
+    return await _extract_kleinanzeigen_detail_async(
+        url=url,
+        http_get_func=http_get_async,
+        log_func=log,
+        normalize_phone_func=normalize_phone,
+        validate_phone_func=validate_phone,
+        is_mobile_number_func=is_mobile_number,
+        extract_all_phone_patterns_func=extract_all_phone_patterns,
+        get_best_phone_number_func=get_best_phone_number,
+        extract_whatsapp_number_func=extract_whatsapp_number,
+        extract_phone_with_browser_func=extract_phone_with_browser,
+        extract_name_enhanced_func=extract_name_enhanced,
+        learning_engine=_LEARNING_ENGINE,
+        HTTP_TIMEOUT=HTTP_TIMEOUT,
+        EMAIL_RE=EMAIL_RE,
+        MOBILE_RE=MOBILE_RE,
+    )
 
 
 def _mark_url_seen(url: str, source: str = ""):
     """
     Helper function to mark a URL as seen in the database.
     
+    Wrapper function that calls the modular implementation.
+    
     Args:
         url: The URL to mark as seen
         source: Optional source name for logging (e.g., "Markt.de", "Quoka")
     """
-    try:
-        con = db()
-        cur = con.cursor()
-        cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (url,))
-        con.commit()
-        con.close()
-        _seen_urls_cache.add(_normalize_for_dedupe(url))
-    except Exception as e:
-        log_prefix = f"{source}: " if source else ""
-        log("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
+    _mark_url_seen_helper(
+        url=url,
+        source=source,
+        db_func=db,
+        log_func=log,
+        seen_cache=_seen_urls_cache,
+        normalize_func=_normalize_for_dedupe,
+    )
 
 
 async def crawl_kleinanzeigen_portal_async() -> List[Dict]:
