@@ -1,9 +1,10 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import ScraperConfig, ScraperRun, ScraperLog
 
 
 @admin.register(ScraperConfig)
-class ScraperConfigAdmin(admin.ModelAdmin):
+class ScraperConfigAdmin(ModelAdmin):
     """Admin interface for ScraperConfig"""
     
     list_display = ['id', 'industry', 'mode', 'qpi', 'smart', 'force', 'once', 'dry_run', 'updated_at', 'updated_by']
@@ -12,13 +13,16 @@ class ScraperConfigAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Grundeinstellungen', {
-            'fields': ('industry', 'mode', 'qpi', 'daterestrict')
+            'fields': ('industry', 'mode', 'qpi', 'daterestrict'),
+            'description': 'Basis-Scraper-Einstellungen',
         }),
         ('Flags', {
-            'fields': ('smart', 'force', 'once', 'dry_run')
+            'fields': ('smart', 'force', 'once', 'dry_run'),
+            'description': 'Erweiterte Optionen und Flags',
         }),
         ('Metadaten', {
-            'fields': ('updated_at', 'updated_by')
+            'fields': ('updated_at', 'updated_by'),
+            'classes': ('collapse',),
         }),
     )
     
@@ -37,7 +41,7 @@ class ScraperConfigAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScraperRun)
-class ScraperRunAdmin(admin.ModelAdmin):
+class ScraperRunAdmin(ModelAdmin):
     """Admin interface for ScraperRun"""
     
     list_display = ['id', 'status', 'started_at', 'finished_at', 'duration_display', 'leads_found', 'api_cost', 'pid', 'started_by']
@@ -88,7 +92,7 @@ class ScraperRunAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScraperLog)
-class ScraperLogAdmin(admin.ModelAdmin):
+class ScraperLogAdmin(ModelAdmin):
     """Admin interface for ScraperLog"""
     
     list_display = ['id', 'run', 'level', 'message_preview', 'created_at']

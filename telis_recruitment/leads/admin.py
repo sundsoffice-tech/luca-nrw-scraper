@@ -3,6 +3,8 @@ from django.utils.html import format_html
 from django.db.models import Count
 from django.http import HttpResponse
 import csv
+from unfold.admin import ModelAdmin
+from unfold.contrib.filters.admin import RangeDateFilter
 from .models import Lead, CallLog, EmailLog, SyncStatus, ScraperRun, ScraperConfig
 
 
@@ -23,7 +25,7 @@ class EmailLogInline(admin.TabularInline):
 
 
 @admin.register(Lead)
-class LeadAdmin(admin.ModelAdmin):
+class LeadAdmin(ModelAdmin):
     list_display = [
         'name', 
         'status_badge', 
@@ -41,9 +43,10 @@ class LeadAdmin(admin.ModelAdmin):
         'source', 
         'lead_type',
         'interest_level',
-        ('created_at', admin.DateFieldListFilter),
+        ('created_at', RangeDateFilter),
         'assigned_to',
     ]
+    list_filter_submit = True  # Add apply button to filters
     search_fields = ['name', 'email', 'telefon', 'company', 'notes']
     ordering = ['-quality_score', '-created_at']
     
@@ -181,7 +184,7 @@ class LeadAdmin(admin.ModelAdmin):
 
 
 @admin.register(CallLog)
-class CallLogAdmin(admin.ModelAdmin):
+class CallLogAdmin(ModelAdmin):
     list_display = ['lead', 'outcome_badge', 'duration_display', 'interest_display', 'called_by', 'called_at']
     list_filter = ['outcome', 'called_at', 'called_by', 'interest_level']
     search_fields = ['lead__name', 'notes']
@@ -220,7 +223,7 @@ class CallLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(EmailLog)
-class EmailLogAdmin(admin.ModelAdmin):
+class EmailLogAdmin(ModelAdmin):
     list_display = ['lead', 'email_type_badge', 'subject', 'sent_at', 'opened_badge', 'clicked_badge']
     list_filter = ['email_type', 'sent_at']
     search_fields = ['lead__name', 'subject']
@@ -253,7 +256,7 @@ class EmailLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(SyncStatus)
-class SyncStatusAdmin(admin.ModelAdmin):
+class SyncStatusAdmin(ModelAdmin):
     """Admin for SyncStatus - shows sync history and statistics"""
     
     list_display = [
@@ -331,7 +334,7 @@ class SyncStatusAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScraperRun)
-class ScraperRunAdmin(admin.ModelAdmin):
+class ScraperRunAdmin(ModelAdmin):
     """Admin for ScraperRun - shows scraper execution history"""
     
     list_display = [
@@ -440,7 +443,7 @@ class ScraperRunAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScraperConfig)
-class ScraperConfigAdmin(admin.ModelAdmin):
+class ScraperConfigAdmin(ModelAdmin):
     """Admin for ScraperConfig - singleton configuration"""
     
     list_display = [
@@ -454,7 +457,8 @@ class ScraperConfigAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Qualität', {
-            'fields': ('min_score',)
+            'fields': ('min_score',),
+            'description': 'Mindest-Score für Lead-Qualität',
         }),
         ('Scraper-Verhalten', {
             'fields': (
@@ -462,14 +466,16 @@ class ScraperConfigAdmin(admin.ModelAdmin):
                 'request_timeout',
                 'pool_size',
                 'internal_depth_per_domain',
-            )
+            ),
+            'description': 'Konfiguration des Scraper-Verhaltens',
         }),
         ('Flags', {
-            'fields': ('allow_pdf', 'allow_insecure_ssl')
+            'fields': ('allow_pdf', 'allow_insecure_ssl'),
+            'description': 'Erweiterte Optionen',
         }),
         ('Meta', {
             'fields': ('updated_at', 'updated_by'),
-            'classes': ('collapse',)
+            'classes': ('collapse',),
         }),
     )
     

@@ -3,10 +3,11 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
+from unfold.admin import ModelAdmin, TabularInline
 from .models import LandingPage, PageVersion, PageComponent, PageSubmission
 
 
-class PageVersionInline(admin.TabularInline):
+class PageVersionInline(TabularInline):
     """Inline display of page versions"""
     model = PageVersion
     extra = 0
@@ -19,7 +20,7 @@ class PageVersionInline(admin.TabularInline):
 
 
 @admin.register(LandingPage)
-class LandingPageAdmin(admin.ModelAdmin):
+class LandingPageAdmin(ModelAdmin):
     """Admin interface for landing pages"""
     
     list_display = ['title', 'slug', 'status_badge', 'published_at', 'builder_link', 'preview_link', 'created_at']
@@ -54,10 +55,14 @@ class LandingPageAdmin(admin.ModelAdmin):
     
     def status_badge(self, obj):
         """Show status as colored badge"""
-        color = 'green' if obj.status == 'published' else 'gray'
+        if obj.status == 'published':
+            return format_html(
+                '<span style="background-color: #22c55e; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px; font-weight: 500;">Published</span>'
+            )
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color, obj.get_status_display()
+            '<span style="background-color: #6b7280; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">Draft</span>'
         )
     status_badge.short_description = 'Status'
     
@@ -68,9 +73,9 @@ class LandingPageAdmin(admin.ModelAdmin):
     builder_link.short_description = 'Builder'
     
     def preview_link(self, obj):
-        """Link to preview page"""
+        """Link to preview page at /p/"""
         if obj.status == 'published':
-            url = obj.get_absolute_url()
+            url = f'/p/{obj.slug}/'
             return format_html('<a href="{}" target="_blank">View Live</a>', url)
         return format_html('<span style="color: gray;">Draft only</span>')
     preview_link.short_description = 'Preview'
@@ -108,7 +113,7 @@ class LandingPageAdmin(admin.ModelAdmin):
 
 
 @admin.register(PageVersion)
-class PageVersionAdmin(admin.ModelAdmin):
+class PageVersionAdmin(ModelAdmin):
     """Admin interface for page versions"""
     
     list_display = ['landing_page', 'version', 'created_by', 'created_at', 'note']
@@ -124,7 +129,7 @@ class PageVersionAdmin(admin.ModelAdmin):
 
 
 @admin.register(PageComponent)
-class PageComponentAdmin(admin.ModelAdmin):
+class PageComponentAdmin(ModelAdmin):
     """Admin interface for reusable page components"""
     
     list_display = ['name', 'category', 'slug', 'is_active', 'created_at']
@@ -145,7 +150,7 @@ class PageComponentAdmin(admin.ModelAdmin):
 
 
 @admin.register(PageSubmission)
-class PageSubmissionAdmin(admin.ModelAdmin):
+class PageSubmissionAdmin(ModelAdmin):
     """Admin interface for page submissions"""
     
     list_display = ['landing_page', 'lead_link', 'created_at', 'utm_source', 'utm_campaign', 'client_ip']
