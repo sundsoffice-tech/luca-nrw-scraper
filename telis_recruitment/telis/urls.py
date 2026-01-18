@@ -32,6 +32,9 @@ urlpatterns = [
     ), name='crm-login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='crm-login'), name='logout'),
     
+    # Scraper Control (new dedicated app)
+    path('crm/scraper/', include('scraper_control.urls')),
+    
     # CRM (protected)
     path('crm/', include('leads.crm_urls')),
     
