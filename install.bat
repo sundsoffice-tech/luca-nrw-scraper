@@ -64,7 +64,7 @@ if exist .env (
 
 REM Also copy to telis_recruitment if needed
 if not exist telis_recruitment\.env (
-    copy .env.example telis_recruitment\.env >nul 2>&1
+    copy .env.example telis_recruitment\.env >nul 2>&1 && echo [OK] Also copied .env to telis_recruitment\ || echo [NOTE] Could not copy .env to telis_recruitment\ (may not be needed)
 )
 
 REM Step 4: Run database migrations

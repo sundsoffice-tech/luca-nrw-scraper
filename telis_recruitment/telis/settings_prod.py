@@ -119,7 +119,9 @@ LOGGING = {
 # ======================
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.getenv('MEDIA_ROOT', BASE_DIR / 'media')
+# Handle Path/string compatibility
+_media_root = os.getenv('MEDIA_ROOT')
+MEDIA_ROOT = Path(_media_root) if _media_root else BASE_DIR / 'media'
 
 # ======================
 # ADMIN SETTINGS

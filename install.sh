@@ -71,7 +71,7 @@ fi
 
 # Also copy to telis_recruitment if needed
 if [ ! -f "telis_recruitment/.env" ]; then
-    cp .env.example telis_recruitment/.env 2>/dev/null || true
+    cp .env.example telis_recruitment/.env 2>/dev/null && echo -e "${GREEN}✓ Also copied .env to telis_recruitment/${NC}" || echo -e "${YELLOW}⚠ Note: Couldn't copy .env to telis_recruitment/ (may not be needed)${NC}"
 fi
 
 # Step 4: Run database migrations

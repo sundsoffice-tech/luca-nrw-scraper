@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DJANGO_SETTINGS_MODULE=telis.settings
+    DJANGO_SETTINGS_MODULE=telis.settings_prod
 
 # Install system dependencies
 # gcc, build-essential for compiling Python packages
