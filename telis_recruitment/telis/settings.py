@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'leads.apps.LeadsConfig',
+    'scraper_control',
 ]
 
 MIDDLEWARE = [

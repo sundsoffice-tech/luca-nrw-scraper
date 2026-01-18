@@ -1,0 +1,220 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block title %}Scraper-Steuerung - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">/</span>
+<span class="text-gray-300">Scraper</span>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">🤖 Scraper-Steuerung</h1>
+            <p class="text-gray-400 mt-1">Lead-Scraper starten, stoppen und überwachen</p>
+        </div>
+    </div>
+
+    <!-- Status Card -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-100">Status</h2>
+            <div id="status-indicator" class="flex items-center space-x-2">
+                <div class="w-3 h-3 rounded-full bg-gray-500" id="status-dot"></div>
+                <span class="text-gray-300" id="status-text">Gestoppt</span>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Prozess-ID</div>
+                <div class="text-2xl font-bold text-gray-100 mt-1" id="stat-pid">-</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Laufzeit</div>
+                <div class="text-2xl font-bold text-gray-100 mt-1" id="stat-uptime">-</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Leads gefunden</div>
+                <div class="text-2xl font-bold text-primary mt-1" id="stat-leads">0</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">CPU / RAM</div>
+                <div class="text-2xl font-bold text-gray-100 mt-1" id="stat-resources">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-100 mb-4">Steuerung</h2>
+        
+        <form id="scraper-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Industry -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Industry</label>
+                    <select name="industry" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="recruiter" {% if config.industry == 'recruiter' %}selected{% endif %}>Recruiter</option>
+                        <option value="candidates" {% if config.industry == 'candidates' %}selected{% endif %}>Kandidaten</option>
+                        <option value="talent_hunt" {% if config.industry == 'talent_hunt' %}selected{% endif %}>Talent Hunt</option>
+                        <option value="all" {% if config.industry == 'all' %}selected{% endif %}>Alle</option>
+                    </select>
+                </div>
+                
+                <!-- QPI -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Queries per Industry</label>
+                    <input type="number" name="qpi" value="{{ config.qpi }}" min="1" max="100" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+                
+                <!-- Mode -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Modus</label>
+                    <select name="mode" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="standard" {% if config.mode == 'standard' %}selected{% endif %}>Standard</option>
+                        <option value="learning" {% if config.mode == 'learning' %}selected{% endif %}>Learning</option>
+                        <option value="aggressive" {% if config.mode == 'aggressive' %}selected{% endif %}>Aggressive</option>
+                        <option value="snippet_only" {% if config.mode == 'snippet_only' %}selected{% endif %}>Snippet Only</option>
+                    </select>
+                </div>
+                
+                <!-- Date Restrict -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Date Restrict</label>
+                    <input type="text" name="daterestrict" value="{{ config.daterestrict }}" placeholder="z.B. d30, w8, m3" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                </div>
+            </div>
+            
+            <!-- Checkboxes -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <label class="flex items-center">
+                    <input type="checkbox" name="smart" {% if config.smart %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                    <span class="text-sm text-gray-300">Smart Mode</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" name="once" {% if config.once %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                    <span class="text-sm text-gray-300">Einmal ausführen</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" name="force" {% if config.force %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                    <span class="text-sm text-gray-300">Force (Cache ignorieren)</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" name="dry_run" {% if config.dry_run %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                    <span class="text-sm text-gray-300">Dry Run (Testmodus)</span>
+                </label>
+            </div>
+            
+            <div class="flex space-x-4">
+                <button type="button" id="btn-start" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white font-semibold rounded-lg transition duration-150">
+                    ▶️ Scraper starten
+                </button>
+                <button type="button" id="btn-stop" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-150" disabled>
+                    ⏹️ Scraper stoppen
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Live Logs -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-gray-100">Live-Logs</h2>
+            <button id="btn-clear-logs" class="text-gray-400 hover:text-primary text-sm transition duration-150">
+                Logs löschen
+            </button>
+        </div>
+        
+        <div id="log-container" class="bg-dark-900 rounded-lg p-4 h-96 overflow-y-auto font-mono text-sm text-gray-300">
+            <div class="text-gray-500">Warte auf Logs...</div>
+        </div>
+    </div>
+
+    <!-- Recent Runs -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-100 mb-4">Letzte Läufe</h2>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-dark-700">
+                    <tr>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">ID</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Status</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Gestartet</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Dauer</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Leads</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">API-Kosten</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Gestartet von</th>
+                    </tr>
+                </thead>
+                <tbody id="runs-tbody">
+                    {% for run in recent_runs %}
+                    <tr class="border-b border-dark-700 hover:bg-dark-700/50">
+                        <td class="py-3 px-4 text-gray-300">#{{ run.id }}</td>
+                        <td class="py-3 px-4">
+                            {% if run.status == 'running' %}
+                            <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm">Läuft</span>
+                            {% elif run.status == 'completed' %}
+                            <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">Fertig</span>
+                            {% elif run.status == 'failed' or run.status == 'error' %}
+                            <span class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm">Fehler</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">Gestoppt</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-gray-400 text-sm">{{ run.started_at|date:"d.m.Y H:i" }}</td>
+                        <td class="py-3 px-4 text-gray-400 text-sm">
+                            {% if run.duration %}
+                                {% with total_seconds=run.duration.total_seconds|floatformat:0 %}
+                                    {% if total_seconds|add:0 >= 3600 %}
+                                        {{ total_seconds|floatformat:0|divisibleby:3600 }}h
+                                    {% elif total_seconds|add:0 >= 60 %}
+                                        {{ total_seconds|floatformat:0|divisibleby:60 }}m
+                                    {% else %}
+                                        {{ total_seconds }}s
+                                    {% endif %}
+                                {% endwith %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-gray-300">{{ run.leads_found }}</td>
+                        <td class="py-3 px-4 text-gray-400 text-sm">${{ run.api_cost }}</td>
+                        <td class="py-3 px-4 text-gray-400 text-sm">
+                            {% if run.started_by %}
+                                {{ run.started_by.username }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-gray-500">Keine Läufe vorhanden</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/scraper-control.js' %}"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize scraper control with new endpoints
+const scraperControl = new ScraperControl({
+    statusEndpoint: '{% url "scraper_control:api-status" %}',
+    startEndpoint: '{% url "scraper_control:api-start" %}',
+    stopEndpoint: '{% url "scraper_control:api-stop" %}',
+    logsEndpoint: '{% url "scraper_control:api-logs-stream" %}',
+    csrfToken: '{{ csrf_token }}'
+});
+</script>
+{% endblock %}
