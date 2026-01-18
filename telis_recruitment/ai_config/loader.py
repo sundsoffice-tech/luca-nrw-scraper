@@ -44,7 +44,7 @@ def get_ai_config() -> Dict[str, Any]:
                 'default_model': config.default_model.name if config.default_model else None,
                 'default_model_display': config.default_model.display_name if config.default_model else None,
             }
-    except Exception as e:
+    except Exception:
         # If there's any error (e.g., table doesn't exist yet), return defaults
         pass
     
@@ -150,7 +150,7 @@ def log_usage(
             request_id=request_id or "",
             metadata=metadata or {}
         )
-    except Exception as e:
+    except Exception:
         # Silently fail if logging doesn't work (e.g., during migrations)
         # Don't break the main application flow
         pass
