@@ -145,10 +145,25 @@ from login_handler import (
 # Import from new luca_scraper modules
 from luca_scraper.config import *  # Import all config constants
 from luca_scraper.extraction.phone import normalize_phone, validate_phone, _phone_context_ok
+from luca_scraper.extraction.email import (
+    clean_email, normalize_email, is_private_email, is_valid_email,
+    email_quality, extract_emails_from_text
+)
 from luca_scraper.database import (
     db, init_db, get_learning_engine, init_mode,
     is_query_done, mark_query_done, mark_url_seen, url_seen,
     insert_leads, start_run, finish_run
+)
+from luca_scraper.network import (
+    _host_from, _penalize_host, _host_allowed,
+    _should_retry_status, _schedule_retry, _record_retry, _record_drop,
+    _reset_metrics, RUN_METRICS, get_client, _make_client, _acceptable_by_headers,
+    check_robots_txt, robots_allowed_async
+)
+from luca_scraper.utils.helpers import (
+    etld1, is_likely_human_name, looks_like_company, has_nrw_signal,
+    extract_company_name, detect_company_size, detect_recency,
+    normalize_whitespace, clean_url
 )
 
 # Suppress the noisy XML warning
