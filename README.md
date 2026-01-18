@@ -14,26 +14,45 @@ python scriptname.py --once --industry talent_hunt --qpi 15
 python scriptname.py --ui
 ```
 
-### 🎯 Dashboard (NEW!)
-Professional control center for monitoring and managing the scraper:
+### 🎯 Django CRM (Recommended)
+Professional Django-based CRM system for managing and processing leads from the LUCA NRW Scraper.
 
+**Quick Start:**
 ```bash
-# Start the LUCA Control Center dashboard
-python3 -m dashboard.app
+cd telis_recruitment
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Setup database
+python manage.py migrate
+python manage.py createsuperuser
+
+# Start the server
+python manage.py runserver
 ```
 
-Then open http://127.0.0.1:5056 in your browser.
+**Access:**
+- CRM Dashboard: http://127.0.0.1:8000/crm/
+- Admin Interface: http://127.0.0.1:8000/admin/
+- Scraper Control: http://127.0.0.1:8000/crm/scraper/ (Admin only)
+- API Endpoints: http://127.0.0.1:8000/api/
 
-**Dashboard Features:**
-- 📊 Real-time KPI tracking (leads, costs, success rate)
-- 💰 API cost monitoring and budget management
-- 📈 Interactive charts (lead history, top sources, cost trends)
-- 🔍 5 search modes (Standard, Headhunter, Aggressive, Snippet Only, Learning)
-- ⚙️ Configurable settings (budget, regions, filters)
-- 📡 Live log streaming
-- 📥 CSV export
+**Features:**
+- 📊 Real-time KPIs and statistics
+- 🤖 Integrated scraper control panel (start/stop with live monitoring)
+- 👥 Lead management with filtering and search
+- 📈 Activity feed and team performance overview
+- 📥 CSV/Excel export with advanced filters
+- 🔐 Role-based permissions (Admin/Manager/Telefonist)
 
-See [dashboard/README.md](dashboard/README.md) for detailed documentation.
+See [telis_recruitment/README.md](telis_recruitment/README.md) for detailed documentation.
+
+> **Note:** The legacy Flask dashboard has been removed. All dashboard functionality is now available in the Django CRM.
 
 ## 📸 Screenshots
 
