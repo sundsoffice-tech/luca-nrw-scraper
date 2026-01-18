@@ -117,6 +117,11 @@
                     <span>Scraper</span>
                 </a>
                 
+                <a href="{% url 'pages:builder-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'pages' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="text-xl mr-3">📄</span>
+                    <span>Landing Pages</span>
+                </a>
+                
                 <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
                     <span class="text-xl mr-3">⚙️</span>
                     <span>Einstellungen</span>

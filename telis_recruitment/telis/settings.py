@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'leads.apps.LeadsConfig',
     'scraper_control',
     'ai_config',
+    'pages.apps.PagesConfig',
 ]
 
 MIDDLEWARE = [

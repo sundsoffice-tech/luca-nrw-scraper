@@ -24,6 +24,9 @@ urlpatterns = [
     path('', landing_page, name='landing-page'),
     path('phone/', phone_dashboard, name='phone-dashboard'),
     
+    # Public landing pages (pages app)
+    path('p/', include('pages.public_urls')),
+    
     # Authentication
     path('login/', auth_views.LoginView.as_view(template_name='auth/login.html'), name='login'),
     path('crm/login/', auth_views.LoginView.as_view(
@@ -34,6 +37,9 @@ urlpatterns = [
     
     # Scraper Control (new dedicated app)
     path('crm/scraper/', include('scraper_control.urls')),
+    
+    # Pages app (builder interface - staff only)
+    path('crm/pages/', include('pages.urls')),
     
     # CRM (protected)
     path('crm/', include('leads.crm_urls')),
