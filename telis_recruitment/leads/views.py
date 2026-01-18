@@ -41,9 +41,31 @@ from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT
 
 logger = logging.getLogger(__name__)
 
+# Constants
+MIN_NAME_LENGTH = 2
+MAX_NAME_LENGTH = 255
+MAX_CSV_ERRORS = 100
+
 # Validation patterns
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+"""
+Email validation pattern.
+Validates standard email format: local@domain.tld
+- Local part: alphanumeric, dots, underscores, percent, plus, hyphens
+- Domain: alphanumeric, dots, hyphens
+- TLD: minimum 2 characters
+Note: For production use, consider Django's EmailValidator for better coverage.
+"""
+
 PHONE_REGEX = re.compile(r'^[\d\s\-\+\(\)\/]{6,25}$')
+"""
+Phone number validation pattern.
+Accepts various international formats with:
+- Digits (0-9)
+- Spaces, hyphens, plus signs, parentheses, forward slashes
+- Length: 6-25 characters
+Examples: +49 123 456789, (123) 456-7890, 0123456789
+"""
 
 
 class LeadPagination(PageNumberPagination):
@@ -138,9 +160,6 @@ def api_health(request):
     Returns:
         JSON response with status and component health
     """
-    from django.db import connection
-    from django.conf import settings
-    
     health_status = {
         'api': 'ok',
         'database': 'unknown'
@@ -149,6 +168,7 @@ def api_health(request):
     
     # Check database connectivity
     try:
+        from django.db import connection
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
@@ -204,16 +224,16 @@ def opt_in(request):
         telefon = data.get('telefon', '').strip() if data.get('telefon') else None
         
         # Name validation
-        if not name or len(name) < 2:
+        if not name or len(name) < MIN_NAME_LENGTH:
             return JsonResponse({
                 'success': False,
-                'error': 'Name must be at least 2 characters'
+                'error': f'Name must be at least {MIN_NAME_LENGTH} characters'
             }, status=400)
         
-        if len(name) > 255:
+        if len(name) > MAX_NAME_LENGTH:
             return JsonResponse({
                 'success': False,
-                'error': 'Name is too long (max 255 characters)'
+                'error': f'Name is too long (max {MAX_NAME_LENGTH} characters)'
             }, status=400)
         
         # Email validation
@@ -317,9 +337,11 @@ def _decode_csv_file(csv_file):
         except UnicodeDecodeError:
             continue
     
-    raise UnicodeDecodeError(
-        'utf-8', b'', 0, 1,
-        f"Could not decode file with any supported encoding: {', '.join(encodings)}"
+    # If no encoding works, raise a more descriptive error
+    raise ValueError(
+        f"Could not decode file with any supported encoding. "
+        f"Tried: {', '.join(encodings)}. "
+        f"Please ensure the file is saved with UTF-8 or Latin-1 encoding."
     )
 
 
@@ -365,8 +387,8 @@ def _process_csv_content(decoded_content: str) -> dict:
                     skipped += 1
             except Exception as e:
                 errors.append(f"Row {row_num}: {str(e)}")
-                if len(errors) >= 100:  # Limit error collection
-                    errors.append("... (additional errors truncated)")
+                if len(errors) >= MAX_CSV_ERRORS:
+                    errors.append(f"... (additional errors truncated, max {MAX_CSV_ERRORS} shown)")
                     break
     
     return {
@@ -434,8 +456,8 @@ def import_csv(request):
             'message': f"Import completed: {result['imported']} new, {result['updated']} updated"
         })
         
-    except UnicodeDecodeError:
-        logger.warning(f"CSV decode error for file uploaded by {request.user}")
+    except (UnicodeDecodeError, ValueError) as e:
+        logger.warning(f"CSV decode error for file uploaded by {request.user}: {str(e)}")
         return Response({
             'success': False,
             'error': 'Could not decode file. Please ensure it uses UTF-8 or Latin-1 encoding.'
