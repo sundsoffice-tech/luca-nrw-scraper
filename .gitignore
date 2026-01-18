@@ -5,6 +5,17 @@ scraper.db
 .venv/
 *.xlsx
 *.csv
+!example_*.csv
+
+# Emergency run files
+emergency_run_*.json
+emergency_run_*.log
+
+# Data files
+*.db
+*.sqlite3
+data/
+
 # Secrets
 .env
 # Login sessions (contains user cookies)
