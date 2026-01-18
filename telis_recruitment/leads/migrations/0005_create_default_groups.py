@@ -27,8 +27,6 @@ def create_groups_and_assign_superusers(apps, schema_editor):
     
     # === CREATE ADMIN GROUP ===
     admin_group, created = Group.objects.get_or_create(name='Admin')
-    if created:
-        print('✓ Created Admin group')
     
     # Admin gets all permissions on Lead, CallLog, EmailLog
     admin_permissions = Permission.objects.filter(
@@ -46,8 +44,6 @@ def create_groups_and_assign_superusers(apps, schema_editor):
     
     # === CREATE MANAGER GROUP ===
     manager_group, created = Group.objects.get_or_create(name='Manager')
-    if created:
-        print('✓ Created Manager group')
     
     # Manager can view all leads, view/add call logs and email logs
     manager_permissions = Permission.objects.filter(
@@ -65,8 +61,6 @@ def create_groups_and_assign_superusers(apps, schema_editor):
     
     # === CREATE TELEFONIST GROUP ===
     telefonist_group, created = Group.objects.get_or_create(name='Telefonist')
-    if created:
-        print('✓ Created Telefonist group')
     
     # Telefonist can view assigned leads, add call logs
     telefonist_permissions = Permission.objects.filter(
@@ -84,7 +78,6 @@ def create_groups_and_assign_superusers(apps, schema_editor):
     for superuser in superusers:
         if not superuser.groups.filter(name='Admin').exists():
             superuser.groups.add(admin_group)
-            print(f'✓ Added superuser "{superuser.username}" to Admin group')
 
 
 def reverse_migration(apps, schema_editor):

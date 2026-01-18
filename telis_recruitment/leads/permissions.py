@@ -20,11 +20,14 @@ class IsAdmin(BasePermission):
     - Change scraper settings
     - View reports/analytics
     - System settings
+    
+    Superusers always have access.
     """
     
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and \
-               request.user.groups.filter(name='Admin').exists()
+               (request.user.is_superuser or \
+                request.user.groups.filter(name='Admin').exists())
 
 
 class IsManager(BasePermission):
@@ -74,8 +77,10 @@ class CanControlScraper(BasePermission):
     - Start/stop the scraper
     - View scraper logs
     - Change scraper settings
+    
+    Superusers always have access.
     """
     
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and \
-               (request.user.groups.filter(name='Admin').exists() or request.user.is_superuser)
+               (request.user.is_superuser or request.user.groups.filter(name='Admin').exists())
