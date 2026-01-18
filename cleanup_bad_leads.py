@@ -119,6 +119,28 @@ def cleanup_database(db_path: str, dry_run: bool = False):
     print(f"Leads before cleanup: {before}")
     print(f"{'='*60}\n")
     
+    # Create backup before deletion (if not dry run)
+    backup_path = None
+    if not dry_run:
+        import shutil
+        from datetime import datetime
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = f"{db_path}.backup_{timestamp}"
+        
+        print(f"Creating backup: {backup_path}")
+        try:
+            shutil.copy2(db_path, backup_path)
+            print(f"✅ Backup created successfully\n")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not create backup: {e}")
+            print("Continue anyway? (y/n): ", end='')
+            response = input().lower()
+            if response != 'y':
+                print("Aborted by user")
+                conn.close()
+                return 1
+    
     # Identify leads to delete
     c.execute("SELECT id, telefon, quelle, name FROM leads")
     to_delete = []
@@ -156,6 +178,7 @@ def cleanup_database(db_path: str, dry_run: bool = False):
         print(f"{'='*60}\n")
         
         for lead_id, _ in to_delete:
+            # Use parametrized query to prevent SQL injection
             c.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
         
         conn.commit()
@@ -170,6 +193,8 @@ def cleanup_database(db_path: str, dry_run: bool = False):
         print(f"Leads before:  {before}")
         print(f"Leads after:   {after}")
         print(f"Deleted:       {before - after}")
+        if backup_path:
+            print(f"Backup saved:  {backup_path}")
         print(f"{'='*60}\n")
     else:
         print(f"\n{'='*60}")
