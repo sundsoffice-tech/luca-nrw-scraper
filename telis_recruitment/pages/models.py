@@ -64,11 +64,11 @@ class LandingPage(models.Model):
     
     def get_absolute_url(self):
         """Public URL for the landing page"""
-        return reverse('page-public', kwargs={'slug': self.slug})
+        return reverse('pages_public:page-public', kwargs={'slug': self.slug})
     
     def get_builder_url(self):
         """Builder URL for editing"""
-        return reverse('page-builder', kwargs={'slug': self.slug})
+        return reverse('pages:page-builder', kwargs={'slug': self.slug})
 
 
 class PageVersion(models.Model):
