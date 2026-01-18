@@ -10,6 +10,9 @@ Features:
 - Generates optimized queries based on historical success
 - Provides learning reports for analysis
 
+Integrates with Django ai_config app when available for DB-driven AI configuration.
+Falls back gracefully to environment variables and default constants when Django is not available.
+
 Usage:
     from perplexity_learning import PerplexityLearning
     
@@ -22,8 +25,57 @@ Usage:
 import sqlite3
 import json
 import re
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
+import logging
+
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config,
+        get_prompt,
+        log_usage,
+        check_budget
+    )
+    from telis_recruitment.ai_config.models import AIProvider, AIModel
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    # Fallback defaults when ai_config is not available
+    def get_ai_config():
+        return {
+            'temperature': 0.3,
+            'top_p': 1.0,
+            'max_tokens': 4000,
+            'learning_rate': 0.01,
+            'daily_budget': 5.0,
+            'monthly_budget': 150.0,
+            'confidence_threshold': 0.35,
+            'retry_limit': 2,
+            'timeout_seconds': 30,
+            'default_provider': 'OpenAI',
+            'default_model': 'gpt-4o-mini',
+        }
+    
+    def get_prompt(slug: str):
+        return None
+    
+    def log_usage(*args, **kwargs):
+        pass
+    
+    def check_budget():
+        return True, {
+            'daily_spent': 0.0,
+            'daily_budget': 5.0,
+            'daily_remaining': 5.0,
+            'monthly_spent': 0.0,
+            'monthly_budget': 150.0,
+            'monthly_remaining': 150.0,
+        }
+
+logger = logging.getLogger(__name__)
 
 
 class PerplexityLearning:
@@ -34,6 +86,8 @@ class PerplexityLearning:
     - Query success rates
     - Source domain performance
     - Optimal query patterns
+    
+    Integrates with Django ai_config app when available for configuration management.
     """
     
     def __init__(self, db_path: str = "scraper.db"):
@@ -44,7 +98,48 @@ class PerplexityLearning:
             db_path: Path to SQLite database
         """
         self.db_path = db_path
+        
+        # Load AI configuration (from Django DB if available, else defaults)
+        self.ai_config = get_ai_config()
+        
+        # Try to load Perplexity-specific config from Django
+        self.perplexity_config = self._load_perplexity_config()
+        
+        if AI_CONFIG_AVAILABLE:
+            logger.info(f"AI config loaded from Django DB: provider={self.ai_config.get('default_provider')}, "
+                       f"model={self.ai_config.get('default_model')}")
+            if self.perplexity_config:
+                logger.info(f"Perplexity config: API URL={self.perplexity_config.get('api_url')}")
+        else:
+            logger.info("AI config using fallback defaults (Django not available)")
+        
         self._init_tables()
+    
+    def _load_perplexity_config(self) -> Optional[Dict]:
+        """Load Perplexity provider configuration from Django if available.
+        
+        Returns:
+            Dict with Perplexity config or None if not available
+        """
+        if not AI_CONFIG_AVAILABLE:
+            return None
+        
+        try:
+            provider = AIProvider.objects.filter(name='Perplexity').first()
+            if provider:
+                model = AIModel.objects.filter(provider=provider, active=True).first()
+                return {
+                    'api_url': provider.base_url or 'https://api.perplexity.ai',
+                    'provider_name': provider.name,
+                    'model_name': model.name if model else 'sonar-small',
+                    'temperature': model.default_temperature if model else 0.3,
+                    'max_tokens': model.default_max_tokens if model else 4000,
+                    'active': provider.active,
+                }
+        except Exception as e:
+            logger.debug(f"Could not load Perplexity config from Django: {e}")
+        
+        return None
     
     def _init_tables(self):
         """Create learning tables if they don't exist."""

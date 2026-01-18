@@ -4,6 +4,9 @@ Self-learning system for lead generation optimization.
 
 This module tracks successful patterns (domains, query terms, URL paths, content signals)
 and uses this data to optimize future searches and improve lead quality.
+
+Integrates with Django ai_config app when available for DB-driven AI configuration.
+Falls back gracefully to default constants when Django is not available.
 """
 
 import json
@@ -12,14 +15,77 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import urllib.parse
 import re
+import logging
+
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config,
+        get_prompt,
+        log_usage,
+        check_budget
+    )
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    # Fallback defaults when ai_config is not available
+    def get_ai_config():
+        return {
+            'temperature': 0.3,
+            'top_p': 1.0,
+            'max_tokens': 4000,
+            'learning_rate': 0.01,
+            'daily_budget': 5.0,
+            'monthly_budget': 150.0,
+            'confidence_threshold': 0.35,
+            'retry_limit': 2,
+            'timeout_seconds': 30,
+            'default_provider': 'OpenAI',
+            'default_model': 'gpt-4o-mini',
+        }
+    
+    def get_prompt(slug: str):
+        return None
+    
+    def log_usage(*args, **kwargs):
+        pass
+    
+    def check_budget():
+        return True, {
+            'daily_spent': 0.0,
+            'daily_budget': 5.0,
+            'daily_remaining': 5.0,
+            'monthly_spent': 0.0,
+            'monthly_budget': 150.0,
+            'monthly_remaining': 150.0,
+        }
+
+logger = logging.getLogger(__name__)
 
 
 class LearningEngine:
-    """Self-learning engine that tracks and optimizes lead generation patterns."""
+    """Self-learning engine that tracks and optimizes lead generation patterns.
+    
+    Integrates with Django ai_config app when available for configuration management.
+    """
     
     def __init__(self, db_path: str):
-        """Initialize the learning engine with database path."""
+        """Initialize the learning engine with database path.
+        
+        Args:
+            db_path: Path to SQLite database for storing learning data
+        """
         self.db_path = db_path
+        
+        # Load AI configuration (from Django DB if available, else defaults)
+        self.ai_config = get_ai_config()
+        if AI_CONFIG_AVAILABLE:
+            logger.info(f"AI config loaded from Django DB: provider={self.ai_config.get('default_provider')}, "
+                       f"model={self.ai_config.get('default_model')}")
+        else:
+            logger.info("AI config using fallback defaults (Django not available)")
+        
         self._ensure_learning_tables()
     
     def _ensure_learning_tables(self) -> None:

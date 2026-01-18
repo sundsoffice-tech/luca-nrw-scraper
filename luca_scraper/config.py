@@ -3,12 +3,38 @@ LUCA NRW Scraper - Zentrale Konfiguration
 ==========================================
 Alle Konstanten und Environment Variables aus scriptname.py extrahiert.
 Phase 1 der Modularisierung.
+
+AI Configuration Priority:
+--------------------------
+Configuration is loaded in the following priority order:
+1. Django DB via ai_config app (when available)
+2. Environment variables
+3. Hardcoded defaults
+
+Use get_config() to access AI configuration with automatic fallback.
 """
 
 import os
 import random
 import urllib.parse
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional, Any
+import logging
+
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config as _get_ai_config_django,
+        get_prompt,
+        log_usage,
+        check_budget
+    )
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    _get_ai_config_django = None
+
+logger = logging.getLogger(__name__)
 
 
 # =========================
@@ -498,3 +524,86 @@ ENABLE_BING = bool(BING_API_KEY)
 # =========================
 
 BASE_DORKS: List[str] = []
+
+
+# =========================
+# AI CONFIGURATION
+# =========================
+
+def get_config(param: Optional[str] = None) -> Any:
+    """
+    Get AI configuration with automatic fallback priority.
+    
+    Priority order:
+    1. Django DB via ai_config app (when available)
+    2. Environment variables
+    3. Hardcoded defaults
+    
+    Args:
+        param: Optional specific parameter to retrieve. If None, returns full config dict.
+               Available params: 'temperature', 'max_tokens', 'top_p', 'learning_rate',
+                                'daily_budget', 'monthly_budget', 'confidence_threshold',
+                                'retry_limit', 'timeout_seconds', 'default_provider',
+                                'default_model', 'default_model_display'
+    
+    Returns:
+        Full config dict or specific parameter value
+    
+    Examples:
+        >>> config = get_config()  # Get full config
+        >>> temp = get_config('temperature')  # Get specific param
+        >>> model = get_config('default_model')
+    """
+    # Default configuration (Priority 3: Hardcoded defaults)
+    defaults = {
+        'temperature': 0.3,
+        'top_p': 1.0,
+        'max_tokens': 4000,
+        'learning_rate': 0.01,
+        'daily_budget': 5.0,
+        'monthly_budget': 150.0,
+        'confidence_threshold': 0.35,
+        'retry_limit': 2,
+        'timeout_seconds': 30,
+        'default_provider': 'OpenAI',
+        'default_model': 'gpt-4o-mini',
+        'default_model_display': 'GPT-4o Mini',
+    }
+    
+    # Priority 2: Override with environment variables if set
+    env_overrides = {}
+    if os.getenv('AI_TEMPERATURE'):
+        try:
+            env_overrides['temperature'] = float(os.getenv('AI_TEMPERATURE'))
+        except ValueError:
+            pass
+    
+    if os.getenv('AI_MAX_TOKENS'):
+        try:
+            env_overrides['max_tokens'] = int(os.getenv('AI_MAX_TOKENS'))
+        except ValueError:
+            pass
+    
+    if os.getenv('AI_MODEL'):
+        env_overrides['default_model'] = os.getenv('AI_MODEL')
+    
+    if os.getenv('AI_PROVIDER'):
+        env_overrides['default_provider'] = os.getenv('AI_PROVIDER')
+    
+    # Merge defaults with env overrides
+    config = {**defaults, **env_overrides}
+    
+    # Priority 1: Django DB (when available)
+    if AI_CONFIG_AVAILABLE and _get_ai_config_django:
+        try:
+            django_config = _get_ai_config_django()
+            if django_config:
+                config.update(django_config)
+                logger.debug("AI config loaded from Django DB")
+        except Exception as e:
+            logger.debug(f"Could not load AI config from Django DB: {e}")
+    
+    # Return specific param or full config
+    if param:
+        return config.get(param)
+    return config

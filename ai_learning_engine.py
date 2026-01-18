@@ -2,6 +2,9 @@
 """
 Aktives Self-Learning System für Lead-Extraktion.
 Lernt aus Erfolgen und Fehlern, optimiert sich automatisch.
+
+Integrates with Django ai_config app when available for DB-driven AI configuration.
+Falls back gracefully to default constants when Django is not available.
 """
 
 import sqlite3
@@ -10,6 +13,53 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
+import logging
+
+# Optional Django ai_config integration
+# Falls back gracefully when Django is not available or configured
+try:
+    from telis_recruitment.ai_config.loader import (
+        get_ai_config,
+        get_prompt,
+        log_usage,
+        check_budget
+    )
+    AI_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    AI_CONFIG_AVAILABLE = False
+    # Fallback defaults when ai_config is not available
+    def get_ai_config():
+        return {
+            'temperature': 0.3,
+            'top_p': 1.0,
+            'max_tokens': 4000,
+            'learning_rate': 0.01,
+            'daily_budget': 5.0,
+            'monthly_budget': 150.0,
+            'confidence_threshold': 0.35,
+            'retry_limit': 2,
+            'timeout_seconds': 30,
+            'default_provider': 'OpenAI',
+            'default_model': 'gpt-4o-mini',
+        }
+    
+    def get_prompt(slug: str):
+        return None
+    
+    def log_usage(*args, **kwargs):
+        pass
+    
+    def check_budget():
+        return True, {
+            'daily_spent': 0.0,
+            'daily_budget': 5.0,
+            'daily_remaining': 5.0,
+            'monthly_spent': 0.0,
+            'monthly_budget': 150.0,
+            'monthly_remaining': 150.0,
+        }
+
+logger = logging.getLogger(__name__)
 
 
 class ActiveLearningEngine:
@@ -19,10 +69,21 @@ class ActiveLearningEngine:
     - Erfolgreiche Dorks priorisiert
     - Neue Telefon-Patterns automatisch lernt
     - Host-Backoff bei Fehlern verwaltet
+    
+    Integrates with Django ai_config app when available for configuration management.
     """
     
     def __init__(self, db_path: str = "scraper.db"):
         self.db_path = db_path
+        
+        # Load AI configuration (from Django DB if available, else defaults)
+        self.ai_config = get_ai_config()
+        if AI_CONFIG_AVAILABLE:
+            logger.info(f"AI config loaded from Django DB: provider={self.ai_config.get('default_provider')}, "
+                       f"model={self.ai_config.get('default_model')}")
+        else:
+            logger.info("AI config using fallback defaults (Django not available)")
+        
         self._init_learning_tables()
         self._load_learned_patterns()
     
