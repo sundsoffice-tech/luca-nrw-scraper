@@ -112,7 +112,7 @@
                     <div class="text-xs text-gray-500 uppercase font-semibold">Administration</div>
                 </div>
                 
-                <a href="{% url 'crm-scraper' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'crm-scraper' %}active{% endif %}">
+                <a href="{% url 'scraper_control:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'scraper' in request.path %}active{% endif %}">
                     <span class="text-xl mr-3">🤖</span>
                     <span>Scraper</span>
                 </a>
