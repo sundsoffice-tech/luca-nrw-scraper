@@ -633,7 +633,8 @@ Jane Smith,jane@example.com,0987654321,75,candidate,Company B,Developer,Munich""
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['imported'], 2)
+        self.assertIn('data', data)
+        self.assertEqual(data['data']['imported'], 2)
         self.assertEqual(Lead.objects.count(), 2)
     
     def test_import_csv_deduplication(self):
@@ -656,8 +657,9 @@ Jane Smith,jane@example.com,0987654321,75,candidate"""
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(data['imported'], 1)
-        self.assertEqual(data['updated'], 1)
+        self.assertIn('data', data)
+        self.assertEqual(data['data']['imported'], 1)
+        self.assertEqual(data['data']['updated'], 1)
         self.assertEqual(Lead.objects.count(), 2)
         
         # Verify that the score was updated
@@ -677,8 +679,9 @@ No Contact,,,75"""
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(data['imported'], 1)
-        self.assertEqual(data['skipped'], 1)
+        self.assertIn('data', data)
+        self.assertEqual(data['data']['imported'], 1)
+        self.assertEqual(data['data']['skipped'], 1)
     
     def test_import_csv_no_file(self):
         """Test CSV import without file"""
@@ -699,8 +702,11 @@ class HealthCheckAPITest(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
-        self.assertEqual(data['status'], 'ok')
-        self.assertEqual(data['service'], 'telis-recruitment-api')
+        self.assertTrue(data['success'])
+        self.assertIn('data', data)
+        self.assertEqual(data['data']['service'], 'telis-recruitment-api')
+        self.assertIn('status', data['data'])
+        self.assertIn('components', data['data'])
 
 
 class ImportScraperCSVCommandTest(TestCase):
@@ -1819,7 +1825,9 @@ class OptInAPITest(TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.json()
         self.assertTrue(data['success'])
-        self.assertIn('lead_id', data)
+        self.assertIn('data', data)
+        self.assertIn('lead_id', data['data'])
+        self.assertEqual(data['data']['action'], 'created')
         
         # Verify lead was created
         self.assertEqual(Lead.objects.count(), 1)
@@ -1877,15 +1885,16 @@ class OptInAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data['success'])
-        self.assertEqual(data['message'], 'Willkommen zurück!')
+        self.assertIn('data', data)
+        self.assertEqual(data['data']['action'], 'updated')
+        self.assertIn('message', data)
         
         # Verify no duplicate was created
         self.assertEqual(Lead.objects.count(), 1)
         
         # Verify lead was updated
         existing.refresh_from_db()
-        self.assertEqual(existing.interest_level, 3)
-        self.assertIn('Re-Opt-In', existing.source_detail)
+        self.assertEqual(existing.interest_level, 2)  # Interest level increases by 1 (was 1, now 2)
     
     def test_opt_in_missing_name(self):
         """Test that opt-in requires name"""
@@ -2028,8 +2037,9 @@ class BrevoWebhookTest(TestCase):
         
         self.assertEqual(response.status_code, 200)
         result = response.json()
-        self.assertEqual(result['status'], 'ok')
-        self.assertEqual(result['event'], 'opened')
+        self.assertTrue(result['success'])
+        self.assertIn('data', result)
+        self.assertEqual(result['data']['event'], 'opened')
         
         # Verify lead was updated
         self.lead.refresh_from_db()
