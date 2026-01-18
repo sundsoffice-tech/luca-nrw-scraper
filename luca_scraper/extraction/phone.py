@@ -9,7 +9,18 @@ with special support for German (DE) phone numbers in E.164 format.
 import re
 from typing import Tuple
 
-from learning_engine import is_mobile_number
+# Try to import is_mobile_number from learning_engine, fallback if not available
+try:
+    from learning_engine import is_mobile_number
+except ImportError:
+    # Fallback implementation if learning_engine is not available
+    def is_mobile_number(phone: str) -> bool:
+        """Fallback: Check if phone is a German mobile number."""
+        if not phone:
+            return False
+        # Simple check for German mobile prefixes
+        return any(phone.startswith(f'+4915{i}') or phone.startswith(f'+4916{i}') or phone.startswith(f'+4917{i}') 
+                   for i in range(10))
 
 
 # German mobile prefixes (015x, 016x, 017x)

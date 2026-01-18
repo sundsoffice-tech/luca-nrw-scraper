@@ -6,7 +6,7 @@ Provides lazy singleton pattern for database connections.
 
 import os
 import sqlite3
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from luca_scraper.config import DB_PATH
 from learning_engine import LearningEngine
@@ -65,7 +65,7 @@ def get_learning_engine() -> Optional[LearningEngine]:
     return _LEARNING_ENGINE
 
 
-def init_mode(mode: str):
+def init_mode(mode: str) -> Dict[str, Any]:
     """
     Initialize the operating mode and apply its configuration.
     
