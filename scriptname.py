@@ -257,6 +257,60 @@ try:
         init_db as _init_db,
         migrate_db_unique_indexes as _migrate_db_unique_indexes,
     )
+    # Phase 3 imports
+    from luca_scraper.search import (
+        DEFAULT_QUERIES as _DEFAULT_QUERIES,
+        INDUSTRY_QUERIES as _INDUSTRY_QUERIES,
+        RECRUITER_QUERIES as _RECRUITER_QUERIES,
+        build_queries as _build_queries,
+    )
+    from luca_scraper.scoring import (
+        # Patterns
+        EMAIL_RE as _EMAIL_RE,
+        PHONE_RE as _PHONE_RE,
+        MOBILE_RE as _MOBILE_RE,
+        SALES_RE as _SALES_RE,
+        PROVISION_HINT as _PROVISION_HINT,
+        D2D_HINT as _D2D_HINT,
+        CALLCENTER_HINT as _CALLCENTER_HINT,
+        B2C_HINT as _B2C_HINT,
+        JOBSEEKER_RE as _JOBSEEKER_RE,
+        CANDIDATE_TEXT_RE as _CANDIDATE_TEXT_RE,
+        EMPLOYER_TEXT_RE as _EMPLOYER_TEXT_RE,
+        RECRUITER_RE as _RECRUITER_RE,
+        WHATSAPP_RE as _WHATSAPP_RE,
+        WA_LINK_RE as _WA_LINK_RE,
+        WHATS_RE as _WHATS_RE,
+        WHATSAPP_PHRASE_RE as _WHATSAPP_PHRASE_RE,
+        TELEGRAM_LINK_RE as _TELEGRAM_LINK_RE,
+        CITY_RE as _CITY_RE,
+        NAME_RE as _NAME_RE,
+        SALES_WINDOW as _SALES_WINDOW,
+        JOBSEEKER_WINDOW as _JOBSEEKER_WINDOW,
+        # Signals
+        CANDIDATE_POSITIVE_SIGNALS as _CANDIDATE_POSITIVE_SIGNALS,
+        JOB_OFFER_SIGNALS as _JOB_OFFER_SIGNALS,
+        STRICT_JOB_AD_MARKERS as _STRICT_JOB_AD_MARKERS,
+        MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE as _MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE,
+        CANDIDATE_KEYWORDS as _CANDIDATE_KEYWORDS,
+        IGNORE_KEYWORDS as _IGNORE_KEYWORDS,
+        JOB_AD_MARKERS as _JOB_AD_MARKERS,
+        HIRING_INDICATORS as _HIRING_INDICATORS,
+        SOLO_BIZ_INDICATORS as _SOLO_BIZ_INDICATORS,
+        AGENT_FINGERPRINTS as _AGENT_FINGERPRINTS,
+        RETAIL_ROLES as _RETAIL_ROLES,
+        # Functions
+        is_candidate_seeking_job as _is_candidate_seeking_job,
+        is_job_advertisement as _is_job_advertisement,
+        classify_lead as _classify_lead,
+        is_garbage_context as _is_garbage_context,
+        should_drop_lead as _should_drop_lead,
+        should_skip_url_prefetch as _should_skip_url_prefetch,
+    )
+    from luca_scraper.cli import (
+        parse_args as _parse_args,
+        validate_config as _validate_config,
+    )
     _LUCA_SCRAPER_AVAILABLE = True
 except ImportError as e:
     # Fallback: luca_scraper not available, use inline definitions
