@@ -200,6 +200,7 @@ def import_csv(request):
     Note: Rate limited to prevent abuse.
     """
     from django_ratelimit.exceptions import Ratelimited
+    from leads.utils.csv_import import CSVImporter
     
     # Check if rate limit was hit
     if getattr(request, 'limited', False):
@@ -218,76 +219,39 @@ def import_csv(request):
             return JsonResponse({
                 'error': f'File too large. Maximum size: {MAX_CSV_UPLOAD_SIZE / (1024*1024):.0f}MB'
             }, status=400)
-        decoded_file = csv_file.read().decode('utf-8')
-        reader = csv.DictReader(io.StringIO(decoded_file))
         
-        imported = 0
-        updated = 0
-        skipped = 0
-        errors = []
+        # Decode file content
+        try:
+            decoded_file = csv_file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                csv_file.seek(0)
+                decoded_file = csv_file.read().decode('latin-1')
+            except Exception as e:
+                return JsonResponse({
+                    'error': f'Could not decode file: {str(e)}'
+                }, status=400)
         
-        with transaction.atomic():
-            for i, row in enumerate(reader, 1):
-                try:
-                    email = (row.get('email') or '').strip() or None
-                    telefon = (row.get('telefon') or '').strip() or None
-                    
-                    if not email and not telefon:
-                        skipped += 1
-                        continue
-                    
-                    # Deduplizierung
-                    existing = None
-                    if email:
-                        existing = Lead.objects.filter(email=email).first()
-                    if not existing and telefon:
-                        existing = Lead.objects.filter(telefon=telefon).first()
-                    
-                    # Parse and validate score
-                    try:
-                        score_value = row.get('score', DEFAULT_QUALITY_SCORE)
-                        new_score = int(score_value) if score_value else DEFAULT_QUALITY_SCORE
-                        new_score = max(0, min(100, new_score))  # Clamp to 0-100 range
-                    except (ValueError, TypeError):
-                        new_score = DEFAULT_QUALITY_SCORE  # Default score if invalid
-                    
-                    if existing:
-                        if new_score > existing.quality_score:
-                            existing.quality_score = new_score
-                            existing.save()
-                            updated += 1
-                        else:
-                            skipped += 1
-                    else:
-                        lead_type = row.get('lead_type', '')
-                        if lead_type not in dict(Lead.LeadType.choices):
-                            lead_type = Lead.LeadType.UNKNOWN
-                        
-                        Lead.objects.create(
-                            name=row.get('name', 'Unbekannt')[:255],
-                            email=email,
-                            telefon=telefon,
-                            source=Lead.Source.SCRAPER,
-                            source_url=(row.get('quelle') or '')[:200] or None,
-                            quality_score=new_score,
-                            lead_type=lead_type,
-                            company=(row.get('company_name') or row.get('firma') or '')[:255] or None,
-                            role=(row.get('rolle') or row.get('position') or '')[:255] or None,
-                            location=(row.get('region') or row.get('standort') or '')[:255] or None,
-                        )
-                        imported += 1
-                except Exception as e:
-                    errors.append(f'Zeile {i}: {str(e)}')
+        # Use CSV importer utility
+        importer = CSVImporter(dry_run=False, force_update=False)
+        stats = importer.import_from_stream(io.StringIO(decoded_file))
         
-        return JsonResponse({
+        response_data = {
             'success': True,
-            'imported': imported,
-            'updated': updated,
-            'skipped': skipped,
-            'errors': errors[:MAX_ERROR_REPORTS],
-        })
+            'imported': stats['imported'],
+            'updated': stats['updated'],
+            'skipped': stats['skipped'],
+            'errors': stats['errors'][:MAX_ERROR_REPORTS] if stats['errors'] else []
+        }
+        
+        if stats['errors']:
+            response_data['error_count'] = len(stats['errors'])
+            response_data['error_report'] = importer.get_error_report()
+        
+        return JsonResponse(response_data)
     
     except Exception as e:
+        logger.error(f"CSV import error: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 
