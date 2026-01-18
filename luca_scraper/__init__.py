@@ -13,10 +13,16 @@ Phase 3: Search, Scoring, Validation & CLI
 - Extrahierte Scoring und Validation
 - Extrahierte CLI Interface
 
-Version: 3.0.0
+Phase 4: Portal Crawlers Extraction
+- Extrahierte Portal-Crawler in dedizierte Module
+- BaseCrawler Abstract Class
+- Kleinanzeigen, Markt.de, Quoka, Kalaydo, MeineStadt Crawler
+- Generic Detail Extractor
+
+Version: 4.0.0
 """
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"
 
 # =========================
 # Re-export Config
@@ -222,6 +228,30 @@ from .cli import (
     validate_config,
     print_banner,
     print_help,
+)
+
+# =========================
+# Re-export Crawlers Module (Phase 4)
+# =========================
+
+from .crawlers import (
+    # Base
+    BaseCrawler,
+    
+    # Kleinanzeigen
+    crawl_kleinanzeigen_listings_async,
+    extract_kleinanzeigen_detail_async,
+    crawl_kleinanzeigen_portal_async,
+    
+    # Other Portals
+    crawl_markt_de_listings_async,
+    crawl_quoka_listings_async,
+    crawl_kalaydo_listings_async,
+    crawl_meinestadt_listings_async,
+    
+    # Generic
+    extract_generic_detail_async,
+    _mark_url_seen,
 )
 
 # =========================
@@ -435,6 +465,18 @@ __all__ = [
     "validate_config",
     "print_banner",
     "print_help",
+    
+    # Crawlers Module (Phase 4)
+    "BaseCrawler",
+    "crawl_kleinanzeigen_listings_async",
+    "extract_kleinanzeigen_detail_async",
+    "crawl_kleinanzeigen_portal_async",
+    "crawl_markt_de_listings_async",
+    "crawl_quoka_listings_async",
+    "crawl_kalaydo_listings_async",
+    "crawl_meinestadt_listings_async",
+    "extract_generic_detail_async",
+    "_mark_url_seen",
 ]
 
 # Add optional imports to __all__ if available
