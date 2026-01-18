@@ -1,7 +1,7 @@
 """KI-gestützte Email-Generierung"""
 import os
 from typing import Dict, List, Optional
-from ai_config.loader import get_ai_config, get_prompt, log_usage, check_budget
+from ai_config.loader import get_ai_config, get_prompt, log_usage, check_budget, calculate_cost
 
 
 # Default Prompt für Email-Generierung
@@ -84,8 +84,11 @@ def generate_email_template(
         
         start_time = time.time()
         
+        provider = config.get('default_provider', 'OpenAI')
+        model = config.get('default_model', 'gpt-4o-mini')
+        
         response = client.chat.completions.create(
-            model=config.get('default_model', 'gpt-4o-mini'),
+            model=model,
             messages=[
                 {"role": "system", "content": "Du bist ein professioneller Email-Texter."},
                 {"role": "user", "content": prompt}
@@ -96,17 +99,17 @@ def generate_email_template(
         
         latency_ms = int((time.time() - start_time) * 1000)
         
-        # Token-Verbrauch und Kosten
+        # Token-Verbrauch
         tokens_prompt = response.usage.prompt_tokens
         tokens_completion = response.usage.completion_tokens
         
-        # Kosten berechnen (vereinfachte Annahme: 0.00015 EUR pro 1K tokens prompt, 0.0006 EUR per 1K completion)
-        cost = (tokens_prompt / 1000.0) * 0.00015 + (tokens_completion / 1000.0) * 0.0006
+        # Kosten berechnen mit ai_config
+        cost = calculate_cost(provider, model, tokens_prompt, tokens_completion)
         
         # Usage loggen
         log_usage(
-            provider=config.get('default_provider', 'OpenAI'),
-            model=config.get('default_model', 'gpt-4o-mini'),
+            provider=provider,
+            model=model,
             prompt_slug='email_generation',
             tokens_prompt=tokens_prompt,
             tokens_completion=tokens_completion,
@@ -183,8 +186,11 @@ def improve_email_text(
         client = openai.OpenAI(api_key=api_key)
         start_time = time.time()
         
+        provider = config.get('default_provider', 'OpenAI')
+        model = config.get('default_model', 'gpt-4o-mini')
+        
         response = client.chat.completions.create(
-            model=config.get('default_model', 'gpt-4o-mini'),
+            model=model,
             messages=[
                 {"role": "system", "content": "Du bist ein professioneller Email-Texter."},
                 {"role": "user", "content": prompt}
@@ -196,11 +202,11 @@ def improve_email_text(
         latency_ms = int((time.time() - start_time) * 1000)
         tokens_prompt = response.usage.prompt_tokens
         tokens_completion = response.usage.completion_tokens
-        cost = (tokens_prompt / 1000.0) * 0.00015 + (tokens_completion / 1000.0) * 0.0006
+        cost = calculate_cost(provider, model, tokens_prompt, tokens_completion)
         
         log_usage(
-            provider=config.get('default_provider', 'OpenAI'),
-            model=config.get('default_model', 'gpt-4o-mini'),
+            provider=provider,
+            model=model,
             prompt_slug='email_improvement',
             tokens_prompt=tokens_prompt,
             tokens_completion=tokens_completion,
@@ -264,8 +270,11 @@ Antworte nur mit den Betreffzeilen, eine pro Zeile."""
         client = openai.OpenAI(api_key=api_key)
         start_time = time.time()
         
+        provider = config.get('default_provider', 'OpenAI')
+        model = config.get('default_model', 'gpt-4o-mini')
+        
         response = client.chat.completions.create(
-            model=config.get('default_model', 'gpt-4o-mini'),
+            model=model,
             messages=[
                 {"role": "system", "content": "Du bist ein kreativer Email-Marketing-Experte."},
                 {"role": "user", "content": prompt}
@@ -277,11 +286,11 @@ Antworte nur mit den Betreffzeilen, eine pro Zeile."""
         latency_ms = int((time.time() - start_time) * 1000)
         tokens_prompt = response.usage.prompt_tokens
         tokens_completion = response.usage.completion_tokens
-        cost = (tokens_prompt / 1000.0) * 0.00015 + (tokens_completion / 1000.0) * 0.0006
+        cost = calculate_cost(provider, model, tokens_prompt, tokens_completion)
         
         log_usage(
-            provider=config.get('default_provider', 'OpenAI'),
-            model=config.get('default_model', 'gpt-4o-mini'),
+            provider=provider,
+            model=model,
             prompt_slug='subject_generation',
             tokens_prompt=tokens_prompt,
             tokens_completion=tokens_completion,
