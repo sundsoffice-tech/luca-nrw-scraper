@@ -9,8 +9,14 @@ scraper.db
 emergency_run_*.json
 emergency_run_*.log
 
+# Diagnose files
+diagnose_report_*.json
+diagnose_run.log
+
 # Data files
 *.db
+*.db.bak
+*.sqlite
 *.sqlite3
 data/
 
@@ -24,7 +30,17 @@ data/
 # Login sessions (contains user cookies)
 sessions/
 
+# Backup files
+*_backup.py
+*_orig_*.py
+
 # Test files
 test_browser_integration.py
 test_browser_e2e.py
 scraper_test.db
+
+# OS/IDE artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
