@@ -63,7 +63,7 @@ class LandingPageAdmin(admin.ModelAdmin):
     
     def builder_link(self, obj):
         """Link to builder interface"""
-        url = reverse('page-builder', kwargs={'slug': obj.slug})
+        url = reverse('pages:page-builder', kwargs={'slug': obj.slug})
         return format_html('<a href="{}" target="_blank">Edit in Builder</a>', url)
     builder_link.short_description = 'Builder'
     

@@ -122,7 +122,11 @@ def form_submit(request, slug):
         if request.content_type == 'application/json':
             data = json.loads(request.body)
         else:
-            data = dict(request.POST)
+            # Convert POST data to dict, preserving multi-value fields
+            data = {}
+            for key in request.POST.keys():
+                values = request.POST.getlist(key)
+                data[key] = values if len(values) > 1 else values[0]
         
         # Extract UTM parameters
         utm_source = request.GET.get('utm_source', '')
@@ -177,10 +181,30 @@ def form_submit(request, slug):
         
         # Sync to Brevo if lead exists
         if lead and lead.email:
-            # TODO: Use existing Brevo integration with page-specific list
             try:
-                sync_lead_to_brevo(lead)
-                logger.info(f"Synced lead to Brevo: {lead.email}")
+                # Use page-specific Brevo list if configured
+                if page.brevo_list_id:
+                    # Import here to avoid circular imports
+                    from leads.services.brevo import create_or_update_contact
+                    
+                    # Prepare contact attributes
+                    name_parts = (lead.name or "").split(" ", 1)
+                    attributes = {
+                        "VORNAME": name_parts[0] if name_parts else "",
+                        "NACHNAME": name_parts[1] if len(name_parts) > 1 else "",
+                        "TELEFON": lead.telefon or "",
+                    }
+                    
+                    create_or_update_contact(
+                        email=lead.email,
+                        attributes=attributes,
+                        list_ids=[page.brevo_list_id]
+                    )
+                    logger.info(f"Synced lead to Brevo list {page.brevo_list_id}: {lead.email}")
+                else:
+                    # Use default sync
+                    sync_lead_to_brevo(lead)
+                    logger.info(f"Synced lead to Brevo (default lists): {lead.email}")
             except Exception as e:
                 logger.error(f"Failed to sync lead to Brevo: {e}")
         
