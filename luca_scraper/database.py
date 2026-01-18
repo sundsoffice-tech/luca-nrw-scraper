@@ -45,22 +45,8 @@ def db() -> sqlite3.Connection:
             if not _DB_READY:
                 _ensure_schema(_db_local.conn)
                 
-                # Initialize dashboard schema if available
-                try:
-                    from dashboard.db_schema import (
-                        ensure_dashboard_schema,
-                        initialize_default_search_modes,
-                        initialize_default_settings
-                    )
-                    ensure_dashboard_schema(_db_local.conn)
-                    initialize_default_search_modes(_db_local.conn)
-                    initialize_default_settings(_db_local.conn)
-                except ImportError:
-                    # Dashboard module not available - this is expected
-                    pass
-                except Exception as e:
-                    # Log other errors but don't fail
-                    print(f"Warning: Could not initialize dashboard schema: {e}")
+                # Dashboard schema initialization removed - migrated to Django CRM
+                # See docs/FLASK_TO_DJANGO_MIGRATION.md for migration details
                 
                 _DB_READY = True
     

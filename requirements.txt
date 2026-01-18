@@ -9,9 +9,8 @@ python-dotenv>=1.0.0
 duckduckgo-search>=3.9.0
 httpx>=0.24.0
 
-# Dashboard dependencies
+# Scraper basic UI (--ui mode)
 flask>=2.3.2
-flask-cors>=4.0.0
 
 # Data processing
 pandas>=2.0.0
@@ -28,3 +27,4 @@ selenium>=4.0.0
 
 # Note: Chart.js is loaded via CDN in the HTML templates
 # Note: Tailwind CSS is loaded via CDN in the HTML templates
+# Note: flask-cors removed - only used by deprecated dashboard, not needed for basic scraper UI
