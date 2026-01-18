@@ -664,191 +664,30 @@ DENY_CT_EXACT = {
 PDF_CT = "application/pdf"
 
 # Circuit-Breaker pro Host
-_HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "failures": int}}
-# URLs, die wegen 429/403 in die zweite Welle sollen
-CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))  # Reduziert von 90 auf 30 Sekunden
-CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))   # Neu: Kürzere Penalty für APIs
-CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
+# Network layer imports
+from luca_scraper.network import (
+    _host_from,
+    _penalize_host,
+    _host_allowed,
+    _should_retry_status,
+    _schedule_retry,
+    _record_retry,
+    _record_drop,
+    _reset_metrics,
+    RUN_METRICS,
+    _RETRY_URLS,
+    get_client,
+    _make_client,
+    _acceptable_by_headers,
+    check_robots_txt,
+    robots_allowed_async,
+)
 
-RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
-RETRY_MAX_PER_URL = int(os.getenv("RETRY_MAX_PER_URL", "2"))
-RETRY_BACKOFF_BASE = float(os.getenv("RETRY_BACKOFF_BASE", "6.0"))
-_RETRY_URLS: Dict[str, Dict[str, Any]] = {}  # url -> {"retries": int, "status": int}
 _SITEMAP_FAILED_HOSTS: set[str] = set()
-RUN_METRICS = {
-    "removed_by_dropper": 0,
-    "portal_dropped": 0,
-    "impressum_dropped": 0,
-    "pdf_dropped": 0,
-    "retry_count": 0,
-    "status_429": 0,
-    "status_403": 0,
-    "status_5xx": 0,
-}
-
-def _reset_metrics():
-    global RUN_METRICS
-    RUN_METRICS = {k: 0 for k in RUN_METRICS}
-
-def _record_drop(reason: str):
-    RUN_METRICS["removed_by_dropper"] += 1
-    if reason in ("portal_host", "portal_domain"):
-        RUN_METRICS["portal_dropped"] += 1
-    if reason == "impressum_no_contact":
-        RUN_METRICS["impressum_dropped"] += 1
-    if reason == "pdf_without_cv_hint":
-        RUN_METRICS["pdf_dropped"] += 1
-
-def _record_retry(status: int):
-    RUN_METRICS["retry_count"] += 1
-    if status == 429:
-        RUN_METRICS["status_429"] += 1
-    elif status == 403:
-        RUN_METRICS["status_403"] += 1
-    if 500 <= status < 600:
-        RUN_METRICS["status_5xx"] += 1
-
-def _host_from(url: str) -> str:
-    try:
-        return urllib.parse.urlparse(url).netloc.lower()
-    except Exception:
-        return ""
-
-def _penalize_host(host: str, reason: str = "error"):
-    """Penalisiert Host mit Learning-Integration"""
-    if not host:
-        return
-    
-    # API-Hosts bekommen kürzere Penalty
-    # Use proper domain matching to avoid substring attacks
-    is_google_api = host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com")
-    is_api_host = host.startswith("api.")
-    
-    if is_google_api or is_api_host:
-        penalty = CB_API_PENALTY
-    else:
-        penalty = CB_BASE_PENALTY
-    
-    if is_google_api:
-        # Google API: never hard-penalize; at most a short cool-down
-        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        st["penalty_until"] = time.time() + penalty
-        st["failures"] = 0
-        log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
-    else:
-        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        st["failures"] = min(st["failures"] + 1, 10)
-        penalty = min(penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
-        st["penalty_until"] = time.time() + penalty
-        log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
-    
-    # Learning Engine informieren
-    try:
-        from ai_learning_engine import ActiveLearningEngine
-        learning = ActiveLearningEngine()
-        learning.record_host_failure(host, reason)
-    except Exception:
-        pass  # Learning ist optional
-
-def _host_allowed(host: str) -> bool:
-    # Use proper domain matching to avoid substring attacks
-    if host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com"):
-        return True
-    st = _HOST_STATE.get(host)
-    if not st:
-        return True
-    if time.time() >= st.get("penalty_until", 0.0):
-        st["failures"] = 0
-        st["penalty_until"] = 0.0
-        return True
-    return False
-
-def _should_retry_status(status: int) -> bool:
-    if status in (429, 503, 504):
-        return True
-    if status == 403 and RETRY_INCLUDE_403:
-        return True
-    return False
-
-def _schedule_retry(url: str, status: int):
-    _record_retry(status)
-    if not url:
-        return
-    if url in _RETRY_URLS:
-        return
-    _RETRY_URLS[url] = {"retries": 0, "status": status, "last_ts": time.time()}
-
-# Globale Async-Client-Fabrik + Rate-Limiter
-_CLIENT_SECURE: Optional[AsyncSession] = None
-_CLIENT_INSECURE: Optional[AsyncSession] = None
-
-async def get_client(secure: bool = True) -> AsyncSession:
-    global _CLIENT_SECURE, _CLIENT_INSECURE
-    proxy_cfg = {"http://": "socks5://127.0.0.1:9050", "https://": "socks5://127.0.0.1:9050"} if USE_TOR else None
-    if secure:
-        if _CLIENT_SECURE is None:
-            _CLIENT_SECURE = AsyncSession(
-                impersonate="chrome120",
-                headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
-                verify=True,
-                timeout=HTTP_TIMEOUT,
-                proxies=proxy_cfg,
-            )
-        return _CLIENT_SECURE
-    else:
-        if _CLIENT_INSECURE is None:
-            _CLIENT_INSECURE = AsyncSession(
-                impersonate="chrome120",
-                headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
-                verify=False,
-                timeout=HTTP_TIMEOUT,
-                proxies=proxy_cfg,
-            )
-        return _CLIENT_INSECURE
-    
-def _make_client(secure: bool, ua: str, proxy_url: Optional[str], force_http1: bool, timeout_s: int):
-    # === TASK 2: Harden proxy handling for normal HTTP requests ===
-    if USE_TOR:
-        proxy_url = "socks5://127.0.0.1:9050"
-    headers = {
-        "User-Agent": ua or USER_AGENT,
-        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
-    }
-    
-    # When secure=True and NOT using Tor, explicitly disable proxies
-    # to prevent environment variable lookup that causes ConnectTimeout
-    if secure and not USE_TOR and not proxy_url:
-        proxies = None  # Explicitly None to bypass all proxy lookups
-    else:
-        proxies = {"http://": proxy_url, "https://": proxy_url} if proxy_url else None
-    
-    return AsyncSession(
-        impersonate="chrome120",
-        headers=headers,
-        verify=True if secure else False,
-        timeout=timeout_s,
-        proxies=proxies,
-    )
-
-
 
 # robots.txt Cache mit TTL
 _ROBOTS_CACHE_TTL = int(os.getenv("ROBOTS_CACHE_TTL", "21600"))  # 6h
 _ROBOTS_CACHE: Dict[str, Tuple[RobotFileParser, float]] = {}     # {base: (rp, ts)}
-
-def _acceptable_by_headers(hdrs: Dict[str, str]) -> Tuple[bool, str]:
-    ct = (hdrs.get("Content-Type", "") or "").lower().split(";")[0].strip()
-    if any(ct.startswith(p) for p in BINARY_CT_PREFIXES) or ct in DENY_CT_EXACT:
-        return False, f"content-type={ct}"
-    if (PDF_CT in ct) and (not CFG.allow_pdf):
-        return False, "pdf-not-allowed"
-    try:
-        cl = int(hdrs.get("Content-Length", "0"))
-        if cl > 0 and cl > MAX_CONTENT_LENGTH:
-            return False, f"too-large:{cl}"
-    except Exception:
-        pass
-    return True, ct or "unknown"
 
 # Letzten HTTP-Status pro URL merken
 _LAST_STATUS: Dict[str, int] = {}
@@ -1032,12 +871,6 @@ async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HT
             return None
     
     return r
-
-def check_robots_txt(url: str, rp: Optional[RobotFileParser] = None) -> bool:
-    return True
-
-async def robots_allowed_async(url: str) -> bool:
-    return True
 
 # =========================
 # Suche (modular)
