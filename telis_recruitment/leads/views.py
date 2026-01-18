@@ -10,12 +10,14 @@ from django.db import models, transaction
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.core.management import call_command
+from django_ratelimit.decorators import ratelimit
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Lead, CallLog, EmailLog, SyncStatus
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
+from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT, MAX_CSV_UPLOAD_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -190,17 +192,32 @@ class EmailLogViewSet(viewsets.ModelViewSet):
 
 @csrf_exempt
 @require_POST
+@ratelimit(key='user_or_ip', rate=API_RATE_LIMIT_IMPORT, method='POST')
 def import_csv(request):
     """
     CSV-Import Endpoint für Scraper-Daten.
     Erwartet: POST mit file-Upload
-    Note: CSRF exempt for automated scraper access. Consider adding API key authentication.
+    Note: Rate limited to prevent abuse.
     """
+    from django_ratelimit.exceptions import Ratelimited
+    
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return JsonResponse({
+            'error': 'Rate limit exceeded. Please try again later.'
+        }, status=429)
+    
     try:
         if 'file' not in request.FILES:
             return JsonResponse({'error': 'No file provided'}, status=400)
         
         csv_file = request.FILES['file']
+        
+        # Check file size
+        if csv_file.size > MAX_CSV_UPLOAD_SIZE:
+            return JsonResponse({
+                'error': f'File too large. Maximum size: {MAX_CSV_UPLOAD_SIZE / (1024*1024):.0f}MB'
+            }, status=400)
         decoded_file = csv_file.read().decode('utf-8')
         reader = csv.DictReader(io.StringIO(decoded_file))
         
@@ -295,9 +312,17 @@ def phone_dashboard(request):
 
 @csrf_exempt
 @require_POST
+@ratelimit(key='ip', rate=API_RATE_LIMIT_OPT_IN, method='POST')
 def opt_in(request):
     """
     Opt-In API Endpoint für Landing Page.
+    Rate limited to prevent spam/abuse.
+    """
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return JsonResponse({
+            'error': 'Too many requests. Please try again in a few minutes.'
+        }, status=429)
     Erstellt einen neuen Lead mit Source: landing_page
     """
     try:

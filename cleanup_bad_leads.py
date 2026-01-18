@@ -4,21 +4,54 @@
 One-time cleanup script to remove invalid leads from the database.
 
 This script:
-1. Identifies leads with invalid phone numbers
-2. Identifies leads from blocked sources
-3. Identifies test/probe entries
-4. Removes all identified bad leads
-5. Reports statistics before and after cleanup
+1. Creates a backup of the database before making changes
+2. Identifies leads with invalid phone numbers
+3. Identifies leads from blocked sources
+4. Identifies test/probe entries
+5. Removes all identified bad leads using parameterized queries
+6. Reports statistics before and after cleanup
 
 Usage:
-    python cleanup_bad_leads.py [--db DATABASE_PATH] [--dry-run]
+    python cleanup_bad_leads.py [--db DATABASE_PATH] [--dry-run] [--no-backup]
 """
 
 import sqlite3
 import re
 import sys
 import argparse
+import logging
+import shutil
 from pathlib import Path
+from datetime import datetime
+
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def create_backup(db_path: str) -> str:
+    """
+    Create a backup of the database before making changes.
+    
+    Args:
+        db_path: Path to the database file
+        
+    Returns:
+        str: Path to the backup file
+    """
+    db_path = Path(db_path)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_path = db_path.parent / f"{db_path.stem}_backup_{timestamp}{db_path.suffix}"
+    
+    logger.info(f"Creating backup: {backup_path}")
+    shutil.copy2(db_path, backup_path)
+    logger.info(f"Backup created successfully")
+    
+    return str(backup_path)
 
 
 def is_valid_phone(phone):
@@ -95,29 +128,40 @@ def is_test_entry(name):
     return any(pattern in name_lower for pattern in test_patterns)
 
 
-def cleanup_database(db_path: str, dry_run: bool = False):
+def cleanup_database(db_path: str, dry_run: bool = False, create_backup_file: bool = True):
     """
     Clean up invalid leads from database.
     
     Args:
         db_path: Path to SQLite database
         dry_run: If True, only report what would be deleted without actually deleting
+        create_backup_file: If True, create a backup before making changes
     """
-    print(f"Opening database: {db_path}")
+    logger.info(f"Opening database: {db_path}")
+    
+    # Create backup before making changes (unless disabled or dry run)
+    if create_backup_file and not dry_run:
+        try:
+            backup_path = create_backup(db_path)
+            logger.info(f"Backup saved to: {backup_path}")
+        except Exception as e:
+            logger.error(f"Failed to create backup: {e}")
+            logger.error("Aborting to prevent data loss")
+            return 1
     
     try:
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
     except sqlite3.Error as e:
-        print(f"ERROR: Could not open database: {e}")
+        logger.error(f"ERROR: Could not open database: {e}")
         return 1
     
     # Count leads before cleanup
     c.execute("SELECT COUNT(*) FROM leads")
     before = c.fetchone()[0]
-    print(f"\n{'='*60}")
-    print(f"Leads before cleanup: {before}")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Leads before cleanup: {before}")
+    logger.info(f"{'='*60}\n")
     
     # Identify leads to delete
     c.execute("SELECT id, telefon, quelle, name FROM leads")
@@ -137,25 +181,26 @@ def cleanup_database(db_path: str, dry_run: bool = False):
         elif is_test_entry(name):
             to_delete.append((lead_id, f"Test-Eintrag: {name}"))
     
-    print(f"\n{'='*60}")
-    print(f"Leads to delete: {len(to_delete)}")
-    print(f"{'='*60}\n")
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Leads to delete: {len(to_delete)}")
+    logger.info(f"{'='*60}\n")
     
     if to_delete:
-        print("Details of leads to be deleted:\n")
+        logger.info("Details of leads to be deleted:\n")
         for lead_id, reason in to_delete[:20]:  # Show first 20
-            print(f"  DELETE id={lead_id}: {reason}")
+            logger.info(f"  DELETE id={lead_id}: {reason}")
         
         if len(to_delete) > 20:
-            print(f"  ... and {len(to_delete) - 20} more")
+            logger.info(f"  ... and {len(to_delete) - 20} more")
     
-    # Perform deletion if not dry run
+    # Perform deletion if not dry run (using parameterized queries)
     if not dry_run:
-        print(f"\n{'='*60}")
-        print("Performing deletion...")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info("Performing deletion...")
+        logger.info(f"{'='*60}\n")
         
         for lead_id, _ in to_delete:
+            # Use parameterized query to prevent SQL injection
             c.execute("DELETE FROM leads WHERE id = ?", (lead_id,))
         
         conn.commit()
@@ -164,20 +209,20 @@ def cleanup_database(db_path: str, dry_run: bool = False):
         c.execute("SELECT COUNT(*) FROM leads")
         after = c.fetchone()[0]
         
-        print(f"\n{'='*60}")
-        print(f"CLEANUP COMPLETE")
-        print(f"{'='*60}")
-        print(f"Leads before:  {before}")
-        print(f"Leads after:   {after}")
-        print(f"Deleted:       {before - after}")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"CLEANUP COMPLETE")
+        logger.info(f"{'='*60}")
+        logger.info(f"Leads before:  {before}")
+        logger.info(f"Leads after:   {after}")
+        logger.info(f"Deleted:       {before - after}")
+        logger.info(f"{'='*60}\n")
     else:
-        print(f"\n{'='*60}")
-        print("DRY RUN - No changes made")
-        print(f"{'='*60}")
-        print(f"Would delete:  {len(to_delete)} leads")
-        print(f"Would remain:  {before - len(to_delete)} leads")
-        print(f"{'='*60}\n")
+        logger.info(f"\n{'='*60}")
+        logger.info("DRY RUN - No changes made")
+        logger.info(f"{'='*60}")
+        logger.info(f"Would delete:  {len(to_delete)} leads")
+        logger.info(f"Would remain:  {before - len(to_delete)} leads")
+        logger.info(f"{'='*60}\n")
     
     conn.close()
     return 0
@@ -198,15 +243,20 @@ def main():
         action='store_true',
         help='Show what would be deleted without actually deleting'
     )
+    parser.add_argument(
+        '--no-backup',
+        action='store_true',
+        help='Skip creating a backup before deletion'
+    )
     
     args = parser.parse_args()
     
     # Check if database exists
     if not Path(args.db).exists():
-        print(f"ERROR: Database not found: {args.db}")
+        logger.error(f"ERROR: Database not found: {args.db}")
         return 1
     
-    return cleanup_database(args.db, args.dry_run)
+    return cleanup_database(args.db, args.dry_run, not args.no_backup)
 
 
 if __name__ == '__main__':
