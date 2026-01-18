@@ -1,5 +1,25 @@
 # LUCA Control Center - Dashboard
 
+> **⚠️ DEPRECATED - This Flask dashboard is being replaced by the Django CRM system**
+> 
+> **New Location:** All scraper control, monitoring, and export features have been migrated to the Django CRM at `/crm/scraper/`
+> 
+> **Migration Date:** January 2026
+> 
+> **Why the change?**
+> - Unified dashboard with integrated lead management
+> - Better authentication and permission system
+> - Consistent UI/UX with the rest of the CRM
+> - Easier maintenance with single Django codebase
+> 
+> **For new features and scraper control, please use:**
+> - Django CRM: `http://localhost:8000/crm/scraper/` (requires login)
+> - Full documentation in `/telis_recruitment/README.md`
+> 
+> This Flask dashboard will be kept for reference but is no longer actively maintained.
+
+---
+
 Professional web-based dashboard for the LUCA NRW Scraper, providing real-time monitoring, KPI tracking, API cost management, and configuration options.
 
 ## Features

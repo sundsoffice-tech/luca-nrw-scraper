@@ -58,3 +58,18 @@ class IsTelefonist(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and \
                request.user.groups.filter(name__in=['Admin', 'Manager', 'Telefonist']).exists()
+
+
+class CanControlScraper(BasePermission):
+    """
+    Permission class for scraper control.
+    
+    Only Admin users can:
+    - Start/stop the scraper
+    - View scraper logs
+    - Change scraper settings
+    """
+    
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and \
+               (request.user.groups.filter(name='Admin').exists() or request.user.is_superuser)

@@ -56,7 +56,9 @@ python manage.py runserver
 Der Server läuft jetzt auf http://127.0.0.1:8000/
 
 - Admin-Interface: http://127.0.0.1:8000/admin/
-- API-Endpoints: http://127.0.0.1:8000/api/ (wird in PR #1d hinzugefügt)
+- CRM Dashboard: http://127.0.0.1:8000/crm/
+- Scraper Control: http://127.0.0.1:8000/crm/scraper/ (Admin only)
+- API-Endpoints: http://127.0.0.1:8000/api/
 
 ### 5. Statische Dateien (für Produktion)
 
@@ -112,6 +114,46 @@ Nach diesem Setup (PR #1a) folgen:
 - **Gunicorn**: WSGI-Server für Produktion
 - **Whitenoise**: Statische Dateien
 - **CORS Headers**: API-Zugriffskontrolle
+- **psutil**: Prozess-Monitoring für Scraper-Control
+- **openpyxl**: Excel-Export-Funktionalität
+
+## Features
+
+### 🎯 CRM Dashboard
+- Echtzeit-KPIs und Statistiken
+- Lead-Verwaltung mit Filterung und Suche
+- Aktivitäts-Feed
+- Team-Performance-Übersicht (Manager/Admin)
+
+### 🤖 Scraper-Steuerung (Admin only)
+Das integrierte Scraper-Control-Panel ermöglicht die vollständige Verwaltung des LUCA Scraper:
+
+- **Start/Stop**: Scraper mit verschiedenen Modi und Parametern starten
+- **Live-Monitoring**: Echtzeit-Status, CPU/RAM-Auslastung, Leads-Count
+- **Live-Logs**: Server-Sent Events (SSE) für Log-Streaming
+- **Historie**: Übersicht über vergangene Scraper-Läufe
+- **Export**: CSV/Excel-Export mit erweiterten Filtern
+
+**Zugriff:** http://127.0.0.1:8000/crm/scraper/ (erfordert Admin-Berechtigung)
+
+**API-Endpunkte:**
+- `POST /crm/api/scraper/start/` - Scraper starten
+- `POST /crm/api/scraper/stop/` - Scraper stoppen
+- `GET /crm/api/scraper/status/` - Aktueller Status
+- `GET /crm/api/scraper/logs/` - Live-Log-Stream (SSE)
+- `GET /crm/api/export/csv/` - Lead-Export als CSV
+- `GET /crm/api/export/excel/` - Lead-Export als Excel
+
+### 📊 Export-Funktionen
+- CSV-Export mit Filtern
+- Excel-Export mit Formatierung
+- Filterung nach Status, Quelle, Lead-Typ, Score, Datum
+- Automatische Spaltenbreite und Styling
+
+### 🔐 Berechtigungssystem
+- **Admin**: Vollzugriff inkl. Scraper-Control und Einstellungen
+- **Manager**: Leads einsehen, Reports, Team-Performance
+- **Telefonist**: Nur zugewiesene Leads und Anruf-Funktionen
 
 ## Support
 

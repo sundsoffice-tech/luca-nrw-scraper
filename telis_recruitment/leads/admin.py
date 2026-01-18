@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.db.models import Count
 from django.http import HttpResponse
 import csv
-from .models import Lead, CallLog, EmailLog, SyncStatus
+from .models import Lead, CallLog, EmailLog, SyncStatus, ScraperRun, ScraperConfig
 
 
 class CallLogInline(admin.TabularInline):
@@ -328,6 +328,165 @@ class SyncStatusAdmin(admin.ModelAdmin):
             '<span style="color: #6b7280;">⏭️  {}</span>',
             obj.leads_skipped
         )
+
+
+@admin.register(ScraperRun)
+class ScraperRunAdmin(admin.ModelAdmin):
+    """Admin for ScraperRun - shows scraper execution history"""
+    
+    list_display = [
+        'id',
+        'status_badge',
+        'started_at',
+        'duration_display',
+        'leads_stats',
+        'started_by',
+        'pid'
+    ]
+    
+    list_filter = [
+        'status',
+        'started_at',
+        'started_by',
+    ]
+    
+    search_fields = ['id', 'logs']
+    
+    readonly_fields = [
+        'started_at',
+        'finished_at',
+        'status',
+        'leads_found',
+        'leads_saved',
+        'leads_rejected',
+        'config_snapshot',
+        'logs',
+        'pid',
+        'started_by',
+        'duration_display'
+    ]
+    
+    fieldsets = (
+        ('Status', {
+            'fields': ('status', 'pid', 'started_by')
+        }),
+        ('Zeitraum', {
+            'fields': ('started_at', 'finished_at', 'duration_display')
+        }),
+        ('Ergebnisse', {
+            'fields': ('leads_found', 'leads_saved', 'leads_rejected')
+        }),
+        ('Konfiguration', {
+            'fields': ('config_snapshot',),
+            'classes': ('collapse',)
+        }),
+        ('Logs', {
+            'fields': ('logs',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Prevent manual creation"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion of old runs"""
+        return True
+    
+    @admin.display(description='Status')
+    def status_badge(self, obj):
+        colors = {
+            'running': '#3b82f6',
+            'completed': '#22c55e',
+            'failed': '#ef4444',
+            'stopped': '#6b7280',
+        }
+        icons = {
+            'running': '▶️',
+            'completed': '✅',
+            'failed': '❌',
+            'stopped': '⏹️',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        icon = icons.get(obj.status, '❓')
+        return format_html(
+            '{} <span style="background-color: {}; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">{}</span>',
+            icon, color, obj.get_status_display()
+        )
+    
+    @admin.display(description='Dauer')
+    def duration_display(self, obj):
+        seconds = obj.duration_seconds
+        if seconds == 0:
+            return '-'
+        
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        
+        if minutes > 0:
+            return f'{minutes}m {secs}s'
+        return f'{secs}s'
+    
+    @admin.display(description='Leads')
+    def leads_stats(self, obj):
+        return format_html(
+            '<span style="color: #22c55e;">✓ {}</span> / '
+            '<span style="color: #ef4444;">✗ {}</span>',
+            obj.leads_saved,
+            obj.leads_rejected
+        )
+
+
+@admin.register(ScraperConfig)
+class ScraperConfigAdmin(admin.ModelAdmin):
+    """Admin for ScraperConfig - singleton configuration"""
+    
+    list_display = [
+        'id',
+        'min_score',
+        'max_results_per_domain',
+        'pool_size',
+        'updated_at',
+        'updated_by'
+    ]
+    
+    fieldsets = (
+        ('Qualität', {
+            'fields': ('min_score',)
+        }),
+        ('Scraper-Verhalten', {
+            'fields': (
+                'max_results_per_domain',
+                'request_timeout',
+                'pool_size',
+                'internal_depth_per_domain',
+            )
+        }),
+        ('Flags', {
+            'fields': ('allow_pdf', 'allow_insecure_ssl')
+        }),
+        ('Meta', {
+            'fields': ('updated_at', 'updated_by'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['updated_at', 'updated_by']
+    
+    def has_add_permission(self, request):
+        """Only one config should exist"""
+        return not ScraperConfig.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of config"""
+        return False
+    
+    def save_model(self, request, obj, form, change):
+        """Track who updated the config"""
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 # Admin Site Customization
