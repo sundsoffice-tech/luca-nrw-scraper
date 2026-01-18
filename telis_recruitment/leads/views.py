@@ -18,11 +18,12 @@ import hashlib
 import os
 import threading
 import sqlite3
+import re
 from pathlib import Path
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST
 from django.conf import settings
 from django.db import transaction
 from django.db.models import F, Q
@@ -32,12 +33,46 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 
 from .models import Lead, CallLog, EmailLog
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
 from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT
 
 logger = logging.getLogger(__name__)
+
+# Constants
+MIN_NAME_LENGTH = 2
+MAX_NAME_LENGTH = 255
+MAX_CSV_ERRORS = 100
+
+# Validation patterns
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+"""
+Email validation pattern.
+Validates standard email format: local@domain.tld
+- Local part: alphanumeric, dots, underscores, percent, plus, hyphens
+- Domain: alphanumeric, dots, hyphens
+- TLD: minimum 2 characters
+Note: For production use, consider Django's EmailValidator for better coverage.
+"""
+
+PHONE_REGEX = re.compile(r'^[\d\s\-\+\(\)\/]{6,25}$')
+"""
+Phone number validation pattern.
+Accepts various international formats with:
+- Digits (0-9)
+- Spaces, hyphens, plus signs, parentheses, forward slashes
+- Length: 6-25 characters
+Examples: +49 123 456789, (123) 456-7890, 0123456789
+"""
+
+
+class LeadPagination(PageNumberPagination):
+    """Pagination for Lead list endpoints."""
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -47,6 +82,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     queryset = Lead.objects.all().order_by('-created_at')
     serializer_class = LeadSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = LeadPagination
     
     def get_serializer_class(self):
         """Use a more compact serializer for list actions"""
@@ -117,13 +153,50 @@ def api_health(request):
     """
     Health check endpoint.
     
+    Checks:
+    - API availability
+    - Database connectivity
+    
     Returns:
-        JSON response with status and service name
+        JSON response with status and component health
     """
-    return Response({
-        'status': 'ok',
-        'service': 'telis-recruitment-api'
-    })
+    health_status = {
+        'api': 'ok',
+        'database': 'unknown'
+    }
+    overall_status = 'ok'
+    
+    # Check database connectivity
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        health_status['database'] = 'ok'
+    except Exception as e:
+        health_status['database'] = 'error'
+        overall_status = 'degraded'
+        logger.error(f"Health check database error: {e}")
+    
+    # Get version info if available
+    version = getattr(settings, 'APP_VERSION', None)
+    
+    response_data = {
+        'success': True,
+        'data': {
+            'status': overall_status,
+            'service': 'telis-recruitment-api',
+            'components': health_status
+        }
+    }
+    
+    if version:
+        response_data['data']['version'] = version
+    
+    # Return 200 for ok, 503 for degraded
+    status_code = 200 if overall_status == 'ok' else 503
+    
+    return Response(response_data, status=status_code)
 
 
 @csrf_exempt
@@ -136,9 +209,9 @@ def opt_in(request):
     Creates a new lead with source: landing_page.
     Rate limited to prevent spam/abuse.
     """
-    # Check if rate limit was hit
     if getattr(request, 'limited', False):
         return JsonResponse({
+            'success': False,
             'error': 'Too many requests. Please try again in a few minutes.'
         }, status=429)
     
@@ -148,17 +221,39 @@ def opt_in(request):
         # Validate required fields
         name = data.get('name', '').strip()
         email = data.get('email', '').strip()
+        telefon = data.get('telefon', '').strip() if data.get('telefon') else None
         
-        if not name:
+        # Name validation
+        if not name or len(name) < MIN_NAME_LENGTH:
             return JsonResponse({
                 'success': False,
-                'error': 'Name is required'
+                'error': f'Name must be at least {MIN_NAME_LENGTH} characters'
             }, status=400)
         
+        if len(name) > MAX_NAME_LENGTH:
+            return JsonResponse({
+                'success': False,
+                'error': f'Name is too long (max {MAX_NAME_LENGTH} characters)'
+            }, status=400)
+        
+        # Email validation
         if not email:
             return JsonResponse({
                 'success': False,
                 'error': 'Email is required'
+            }, status=400)
+        
+        if not EMAIL_REGEX.match(email):
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid email format'
+            }, status=400)
+        
+        # Phone validation (optional but must be valid if provided)
+        if telefon and not PHONE_REGEX.match(telefon):
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid phone number format'
             }, status=400)
         
         # Check for existing lead
@@ -167,32 +262,41 @@ def opt_in(request):
         if existing_lead:
             # Update existing lead
             existing_lead.name = name
-            if data.get('telefon'):
-                existing_lead.telefon = data.get('telefon')
+            if telefon:
+                existing_lead.telefon = telefon
             existing_lead.interest_level = min(5, existing_lead.interest_level + 1)
             existing_lead.save()
             
+            logger.info(f"Lead updated via opt_in: {existing_lead.id}")
+            
             return JsonResponse({
                 'success': True,
-                'lead_id': existing_lead.id,
-                'message': 'Lead updated successfully',
-                'status': 'updated'
+                'data': {
+                    'lead_id': existing_lead.id,
+                    'action': 'updated'
+                },
+                'message': 'Lead updated successfully'
             }, status=200)
         else:
             # Create new lead
             lead = Lead.objects.create(
                 name=name,
                 email=email,
-                telefon=data.get('telefon', '').strip() or None,
+                telefon=telefon,
                 source=Lead.Source.LANDING_PAGE,
                 status=Lead.Status.NEW,
                 quality_score=70,
                 interest_level=3
             )
             
+            logger.info(f"Lead created via opt_in: {lead.id}")
+            
             return JsonResponse({
                 'success': True,
-                'lead_id': lead.id,
+                'data': {
+                    'lead_id': lead.id,
+                    'action': 'created'
+                },
                 'message': 'Lead created successfully'
             }, status=201)
             
@@ -209,6 +313,92 @@ def opt_in(request):
         }, status=500)
 
 
+def _decode_csv_file(csv_file):
+    """
+    Try to decode CSV file with multiple encodings.
+    
+    Args:
+        csv_file: Uploaded file object
+        
+    Returns:
+        str: Decoded string content
+        
+    Raises:
+        UnicodeDecodeError: If no encoding works
+    """
+    encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            csv_file.seek(0)
+            content = csv_file.read().decode(encoding)
+            logger.debug(f"CSV decoded successfully with {encoding}")
+            return content
+        except UnicodeDecodeError:
+            continue
+    
+    # If no encoding works, raise a more descriptive error
+    raise ValueError(
+        f"Could not decode file with any supported encoding. "
+        f"Tried: {', '.join(encodings)}. "
+        f"Please ensure the file is saved with UTF-8 or Latin-1 encoding."
+    )
+
+
+def _detect_csv_delimiter(content: str) -> str:
+    """Detect CSV delimiter from content sample."""
+    sample = content[:2048]
+    semicolon_count = sample.count(';')
+    comma_count = sample.count(',')
+    
+    # Use semicolon if it appears more often (common in German CSVs)
+    return ';' if semicolon_count > comma_count else ','
+
+
+def _process_csv_content(decoded_content: str) -> dict:
+    """
+    Process decoded CSV content and import leads.
+    
+    Args:
+        decoded_content: Decoded CSV string
+        
+    Returns:
+        dict: Import statistics with keys: imported, updated, skipped, errors
+    """
+    io_string = io.StringIO(decoded_content)
+    delimiter = _detect_csv_delimiter(decoded_content)
+    
+    reader = csv.DictReader(io_string, delimiter=delimiter)
+    
+    imported = 0
+    updated = 0
+    skipped = 0
+    errors = []
+    
+    with transaction.atomic():
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
+            try:
+                result = _process_csv_row(row)
+                if result == 'imported':
+                    imported += 1
+                elif result == 'updated':
+                    updated += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+                if len(errors) >= MAX_CSV_ERRORS:
+                    errors.append(f"... (additional errors truncated, max {MAX_CSV_ERRORS} shown)")
+                    break
+    
+    return {
+        'imported': imported,
+        'updated': updated,
+        'skipped': skipped,
+        'errors': errors if errors else None
+    }
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @ratelimit(key='user', rate=API_RATE_LIMIT_IMPORT, method='POST')
@@ -217,16 +407,18 @@ def import_csv(request):
     CSV Import API Endpoint.
     
     Imports leads from a CSV file.
-    Supports deduplication and updates.
+    Supports multiple encodings (UTF-8, Latin-1, etc.) and delimiters.
+    Handles deduplication and updates.
     Rate limited to prevent abuse.
     """
-    # Check if rate limit was hit
+    # Check rate limit
     if getattr(request, 'limited', False):
         return Response({
             'success': False,
             'error': 'Too many requests. Please try again in a few minutes.'
         }, status=status.HTTP_429_TOO_MANY_REQUESTS)
     
+    # Check file presence
     if 'file' not in request.FILES:
         return Response({
             'success': False,
@@ -238,103 +430,43 @@ def import_csv(request):
     # Validate file size (max 10MB by default)
     max_size = getattr(settings, 'MAX_CSV_UPLOAD_SIZE', 10 * 1024 * 1024)
     if csv_file.size > max_size:
+        max_size_mb = max_size // 1024 // 1024
         return Response({
             'success': False,
-            'error': f'File too large. Maximum size is {max_size / 1024 / 1024}MB'
+            'error': f'File too large. Maximum size is {max_size_mb}MB'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Read CSV file
-        decoded_file = csv_file.read().decode('utf-8')
-        io_string = io.StringIO(decoded_file)
+        # Decode file with automatic encoding detection
+        decoded_content = _decode_csv_file(csv_file)
         
-        # Detect delimiter
-        sample = decoded_file[:1024]
-        if ';' in sample and ',' not in sample:
-            delimiter = ';'
-        else:
-            delimiter = ','
+        # Process CSV content
+        result = _process_csv_content(decoded_content)
         
-        reader = csv.DictReader(io_string, delimiter=delimiter)
-        
-        imported = 0
-        updated = 0
-        skipped = 0
-        errors = []
-        
-        with transaction.atomic():
-            for row in reader:
-                try:
-                    result = _process_csv_row(row)
-                    if result == 'imported':
-                        imported += 1
-                    elif result == 'updated':
-                        updated += 1
-                    else:
-                        skipped += 1
-                except Exception as e:
-                    errors.append(str(e))
+        # Log import results
+        logger.info(
+            f"CSV import by {request.user}: "
+            f"{result['imported']} imported, {result['updated']} updated, "
+            f"{result['skipped']} skipped"
+        )
         
         return Response({
             'success': True,
-            'imported': imported,
-            'updated': updated,
-            'skipped': skipped,
-            'errors': errors if errors else None
+            'data': result,
+            'message': f"Import completed: {result['imported']} new, {result['updated']} updated"
         })
         
-    except UnicodeDecodeError:
-        # Try with latin-1 encoding
-        try:
-            csv_file.seek(0)
-            decoded_file = csv_file.read().decode('latin-1')
-            io_string = io.StringIO(decoded_file)
-            
-            # Detect delimiter
-            sample = decoded_file[:1024]
-            if ';' in sample and ',' not in sample:
-                delimiter = ';'
-            else:
-                delimiter = ','
-            
-            reader = csv.DictReader(io_string, delimiter=delimiter)
-            
-            imported = 0
-            updated = 0
-            skipped = 0
-            errors = []
-            
-            with transaction.atomic():
-                for row in reader:
-                    try:
-                        result = _process_csv_row(row)
-                        if result == 'imported':
-                            imported += 1
-                        elif result == 'updated':
-                            updated += 1
-                        else:
-                            skipped += 1
-                    except Exception as e:
-                        errors.append(str(e))
-            
-            return Response({
-                'success': True,
-                'imported': imported,
-                'updated': updated,
-                'skipped': skipped,
-                'errors': errors if errors else None
-            })
-        except Exception as e:
-            logger.error(f"Error reading CSV file: {str(e)}")
-            return Response({
-                'success': False,
-                'error': f'Error reading file: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        logger.error(f"Error in import_csv: {str(e)}")
+    except (UnicodeDecodeError, ValueError) as e:
+        logger.warning(f"CSV decode error for file uploaded by {request.user}: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Error processing CSV: {str(e)}'
+            'error': 'Could not decode file. Please ensure it uses UTF-8 or Latin-1 encoding.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.exception(f"Error in import_csv: {e}")
+        return Response({
+            'success': False,
+            'error': 'Error processing CSV file'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -516,9 +648,11 @@ def brevo_webhook(request):
         lead.refresh_from_db()
         
         return JsonResponse({
-            'status': 'ok',
-            'event': event,
-            'lead_id': lead.id
+            'success': True,
+            'data': {
+                'event': event,
+                'lead_id': lead.id
+            }
         })
         
     except json.JSONDecodeError:
