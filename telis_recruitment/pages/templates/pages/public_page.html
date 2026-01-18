@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ seo_title }}</title>
+    {% if seo_description %}
+    <meta name="description" content="{{ seo_description }}">
+    {% endif %}
+    {% if seo_image %}
+    <meta property="og:image" content="{{ seo_image }}">
+    {% endif %}
+    <meta property="og:title" content="{{ seo_title }}">
+    <meta property="og:description" content="{{ seo_description }}">
+    <style>
+        /* Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+        }
+        
+        /* Page-specific CSS from builder */
+        {{ page.css|safe }}
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <!-- Rendered HTML from builder -->
+    {{ page.html|safe }}
+    
+    <script>
+        // Form submission handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form[data-landing-form]');
+            
+            forms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(form);
+                    const data = {};
+                    formData.forEach((value, key) => {
+                        data[key] = value;
+                    });
+                    
+                    // Get UTM parameters from URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const utmParams = {};
+                    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(param => {
+                        if (urlParams.has(param)) {
+                            utmParams[param] = urlParams.get(param);
+                        }
+                    });
+                    
+                    // Build submission URL with UTM params
+                    const submitUrl = '{% url "pages_public:form-submit" page.slug %}' + 
+                        (Object.keys(utmParams).length > 0 ? '?' + new URLSearchParams(utmParams).toString() : '');
+                    
+                    fetch(submitUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.success) {
+                            // Show success message
+                            alert('Vielen Dank! Ihre Anfrage wurde erfolgreich übermittelt.');
+                            form.reset();
+                        } else {
+                            alert('Es gab einen Fehler bei der Übermittlung. Bitte versuchen Sie es erneut.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Es gab einen Fehler bei der Übermittlung. Bitte versuchen Sie es erneut.');
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>
