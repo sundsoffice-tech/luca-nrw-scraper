@@ -2,18 +2,51 @@ Zweck: NRW-Vertriebsleads automatisch finden, bewerten, exportieren.
 
 ## 🚀 Quick Start
 
+### 🐳 Docker (Recommended)
+The fastest way to get started with LUCA Command Center:
+
+```bash
+# Clone and setup
+git clone https://github.com/sundsoffice-tech/luca-nrw-scraper.git
+cd luca-nrw-scraper
+cp .env.example .env
+
+# Edit .env with your settings (required: SECRET_KEY)
+nano .env
+
+# Start with Docker
+docker-compose up -d
+
+# Create admin user
+docker-compose exec web python manage.py createsuperuser
+
+# Access: http://localhost:8000/crm/
+```
+
+See [docs/INSTALLATION.md](docs/INSTALLATION.md) for detailed installation instructions and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment guides.
+
+### 🔧 Manual Installation
+
+**Linux/Mac:**
+```bash
+./install.sh
+```
+
+**Windows:**
+```cmd
+install.bat
+```
+
+Then start the server:
+```bash
+source venv/bin/activate  # Linux/Mac
+# or venv\Scripts\activate.bat for Windows
+cd telis_recruitment
+python manage.py runserver
+```
+
 ### 🎯 Django CRM (Primary Interface)
 Professional Django-based CRM system for managing leads, controlling the scraper, and accessing all features.
-
-**Quick Start:**
-```bash
-cd telis_recruitment
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
-# Open http://127.0.0.1:8000/crm/
-```
 
 **Access Points:**
 - **CRM Dashboard**: http://127.0.0.1:8000/crm/ - Main interface with KPIs and lead management
@@ -47,6 +80,12 @@ python scriptname.py --once --industry talent_hunt --qpi 15
 # Start scraper with basic UI (minimal web interface)
 python scriptname.py --ui
 ```
+
+## 📚 Documentation
+
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual, troubleshooting)
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment to Railway, Render, Fly.io, Hetzner
+- **[Django CRM Details](telis_recruitment/README.md)** - Detailed Django CRM documentation
 
 ## 📸 Screenshots
 

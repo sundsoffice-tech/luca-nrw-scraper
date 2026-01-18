@@ -50,6 +50,7 @@ scraper_test.db
 
 # Django static files
 staticfiles/
+media/
 
 # OS/IDE artifacts
 .DS_Store
@@ -57,3 +58,6 @@ Thumbs.db
 *.swp
 *.swo
 test_ai_config_integration.py
+
+# Docker
+*.log

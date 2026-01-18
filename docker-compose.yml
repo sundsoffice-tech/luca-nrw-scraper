@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: luca-command-center
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist database
+      - ./telis_recruitment/db.sqlite3:/app/telis_recruitment/db.sqlite3
+      # Persist static files
+      - ./telis_recruitment/staticfiles:/app/telis_recruitment/staticfiles
+      # Persist media files
+      - ./telis_recruitment/media:/app/telis_recruitment/media
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check", "--deploy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # Optional scraper service - activate with: docker-compose --profile scraper up
+  scraper:
+    build: .
+    container_name: luca-scraper
+    working_dir: /app
+    command: >
+      python scriptname.py 
+      --once 
+      --industry ${SCRAPER_DEFAULT_INDUSTRY:-recruiter}
+      --qpi ${SCRAPER_QPI:-6}
+    volumes:
+      # Share data directory with web service
+      - ./data:/app/data
+      - ./telis_recruitment/db.sqlite3:/app/telis_recruitment/db.sqlite3
+    env_file:
+      - .env
+    profiles:
+      - scraper
+    restart: "no"
+
+volumes:
+  db:
+  static:
+  media:
