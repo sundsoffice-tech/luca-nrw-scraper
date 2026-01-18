@@ -77,6 +77,11 @@ except (ImportError, Exception):
 
 logger = logging.getLogger(__name__)
 
+# Perplexity provider defaults
+PERPLEXITY_PROVIDER_NAME = 'Perplexity'
+PERPLEXITY_DEFAULT_API_URL = 'https://api.perplexity.ai'
+PERPLEXITY_DEFAULT_MODEL = 'sonar-small'
+
 
 class PerplexityLearning:
     """
@@ -125,13 +130,13 @@ class PerplexityLearning:
             return None
         
         try:
-            provider = AIProvider.objects.filter(name='Perplexity').first()
+            provider = AIProvider.objects.filter(name=PERPLEXITY_PROVIDER_NAME).first()
             if provider:
                 model = AIModel.objects.filter(provider=provider, active=True).first()
                 return {
-                    'api_url': provider.base_url or 'https://api.perplexity.ai',
+                    'api_url': provider.base_url or PERPLEXITY_DEFAULT_API_URL,
                     'provider_name': provider.name,
-                    'model_name': model.name if model else 'sonar-small',
+                    'model_name': model.name if model else PERPLEXITY_DEFAULT_MODEL,
                     'temperature': model.default_temperature if model else 0.3,
                     'max_tokens': model.default_max_tokens if model else 4000,
                     'active': provider.active,

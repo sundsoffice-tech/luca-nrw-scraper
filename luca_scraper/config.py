@@ -594,7 +594,7 @@ def get_config(param: Optional[str] = None) -> Any:
     config = {**defaults, **env_overrides}
     
     # Priority 1: Django DB (when available)
-    if AI_CONFIG_AVAILABLE and _get_ai_config_django:
+    if AI_CONFIG_AVAILABLE:
         try:
             django_config = _get_ai_config_django()
             if django_config:
