@@ -1,11 +1,23 @@
 """
 API views for the leads application.
+
+Required Environment Variables:
+- BREVO_WEBHOOK_SECRET: Secret key for Brevo webhook signature verification
+                        Get this from Brevo Dashboard > Settings > Webhooks
+
+Optional Settings:
+- ALLOWED_SCRAPER_DB_PATHS: List of additional allowed database paths for sync
 """
 
 import json
 import csv
 import io
 import logging
+import hmac
+import hashlib
+import os
+import threading
+import sqlite3
 from pathlib import Path
 
 from django.http import JsonResponse
@@ -401,14 +413,66 @@ def _process_csv_row(row):
         return 'imported'
 
 
+# Thread-safe cache for allowed database paths
+_allowed_db_paths_lock = threading.Lock()
+ALLOWED_DB_PATHS = None
+
+
+def _get_allowed_db_paths():
+    """Get list of allowed database paths (whitelist). Thread-safe."""
+    global ALLOWED_DB_PATHS
+    if ALLOWED_DB_PATHS is None:
+        with _allowed_db_paths_lock:
+            # Double-check locking pattern
+            if ALLOWED_DB_PATHS is None:
+                base = Path(settings.BASE_DIR).parent.resolve()
+                ALLOWED_DB_PATHS = [
+                    base / 'scraper.db',
+                ]
+                # Add custom paths from settings if defined
+                custom_paths = getattr(settings, 'ALLOWED_SCRAPER_DB_PATHS', [])
+                for p in custom_paths:
+                    ALLOWED_DB_PATHS.append(Path(p).resolve())
+    return ALLOWED_DB_PATHS
+
+
 @csrf_exempt
 @require_POST
 def brevo_webhook(request):
     """
     Webhook endpoint for Brevo email events.
+    Secured with HMAC signature verification.
     
     Handles: opened, click, hard_bounce, unsubscribed events.
     """
+    # Verify webhook signature
+    signature = request.headers.get('X-Sib-Signature')
+    webhook_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
+    
+    if webhook_secret:
+        if not signature:
+            logger.warning("Brevo webhook called without signature")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Missing signature'
+            }, status=401)
+        
+        expected_signature = hmac.new(
+            webhook_secret.encode(),
+            request.body,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected_signature):
+            logger.warning("Invalid Brevo webhook signature received")
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid signature'
+            }, status=401)
+    else:
+        # Log warning if secret not configured (allows graceful deployment)
+        logger.warning("BREVO_WEBHOOK_SECRET not configured - webhook signature verification disabled!")
+    
     try:
         data = json.loads(request.body)
         
@@ -479,26 +543,46 @@ def trigger_sync(request):
     Parameters:
         - db_path: Path to scraper database (optional, uses default if not provided)
         - force: Force update even if score is lower (optional, default: false)
+    
+    Security: Only whitelisted database paths are allowed.
     """
-    db_path = request.data.get('db_path')
+    db_path_input = request.data.get('db_path')
     force = request.data.get('force', False)
     
-    # Use default path if not provided
-    if not db_path:
-        scraper_path = Path(settings.BASE_DIR).parent
-        db_path = scraper_path / 'scraper.db'
+    # Determine and validate database path
+    if db_path_input:
+        # Resolve path (removes ../ and resolves symlinks)
+        db_path = Path(db_path_input).resolve()
+        
+        # Whitelist check
+        allowed_paths = _get_allowed_db_paths()
+        if db_path not in allowed_paths:
+            logger.warning(
+                f"Unauthorized db_path attempted: {db_path} by user {request.user}"
+            )
+            return Response({
+                'success': False,
+                'error': 'Unauthorized database path'
+            }, status=status.HTTP_403_FORBIDDEN)
     else:
-        db_path = Path(db_path)
+        # Use default path
+        db_path = Path(settings.BASE_DIR).parent / 'scraper.db'
     
+    # Additional validation: must be .db file
+    if not str(db_path).endswith('.db'):
+        return Response({
+            'success': False,
+            'error': 'Invalid database file extension'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Don't expose full path in error messages
     if not db_path.exists():
         return Response({
             'success': False,
-            'error': f'Database not found: {db_path}'
+            'error': 'Database not found'
         }, status=status.HTTP_404_NOT_FOUND)
     
     try:
-        import sqlite3
-        
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         
@@ -538,14 +622,14 @@ def trigger_sync(request):
             'imported': imported,
             'updated': updated,
             'skipped': skipped,
-            'message': f'Sync completed from {db_path}'
+            'message': 'Sync completed successfully'
         })
         
     except Exception as e:
         logger.error(f"Error in trigger_sync: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Error syncing database: {str(e)}'
+            'error': 'Error syncing database'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

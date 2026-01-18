@@ -186,6 +186,9 @@ BREVO_DEFAULT_LIST_ID = _get_optional_int('BREVO_DEFAULT_LIST_ID')
 BREVO_LANDING_PAGE_LIST_ID = _get_optional_int('BREVO_LANDING_PAGE_LIST_ID')
 BREVO_WELCOME_TEMPLATE_ID = _get_optional_int('BREVO_WELCOME_TEMPLATE_ID')
 
+# Brevo Webhook Security
+BREVO_WEBHOOK_SECRET = os.getenv('BREVO_WEBHOOK_SECRET', None)
+
 
 # ==========================
 # Authentication Settings

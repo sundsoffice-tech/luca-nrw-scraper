@@ -10,6 +10,7 @@ import csv
 import json
 import tempfile
 import sqlite3
+import shutil
 from pathlib import Path
 from .models import Lead, CallLog, EmailLog, SyncStatus
 
@@ -2142,6 +2143,283 @@ class BrevoWebhookTest(TestCase):
         result = response.json()
         self.assertIn('error', result)
 
+
+class BrevoWebhookSecurityTest(TestCase):
+    """Tests for Brevo webhook HMAC signature verification"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.url = '/api/webhooks/brevo/'
+        self.lead = Lead.objects.create(
+            name='Security Test Lead',
+            email='security@example.com',
+            source=Lead.Source.LANDING_PAGE
+        )
+        self.webhook_secret = 'test-webhook-secret-12345'
+    
+    def _generate_signature(self, body, secret):
+        """Helper to generate HMAC signature"""
+        import hmac
+        import hashlib
+        return hmac.new(
+            secret.encode(),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+    
+    def test_webhook_with_valid_signature(self):
+        """Test webhook accepts valid HMAC signature"""
+        from django.conf import settings
+        original_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
+        
+        try:
+            settings.BREVO_WEBHOOK_SECRET = self.webhook_secret
+            
+            data = {
+                'event': 'opened',
+                'email': 'security@example.com'
+            }
+            body = json.dumps(data).encode()
+            signature = self._generate_signature(body, self.webhook_secret)
+            
+            response = self.client.post(
+                self.url,
+                data=body,
+                content_type='application/json',
+                HTTP_X_SIB_SIGNATURE=signature
+            )
+            
+            self.assertEqual(response.status_code, 200)
+            result = response.json()
+            self.assertEqual(result['status'], 'ok')
+            
+        finally:
+            if original_secret is None:
+                delattr(settings, 'BREVO_WEBHOOK_SECRET')
+            else:
+                settings.BREVO_WEBHOOK_SECRET = original_secret
+    
+    def test_webhook_with_invalid_signature(self):
+        """Test webhook rejects invalid HMAC signature"""
+        from django.conf import settings
+        original_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
+        
+        try:
+            settings.BREVO_WEBHOOK_SECRET = self.webhook_secret
+            
+            data = {
+                'event': 'opened',
+                'email': 'security@example.com'
+            }
+            
+            response = self.client.post(
+                self.url,
+                data=json.dumps(data),
+                content_type='application/json',
+                HTTP_X_SIB_SIGNATURE='invalid-signature-12345'
+            )
+            
+            self.assertEqual(response.status_code, 401)
+            result = response.json()
+            self.assertEqual(result['status'], 'error')
+            self.assertIn('signature', result['message'].lower())
+            
+        finally:
+            if original_secret is None:
+                delattr(settings, 'BREVO_WEBHOOK_SECRET')
+            else:
+                settings.BREVO_WEBHOOK_SECRET = original_secret
+    
+    def test_webhook_without_signature_when_secret_configured(self):
+        """Test webhook rejects requests without signature when secret is configured"""
+        from django.conf import settings
+        original_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
+        
+        try:
+            settings.BREVO_WEBHOOK_SECRET = self.webhook_secret
+            
+            data = {
+                'event': 'opened',
+                'email': 'security@example.com'
+            }
+            
+            response = self.client.post(
+                self.url,
+                data=json.dumps(data),
+                content_type='application/json'
+            )
+            
+            self.assertEqual(response.status_code, 401)
+            result = response.json()
+            self.assertEqual(result['status'], 'error')
+            self.assertIn('signature', result['message'].lower())
+            
+        finally:
+            if original_secret is None:
+                delattr(settings, 'BREVO_WEBHOOK_SECRET')
+            else:
+                settings.BREVO_WEBHOOK_SECRET = original_secret
+    
+    def test_webhook_without_secret_configured_allows_requests(self):
+        """Test webhook allows requests without signature when secret not configured (graceful degradation)"""
+        from django.conf import settings
+        original_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
+        
+        try:
+            # Ensure secret is not set
+            if hasattr(settings, 'BREVO_WEBHOOK_SECRET'):
+                delattr(settings, 'BREVO_WEBHOOK_SECRET')
+            
+            data = {
+                'event': 'opened',
+                'email': 'security@example.com'
+            }
+            
+            response = self.client.post(
+                self.url,
+                data=json.dumps(data),
+                content_type='application/json'
+            )
+            
+            # Should succeed but with warning logged
+            self.assertEqual(response.status_code, 200)
+            
+        finally:
+            if original_secret:
+                settings.BREVO_WEBHOOK_SECRET = original_secret
+
+
+class TriggerSyncSecurityTest(APITestCase):
+    """Tests for trigger_sync path traversal protection"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('trigger-sync')
+        
+        # Create a temporary test database
+        self.temp_dir = tempfile.mkdtemp()
+        self.temp_path = Path(self.temp_dir)
+        self.test_db_path = self.temp_path / 'test_scraper.db'
+        
+        # Create test database
+        conn = sqlite3.connect(str(self.test_db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE leads(
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                score INT
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO leads (id, name, email, score)
+            VALUES (1, 'Test Lead', 'test@example.com', 75)
+        """)
+        conn.commit()
+        conn.close()
+    
+    def tearDown(self):
+        """Clean up temporary files"""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        
+        # Reset global cache (thread-safe)
+        from leads import views
+        with views._allowed_db_paths_lock:
+            views.ALLOWED_DB_PATHS = None
+    
+    def test_trigger_sync_rejects_path_traversal_attempt(self):
+        """Test that path traversal attempts are rejected"""
+        response = self.client.post(
+            self.url,
+            {'db_path': '../../../etc/passwd'},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Unauthorized', response.data['error'])
+    
+    def test_trigger_sync_rejects_absolute_unauthorized_path(self):
+        """Test that absolute unauthorized paths are rejected"""
+        response = self.client.post(
+            self.url,
+            {'db_path': '/etc/passwd'},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Unauthorized', response.data['error'])
+    
+    def test_trigger_sync_rejects_non_db_file(self):
+        """Test that non-.db files are rejected"""
+        response = self.client.post(
+            self.url,
+            {'db_path': str(self.temp_path / 'test.txt')},
+            format='json'
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('extension', response.data['error'].lower())
+    
+    def test_trigger_sync_does_not_expose_full_path_in_errors(self):
+        """Test that error messages don't expose full file paths"""
+        response = self.client.post(
+            self.url,
+            {'db_path': '/nonexistent/path/database.db'},
+            format='json'
+        )
+        
+        # Should return error without exposing full path
+        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+        error_msg = response.data['error']
+        # Error message should not contain full path
+        self.assertNotIn('/nonexistent/path/', error_msg)
+    
+    def test_trigger_sync_allows_whitelisted_path(self):
+        """Test that whitelisted paths are allowed"""
+        from django.conf import settings
+        original_paths = getattr(settings, 'ALLOWED_SCRAPER_DB_PATHS', None)
+        
+        try:
+            # Add test path to whitelist
+            settings.ALLOWED_SCRAPER_DB_PATHS = [str(self.test_db_path)]
+            
+            # Reset cache to pick up new settings (thread-safe)
+            from leads import views
+            with views._allowed_db_paths_lock:
+                views.ALLOWED_DB_PATHS = None
+            
+            response = self.client.post(
+                self.url,
+                {'db_path': str(self.test_db_path)},
+                format='json'
+            )
+            
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertTrue(response.data['success'])
+            
+        finally:
+            if original_paths is None:
+                if hasattr(settings, 'ALLOWED_SCRAPER_DB_PATHS'):
+                    delattr(settings, 'ALLOWED_SCRAPER_DB_PATHS')
+            else:
+                settings.ALLOWED_SCRAPER_DB_PATHS = original_paths
+    
+    def test_trigger_sync_uses_default_path_when_not_specified(self):
+        """Test that default path is used when db_path is not specified"""
+        response = self.client.post(
+            self.url,
+            {},
+            format='json'
+        )
+        
+        # May return 404 if default doesn't exist, but shouldn't be a security error
+        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND])
+        if response.status_code == status.HTTP_404_NOT_FOUND:
+            self.assertEqual(response.data['error'], 'Database not found')
 
 
 # ===============================
