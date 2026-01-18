@@ -56,3 +56,4 @@ staticfiles/
 Thumbs.db
 *.swp
 *.swo
+test_ai_config_integration.py
