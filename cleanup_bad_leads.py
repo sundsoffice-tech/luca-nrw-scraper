@@ -42,14 +42,34 @@ def create_backup(db_path: str) -> str:
         
     Returns:
         str: Path to the backup file
+        
+    Raises:
+        ValueError: If the file is not a valid SQLite database
+        IOError: If backup fails
     """
     db_path = Path(db_path)
+    
+    # Verify it's a SQLite database by trying to open it
+    try:
+        conn = sqlite3.connect(str(db_path))
+        # Check if it has the leads table
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='leads'")
+        if not cursor.fetchone():
+            logger.warning("Database does not contain 'leads' table")
+        conn.close()
+    except sqlite3.Error as e:
+        raise ValueError(f"Not a valid SQLite database: {e}")
+    
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_path = db_path.parent / f"{db_path.stem}_backup_{timestamp}{db_path.suffix}"
     
     logger.info(f"Creating backup: {backup_path}")
-    shutil.copy2(db_path, backup_path)
-    logger.info(f"Backup created successfully")
+    try:
+        shutil.copy2(db_path, backup_path)
+        logger.info(f"Backup created successfully ({backup_path.stat().st_size} bytes)")
+    except Exception as e:
+        raise IOError(f"Failed to create backup: {e}")
     
     return str(backup_path)
 

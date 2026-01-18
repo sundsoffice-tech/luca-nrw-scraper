@@ -279,7 +279,9 @@ def phone_dashboard(request):
 @ratelimit(key='ip', rate=API_RATE_LIMIT_OPT_IN, method='POST')
 def opt_in(request):
     """
-    Opt-In API Endpoint für Landing Page.
+    Opt-In API Endpoint for Landing Page.
+    
+    Creates a new lead with source: landing_page.
     Rate limited to prevent spam/abuse.
     """
     # Check if rate limit was hit

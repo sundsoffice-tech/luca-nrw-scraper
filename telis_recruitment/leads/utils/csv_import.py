@@ -116,8 +116,12 @@ class CSVImporter:
             '50'
         )
         try:
-            score = int(score_raw) if score_raw else 50
-            score = max(0, min(100, score))  # Clamp to 0-100
+            # Handle empty strings and None separately from zero values
+            if score_raw is None or score_raw == '':
+                score = 50
+            else:
+                score = int(score_raw)
+                score = max(0, min(100, score))  # Clamp to 0-100
         except (ValueError, TypeError):
             logger.warning(f"Invalid score value '{score_raw}' for {name}, defaulting to 50")
             score = 50
@@ -335,7 +339,32 @@ class CSVImporter:
         
         logger.info(f"Processing {len(rows)} rows")
         
-        with transaction.atomic():
+        # Use transaction only if not dry_run
+        if not self.dry_run:
+            with transaction.atomic():
+                for i, row in enumerate(rows, 1):
+                    try:
+                        # Parse row
+                        data = self.parse_row(row)
+                        if data is None:
+                            self.stats['skipped'] += 1
+                            logger.debug(f"Row {i}: Skipped (no contact info)")
+                            continue
+                        
+                        # Process lead
+                        result = self.process_lead(data, i)
+                        if result == 'imported':
+                            self.stats['imported'] += 1
+                        elif result == 'updated':
+                            self.stats['updated'] += 1
+                        else:
+                            self.stats['skipped'] += 1
+                    
+                    except Exception as e:
+                        # Error already logged in process_lead
+                        pass
+        else:
+            # In dry_run mode, don't use transaction
             for i, row in enumerate(rows, 1):
                 try:
                     # Parse row
@@ -345,7 +374,7 @@ class CSVImporter:
                         logger.debug(f"Row {i}: Skipped (no contact info)")
                         continue
                     
-                    # Process lead
+                    # Process lead (will not save due to dry_run flag)
                     result = self.process_lead(data, i)
                     if result == 'imported':
                         self.stats['imported'] += 1
@@ -357,10 +386,6 @@ class CSVImporter:
                 except Exception as e:
                     # Error already logged in process_lead
                     pass
-            
-            if self.dry_run:
-                # Rollback transaction in dry run mode
-                transaction.set_rollback(True)
         
         return self.stats
     
