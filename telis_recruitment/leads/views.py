@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django_ratelimit.decorators import ratelimit
 
 from rest_framework import viewsets, status
@@ -73,13 +73,10 @@ class LeadViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
-                name__icontains=search
-            ) | queryset.filter(
-                email__icontains=search
-            ) | queryset.filter(
-                telefon__icontains=search
-            ) | queryset.filter(
-                company__icontains=search
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(telefon__icontains=search) |
+                Q(company__icontains=search)
             )
         
         return queryset

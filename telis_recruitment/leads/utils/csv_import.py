@@ -321,18 +321,34 @@ class CSVImporter:
             'errors': []
         }
         
-        # Convert to string if needed
-        if isinstance(stream, bytes):
-            content = stream.decode('utf-8')
-        elif hasattr(stream, 'read'):
-            if hasattr(stream, 'mode') and 'b' in stream.mode:
-                # Binary stream
-                content = stream.read().decode('utf-8')
-            else:
-                # Text stream
-                content = stream.read()
-        else:
-            content = stream
+        # Convert to string, trying different encodings
+        content = None
+        encodings = ['utf-8', 'latin-1']
+        
+        for encoding in encodings:
+            try:
+                if isinstance(stream, bytes):
+                    content = stream.decode(encoding)
+                elif hasattr(stream, 'read'):
+                    if hasattr(stream, 'mode') and 'b' in stream.mode:
+                        # Binary stream
+                        content = stream.read().decode(encoding)
+                    else:
+                        # Text stream - already decoded
+                        content = stream.read()
+                        break  # Text streams don't need encoding
+                else:
+                    content = stream
+                    break  # String doesn't need encoding
+                
+                # If we got here without exception, break
+                break
+            except UnicodeDecodeError:
+                if encoding == encodings[-1]:
+                    # Last encoding failed
+                    raise
+                # Try next encoding
+                continue
         
         # Detect delimiter
         sample = content[:1024]
@@ -342,50 +358,24 @@ class CSVImporter:
         io_string = io.StringIO(content)
         reader = csv.DictReader(io_string, delimiter=delimiter)
         
-        try:
-            with transaction.atomic():
-                for i, row in enumerate(reader, 1):
-                    try:
-                        parsed = self.parse_row(row)
-                        if parsed is None:
-                            self.stats['skipped'] += 1
-                            continue
-                        
-                        result = self.process_lead(parsed)
-                        self.stats[result] += 1
-                        
-                    except Exception as e:
-                        error_msg = f"Row {i}: {str(e)}"
-                        self.stats['errors'].append(error_msg)
-                        logger.error(error_msg)
-                
-                # Rollback if dry run
-                if self.dry_run:
-                    transaction.set_rollback(True)
-        
-        except UnicodeDecodeError:
-            # Try with Latin-1 encoding
-            io_string = io.StringIO(content.encode('utf-8').decode('latin-1'))
-            reader = csv.DictReader(io_string, delimiter=delimiter)
+        with transaction.atomic():
+            for i, row in enumerate(reader, 1):
+                try:
+                    parsed = self.parse_row(row)
+                    if parsed is None:
+                        self.stats['skipped'] += 1
+                        continue
+                    
+                    result = self.process_lead(parsed)
+                    self.stats[result] += 1
+                    
+                except Exception as e:
+                    error_msg = f"Row {i}: {str(e)}"
+                    self.stats['errors'].append(error_msg)
+                    logger.error(error_msg)
             
-            with transaction.atomic():
-                for i, row in enumerate(reader, 1):
-                    try:
-                        parsed = self.parse_row(row)
-                        if parsed is None:
-                            self.stats['skipped'] += 1
-                            continue
-                        
-                        result = self.process_lead(parsed)
-                        self.stats[result] += 1
-                        
-                    except Exception as e:
-                        error_msg = f"Row {i}: {str(e)}"
-                        self.stats['errors'].append(error_msg)
-                        logger.error(error_msg)
-                
-                # Rollback if dry run
-                if self.dry_run:
-                    transaction.set_rollback(True)
+            # Rollback if dry run
+            if self.dry_run:
+                transaction.set_rollback(True)
         
         return self.stats
