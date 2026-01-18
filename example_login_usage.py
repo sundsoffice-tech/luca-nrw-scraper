@@ -174,8 +174,7 @@ def main():
     print("\nNext steps:")
     print("  1. Try: python scriptname.py --login linkedin")
     print("  2. Try: python scriptname.py --list-sessions")
-    print("  3. Try: python dashboard.py")
-    print("  4. Read: LOGIN_SYSTEM_GUIDE.md")
+    print("  3. Read: LOGIN_SYSTEM_GUIDE.md")
     print()
 
 
