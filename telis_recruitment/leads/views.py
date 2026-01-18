@@ -550,3 +550,25 @@ def trigger_sync(request):
             'success': False,
             'error': f'Error syncing database: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Template views for public pages
+from django.shortcuts import render
+
+
+def landing_page(request):
+    """
+    Landing page view.
+    
+    Public page for lead opt-in.
+    """
+    return render(request, 'leads/landing_page.html')
+
+
+def phone_dashboard(request):
+    """
+    Phone dashboard view.
+    
+    Public page for phone number verification/lookup.
+    """
+    return render(request, 'leads/phone_dashboard.html')
