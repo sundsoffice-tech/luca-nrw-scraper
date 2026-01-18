@@ -8,10 +8,15 @@ Phase 1: Konsolidierung
 - Extrahierte Database Layer aus scriptname.py
 - Backward Compatibility durch Re-Exports
 
-Version: 2.0.0
+Phase 3: Search, Scoring, Validation & CLI
+- Extrahierte Search Query Management
+- Extrahierte Scoring und Validation
+- Extrahierte CLI Interface
+
+Version: 3.0.0
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 
 # =========================
 # Re-export Config
@@ -145,6 +150,78 @@ from .database import (
     init_db,
     transaction,
     migrate_db_unique_indexes,
+)
+
+# =========================
+# Re-export Search Module (Phase 3)
+# =========================
+
+from .search import (
+    DEFAULT_QUERIES,
+    INDUSTRY_QUERIES,
+    RECRUITER_QUERIES,
+    build_queries,
+)
+
+# =========================
+# Re-export Scoring Module (Phase 3)
+# =========================
+
+from .scoring import (
+    # Patterns
+    EMAIL_RE,
+    PHONE_RE,
+    MOBILE_RE,
+    SALES_RE,
+    PROVISION_HINT,
+    D2D_HINT,
+    CALLCENTER_HINT,
+    B2C_HINT,
+    JOBSEEKER_RE,
+    CANDIDATE_TEXT_RE,
+    EMPLOYER_TEXT_RE,
+    RECRUITER_RE,
+    WHATSAPP_RE,
+    WA_LINK_RE,
+    WHATS_RE,
+    WHATSAPP_PHRASE_RE,
+    TELEGRAM_LINK_RE,
+    CITY_RE,
+    NAME_RE,
+    SALES_WINDOW,
+    JOBSEEKER_WINDOW,
+    
+    # Signals
+    CANDIDATE_POSITIVE_SIGNALS,
+    JOB_OFFER_SIGNALS,
+    STRICT_JOB_AD_MARKERS,
+    MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE,
+    CANDIDATE_KEYWORDS,
+    IGNORE_KEYWORDS,
+    JOB_AD_MARKERS,
+    HIRING_INDICATORS,
+    SOLO_BIZ_INDICATORS,
+    AGENT_FINGERPRINTS,
+    RETAIL_ROLES,
+    
+    # Functions
+    is_candidate_seeking_job,
+    is_job_advertisement,
+    classify_lead,
+    is_garbage_context,
+    should_drop_lead,
+    should_skip_url_prefetch,
+)
+
+# =========================
+# Re-export CLI Module (Phase 3)
+# =========================
+
+from .cli import (
+    parse_args,
+    validate_config,
+    print_banner,
+    print_help,
 )
 
 # =========================
@@ -302,6 +379,62 @@ __all__ = [
     "init_db",
     "transaction",
     "migrate_db_unique_indexes",
+    
+    # Search Module (Phase 3)
+    "DEFAULT_QUERIES",
+    "INDUSTRY_QUERIES",
+    "RECRUITER_QUERIES",
+    "build_queries",
+    
+    # Scoring Module - Patterns (Phase 3)
+    "EMAIL_RE",
+    "PHONE_RE",
+    "MOBILE_RE",
+    "SALES_RE",
+    "PROVISION_HINT",
+    "D2D_HINT",
+    "CALLCENTER_HINT",
+    "B2C_HINT",
+    "JOBSEEKER_RE",
+    "CANDIDATE_TEXT_RE",
+    "EMPLOYER_TEXT_RE",
+    "RECRUITER_RE",
+    "WHATSAPP_RE",
+    "WA_LINK_RE",
+    "WHATS_RE",
+    "WHATSAPP_PHRASE_RE",
+    "TELEGRAM_LINK_RE",
+    "CITY_RE",
+    "NAME_RE",
+    "SALES_WINDOW",
+    "JOBSEEKER_WINDOW",
+    
+    # Scoring Module - Signals (Phase 3)
+    "CANDIDATE_POSITIVE_SIGNALS",
+    "JOB_OFFER_SIGNALS",
+    "STRICT_JOB_AD_MARKERS",
+    "MIN_JOB_OFFER_SIGNALS_TO_OVERRIDE",
+    "CANDIDATE_KEYWORDS",
+    "IGNORE_KEYWORDS",
+    "JOB_AD_MARKERS",
+    "HIRING_INDICATORS",
+    "SOLO_BIZ_INDICATORS",
+    "AGENT_FINGERPRINTS",
+    "RETAIL_ROLES",
+    
+    # Scoring Module - Functions (Phase 3)
+    "is_candidate_seeking_job",
+    "is_job_advertisement",
+    "classify_lead",
+    "is_garbage_context",
+    "should_drop_lead",
+    "should_skip_url_prefetch",
+    
+    # CLI Module (Phase 3)
+    "parse_args",
+    "validate_config",
+    "print_banner",
+    "print_help",
 ]
 
 # Add optional imports to __all__ if available
