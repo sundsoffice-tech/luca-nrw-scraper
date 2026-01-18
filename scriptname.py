@@ -146,6 +146,124 @@ from login_handler import (
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 # =========================
+# Import from modular structure (Phase 1)
+# =========================
+# Try to import from new luca_scraper package
+# Fallback to inline definitions for backward compatibility
+try:
+    from luca_scraper.config import (
+        # API Keys
+        OPENAI_API_KEY as _OPENAI_API_KEY,
+        PERPLEXITY_API_KEY as _PERPLEXITY_API_KEY,
+        BING_API_KEY as _BING_API_KEY,
+        GCS_API_KEY as _GCS_API_KEY,
+        GCS_CX_RAW as _GCS_CX_RAW,
+        GCS_KEYS as _GCS_KEYS,
+        GCS_CXS as _GCS_CXS,
+        GCS_CX as _GCS_CX,
+        # Database
+        DB_PATH as _DB_PATH,
+        # HTTP & Networking
+        HTTP_TIMEOUT as _HTTP_TIMEOUT,
+        MAX_FETCH_SIZE as _MAX_FETCH_SIZE,
+        POOL_SIZE as _POOL_SIZE,
+        ASYNC_LIMIT as _ASYNC_LIMIT,
+        ASYNC_PER_HOST as _ASYNC_PER_HOST,
+        HTTP2_ENABLED as _HTTP2_ENABLED,
+        USE_TOR as _USE_TOR,
+        ALLOW_PDF as _ALLOW_PDF,
+        ALLOW_INSECURE_SSL as _ALLOW_INSECURE_SSL,
+        ALLOW_PDF_NON_CV as _ALLOW_PDF_NON_CV,
+        USER_AGENT as _USER_AGENT,
+        PROXY_ENV_VARS as _PROXY_ENV_VARS,
+        # Rate Limiting
+        SLEEP_BETWEEN_QUERIES as _SLEEP_BETWEEN_QUERIES,
+        MAX_GOOGLE_PAGES as _MAX_GOOGLE_PAGES,
+        CB_BASE_PENALTY as _CB_BASE_PENALTY,
+        CB_API_PENALTY as _CB_API_PENALTY,
+        RETRY_INCLUDE_403 as _RETRY_INCLUDE_403,
+        RETRY_MAX_PER_URL as _RETRY_MAX_PER_URL,
+        RETRY_BACKOFF_BASE as _RETRY_BACKOFF_BASE,
+        _ROBOTS_CACHE_TTL as __ROBOTS_CACHE_TTL,
+        # Scoring
+        MIN_SCORE_ENV as _MIN_SCORE_ENV,
+        MAX_PER_DOMAIN as _MAX_PER_DOMAIN,
+        INTERNAL_DEPTH_PER_DOMAIN as _INTERNAL_DEPTH_PER_DOMAIN,
+        DEFAULT_QUALITY_SCORE as _DEFAULT_QUALITY_SCORE,
+        MAX_CONTENT_LENGTH as _MAX_CONTENT_LENGTH,
+        BINARY_CT_PREFIXES as _BINARY_CT_PREFIXES,
+        DENY_CT_EXACT as _DENY_CT_EXACT,
+        PDF_CT as _PDF_CT,
+        SEED_FORCE as _SEED_FORCE,
+        # Feature Flags
+        ENABLE_KLEINANZEIGEN as _ENABLE_KLEINANZEIGEN,
+        KLEINANZEIGEN_MAX_RESULTS as _KLEINANZEIGEN_MAX_RESULTS,
+        TELEFONBUCH_ENRICHMENT_ENABLED as _TELEFONBUCH_ENRICHMENT_ENABLED,
+        TELEFONBUCH_STRICT_MODE as _TELEFONBUCH_STRICT_MODE,
+        TELEFONBUCH_RATE_LIMIT as _TELEFONBUCH_RATE_LIMIT,
+        TELEFONBUCH_CACHE_DAYS as _TELEFONBUCH_CACHE_DAYS,
+        TELEFONBUCH_MOBILE_ONLY as _TELEFONBUCH_MOBILE_ONLY,
+        PARALLEL_PORTAL_CRAWL as _PARALLEL_PORTAL_CRAWL,
+        MAX_CONCURRENT_PORTALS as _MAX_CONCURRENT_PORTALS,
+        PORTAL_CONCURRENCY_PER_SITE as _PORTAL_CONCURRENCY_PER_SITE,
+        ENABLE_GOOGLE_CSE as _ENABLE_GOOGLE_CSE,
+        ENABLE_PERPLEXITY as _ENABLE_PERPLEXITY,
+        ENABLE_BING as _ENABLE_BING,
+        # NRW Cities
+        NRW_CITIES as _NRW_CITIES,
+        NRW_CITIES_EXTENDED as _NRW_CITIES_EXTENDED,
+        NRW_BIG_CITIES as _NRW_BIG_CITIES,
+        METROPOLIS as _METROPOLIS,
+        NRW_REGIONS as _NRW_REGIONS,
+        SALES_TITLES as _SALES_TITLES,
+        # Search Patterns
+        PRIVATE_MAILS as _PRIVATE_MAILS,
+        MOBILE_PATTERNS as _MOBILE_PATTERNS,
+        REGION as _REGION,
+        CONTACT as _CONTACT,
+        SALES as _SALES,
+        # Portal URLs
+        KLEINANZEIGEN_URLS as _KLEINANZEIGEN_URLS,
+        MARKT_DE_URLS as _MARKT_DE_URLS,
+        QUOKA_DE_URLS as _QUOKA_DE_URLS,
+        KALAYDO_DE_URLS as _KALAYDO_DE_URLS,
+        MEINESTADT_DE_URLS as _MEINESTADT_DE_URLS,
+        FREELANCER_PORTAL_URLS as _FREELANCER_PORTAL_URLS,
+        DHD24_URLS as _DHD24_URLS,
+        FREELANCERMAP_URLS as _FREELANCERMAP_URLS,
+        FREELANCE_DE_URLS as _FREELANCE_DE_URLS,
+        DIRECT_CRAWL_URLS as _DIRECT_CRAWL_URLS,
+        # Blacklists
+        DROP_MAILBOX_PREFIXES as _DROP_MAILBOX_PREFIXES,
+        DROP_PORTAL_DOMAINS as _DROP_PORTAL_DOMAINS,
+        BLACKLIST_DOMAINS as _BLACKLIST_DOMAINS,
+        BLACKLIST_PATH_PATTERNS as _BLACKLIST_PATH_PATTERNS,
+        ALWAYS_ALLOW_PATTERNS as _ALWAYS_ALLOW_PATTERNS,
+        # Portal Configs
+        PORTAL_DELAYS as _PORTAL_DELAYS,
+        DIRECT_CRAWL_SOURCES as _DIRECT_CRAWL_SOURCES,
+        MAX_PROFILES_PER_URL as _MAX_PROFILES_PER_URL,
+        # Export
+        DEFAULT_CSV as _DEFAULT_CSV,
+        DEFAULT_XLSX as _DEFAULT_XLSX,
+        ENH_FIELDS as _ENH_FIELDS,
+        LEAD_FIELDS as _LEAD_FIELDS,
+        # Helper Functions
+        _normalize_cx as __normalize_cx,
+        _jitter as __jitter,
+    )
+    from luca_scraper.database import (
+        db as _db,
+        init_db as _init_db,
+        migrate_db_unique_indexes as _migrate_db_unique_indexes,
+    )
+    _LUCA_SCRAPER_AVAILABLE = True
+except ImportError as e:
+    # Fallback: luca_scraper not available, use inline definitions
+    _LUCA_SCRAPER_AVAILABLE = False
+    # Will use existing definitions below
+
+# =========================
 # NRW Städte für städtebasierte Suche
 # =========================
 NRW_CITIES = [
@@ -1019,6 +1137,105 @@ class ScraperConfig:
 CFG = ScraperConfig()
 
 # =========================
+# Use luca_scraper imports if available
+# =========================
+if _LUCA_SCRAPER_AVAILABLE:
+    # Override constants with imported values from luca_scraper
+    OPENAI_API_KEY = _OPENAI_API_KEY
+    PERPLEXITY_API_KEY = _PERPLEXITY_API_KEY
+    BING_API_KEY = _BING_API_KEY
+    GCS_API_KEY = _GCS_API_KEY
+    GCS_CX_RAW = _GCS_CX_RAW
+    DB_PATH = _DB_PATH
+    HTTP_TIMEOUT = _HTTP_TIMEOUT
+    MAX_FETCH_SIZE = _MAX_FETCH_SIZE
+    POOL_SIZE = _POOL_SIZE
+    ASYNC_LIMIT = _ASYNC_LIMIT
+    ASYNC_PER_HOST = _ASYNC_PER_HOST
+    HTTP2_ENABLED = _HTTP2_ENABLED
+    USE_TOR = _USE_TOR
+    ALLOW_PDF = _ALLOW_PDF
+    ALLOW_INSECURE_SSL = _ALLOW_INSECURE_SSL
+    ALLOW_PDF_NON_CV = _ALLOW_PDF_NON_CV
+    USER_AGENT = _USER_AGENT
+    PROXY_ENV_VARS = _PROXY_ENV_VARS
+    SLEEP_BETWEEN_QUERIES = _SLEEP_BETWEEN_QUERIES
+    MAX_GOOGLE_PAGES = _MAX_GOOGLE_PAGES
+    CB_BASE_PENALTY = _CB_BASE_PENALTY
+    CB_API_PENALTY = _CB_API_PENALTY
+    RETRY_INCLUDE_403 = _RETRY_INCLUDE_403
+    RETRY_MAX_PER_URL = _RETRY_MAX_PER_URL
+    RETRY_BACKOFF_BASE = _RETRY_BACKOFF_BASE
+    _ROBOTS_CACHE_TTL = __ROBOTS_CACHE_TTL
+    MIN_SCORE_ENV = _MIN_SCORE_ENV
+    MAX_PER_DOMAIN = _MAX_PER_DOMAIN
+    INTERNAL_DEPTH_PER_DOMAIN = _INTERNAL_DEPTH_PER_DOMAIN
+    DEFAULT_QUALITY_SCORE = _DEFAULT_QUALITY_SCORE
+    MAX_CONTENT_LENGTH = _MAX_CONTENT_LENGTH
+    BINARY_CT_PREFIXES = _BINARY_CT_PREFIXES
+    DENY_CT_EXACT = _DENY_CT_EXACT
+    PDF_CT = _PDF_CT
+    SEED_FORCE = _SEED_FORCE
+    ENABLE_KLEINANZEIGEN = _ENABLE_KLEINANZEIGEN
+    KLEINANZEIGEN_MAX_RESULTS = _KLEINANZEIGEN_MAX_RESULTS
+    TELEFONBUCH_ENRICHMENT_ENABLED = _TELEFONBUCH_ENRICHMENT_ENABLED
+    TELEFONBUCH_STRICT_MODE = _TELEFONBUCH_STRICT_MODE
+    TELEFONBUCH_RATE_LIMIT = _TELEFONBUCH_RATE_LIMIT
+    TELEFONBUCH_CACHE_DAYS = _TELEFONBUCH_CACHE_DAYS
+    TELEFONBUCH_MOBILE_ONLY = _TELEFONBUCH_MOBILE_ONLY
+    PARALLEL_PORTAL_CRAWL = _PARALLEL_PORTAL_CRAWL
+    MAX_CONCURRENT_PORTALS = _MAX_CONCURRENT_PORTALS
+    PORTAL_CONCURRENCY_PER_SITE = _PORTAL_CONCURRENCY_PER_SITE
+    # Re-assign cities and regions
+    NRW_CITIES = _NRW_CITIES
+    NRW_CITIES_EXTENDED = _NRW_CITIES_EXTENDED
+    NRW_BIG_CITIES = _NRW_BIG_CITIES
+    METROPOLIS = _METROPOLIS
+    NRW_REGIONS = _NRW_REGIONS
+    SALES_TITLES = _SALES_TITLES
+    PRIVATE_MAILS = _PRIVATE_MAILS
+    MOBILE_PATTERNS = _MOBILE_PATTERNS
+    REGION = _REGION
+    CONTACT = _CONTACT
+    SALES = _SALES
+    # Portal URLs
+    KLEINANZEIGEN_URLS = _KLEINANZEIGEN_URLS
+    MARKT_DE_URLS = _MARKT_DE_URLS
+    QUOKA_DE_URLS = _QUOKA_DE_URLS
+    KALAYDO_DE_URLS = _KALAYDO_DE_URLS
+    MEINESTADT_DE_URLS = _MEINESTADT_DE_URLS
+    FREELANCER_PORTAL_URLS = _FREELANCER_PORTAL_URLS
+    DHD24_URLS = _DHD24_URLS
+    FREELANCERMAP_URLS = _FREELANCERMAP_URLS
+    FREELANCE_DE_URLS = _FREELANCE_DE_URLS
+    DIRECT_CRAWL_URLS = _DIRECT_CRAWL_URLS
+    # Blacklists
+    DROP_MAILBOX_PREFIXES = _DROP_MAILBOX_PREFIXES
+    DROP_PORTAL_DOMAINS = _DROP_PORTAL_DOMAINS
+    BLACKLIST_DOMAINS = _BLACKLIST_DOMAINS
+    BLACKLIST_PATH_PATTERNS = _BLACKLIST_PATH_PATTERNS
+    ALWAYS_ALLOW_PATTERNS = _ALWAYS_ALLOW_PATTERNS
+    # Portal configs
+    PORTAL_DELAYS = _PORTAL_DELAYS
+    DIRECT_CRAWL_SOURCES = _DIRECT_CRAWL_SOURCES
+    MAX_PROFILES_PER_URL = _MAX_PROFILES_PER_URL
+    # Export fields
+    DEFAULT_CSV = _DEFAULT_CSV
+    DEFAULT_XLSX = _DEFAULT_XLSX
+    ENH_FIELDS = _ENH_FIELDS
+    LEAD_FIELDS = _LEAD_FIELDS
+    # Helper functions
+    _normalize_cx = __normalize_cx
+    _jitter = __jitter
+    # Feature flags
+    ENABLE_GOOGLE_CSE = _ENABLE_GOOGLE_CSE
+    ENABLE_PERPLEXITY = _ENABLE_PERPLEXITY
+    ENABLE_BING = _ENABLE_BING
+    GCS_KEYS = _GCS_KEYS
+    GCS_CXS = _GCS_CXS
+    GCS_CX = _GCS_CX
+
+# =========================
 # DB-Layer (SQLite)
 # =========================
 
@@ -1185,6 +1402,10 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.commit()
 
 def db():
+    """Thread-safe database connection. Uses luca_scraper.database if available."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _db()
+    # Fallback to original implementation
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     global _DB_READY, _LEARNING_ENGINE
@@ -1211,7 +1432,10 @@ def db():
     return con
 
 def init_db():
-    # bleibt als expliziter Initialisierer erhalten (macht intern dasselbe)
+    """Initialize database. Uses luca_scraper.database if available."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _init_db()
+    # Fallback to original implementation
     con = db()
     con.close()
 
