@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.conf import settings
 from django.db import transaction
 from django.db.models import F
+from django_ratelimit.decorators import ratelimit
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes
@@ -22,6 +23,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Lead, CallLog, EmailLog
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
+from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +119,20 @@ def api_health(request):
 
 @csrf_exempt
 @require_POST
+@ratelimit(key='ip', rate=API_RATE_LIMIT_OPT_IN, method='POST')
 def opt_in(request):
     """
     Opt-In API Endpoint for Landing Page.
     
     Creates a new lead with source: landing_page.
+    Rate limited to prevent spam/abuse.
     """
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return JsonResponse({
+            'error': 'Too many requests. Please try again in a few minutes.'
+        }, status=429)
+    
     try:
         data = json.loads(request.body)
         
@@ -192,13 +202,22 @@ def opt_in(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@ratelimit(key='user', rate=API_RATE_LIMIT_IMPORT, method='POST')
 def import_csv(request):
     """
     CSV Import API Endpoint.
     
     Imports leads from a CSV file.
     Supports deduplication and updates.
+    Rate limited to prevent abuse.
     """
+    # Check if rate limit was hit
+    if getattr(request, 'limited', False):
+        return Response({
+            'success': False,
+            'error': 'Too many requests. Please try again in a few minutes.'
+        }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+    
     if 'file' not in request.FILES:
         return Response({
             'success': False,

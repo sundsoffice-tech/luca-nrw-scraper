@@ -4,11 +4,26 @@ __pycache__/
 scraper.db
 .venv/
 *.xlsx
+
+# Emergency run files
+emergency_run_*.json
+emergency_run_*.log
+
+# Data files
+*.db
+*.sqlite3
+data/
+
+# Exports (CSV files, but keep examples)
 *.csv
+!example_*.csv
+
 # Secrets
 .env
+
 # Login sessions (contains user cookies)
 sessions/
+
 # Test files
 test_browser_integration.py
 test_browser_e2e.py
