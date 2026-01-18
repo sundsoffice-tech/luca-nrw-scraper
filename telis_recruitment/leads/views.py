@@ -17,6 +17,7 @@ import hmac
 import hashlib
 import os
 import threading
+import sqlite3
 from pathlib import Path
 
 from django.http import JsonResponse
@@ -582,8 +583,6 @@ def trigger_sync(request):
         }, status=status.HTTP_404_NOT_FOUND)
     
     try:
-        import sqlite3
-        
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         

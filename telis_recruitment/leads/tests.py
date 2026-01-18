@@ -10,6 +10,7 @@ import csv
 import json
 import tempfile
 import sqlite3
+import shutil
 from pathlib import Path
 from .models import Lead, CallLog, EmailLog, SyncStatus
 
@@ -2323,7 +2324,6 @@ class TriggerSyncSecurityTest(APITestCase):
     
     def tearDown(self):
         """Clean up temporary files"""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         
         # Reset global cache (thread-safe)
