@@ -355,13 +355,9 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     Returns:
         Score from 0-100
     """
-    # --- FIX START ---
-    # Define t_lower immediately so it is available for all checks
-    t = text or ""
-    t_lower = t.lower()
-    # Preserve previous lowercased behavior for downstream checks
-    t = t_lower
-    # --- FIX END ---
+    # Normalize text for consistent processing
+    t_lower = (text or "").lower()
+    t = t_lower  # Use lowercased text for all checks
     u = (url or "").lower()
     title_text = ""
     if html:
