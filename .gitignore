@@ -3,6 +3,7 @@ __pycache__/
 *.patch
 scraper.db
 .venv/
+venv/
 *.xlsx
 
 # Emergency run files
@@ -46,6 +47,9 @@ sessions/
 test_browser_integration.py
 test_browser_e2e.py
 scraper_test.db
+
+# Django static files
+staticfiles/
 
 # OS/IDE artifacts
 .DS_Store
