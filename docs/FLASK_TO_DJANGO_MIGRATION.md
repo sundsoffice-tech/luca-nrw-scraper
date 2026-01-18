@@ -11,10 +11,13 @@ The LUCA NRW Scraper has successfully migrated from a Flask-based dashboard to a
 **Removed:**
 - `/dashboard/` folder - Legacy Flask dashboard application
 - `/start_dashboard.py` - Flask dashboard launcher script
-- Flask dependencies (`flask`, `flask-cors`) from `requirements.txt`
+- `flask-cors` dependency from `requirements.txt` (only used by dashboard)
 - Dashboard schema initialization from `luca_scraper/database.py`
 - Dashboard imports from `scriptname.py`
 - API cost tracking calls to `dashboard.db_schema.track_api_cost()`
+
+**Retained:**
+- `flask` dependency - Still needed for the basic scraper UI (`python scriptname.py --ui`)
 
 **Added:**
 - `/telis_recruitment/` - Full-featured Django CRM (already exists)
@@ -283,12 +286,33 @@ For questions or issues related to the Django CRM:
 - Check [telis_recruitment/SCRAPER_INTEGRATION.md](../telis_recruitment/SCRAPER_INTEGRATION.md)
 - Create an issue in the repository
 
+## Important Notes
+
+### Scraper Basic UI vs. Flask Dashboard
+
+**The scraper's built-in UI (`python scriptname.py --ui`) is NOT the same as the removed Flask dashboard:**
+
+- **Scraper Basic UI** (`--ui` mode):
+  - Simple control interface for starting/stopping scraper runs
+  - Built into `scriptname.py`
+  - Runs on port 5055
+  - Still available and functional
+  - Uses Flask for basic HTTP serving (retained in requirements.txt)
+  
+- **Flask Dashboard** (removed):
+  - Full-featured control center on port 5056
+  - Separate application in `/dashboard/` folder
+  - Had KPI tracking, analytics, settings, etc.
+  - Completely replaced by Django CRM
+
+**If you need full dashboard functionality, use the Django CRM instead of the basic scraper UI.**
+
 ## Changelog
 
 - **2026-01-18**: Completed migration from Flask to Django CRM
   - Removed Flask dashboard (`/dashboard/`)
   - Removed `start_dashboard.py`
   - Updated `README.md` with Django CRM instructions
-  - Removed Flask dependencies from `requirements.txt`
+  - Removed `flask-cors` from `requirements.txt` (kept `flask` for basic scraper UI)
   - Cleaned up dashboard imports from scraper code
   - Created this migration guide
