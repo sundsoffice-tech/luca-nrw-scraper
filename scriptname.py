@@ -166,6 +166,61 @@ from luca_scraper.utils.helpers import (
     normalize_whitespace, clean_url
 )
 
+# Phase 2: Import refactored search, scoring, and crawler modules with fallback
+try:
+    from luca_scraper.search import (
+        search_perplexity_async,
+        google_cse_search_async,
+        duckduckgo_search_async,
+        kleinanzeigen_search_async,
+        prioritize_urls,
+        _normalize_for_dedupe,
+        _normalize_cx,
+        _extract_url,
+        _jitter,
+    )
+    _HAVE_SEARCH_MODULE = True
+except ImportError:
+    _HAVE_SEARCH_MODULE = False
+
+try:
+    from luca_scraper.scoring import (
+        compute_score,
+        should_drop_lead,
+        is_job_advertisement,
+        is_candidate_seeking_job,
+        # Note: has_nrw_signal, is_likely_human_name, detect_company_size, detect_recency 
+        # are already imported from utils.helpers above
+        detect_industry,
+        estimate_hiring_volume,
+        detect_hidden_gem,
+        analyze_wir_suchen_context,
+        tags_from,
+        is_commercial_agent,
+    )
+    # Import email_quality from scoring if available, otherwise use original
+    from luca_scraper.scoring.validation import email_quality as _email_quality_from_scoring
+    _HAVE_SCORING_MODULE = True
+except ImportError:
+    _HAVE_SCORING_MODULE = False
+
+try:
+    from luca_scraper.crawlers import (
+        crawl_kleinanzeigen_listings_async,
+        extract_kleinanzeigen_detail_async,
+        crawl_kleinanzeigen_portal_async,
+        crawl_markt_de_listings_async,
+        crawl_quoka_listings_async,
+        crawl_kalaydo_listings_async,
+        crawl_meinestadt_listings_async,
+        crawl_dhd24_listings_async,
+        extract_generic_detail_async,
+        _mark_url_seen,
+    )
+    _HAVE_CRAWLERS_MODULE = True
+except ImportError:
+    _HAVE_CRAWLERS_MODULE = False
+
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -891,19 +946,21 @@ async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HT
 # Suche (modular)
 # =========================
 
-def _normalize_cx(s: str) -> str:
-    if not s: return ""
-    try:
-        p = urllib.parse.urlparse(s)
-        if p.query:
-            q = urllib.parse.parse_qs(p.query)
-            val = q.get("cx", [""])[0].strip()
-            if val: return val
-    except Exception:
-        pass
-    return s.strip()
+# Fallback definitions for search helper functions if not imported from module
+if not _HAVE_SEARCH_MODULE:
+    def _normalize_cx(s: str) -> str:
+        if not s: return ""
+        try:
+            p = urllib.parse.urlparse(s)
+            if p.query:
+                q = urllib.parse.parse_qs(p.query)
+                val = q.get("cx", [""])[0].strip()
+                if val: return val
+        except Exception:
+            pass
+        return s.strip()
 
-def _jitter(a=0.2,b=0.8): return a + random.random()*(b-a)
+    def _jitter(a=0.2,b=0.8): return a + random.random()*(b-a)
 
 GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
@@ -1480,6 +1537,12 @@ def path_ok(url: str) -> bool:
     is_rootish = (path in ("", "/"))
     return positive or is_rootish
 
+# ============================================================================
+# SEARCH HELPER FUNCTIONS
+# These functions are now available in luca_scraper.search.manager module
+# Kept here as fallbacks for backward compatibility
+# ============================================================================
+
 def _normalize_for_dedupe(u: str) -> str:
     try:
         pu = urllib.parse.urlparse(u)
@@ -1601,6 +1664,12 @@ def prioritize_urls(urls: List[str]) -> List[str]:
     scored.sort(key=lambda x: (-x[1], x[0]))
     return [u for u, _ in scored]
 
+
+# ============================================================================
+# SEARCH ENGINE FUNCTIONS  
+# These functions are now available in luca_scraper.search module
+# Kept here as fallbacks for backward compatibility
+# ============================================================================
 
 async def search_perplexity_async(query: str) -> List[Dict[str, str]]:
     """
@@ -1899,6 +1968,12 @@ async def kleinanzeigen_search_async(q: str, max_results: int = KLEINANZEIGEN_MA
         log("info", "Kleinanzeigen Treffer", q=keywords, count=len(uniq))
     return uniq
 
+
+# ============================================================================
+# PORTAL CRAWLER FUNCTIONS
+# These functions are now available in luca_scraper.crawlers module
+# Kept here as fallbacks for backward compatibility
+# ============================================================================
 
 async def crawl_kleinanzeigen_listings_async(listing_url: str, max_pages: int = 5) -> List[str]:
     """
@@ -4199,6 +4274,12 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
     except Exception:
         return False, ""
 
+
+# ============================================================================
+# LEAD SCORING AND VALIDATION FUNCTIONS
+# These functions are now available in luca_scraper.scoring module
+# Kept here as fallbacks for backward compatibility  
+# ============================================================================
 
 def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title: str = "") -> Tuple[bool, str]:
     email = (lead.get("email") or "").strip().lower()
