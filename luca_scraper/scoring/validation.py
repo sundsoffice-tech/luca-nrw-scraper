@@ -353,15 +353,17 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
     """
     Post-extraction lead validation with strict phone/email/content checks.
     
-    NOTE: This function requires several dependencies from scriptname.py:
-    - is_job_posting()
-    - validate_phone()
-    - normalize_phone()
-    - is_mobile_number()
+    **IMPORTANT**: This is a simplified version for the refactored module.
+    The full implementation requires integration with scriptname.py dependencies:
+    - is_job_posting() from learning_engine
+    - validate_phone() from lead_validation
+    - normalize_phone() from lead_validation or phone_extractor
+    - is_mobile_number() from learning_engine
     - Various constants (DROP_MAILBOX_PREFIXES, DROP_PORTAL_DOMAINS, etc.)
     - Helper functions (_matches_hostlist, log, etc.)
     
-    These will need to be available when this module is integrated.
+    For now, this provides the basic structure and documentation.
+    Integration will be completed when scriptname.py is fully refactored.
     
     Args:
         lead: Lead dictionary
@@ -372,40 +374,24 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
     Returns:
         Tuple of (should_drop, reason)
     """
-    # This is a placeholder implementation that shows the structure
-    # The actual implementation requires integration with scriptname.py
-    
+    # Basic validation that doesn't require external dependencies
     email = (lead.get("email") or "").strip().lower()
-    url_lower = (page_url or "").lower()
-    text_lower = (text or "").lower()
-    title_lower = (title or "").lower()
-    host = (urllib.parse.urlparse(page_url or "").netloc or "").lower()
+    phone = (lead.get("telefon") or "").strip()
 
     def _drop(reason: str) -> Tuple[bool, str]:
         return True, reason
     
-    # CRITICAL: Check for job postings first - NEVER save as lead
-    # NOTE: Requires is_job_posting() from learning_engine
-    # if is_job_posting(url=page_url, title=title, snippet=lead.get("opening_line", ""), content=text):
-    #     return _drop("job_posting")
-
-    # Telefonnummer Pflicht - strict validation
-    phone = (lead.get("telefon") or "").strip()
+    # Basic phone check
     if not phone:
         return _drop("no_phone")
     
-    # NOTE: These functions need to be imported
-    # is_valid, phone_type = validate_phone(phone)
-    # if not is_valid:
-    #     return _drop("no_phone")
-    
-    # STRICT: Only mobile numbers allowed
-    # normalized_phone = normalize_phone(phone)
-    # if not is_mobile_number(normalized_phone):
-    #     return _drop("not_mobile_number")
-
-    # ... rest of validation logic would go here
-    # This is intentionally incomplete as it requires many dependencies
+    # TODO: Integrate full validation when dependencies are available:
+    # - Check is_job_posting() 
+    # - Validate phone format with validate_phone()
+    # - Check if mobile number with is_mobile_number()
+    # - Check email against DROP_MAILBOX_PREFIXES
+    # - Check domain against DROP_PORTAL_DOMAINS
+    # - Check URL patterns
     
     return False, ""
 
@@ -415,13 +401,16 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
     Pre-fetch URL filtering: check blacklist hosts and path patterns.
     Snippet jackpots with contact data are always allowed through (unless job postings).
     
-    NOTE: This function requires several dependencies from scriptname.py:
-    - is_job_posting()
-    - _is_candidates_mode()
-    - is_candidate_url()
-    - Various constants (ALWAYS_ALLOW_PATTERNS, DROP_PORTAL_DOMAINS, etc.)
+    **IMPORTANT**: This is a simplified version for the refactored module.
+    The full implementation requires integration with scriptname.py dependencies:
+    - is_job_posting() from learning_engine
+    - _is_candidates_mode() helper function
+    - is_candidate_url() validation function
+    - Various constants (ALWAYS_ALLOW_PATTERNS, DROP_PORTAL_DOMAINS, BLACKLIST_PATH_PATTERNS)
+    - Helper function _matches_hostlist()
     
-    These will need to be available when this module is integrated.
+    For now, this provides the basic structure and documentation.
+    Integration will be completed when scriptname.py is fully refactored.
     
     Args:
         url: URL to check
@@ -432,24 +421,23 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
     Returns:
         Tuple of (should_skip, reason)
     """
-    # This is a placeholder implementation
-    # The actual implementation requires integration with scriptname.py
-    
     if not url:
         return False, ""
     
+    # Basic URL validation without dependencies
     try:
         parsed = urllib.parse.urlparse(url)
         host = (parsed.netloc or "").lower()
         path = (parsed.path or "").lower()
         url_lower = url.lower()
         
-        # Check for job posting - always block
-        # NOTE: Requires is_job_posting() from learning_engine
-        # if is_job_posting(url=url, title=title, snippet=snippet):
-        #     return True, "job_posting"
-        
-        # ... rest of filtering logic would go here
+        # TODO: Integrate full filtering when dependencies are available:
+        # - Check is_job_posting()
+        # - Check _is_candidates_mode() and is_candidate_url()
+        # - Check against ALWAYS_ALLOW_PATTERNS
+        # - Check snippet jackpots
+        # - Check host against DROP_PORTAL_DOMAINS
+        # - Check path against BLACKLIST_PATH_PATTERNS
         
         return False, ""
     except Exception:

@@ -100,11 +100,35 @@ GUERILLA_QUERIES = [
     '("Job gesucht" OR "Arbeit gesucht") "Vertrieb" "#jobgesucht" site:.de'
 ]
 
-# Flatten the niche queries into the main list
-for industry_dorks in NICHE_QUERIES.values():
-    DEFAULT_QUERIES.extend(industry_dorks)
-DEFAULT_QUERIES.extend(FREELANCE_QUERIES)
-DEFAULT_QUERIES.extend(GUERILLA_QUERIES)
+
+def _build_default_queries() -> List[str]:
+    """
+    Build the complete default queries list by combining all query sources.
+    
+    This function is called once at module import to create DEFAULT_QUERIES.
+    Separated into a function to avoid side effects during import.
+    
+    Returns:
+        Combined list of all default queries
+    """
+    queries = DEFAULT_QUERIES.copy()
+    
+    # Add niche queries
+    for industry_dorks in NICHE_QUERIES.values():
+        queries.extend(industry_dorks)
+    
+    # Add freelance and guerilla queries
+    queries.extend(FREELANCE_QUERIES)
+    queries.extend(GUERILLA_QUERIES)
+    
+    return queries
+
+
+# Build complete DEFAULT_QUERIES list
+_COMPLETE_DEFAULT_QUERIES = _build_default_queries()
+
+# For backward compatibility, we keep DEFAULT_QUERIES as the base list
+# Users should use build_queries() function for mode-aware query building
 
 
 # =========================
@@ -571,8 +595,8 @@ def build_queries(
         cap = min(max(1, per_industry_limit), len(queries))
         return queries[:cap]
     
-    # Standard mode: use DEFAULT_QUERIES
-    queries: List[str] = list(dict.fromkeys(DEFAULT_QUERIES))
+    # Standard mode: use complete default queries list (including niche, freelance, guerilla)
+    queries: List[str] = list(dict.fromkeys(_COMPLETE_DEFAULT_QUERIES))
     random.shuffle(queries)
 
     cap = min(max(1, per_industry_limit), len(queries))
