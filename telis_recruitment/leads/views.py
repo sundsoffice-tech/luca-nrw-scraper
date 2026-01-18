@@ -16,6 +16,7 @@ import logging
 import hmac
 import hashlib
 import os
+import threading
 from pathlib import Path
 
 from django.http import JsonResponse
@@ -411,22 +412,26 @@ def _process_csv_row(row):
         return 'imported'
 
 
-# Global variable for caching allowed database paths
+# Thread-safe cache for allowed database paths
+_allowed_db_paths_lock = threading.Lock()
 ALLOWED_DB_PATHS = None
 
 
 def _get_allowed_db_paths():
-    """Get list of allowed database paths (whitelist)."""
+    """Get list of allowed database paths (whitelist). Thread-safe."""
     global ALLOWED_DB_PATHS
     if ALLOWED_DB_PATHS is None:
-        base = Path(settings.BASE_DIR).parent.resolve()
-        ALLOWED_DB_PATHS = [
-            base / 'scraper.db',
-        ]
-        # Add custom paths from settings if defined
-        custom_paths = getattr(settings, 'ALLOWED_SCRAPER_DB_PATHS', [])
-        for p in custom_paths:
-            ALLOWED_DB_PATHS.append(Path(p).resolve())
+        with _allowed_db_paths_lock:
+            # Double-check locking pattern
+            if ALLOWED_DB_PATHS is None:
+                base = Path(settings.BASE_DIR).parent.resolve()
+                ALLOWED_DB_PATHS = [
+                    base / 'scraper.db',
+                ]
+                # Add custom paths from settings if defined
+                custom_paths = getattr(settings, 'ALLOWED_SCRAPER_DB_PATHS', [])
+                for p in custom_paths:
+                    ALLOWED_DB_PATHS.append(Path(p).resolve())
     return ALLOWED_DB_PATHS
 
 
@@ -441,7 +446,7 @@ def brevo_webhook(request):
     """
     # Verify webhook signature
     signature = request.headers.get('X-Sib-Signature')
-    webhook_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None) or os.getenv('BREVO_WEBHOOK_SECRET')
+    webhook_secret = getattr(settings, 'BREVO_WEBHOOK_SECRET', None)
     
     if webhook_secret:
         if not signature:
@@ -625,7 +630,7 @@ def trigger_sync(request):
         logger.error(f"Error in trigger_sync: {str(e)}")
         return Response({
             'success': False,
-            'error': f'Error syncing database: {str(e)}'
+            'error': 'Error syncing database'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

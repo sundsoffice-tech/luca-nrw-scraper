@@ -2326,9 +2326,10 @@ class TriggerSyncSecurityTest(APITestCase):
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         
-        # Reset global cache
+        # Reset global cache (thread-safe)
         from leads import views
-        views.ALLOWED_DB_PATHS = None
+        with views._allowed_db_paths_lock:
+            views.ALLOWED_DB_PATHS = None
     
     def test_trigger_sync_rejects_path_traversal_attempt(self):
         """Test that path traversal attempts are rejected"""
@@ -2386,9 +2387,10 @@ class TriggerSyncSecurityTest(APITestCase):
             # Add test path to whitelist
             settings.ALLOWED_SCRAPER_DB_PATHS = [str(self.test_db_path)]
             
-            # Reset cache to pick up new settings
+            # Reset cache to pick up new settings (thread-safe)
             from leads import views
-            views.ALLOWED_DB_PATHS = None
+            with views._allowed_db_paths_lock:
+                views.ALLOWED_DB_PATHS = None
             
             response = self.client.post(
                 self.url,
