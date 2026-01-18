@@ -3,10 +3,11 @@ from django.utils.html import format_html
 from django.db.models import Sum, Count
 from django.utils import timezone
 from datetime import timedelta
+from unfold.admin import ModelAdmin, TabularInline
 from .models import AIProvider, AIModel, AIConfig, PromptTemplate, AIUsageLog
 
 
-class AIModelInline(admin.TabularInline):
+class AIModelInline(TabularInline):
     """Inline editing of AI Models within Provider"""
     model = AIModel
     extra = 0
@@ -18,7 +19,7 @@ class AIModelInline(admin.TabularInline):
 
 
 @admin.register(AIProvider)
-class AIProviderAdmin(admin.ModelAdmin):
+class AIProviderAdmin(ModelAdmin):
     list_display = [
         'name', 'active_badge', 'base_url', 
         'cost_per_1k_tokens_prompt', 'cost_per_1k_tokens_completion',
@@ -59,7 +60,7 @@ class AIProviderAdmin(admin.ModelAdmin):
 
 
 @admin.register(AIModel)
-class AIModelAdmin(admin.ModelAdmin):
+class AIModelAdmin(ModelAdmin):
     list_display = [
         'display_name', 'provider', 'name', 'active_badge',
         'default_temperature', 'default_max_tokens',
@@ -106,7 +107,7 @@ class AIModelAdmin(admin.ModelAdmin):
 
 
 @admin.register(AIConfig)
-class AIConfigAdmin(admin.ModelAdmin):
+class AIConfigAdmin(ModelAdmin):
     list_display = [
         'config_name', 'is_active', 'default_provider', 'default_model',
         'temperature', 'daily_budget', 'monthly_budget', 'updated_at'
@@ -123,13 +124,16 @@ class AIConfigAdmin(admin.ModelAdmin):
             'fields': ('default_provider', 'default_model')
         }),
         ('Model Parameters', {
-            'fields': ('temperature', 'top_p', 'max_tokens', 'learning_rate')
+            'fields': ('temperature', 'top_p', 'max_tokens', 'learning_rate'),
+            'description': 'AI model behavior settings',
         }),
         ('Budget Management', {
-            'fields': ('daily_budget', 'monthly_budget')
+            'fields': ('daily_budget', 'monthly_budget'),
+            'description': 'Cost control settings',
         }),
         ('Quality & Performance', {
-            'fields': ('confidence_threshold', 'retry_limit', 'timeout_seconds')
+            'fields': ('confidence_threshold', 'retry_limit', 'timeout_seconds'),
+            'description': 'Performance tuning',
         }),
     )
     
@@ -155,7 +159,7 @@ class AIConfigAdmin(admin.ModelAdmin):
 
 
 @admin.register(PromptTemplate)
-class PromptTemplateAdmin(admin.ModelAdmin):
+class PromptTemplateAdmin(ModelAdmin):
     list_display = [
         'title', 'slug', 'category', 'is_active', 
         'content_preview', 'updated_at'
@@ -186,7 +190,7 @@ class PromptTemplateAdmin(admin.ModelAdmin):
 
 
 @admin.register(AIUsageLog)
-class AIUsageLogAdmin(admin.ModelAdmin):
+class AIUsageLogAdmin(ModelAdmin):
     list_display = [
         'created_at', 'success_badge', 'provider', 'model',
         'prompt_slug', 'tokens_prompt', 'tokens_completion',

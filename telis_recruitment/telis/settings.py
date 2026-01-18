@@ -30,6 +30,10 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', 'localhost,
 # Application definition
 
 INSTALLED_APPS = [
+    # Unfold must come before django.contrib.admin
+    'unfold',
+    'unfold.contrib.filters',
+    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -199,3 +203,178 @@ BREVO_WEBHOOK_SECRET = os.getenv('BREVO_WEBHOOK_SECRET', None)
 LOGIN_URL = 'crm-login'
 LOGIN_REDIRECT_URL = 'crm-dashboard'
 LOGOUT_REDIRECT_URL = 'crm-login'
+
+
+# ==========================
+# Django Unfold Configuration
+# ==========================
+UNFOLD = {
+    "SITE_TITLE": "LUCA Command Center",
+    "SITE_HEADER": "LUCA Command Center",
+    "SITE_URL": "/",
+    
+    # Theme colors - cyan primary with gradient
+    "COLORS": {
+        "primary": {
+            "50": "236 254 255",
+            "100": "207 250 254",
+            "200": "165 243 252",
+            "300": "103 232 249",
+            "400": "34 211 238",
+            "500": "6 182 212",  # #06b6d4 - primary cyan
+            "600": "8 145 178",  # #0891b2 - hover
+            "700": "14 116 144",
+            "800": "21 94 117",
+            "900": "22 78 99",
+            "950": "8 51 68",
+        },
+    },
+    
+    "THEME": "dark",  # Enable dark mode
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+    
+    # Sidebar navigation with icons and groups
+    "SIDEBAR": {
+        "show_search": True,  # Enable menu search
+        "show_all_applications": False,
+        "navigation": [
+            {
+                "title": "Dashboard",
+                "separator": False,
+                "items": [
+                    {
+                        "title": "Home",
+                        "icon": "home",
+                        "link": "/admin/",
+                    },
+                ],
+            },
+            {
+                "title": "Leads",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Alle Leads",
+                        "icon": "people",
+                        "link": "/admin/leads/lead/",
+                    },
+                    {
+                        "title": "Anruflogs",
+                        "icon": "phone",
+                        "link": "/admin/leads/calllog/",
+                    },
+                    {
+                        "title": "E-Mail Logs",
+                        "icon": "email",
+                        "link": "/admin/leads/emaillog/",
+                    },
+                    {
+                        "title": "Sync Status",
+                        "icon": "sync",
+                        "link": "/admin/leads/syncstatus/",
+                    },
+                ],
+            },
+            {
+                "title": "Scraper",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Konfiguration",
+                        "icon": "settings",
+                        "link": "/admin/scraper_control/scraperconfig/",
+                    },
+                    {
+                        "title": "Scraper Runs",
+                        "icon": "play_arrow",
+                        "link": "/admin/scraper_control/scraperrun/",
+                    },
+                    {
+                        "title": "Logs",
+                        "icon": "description",
+                        "link": "/admin/scraper_control/scraperlog/",
+                    },
+                ],
+            },
+            {
+                "title": "AI-Einstellungen",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "AI-Konfiguration",
+                        "icon": "smart_toy",
+                        "link": "/admin/ai_config/aiconfig/",
+                    },
+                    {
+                        "title": "AI-Provider",
+                        "icon": "cloud",
+                        "link": "/admin/ai_config/aiprovider/",
+                    },
+                    {
+                        "title": "AI-Modelle",
+                        "icon": "memory",
+                        "link": "/admin/ai_config/aimodel/",
+                    },
+                    {
+                        "title": "Prompt Templates",
+                        "icon": "article",
+                        "link": "/admin/ai_config/prompttemplate/",
+                    },
+                    {
+                        "title": "Usage Logs",
+                        "icon": "analytics",
+                        "link": "/admin/ai_config/aiusagelog/",
+                    },
+                ],
+            },
+            {
+                "title": "Landing Pages",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Seiten",
+                        "icon": "web",
+                        "link": "/admin/pages/landingpage/",
+                    },
+                    {
+                        "title": "Komponenten",
+                        "icon": "widgets",
+                        "link": "/admin/pages/pagecomponent/",
+                    },
+                    {
+                        "title": "Einreichungen",
+                        "icon": "assignment",
+                        "link": "/admin/pages/pagesubmission/",
+                    },
+                    {
+                        "title": "Versionen",
+                        "icon": "history",
+                        "link": "/admin/pages/pageversion/",
+                    },
+                ],
+            },
+            {
+                "title": "System",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Benutzer",
+                        "icon": "person",
+                        "link": "/admin/auth/user/",
+                    },
+                    {
+                        "title": "Gruppen",
+                        "icon": "group",
+                        "link": "/admin/auth/group/",
+                    },
+                ],
+            },
+        ],
+    },
+}
