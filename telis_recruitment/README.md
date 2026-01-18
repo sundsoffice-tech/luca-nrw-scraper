@@ -45,7 +45,59 @@ python manage.py migrate
 
 # Erstelle einen Admin-Benutzer
 python manage.py createsuperuser
+
+# Richte Benutzergruppen ein (wird automatisch bei Installation ausgeführt)
+python manage.py setup_groups
 ```
+
+## Benutzer & Rollen
+
+Das TELIS CRM verwendet ein rollenbasiertes Berechtigungssystem mit drei Hauptrollen:
+
+### 🔐 Verfügbare Rollen
+
+#### **Admin** - Voller Zugriff
+- Alle Leads verwalten (erstellen, bearbeiten, löschen)
+- Benutzer verwalten (erstellen, bearbeiten, deaktivieren)
+- Scraper-Einstellungen ändern
+- Reports und Analytics einsehen
+- Systemeinstellungen
+
+#### **Manager** - Team-Übersicht
+- Alle Leads einsehen (nur-lesen, außer Status-Updates)
+- Team-Performance einsehen
+- Reports und Analytics einsehen
+- Leads an Telefonisten zuweisen
+- Keine Benutzerverwaltung
+
+#### **Telefonist** - Zugewiesene Leads
+- Nur zugewiesene Leads einsehen
+- Leads anrufen und Ergebnisse protokollieren
+- Eigene Statistiken einsehen
+- Keine Admin-Funktionen
+
+### 🔧 Gruppen einrichten
+
+Nach der Installation werden die Gruppen automatisch erstellt. Um sie manuell einzurichten:
+
+```bash
+python manage.py setup_groups
+```
+
+Dieser Befehl:
+- Erstellt die drei Gruppen (Admin, Manager, Telefonist) falls sie nicht existieren
+- Weist alle Superuser automatisch der Admin-Gruppe zu
+- Zeigt an, welche Gruppen erstellt und welche Benutzer zugewiesen wurden
+
+**Hinweis:** Superuser haben immer Zugriff auf alle Bereiche, unabhängig von ihrer Gruppenzugehörigkeit.
+
+### 👥 Benutzer zu Gruppen hinzufügen
+
+Über das Django Admin-Interface (http://127.0.0.1:8000/admin/):
+1. Navigiere zu **Authentication and Authorization** → **Users**
+2. Wähle einen Benutzer aus
+3. Scrolle zu **Groups** und füge die entsprechende(n) Gruppe(n) hinzu
+4. Speichere die Änderungen
 
 ### 4. Development Server starten
 

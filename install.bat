@@ -74,6 +74,12 @@ cd telis_recruitment
 python manage.py migrate
 echo [OK] Database migrations completed
 
+REM Step 4.5: Setup user groups
+echo.
+echo Step 4.5: Setting up user groups...
+python manage.py setup_groups
+echo [OK] User groups setup completed
+
 REM Step 5: Collect static files
 echo.
 echo Step 5: Collecting static files...

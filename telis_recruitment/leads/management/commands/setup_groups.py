@@ -86,8 +86,27 @@ class Command(BaseCommand):
         telefonist_group.permissions.set(telefonist_permissions)
         self.stdout.write(f'  → Assigned {telefonist_permissions.count()} permissions to Telefonist')
         
-        self.stdout.write(self.style.SUCCESS('\n✅ User groups setup complete!'))
+        # === ADD SUPERUSERS TO ADMIN GROUP ===
+        self.stdout.write('\n' + '='*60)
+        self.stdout.write('Adding superusers to Admin group...')
+        from django.contrib.auth.models import User
+        superusers = User.objects.filter(is_superuser=True)
+        superusers_added = 0
+        for superuser in superusers:
+            if not superuser.groups.filter(name='Admin').exists():
+                superuser.groups.add(admin_group)
+                superusers_added += 1
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Added superuser "{superuser.username}" to Admin group'))
+            else:
+                self.stdout.write(f'  → Superuser "{superuser.username}" already in Admin group')
+        
+        if superusers_added == 0 and superusers.count() == 0:
+            self.stdout.write(self.style.WARNING('  ⚠ No superusers found. Create one with: python manage.py createsuperuser'))
+        
+        self.stdout.write('\n' + '='*60)
+        self.stdout.write(self.style.SUCCESS('✅ User groups setup complete!'))
         self.stdout.write('\nGroup Summary:')
         self.stdout.write(f'  • Admin: Full access ({admin_group.permissions.count()} permissions)')
         self.stdout.write(f'  • Manager: Reports + team overview ({manager_group.permissions.count()} permissions)')
         self.stdout.write(f'  • Telefonist: Assigned leads only ({telefonist_group.permissions.count()} permissions)')
+        self.stdout.write(f'\nSuperusers in Admin group: {superusers.filter(groups__name="Admin").count()}')
