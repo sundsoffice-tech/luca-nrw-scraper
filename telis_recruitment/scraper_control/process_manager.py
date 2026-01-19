@@ -79,15 +79,31 @@ class ProcessManager:
         self.circuit_breaker_opened_at: Optional[datetime] = None
         self.circuit_breaker_failures: int = 0
         
-        # Configuration for retry and circuit breaker
-        self.max_retry_attempts: int = 3
-        self.qpi_reduction_factor: float = 0.7  # Reduce QPI to 70% on rate limit
-        self.error_rate_threshold: float = 0.5  # 50% error rate triggers circuit breaker
-        self.error_rate_window_seconds: int = 300  # 5 minute window for error rate calculation
-        self.circuit_breaker_failure_threshold: int = 5  # Open circuit after 5 failures
-        self.retry_backoff_base: float = 30.0  # Base backoff in seconds (30s, 60s, 120s, ...)
+        # Load configuration from database (will be set dynamically)
+        self._load_config()
         
         self._initialized = True
+    
+    def _load_config(self):
+        """Load configuration from database."""
+        try:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            
+            self.max_retry_attempts = config.process_max_retry_attempts
+            self.qpi_reduction_factor = config.process_qpi_reduction_factor
+            self.error_rate_threshold = config.process_error_rate_threshold
+            self.circuit_breaker_failure_threshold = config.process_circuit_breaker_failures
+            self.retry_backoff_base = config.process_retry_backoff_base
+            
+            logger.info(f"Loaded config: max_retry={self.max_retry_attempts}, "
+                       f"qpi_factor={self.qpi_reduction_factor}, "
+                       f"error_threshold={self.error_rate_threshold}, "
+                       f"cb_threshold={self.circuit_breaker_failure_threshold}, "
+                       f"backoff={self.retry_backoff_base}")
+        except Exception as e:
+            logger.warning(f"Failed to load config from database, using defaults: {e}")
+            # Keep default values set in __init__
     
     def _read_output(self):
         """Background thread to read and store process output."""
