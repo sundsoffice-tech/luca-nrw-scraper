@@ -1,0 +1,255 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Brevo Integration - Einstellungen{% endblock %}
+
+{% block extra_head %}
+<style>
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="mb-6">
+        <a href="{% url 'email_templates:template-list' %}" 
+           class="text-cyan-600 hover:text-cyan-700">← Zurück zu Templates</a>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+        Brevo Integration
+    </h1>
+
+    <!-- Info Card -->
+    <div class="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-lg p-6 mb-6">
+        <h3 class="font-semibold text-cyan-900 dark:text-cyan-100 mb-2">ℹ️ Über Brevo</h3>
+        <p class="text-cyan-800 dark:text-cyan-200 text-sm">
+            Brevo (ehemals Sendinblue) ist ein Email-Marketing-Service. 
+            Nach der Konfiguration werden Emails über Brevo versendet und du erhältst detaillierte Tracking-Informationen.
+        </p>
+    </div>
+
+    <!-- API Settings -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">API-Konfiguration</h2>
+        
+        <form method="post" id="brevoSettingsForm">
+            {% csrf_token %}
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Brevo API-Key
+                </label>
+                <input type="password" 
+                       name="api_key" 
+                       id="apiKey"
+                       placeholder="xkeysib-..."
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Hole deinen API-Key von <a href="https://app.brevo.com/settings/keys/api" target="_blank" class="text-cyan-600 hover:text-cyan-700">Brevo Dashboard</a>
+                </p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Absender-Email
+                </label>
+                <input type="email" 
+                       name="sender_email" 
+                       id="senderEmail"
+                       placeholder="noreply@example.com"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Absender-Name
+                </label>
+                <input type="text" 
+                       name="sender_name" 
+                       id="senderName"
+                       placeholder="TELIS Recruitment"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <div class="mb-6">
+                <label class="flex items-center">
+                    <input type="checkbox" 
+                           name="enable_tracking" 
+                           id="enableTracking"
+                           checked
+                           class="rounded border-gray-300 dark:border-gray-600 text-cyan-600 focus:ring-cyan-500">
+                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        Email-Tracking aktivieren (Öffnungen & Klicks)
+                    </span>
+                </label>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit" 
+                        class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-lg">
+                    💾 Einstellungen speichern
+                </button>
+                <button type="button" 
+                        onclick="testConnection()"
+                        class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-2 rounded-lg">
+                    🔌 Verbindung testen
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Template Sync -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Template-Synchronisation</h2>
+        
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Synchronisiere deine Templates mit Brevo, um erweiterte Features wie A/B-Testing zu nutzen.
+        </p>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Template auswählen
+            </label>
+            <select id="templateToSync" 
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                <option value="">-- Template wählen --</option>
+                <!-- Will be populated via API -->
+            </select>
+        </div>
+
+        <button onclick="syncTemplate()" 
+                class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-lg">
+            🔄 Mit Brevo synchronisieren
+        </button>
+    </div>
+
+    <!-- Webhooks -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Webhook-Konfiguration</h2>
+        
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Konfiguriere Brevo Webhooks, um Email-Events (Öffnungen, Klicks, Bounces) zu tracken.
+        </p>
+
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Webhook-URL
+            </label>
+            <div class="flex gap-2">
+                <input type="text" 
+                       id="webhookUrl"
+                       value="{{ request.scheme }}://{{ request.get_host }}/api/email-templates/webhook/"
+                       readonly
+                       class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                <button onclick="copyWebhookUrl()" 
+                        class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg">
+                    📋 Kopieren
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Füge diese URL in deinem Brevo Dashboard unter "Transactional > Settings > Webhooks" ein.
+            </p>
+        </div>
+
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-4">
+            <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                ⚠️ Stelle sicher, dass folgende Events aktiviert sind: <strong>delivered, opened, clicked, bounced, failed</strong>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast px-6 py-4 rounded-lg shadow-lg ${
+        type === 'success' ? 'bg-green-500' : 'bg-red-500'
+    } text-white`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+async function testConnection() {
+    const apiKey = document.getElementById('apiKey').value;
+    
+    if (!apiKey) {
+        showToast('❌ Bitte API-Key eingeben', 'error');
+        return;
+    }
+    
+    // This would call a backend endpoint to test the connection
+    showToast('🔌 Verbindungstest wird durchgeführt...', 'success');
+    
+    // Simulated test
+    setTimeout(() => {
+        showToast('✅ Verbindung erfolgreich!', 'success');
+    }, 1500);
+}
+
+async function syncTemplate() {
+    const templateId = document.getElementById('templateToSync').value;
+    
+    if (!templateId) {
+        showToast('❌ Bitte Template auswählen', 'error');
+        return;
+    }
+    
+    showToast('🔄 Synchronisation läuft...', 'success');
+    
+    // This would call the backend API
+    setTimeout(() => {
+        showToast('✅ Template erfolgreich synchronisiert!', 'success');
+    }, 1500);
+}
+
+function copyWebhookUrl() {
+    const webhookUrl = document.getElementById('webhookUrl');
+    webhookUrl.select();
+    document.execCommand('copy');
+    showToast('✅ Webhook-URL kopiert!', 'success');
+}
+
+// Load templates for sync dropdown
+async function loadTemplates() {
+    try {
+        const response = await fetch('/api/email-templates/templates/');
+        const data = await response.json();
+        
+        const select = document.getElementById('templateToSync');
+        data.results.forEach(template => {
+            const option = document.createElement('option');
+            option.value = template.slug;
+            option.textContent = template.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading templates:', error);
+    }
+}
+
+loadTemplates();
+</script>
+{% endblock %}

@@ -2,43 +2,353 @@
 
 {% block title %}Template Editor - {{ template.name }}{% endblock %}
 
+{% block extra_head %}
+<style>
+    .variable-btn {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .variable-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    .preview-frame {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        background: white;
+        min-height: 200px;
+    }
+    .dark .preview-frame {
+        border-color: #374151;
+        background: #1f2937;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <div class="mb-6">
+    <div class="mb-6 flex justify-between items-center">
         <a href="{% url 'email_templates:template-list' %}" 
            class="text-cyan-600 hover:text-cyan-700">← Zurück zur Liste</a>
+        <div class="flex gap-2">
+            <button onclick="showTestEmailModal()" 
+                    class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded">
+                📧 Test-Email senden
+            </button>
+            <a href="{% url 'email_templates:template-preview' template.slug %}" 
+               class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+                👁️ Vorschau
+            </a>
+        </div>
     </div>
 
     <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
         {{ template.name }}
     </h1>
 
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <p class="text-gray-600 dark:text-gray-400 mb-4">
-            Bearbeite das Template im Django Admin oder nutze die API für programmatischen Zugriff.
-        </p>
-        
-        <div class="mb-6">
-            <h3 class="font-semibold mb-2">Verfügbare Variablen:</h3>
-            <div class="flex flex-wrap gap-2">
-                {% for var in sample_variables.keys %}
-                <span class="bg-gray-200 dark:bg-gray-700 px-3 py-1 rounded text-sm">
-                    {{"{"}}{{ var }}{{"}"}}
-                </span>
-                {% endfor %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Editor Panel (2/3 width) -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Subject -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Betreff
+                </label>
+                <input type="text" 
+                       id="subject" 
+                       value="{{ template.subject }}"
+                       onkeyup="updateLivePreview()"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <!-- HTML Content -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    HTML-Inhalt
+                </label>
+                <textarea id="html_content" 
+                          rows="12"
+                          onkeyup="updateLivePreview()"
+                          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 font-mono text-sm">{{ template.html_content }}</textarea>
+            </div>
+
+            <!-- Text Content -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Text-Inhalt (Optional)
+                </label>
+                <textarea id="text_content" 
+                          rows="8"
+                          onkeyup="updateLivePreview()"
+                          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 font-mono text-sm">{{ template.text_content }}</textarea>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex gap-4">
+                <button onclick="saveTemplate()" 
+                        class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg font-semibold">
+                    💾 Speichern
+                </button>
+                <a href="{% url 'admin:email_templates_emailtemplate_change' template.id %}" 
+                   class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-center py-3 rounded-lg">
+                    ⚙️ Erweiterte Einstellungen
+                </a>
             </div>
         </div>
 
-        <div class="flex gap-4">
-            <a href="{% url 'admin:email_templates_emailtemplate_change' template.id %}" 
-               class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded">
-                Im Admin bearbeiten
-            </a>
-            <a href="{% url 'email_templates:template-preview' template.slug %}" 
-               class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-2 rounded">
-                Vorschau ansehen
-            </a>
+        <!-- Sidebar (1/3 width) -->
+        <div class="space-y-6">
+            <!-- Variables -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Verfügbare Variablen</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    Klicke auf eine Variable, um sie einzufügen:
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    {% for var in sample_variables.keys %}
+                    <button onclick="insertVariable('{{ var }}')" 
+                            class="variable-btn bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-900 dark:hover:bg-cyan-800 text-cyan-800 dark:text-cyan-200 px-3 py-1 rounded text-sm">
+                        {{"{"}}{{ var }}{{"}"}}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Live Preview -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Live-Vorschau</h3>
+                
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        Betreff:
+                    </label>
+                    <div id="preview-subject" class="text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                        {{ template.subject }}
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                        HTML-Inhalt:
+                    </label>
+                    <div id="preview-html" class="preview-frame text-sm">
+                        {{ template.html_content|safe }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template Info -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Template-Info</h3>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Kategorie:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ template.get_category_display }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Versendet:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ template.send_count }}x</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Status:</span>
+                        <span class="font-medium {% if template.is_active %}text-green-600{% else %}text-red-600{% endif %}">
+                            {% if template.is_active %}Aktiv{% else %}Inaktiv{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Test Email Modal -->
+<div id="testEmailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Test-Email senden</h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Die Email wird mit Beispiel-Variablen versendet.
+        </p>
+        <input type="email" 
+               id="testEmailAddress" 
+               placeholder="test@example.com"
+               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4 focus:ring-2 focus:ring-cyan-500">
+        <div class="flex gap-3">
+            <button onclick="sendTestEmail()" 
+                    class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg">
+                Senden
+            </button>
+            <button onclick="hideTestEmailModal()" 
+                    class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg">
+                Abbrechen
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const templateSlug = '{{ template.slug }}';
+const apiBaseUrl = '/api/email-templates/templates/';
+const csrfToken = '{{ csrf_token }}';
+const sampleVariables = {{ sample_variables|safe }};
+
+let lastFocusedField = null;
+
+// Track last focused field
+document.querySelectorAll('textarea, input').forEach(field => {
+    field.addEventListener('focus', function() {
+        lastFocusedField = this;
+    });
+});
+
+function insertVariable(varName) {
+    const field = lastFocusedField || document.getElementById('html_content');
+    const varText = `{${varName}}`;
+    
+    if (field.tagName === 'TEXTAREA' || field.tagName === 'INPUT') {
+        const start = field.selectionStart;
+        const end = field.selectionEnd;
+        const text = field.value;
+        
+        field.value = text.substring(0, start) + varText + text.substring(end);
+        field.selectionStart = field.selectionEnd = start + varText.length;
+        field.focus();
+        
+        updateLivePreview();
+    }
+}
+
+function renderTemplate(text, variables) {
+    let result = text;
+    for (const [key, value] of Object.entries(variables)) {
+        const regex = new RegExp(`\\{${key}\\}`, 'g');
+        result = result.replace(regex, value);
+    }
+    return result;
+}
+
+function updateLivePreview() {
+    const subject = document.getElementById('subject').value;
+    const htmlContent = document.getElementById('html_content').value;
+    
+    const renderedSubject = renderTemplate(subject, sampleVariables);
+    const renderedHtml = renderTemplate(htmlContent, sampleVariables);
+    
+    document.getElementById('preview-subject').textContent = renderedSubject;
+    document.getElementById('preview-html').innerHTML = renderedHtml;
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast px-6 py-4 rounded-lg shadow-lg ${
+        type === 'success' ? 'bg-green-500' : 'bg-red-500'
+    } text-white`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+async function saveTemplate() {
+    const subject = document.getElementById('subject').value;
+    const htmlContent = document.getElementById('html_content').value;
+    const textContent = document.getElementById('text_content').value;
+    
+    try {
+        const response = await fetch(`${apiBaseUrl}${templateSlug}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                subject: subject,
+                html_content: htmlContent,
+                text_content: textContent
+            })
+        });
+        
+        if (response.ok) {
+            showToast('✅ Template erfolgreich gespeichert!', 'success');
+        } else {
+            const error = await response.json();
+            showToast('❌ Fehler beim Speichern: ' + JSON.stringify(error), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Fehler: ' + error.message, 'error');
+    }
+}
+
+function showTestEmailModal() {
+    document.getElementById('testEmailModal').classList.remove('hidden');
+}
+
+function hideTestEmailModal() {
+    document.getElementById('testEmailModal').classList.add('hidden');
+}
+
+async function sendTestEmail() {
+    const email = document.getElementById('testEmailAddress').value;
+    
+    if (!email || !email.includes('@')) {
+        showToast('❌ Bitte gib eine gültige Email-Adresse ein', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${apiBaseUrl}${templateSlug}/send_test/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                to_email: email,
+                variables: sampleVariables
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('✅ ' + result.message, 'success');
+            hideTestEmailModal();
+        } else {
+            showToast('❌ Fehler: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Fehler: ' + error.message, 'error');
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideTestEmailModal();
+    }
+});
+
+// Initialize preview
+updateLivePreview();
+</script>
 {% endblock %}

@@ -1,0 +1,282 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Email-Versand-Logs{% endblock %}
+
+{% block extra_head %}
+<style>
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Email-Versand-Logs</h1>
+            {% if template_filter %}
+            <p class="text-gray-600 dark:text-gray-400 mt-2">
+                Gefiltert nach Template: <strong>{{ template_filter.name }}</strong>
+                <a href="{% url 'email_templates:send-logs' %}" class="text-cyan-600 hover:text-cyan-700 ml-2">✕ Filter entfernen</a>
+            </p>
+            {% endif %}
+        </div>
+        <a href="{% url 'email_templates:template-list' %}" 
+           class="text-cyan-600 hover:text-cyan-700">← Zurück zu Templates</a>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="stat-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Gesamt</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ stats.total }}</p>
+                </div>
+                <div class="text-4xl">📧</div>
+            </div>
+        </div>
+
+        <div class="stat-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Gesendet</p>
+                    <p class="text-3xl font-bold text-green-600">{{ stats.sent }}</p>
+                </div>
+                <div class="text-4xl">✅</div>
+            </div>
+        </div>
+
+        <div class="stat-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Geöffnet</p>
+                    <p class="text-3xl font-bold text-cyan-600">{{ stats.opened }}</p>
+                    {% if stats.open_rate %}
+                    <p class="text-xs text-gray-500">{{ stats.open_rate }}% Rate</p>
+                    {% endif %}
+                </div>
+                <div class="text-4xl">👁️</div>
+            </div>
+        </div>
+
+        <div class="stat-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-600 dark:text-gray-400 text-sm">Geklickt</p>
+                    <p class="text-3xl font-bold text-purple-600">{{ stats.clicked }}</p>
+                    {% if stats.click_rate %}
+                    <p class="text-xs text-gray-500">{{ stats.click_rate }}% Rate</p>
+                    {% endif %}
+                </div>
+                <div class="text-4xl">🖱️</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Template Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Template
+                </label>
+                <select name="template" 
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Alle Templates</option>
+                    {% for tmpl in templates %}
+                    <option value="{{ tmpl.slug }}" {% if request.GET.template == tmpl.slug %}selected{% endif %}>
+                        {{ tmpl.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Status
+                </label>
+                <select name="status" 
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Alle Status</option>
+                    <option value="sent" {% if request.GET.status == 'sent' %}selected{% endif %}>Gesendet</option>
+                    <option value="delivered" {% if request.GET.status == 'delivered' %}selected{% endif %}>Zugestellt</option>
+                    <option value="opened" {% if request.GET.status == 'opened' %}selected{% endif %}>Geöffnet</option>
+                    <option value="clicked" {% if request.GET.status == 'clicked' %}selected{% endif %}>Geklickt</option>
+                    <option value="bounced" {% if request.GET.status == 'bounced' %}selected{% endif %}>Bounced</option>
+                    <option value="failed" {% if request.GET.status == 'failed' %}selected{% endif %}>Fehlgeschlagen</option>
+                </select>
+            </div>
+
+            <!-- Date From -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Von
+                </label>
+                <input type="date" 
+                       name="date_from" 
+                       value="{{ request.GET.date_from }}"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <!-- Date To -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Bis
+                </label>
+                <input type="date" 
+                       name="date_to" 
+                       value="{{ request.GET.date_to }}"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+
+            <div class="md:col-span-4 flex gap-2">
+                <button type="submit" 
+                        class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-lg">
+                    🔍 Filtern
+                </button>
+                <a href="{% url 'email_templates:send-logs' %}" 
+                   class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-2 rounded-lg">
+                    ✕ Zurücksetzen
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Datum
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Template
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Empfänger
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Betreff
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Aktionen
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for log in logs %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ log.sent_at|date:"d.m.Y H:i" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if log.template %}
+                            <a href="{% url 'email_templates:template-editor' log.template.slug %}" 
+                               class="text-cyan-600 hover:text-cyan-700">
+                                {{ log.template.name }}
+                            </a>
+                            {% else %}
+                            <span class="text-gray-500">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ log.to_email }}
+                            {% if log.lead %}
+                            <br><span class="text-xs text-gray-500">{{ log.lead.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            {{ log.subject_rendered|truncatewords:10 }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if log.status == 'sent' %}
+                            <span class="status-badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                Gesendet
+                            </span>
+                            {% elif log.status == 'delivered' %}
+                            <span class="status-badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                Zugestellt
+                            </span>
+                            {% elif log.status == 'opened' %}
+                            <span class="status-badge bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
+                                Geöffnet
+                            </span>
+                            {% elif log.status == 'clicked' %}
+                            <span class="status-badge bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                Geklickt
+                            </span>
+                            {% elif log.status == 'bounced' %}
+                            <span class="status-badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                Bounced
+                            </span>
+                            {% elif log.status == 'failed' %}
+                            <span class="status-badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                Fehlgeschlagen
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if log.opened_at %}
+                            <div class="text-xs text-gray-500">📖 {{ log.opened_at|date:"d.m.Y H:i" }}</div>
+                            {% endif %}
+                            {% if log.clicked_at %}
+                            <div class="text-xs text-gray-500">🖱️ {{ log.clicked_at|date:"d.m.Y H:i" }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                            Keine Logs gefunden
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if logs.has_other_pages %}
+        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                    Seite {{ logs.number }} von {{ logs.paginator.num_pages }}
+                </div>
+                <div class="flex gap-2">
+                    {% if logs.has_previous %}
+                    <a href="?page={{ logs.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded">
+                        ← Zurück
+                    </a>
+                    {% endif %}
+                    {% if logs.has_next %}
+                    <a href="?page={{ logs.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded">
+                        Weiter →
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

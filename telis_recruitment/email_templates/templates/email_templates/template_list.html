@@ -2,48 +2,156 @@
 
 {% block title %}Email Templates{% endblock %}
 
+{% block extra_head %}
+<style>
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Email Templates</h1>
         <a href="{% url 'admin:email_templates_emailtemplate_add' %}" 
            class="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded">
-            Neues Template
+            ➕ Neues Template
         </a>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Search -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Suche
+                </label>
+                <input type="text" 
+                       id="searchInput"
+                       placeholder="Template suchen..."
+                       onkeyup="filterTemplates()"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+            </div>
+            
+            <!-- Category Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Kategorie
+                </label>
+                <select id="categoryFilter" 
+                        onchange="filterTemplates()"
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Alle Kategorien</option>
+                    <option value="welcome">Willkommen</option>
+                    <option value="follow_up">Follow-Up</option>
+                    <option value="reminder">Erinnerung</option>
+                    <option value="confirmation">Bestätigung</option>
+                    <option value="newsletter">Newsletter</option>
+                    <option value="custom">Benutzerdefiniert</option>
+                </select>
+            </div>
+            
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Status
+                </label>
+                <select id="statusFilter" 
+                        onchange="filterTemplates()"
+                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Alle</option>
+                    <option value="active">Aktiv</option>
+                    <option value="inactive">Inaktiv</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Templates Grid -->
+    <div id="templatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for template in templates %}
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div class="template-card bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow" 
+             data-name="{{ template.name|lower }}"
+             data-category="{{ template.category }}"
+             data-status="{% if template.is_active %}active{% else %}inactive{% endif %}">
             <div class="flex justify-between items-start mb-4">
-                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white flex-1">
                     {{ template.name }}
                 </h3>
-                {% if template.ai_generated %}
-                <span class="text-cyan-600">🤖</span>
+                <div class="flex gap-2">
+                    {% if template.ai_generated %}
+                    <span title="KI-generiert">🤖</span>
+                    {% endif %}
+                    {% if template.is_active %}
+                    <span class="badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        Aktiv
+                    </span>
+                    {% else %}
+                    <span class="badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                        Inaktiv
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="space-y-2 mb-4">
+                <p class="text-gray-600 dark:text-gray-400 text-sm">
+                    <strong>Kategorie:</strong> {{ template.get_category_display }}
+                </p>
+                
+                <p class="text-gray-600 dark:text-gray-400 text-sm">
+                    <strong>Betreff:</strong> {{ template.subject|truncatewords:10 }}
+                </p>
+                
+                <p class="text-gray-600 dark:text-gray-400 text-sm">
+                    <strong>Versendet:</strong> {{ template.send_count }}x
+                </p>
+
+                {% if template.last_sent_at %}
+                <p class="text-gray-600 dark:text-gray-400 text-sm">
+                    <strong>Zuletzt:</strong> {{ template.last_sent_at|date:"d.m.Y H:i" }}
+                </p>
                 {% endif %}
             </div>
             
-            <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">
-                <strong>Kategorie:</strong> {{ template.get_category_display }}
-            </p>
-            
-            <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">
-                <strong>Betreff:</strong> {{ template.subject|truncatewords:10 }}
-            </p>
-            
-            <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                <strong>Versendet:</strong> {{ template.send_count }}x
-            </p>
-            
-            <div class="flex gap-2">
+            <div class="grid grid-cols-2 gap-2">
                 <a href="{% url 'email_templates:template-editor' template.slug %}" 
-                   class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-center py-2 rounded">
-                    Bearbeiten
+                   class="text-center bg-cyan-600 hover:bg-cyan-700 text-white py-2 rounded">
+                    ✏️ Bearbeiten
                 </a>
                 <a href="{% url 'email_templates:template-preview' template.slug %}" 
-                   class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-center py-2 rounded">
-                    Vorschau
+                   class="text-center bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 py-2 rounded">
+                    👁️ Vorschau
+                </a>
+                <button onclick="showQuickTestModal('{{ template.slug }}', '{{ template.name }}')" 
+                        class="col-span-2 bg-green-600 hover:bg-green-700 text-white py-2 rounded">
+                    📧 Test-Email
+                </button>
+                <a href="{% url 'email_templates:send-logs' %}?template={{ template.slug }}" 
+                   class="col-span-2 text-center bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 py-2 rounded">
+                    📊 Versand-Historie
                 </a>
             </div>
         </div>
@@ -54,4 +162,124 @@
         {% endfor %}
     </div>
 </div>
+
+<!-- Quick Test Email Modal -->
+<div id="quickTestModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2" id="modalTemplateName"></h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">
+            Test-Email mit Beispiel-Variablen senden
+        </p>
+        <input type="email" 
+               id="quickTestEmail" 
+               placeholder="test@example.com"
+               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-4 focus:ring-2 focus:ring-cyan-500">
+        <div class="flex gap-3">
+            <button onclick="sendQuickTest()" 
+                    class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg">
+                Senden
+            </button>
+            <button onclick="hideQuickTestModal()" 
+                    class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg">
+                Abbrechen
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const apiBaseUrl = '/api/email-templates/templates/';
+const csrfToken = '{{ csrf_token }}';
+let currentTemplateSlug = '';
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast px-6 py-4 rounded-lg shadow-lg ${
+        type === 'success' ? 'bg-green-500' : 'bg-red-500'
+    } text-white`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function filterTemplates() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const categoryFilter = document.getElementById('categoryFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const cards = document.querySelectorAll('.template-card');
+    
+    cards.forEach(card => {
+        const name = card.getAttribute('data-name');
+        const category = card.getAttribute('data-category');
+        const status = card.getAttribute('data-status');
+        
+        const matchesSearch = !searchTerm || name.includes(searchTerm);
+        const matchesCategory = !categoryFilter || category === categoryFilter;
+        const matchesStatus = !statusFilter || status === statusFilter;
+        
+        if (matchesSearch && matchesCategory && matchesStatus) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function showQuickTestModal(slug, name) {
+    currentTemplateSlug = slug;
+    document.getElementById('modalTemplateName').textContent = name;
+    document.getElementById('quickTestModal').classList.remove('hidden');
+    document.getElementById('quickTestEmail').value = '';
+}
+
+function hideQuickTestModal() {
+    document.getElementById('quickTestModal').classList.add('hidden');
+    currentTemplateSlug = '';
+}
+
+async function sendQuickTest() {
+    const email = document.getElementById('quickTestEmail').value;
+    
+    if (!email || !email.includes('@')) {
+        showToast('❌ Bitte gib eine gültige Email-Adresse ein', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${apiBaseUrl}${currentTemplateSlug}/send_test/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                to_email: email
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('✅ ' + result.message, 'success');
+            hideQuickTestModal();
+        } else {
+            showToast('❌ Fehler: ' + result.error, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Fehler: ' + error.message, 'error');
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideQuickTestModal();
+    }
+});
+</script>
 {% endblock %}
