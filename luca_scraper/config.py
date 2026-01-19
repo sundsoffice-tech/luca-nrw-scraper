@@ -533,8 +533,10 @@ ENABLE_PERPLEXITY = bool(PERPLEXITY_API_KEY)
 ENABLE_BING = bool(BING_API_KEY)
 
 # =========================
-# BASE DORKS (Empty placeholder - filled in scriptname.py)
+# BASE DORKS
 # =========================
+# Empty placeholder for future implementation
+# Dorks are currently defined in other modules or dynamically generated
 
 BASE_DORKS: List[str] = []
 
