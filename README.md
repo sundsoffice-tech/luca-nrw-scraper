@@ -6,13 +6,17 @@ Zweck: NRW-Vertriebsleads automatisch finden, bewerten, exportieren.
 
 **Neu bei LUCA?** → **[📖 QUICKSTART GUIDE](docs/QUICKSTART.md)** - Deine ersten Leads in 20 Minuten!
 
+```
+Installation (5 min) → Erststart (2 min) → API-Keys (5 min) → Testlauf (5 min) → Leads ansehen (2 min) ✓
+```
+
 Der komplette Weg von Installation bis zu deinen ersten 10 Leads:
 - ✅ Schritt-für-Schritt Anleitung (Docker oder Manuell)
 - ✅ Keine Vorkenntnisse erforderlich
 - ✅ Funktioniert ohne API-Keys (für erste Tests)
 - ✅ Sofort produktiv
 
-**[→ Zum QUICKSTART Guide](docs/QUICKSTART.md)**
+**[→ Zum QUICKSTART Guide](docs/QUICKSTART.md)** | **[Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** | **[Troubleshooting](docs/TROUBLESHOOTING.md)**
 
 ---
 
