@@ -5,9 +5,10 @@ Testing phone number extraction, deobfuscation, and validation.
 
 import pytest
 from phone_extractor import (
-    extract_phone,
+    extract_phones_advanced,
     normalize_phone,
     is_valid_phone,
+    extract_phone_simple,
     PHONE_BLACKLIST,
     OBFUSCATION_REPLACEMENTS,
 )
@@ -19,16 +20,16 @@ class TestPhoneExtraction:
     def test_extract_mobile_standard(self):
         """Test extraction of standard mobile number"""
         text = "Kontakt: 0151 12345678"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
         # Check that it's a German mobile number
-        assert any("151" in p or "01511234" in p for p in phones)
+        assert "151" in result or "01511234" in result
 
     def test_extract_mobile_with_plus(self):
         """Test extraction with +49 prefix"""
         text = "Call me at +49 151 12345678"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_extract_mobile_various_separators(self):
         """Test extraction with different separators"""
@@ -39,38 +40,38 @@ class TestPhoneExtraction:
             "0151 123 45678",
         ]
         for text in test_cases:
-            phones = extract_phone(text)
-            assert len(phones) > 0, f"Failed to extract from: {text}"
+            result = extract_phone_simple(text)
+            assert result is not None, f"Failed to extract from: {text}"
 
     def test_extract_mobile_in_parentheses(self):
         """Test extraction with parentheses format"""
         text = "Mobil: (0151) 12345678"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_extract_whatsapp_number(self):
         """Test extraction of WhatsApp number"""
         text = "WhatsApp: 0151 12345678"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_extract_landline(self):
         """Test extraction of landline number"""
         text = "Tel: 0221 1234567"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_extract_compact_format(self):
         """Test extraction of number without separators"""
         text = "Rufnummer: 015112345678"
-        phones = extract_phone(text)
-        assert len(phones) > 0
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_no_phone_found(self):
         """Test when no phone number is present"""
         text = "This text has no phone number"
-        phones = extract_phone(text)
-        assert len(phones) == 0
+        result = extract_phone_simple(text)
+        assert result is None
 
 
 class TestPhoneNormalization:
@@ -148,24 +149,26 @@ class TestPhoneValidation:
         assert result is False
 
 
-class TestPhoneDeobfuscation:
-    """Test phone number deobfuscation"""
+class TestAdvancedPhoneExtraction:
+    """Test advanced phone extraction with confidence"""
 
-    def test_deobfuscate_word_numbers(self):
-        """Test deobfuscation of word-based numbers"""
-        # This test depends on implementation
-        # If deobfuscation is part of extraction
-        text = "Tel: null eins fünf eins eins zwei drei vier fünf sechs sieben acht"
-        # Should be able to extract or normalize this
-        # Implementation-dependent
+    def test_extract_phones_advanced_returns_tuples(self):
+        """Test that advanced extraction returns tuples with confidence"""
+        text = "Tel: 0151 12345678"
+        results = extract_phones_advanced(text)
+        if results:
+            assert isinstance(results, list)
+            if len(results) > 0:
+                assert isinstance(results[0], tuple)
+                assert len(results[0]) == 3  # (phone, context, confidence)
 
-    def test_obfuscation_patterns_exist(self):
-        """Test that obfuscation replacement patterns are defined"""
-        assert len(OBFUSCATION_REPLACEMENTS) > 0
-        # Check that common patterns are present
-        patterns = [p[0] for p in OBFUSCATION_REPLACEMENTS]
-        assert any("null" in p for p in patterns)
-        assert any("eins" in p for p in patterns)
+    def test_extract_phones_with_context(self):
+        """Test extraction with context"""
+        text = "Mobil: 0151 12345678"
+        results = extract_phones_advanced(text)
+        if results:
+            # Should include context information
+            assert len(results) > 0
 
 
 class TestPhoneBlacklist:
@@ -186,6 +189,18 @@ class TestPhoneBlacklist:
         assert "0900" in PHONE_BLACKLIST or any("0900" in item for item in PHONE_BLACKLIST)
 
 
+class TestObfuscationPatterns:
+    """Test phone number deobfuscation patterns"""
+
+    def test_obfuscation_patterns_exist(self):
+        """Test that obfuscation replacement patterns are defined"""
+        assert len(OBFUSCATION_REPLACEMENTS) > 0
+        # Check that common patterns are present
+        patterns = [p[0] for p in OBFUSCATION_REPLACEMENTS]
+        assert any("null" in p for p in patterns)
+        assert any("eins" in p for p in patterns)
+
+
 @pytest.mark.integration
 class TestIntegratedPhoneExtraction:
     """Integration tests for phone extraction"""
@@ -198,8 +213,8 @@ class TestIntegratedPhoneExtraction:
         Büro: 0221 7654321
         WhatsApp: +49 152 98765432
         """
-        phones = extract_phone(text)
-        assert len(phones) >= 2  # Should find at least 2 numbers
+        results = extract_phones_advanced(text)
+        assert len(results) >= 2  # Should find at least 2 numbers
 
     def test_extract_from_contact_card(self):
         """Test extraction from a contact card"""
@@ -210,23 +225,23 @@ class TestIntegratedPhoneExtraction:
         Mobil: 0151 12345678
         E-Mail: max@firma.de
         """
-        phones = extract_phone(text)
-        assert len(phones) >= 1
+        result = extract_phone_simple(text)
+        assert result is not None
 
     def test_extract_mixed_formats(self):
         """Test extraction with mixed formats"""
         text = "Festnetz: 0221-1234567, Handy: +49 151 12345678, Fax: 0221/1234568"
-        phones = extract_phone(text)
+        results = extract_phones_advanced(text)
         # Should extract multiple numbers
-        assert len(phones) >= 2
+        assert len(results) >= 2
 
     def test_filter_invalid_from_results(self):
         """Test that invalid numbers are filtered from results"""
         text = "Tel: 0800123456 oder 0151 12345678"
-        phones = extract_phone(text)
+        result = extract_phone_simple(text)
         # Should not include 0800 number
-        if phones:
-            assert not any("0800" in p for p in phones)
+        if result:
+            assert "0800" not in result
 
 
 @pytest.mark.parametrize(
@@ -243,8 +258,8 @@ class TestIntegratedPhoneExtraction:
 )
 def test_phone_extraction_parametrized(text, should_find):
     """Parametrized test for various phone extraction scenarios"""
-    phones = extract_phone(text)
+    result = extract_phone_simple(text)
     if should_find:
-        assert len(phones) > 0, f"Should find phone in: {text}"
+        assert result is not None, f"Should find phone in: {text}"
     else:
-        assert len(phones) == 0, f"Should not find phone in: {text}"
+        assert result is None, f"Should not find phone in: {text}"

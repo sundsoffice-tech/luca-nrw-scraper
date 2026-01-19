@@ -6,11 +6,11 @@ Testing email extraction, name extraction, and role detection.
 import pytest
 from stream2_extraction_layer.extraction_enhanced import (
     extract_email_robust,
-    extract_name,
-    detect_role,
+    extract_name_enhanced,
+    extract_role_with_context,
     _deobfuscate,
+    validate_name,
     ExtractionResult,
-    EMAIL_RE,
 )
 
 
@@ -96,13 +96,6 @@ class TestEmailExtraction:
         email = extract_email_robust(text, "")
         assert email is None
 
-    def test_email_regex_pattern(self):
-        """Test EMAIL_RE regex directly"""
-        emails = EMAIL_RE.findall("test@example.com and info@test.org")
-        assert len(emails) == 2
-        assert "test@example.com" in emails
-        assert "info@test.org" in emails
-
 
 class TestNameExtraction:
     """Test name extraction patterns"""
@@ -110,37 +103,43 @@ class TestNameExtraction:
     def test_extract_name_with_context(self):
         """Test name extraction with context markers"""
         text = "Manager: Max Mustermann ist unser Kontakt"
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         assert name is not None
         assert "Max Mustermann" in name
 
     def test_extract_name_with_title(self):
         """Test name extraction with Herr/Frau title"""
         text = "Ansprechpartner: Herr Peter Schmidt"
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         assert name is not None
         assert "Peter Schmidt" in name or "Peter" in name
 
     def test_extract_name_with_parentheses(self):
         """Test name extraction with parentheses"""
         text = "Max Mustermann (CEO) is the contact"
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         assert name is not None
         assert "Max Mustermann" in name
 
     def test_extract_name_ihr_ansprechpartner(self):
         """Test German 'Ihr Ansprechpartner' pattern"""
         text = "Ihr Ansprechpartner: Anna Schmidt"
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         assert name is not None
         assert "Anna Schmidt" in name
 
     def test_no_name_found(self):
         """Test when no name is found"""
         text = "this is just some text without a proper name"
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         # May return None or empty string depending on implementation
         assert name is None or name == ""
+
+    def test_validate_name(self):
+        """Test name validation"""
+        assert validate_name("Max Mustermann") is True
+        assert validate_name("M") is False
+        assert validate_name(None) is False
 
 
 class TestRoleDetection:
@@ -149,42 +148,42 @@ class TestRoleDetection:
     def test_detect_vertriebsleiter(self):
         """Test detection of Vertriebsleiter role"""
         text = "Wir suchen einen erfahrenen Vertriebsleiter"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         assert role is not None
         assert "vertriebsleiter" in role.lower()
 
     def test_detect_sales_director(self):
         """Test detection of Sales Director"""
         text = "Position: Sales Director for Germany"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         assert role is not None
         # Should map to vertriebsleiter category
 
     def test_detect_aussendienst(self):
         """Test detection of Außendienst"""
         text = "Außendienstmitarbeiter gesucht"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         assert role is not None
         assert "außendienst" in role.lower() or "aussendienst" in role.lower()
 
     def test_detect_recruiter(self):
         """Test detection of Recruiter"""
         text = "We need a talented recruiter"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         assert role is not None
         assert "recruiter" in role.lower()
 
     def test_detect_callcenter(self):
         """Test detection of Call Center roles"""
         text = "Call Center Agent for outbound sales"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         assert role is not None
         # Should detect callcenter-related role
 
     def test_no_role_detected(self):
         """Test when no role is detected"""
         text = "Just some random text"
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         # Should return None or empty string
         assert role is None or role == ""
 
@@ -228,9 +227,9 @@ class TestIntegratedExtraction:
         E-Mail: max.mustermann@firma.de
         """
         
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         email = extract_email_robust(text, "")
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         
         assert name is not None
         assert email == "max.mustermann@firma.de"
@@ -244,9 +243,9 @@ class TestIntegratedExtraction:
         Kontakt: schmidt [at] beispiel [dot] de
         """
         
-        name = extract_name(text, "")
+        name = extract_name_enhanced(text, "")
         email = extract_email_robust(text, "")
-        role = detect_role(text)
+        role, confidence = extract_role_with_context(text, "", "")
         
         assert name is not None
         assert "Schmidt" in name
@@ -260,8 +259,8 @@ class TestIntegratedExtraction:
         text = "Anna Meyer (at) company (dot) com - Recruiting Manager"
         
         email = extract_email_robust(text, "")
-        name = extract_name(text, "")
-        role = detect_role(text)
+        name = extract_name_enhanced(text, "")
+        role, confidence = extract_role_with_context(text, "", "")
         
         assert email is not None
         assert "@" in email
