@@ -1,0 +1,37 @@
+{% extends "admin/base.html" %}
+
+{% block extrastyle %}
+<style>
+    .crm-back-button {
+        background: #06b6d4;
+        color: #0f172a;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: bold;
+        margin-left: 20px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: background 0.2s;
+    }
+    .crm-back-button:hover {
+        background: #0891b2;
+    }
+</style>
+{% endblock %}
+
+{% block branding %}
+<div style="display: flex; align-items: center; padding: 10px 20px;">
+    <h1 id="site-name" style="margin: 0;">
+        <a href="{% url 'admin:index' %}" style="color: #417690; text-decoration: none;">
+            LUCA Command Center
+        </a>
+    </h1>
+    <!-- Zurück zum CRM Button -->
+    <a href="{% url 'crm-dashboard' %}" class="crm-back-button">
+        🏠 Zurück zum CRM
+    </a>
+</div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
