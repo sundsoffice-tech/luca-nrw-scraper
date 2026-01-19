@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'ai_config',
     'pages.apps.PagesConfig',
     'email_templates.apps.EmailTemplatesConfig',
+    'reports',
 ]
 
 MIDDLEWARE = [
@@ -378,6 +379,23 @@ UNFOLD = {
                         "title": "Versand-Logs",
                         "icon": "send",
                         "link": "/admin/email_templates/emailsendlog/",
+                    },
+                ],
+            },
+            {
+                "title": "Reports",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Report-Zeitpläne",
+                        "icon": "schedule",
+                        "link": "/admin/reports/reportschedule/",
+                    },
+                    {
+                        "title": "Report-Historie",
+                        "icon": "assessment",
+                        "link": "/admin/reports/reporthistory/",
                     },
                 ],
             },
