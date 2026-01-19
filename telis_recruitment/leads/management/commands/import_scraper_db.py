@@ -10,6 +10,7 @@ Usage:
 """
 import sqlite3
 import time
+import json
 from pathlib import Path
 from datetime import datetime
 from django.core.management.base import BaseCommand, CommandError
@@ -17,6 +18,13 @@ from django.db import transaction
 from django.conf import settings
 from django.utils import timezone
 from leads.models import Lead, SyncStatus
+from leads.field_mapping import (
+    SCRAPER_TO_DJANGO_MAPPING,
+    JSON_ARRAY_FIELDS,
+    is_json_field,
+    is_integer_field,
+    is_url_field
+)
 
 
 class Command(BaseCommand):
@@ -29,6 +37,11 @@ class Command(BaseCommand):
         'freelancer': Lead.LeadType.FREELANCER,
         'hr_contact': Lead.LeadType.HR_CONTACT,
         'candidate': Lead.LeadType.CANDIDATE,
+        'talent_hunt': Lead.LeadType.TALENT_HUNT,
+        'recruiter': Lead.LeadType.RECRUITER,
+        'job_ad': Lead.LeadType.JOB_AD,
+        'company': Lead.LeadType.COMPANY,
+        'individual': Lead.LeadType.INDIVIDUAL,
     }
     
     def add_arguments(self, parser):
@@ -152,11 +165,13 @@ class Command(BaseCommand):
             available_columns = [row[1] for row in cursor.fetchall()]
             
             # Build dynamic column list based on available columns
+            # Get all scraper fields from mapping
+            potential_columns = set(SCRAPER_TO_DJANGO_MAPPING.keys())
+            # Add core fields that are always needed
+            potential_columns.update(['id', 'last_updated'])
+            
             columns_to_select = []
-            for col in ['id', 'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 
-                       'tags', 'region', 'role_guess', 'lead_type', 'company_name', 
-                       'location_specific', 'confidence_score', 'social_profile_url', 
-                       'last_updated']:
+            for col in potential_columns:
                 if col in available_columns:
                     columns_to_select.append(col)
             
@@ -250,10 +265,33 @@ class Command(BaseCommand):
         cleaned = str(value).strip()
         return cleaned if cleaned else None
     
+    def _parse_json_field(self, value):
+        """Parse JSON field from scraper.db"""
+        if not value:
+            return None
+        if isinstance(value, (list, dict)):
+            return value
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            # If it's a string that looks like a comma-separated list
+            if isinstance(value, str) and ',' in value:
+                return [item.strip() for item in value.split(',') if item.strip()]
+            return None
+    
+    def _parse_integer_field(self, value):
+        """Parse integer field from scraper.db"""
+        if value is None or value == '':
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    
     def _process_lead(self, row, dry_run):
         """Process a single lead from scraper.db"""
         
-        # Extract and clean fields using helper
+        # Extract and clean core fields
         email = self._clean_field(row.get('email'))
         telefon = self._clean_field(row.get('telefon'))
         name = self._clean_field(row.get('name')) or 'Unbekannt'
@@ -263,38 +301,66 @@ class Command(BaseCommand):
             return 'skipped'
         
         # Parse score
-        try:
-            score = int(row.get('score') or 50)
-            score = max(0, min(100, score))  # Clamp to 0-100
-        except (ValueError, TypeError):
-            score = 50
+        score = self._parse_integer_field(row.get('score')) or 50
+        score = max(0, min(100, score))  # Clamp to 0-100
         
         # Map lead type
         lead_type_raw = (row.get('lead_type') or '').lower()
         lead_type = self.LEAD_TYPE_MAPPING.get(lead_type_raw, Lead.LeadType.UNKNOWN)
         
+        # Build field data dict using field mapping
+        field_data = {}
+        
+        for scraper_field, django_field in SCRAPER_TO_DJANGO_MAPPING.items():
+            if scraper_field not in row.keys():
+                continue
+                
+            value = row.get(scraper_field)
+            if value is None or value == '':
+                continue
+            
+            # Parse based on field type
+            if is_json_field(django_field):
+                parsed_value = self._parse_json_field(value)
+            elif is_integer_field(django_field):
+                parsed_value = self._parse_integer_field(value)
+            else:
+                parsed_value = self._clean_field(value)
+            
+            if parsed_value is not None:
+                field_data[django_field] = parsed_value
+        
+        # Handle special cases
         # Extract role (prefer role_guess over rolle)
-        role = self._clean_field(row.get('role_guess') or row.get('rolle'))
+        if 'role' not in field_data:
+            role = self._clean_field(row.get('role_guess') or row.get('rolle'))
+            if role:
+                field_data['role'] = role
         
-        # Extract location (prefer location_specific over region)
-        location = self._clean_field(row.get('location_specific') or row.get('region'))
+        # Extract location (prefer location_specific over region, then location)
+        if 'location' not in field_data:
+            location = self._clean_field(
+                row.get('location_specific') or row.get('region') or row.get('location')
+            )
+            if location:
+                field_data['location'] = location
         
-        # Extract company
-        company = self._clean_field(row.get('company_name'))
-        
-        # Extract source URL
-        source_url = self._clean_field(row.get('quelle'))
-        
-        # Extract social profile URLs
+        # Handle social profile URL splitting
         social_profile_url = self._clean_field(row.get('social_profile_url'))
-        linkedin_url = None
-        xing_url = None
-        
         if social_profile_url:
             if 'linkedin' in social_profile_url.lower():
-                linkedin_url = social_profile_url
+                field_data['linkedin_url'] = social_profile_url
             elif 'xing' in social_profile_url.lower():
-                xing_url = social_profile_url
+                field_data['xing_url'] = social_profile_url
+            # Also store in profile_url if not set
+            if 'profile_url' not in field_data:
+                field_data['profile_url'] = social_profile_url
+        
+        # Override with explicit linkedin/xing URLs if present
+        if row.get('linkedin_url'):
+            field_data['linkedin_url'] = self._clean_field(row.get('linkedin_url'))
+        if row.get('xing_url'):
+            field_data['xing_url'] = self._clean_field(row.get('xing_url'))
         
         # Check for existing lead (deduplication)
         existing = None
@@ -312,25 +378,23 @@ class Command(BaseCommand):
                 existing.quality_score = score
             
             # Update empty fields with new data
-            if not existing.company and company:
-                existing.company = company[:255]
-                should_update = True
-            
-            if not existing.role and role:
-                existing.role = role[:255]
-                should_update = True
-            
-            if not existing.location and location:
-                existing.location = location[:255]
-                should_update = True
-            
-            if not existing.linkedin_url and linkedin_url:
-                existing.linkedin_url = linkedin_url
-                should_update = True
-            
-            if not existing.xing_url and xing_url:
-                existing.xing_url = xing_url
-                should_update = True
+            for django_field, value in field_data.items():
+                # Skip fields that shouldn't be in the model
+                if not hasattr(existing, django_field):
+                    continue
+                
+                current_value = getattr(existing, django_field, None)
+                
+                # Update if current field is empty and we have new data
+                if not current_value and value:
+                    # Truncate string fields to max length
+                    if isinstance(value, str) and hasattr(Lead._meta.get_field(django_field), 'max_length'):
+                        max_length = Lead._meta.get_field(django_field).max_length
+                        if max_length:
+                            value = value[:max_length]
+                    
+                    setattr(existing, django_field, value)
+                    should_update = True
             
             if lead_type != Lead.LeadType.UNKNOWN and existing.lead_type == Lead.LeadType.UNKNOWN:
                 existing.lead_type = lead_type
@@ -348,21 +412,35 @@ class Command(BaseCommand):
                 return 'skipped'
         else:
             # Create new lead
+            lead_data = {
+                'name': name[:255],
+                'email': email,
+                'telefon': telefon,
+                'source': Lead.Source.SCRAPER,
+                'quality_score': score,
+                'lead_type': lead_type,
+            }
+            
+            # Add all mapped fields
+            for django_field, value in field_data.items():
+                # Skip fields that shouldn't be in the model
+                if not hasattr(Lead, django_field):
+                    continue
+                
+                # Truncate string fields to max length
+                if isinstance(value, str) and django_field != 'notes':
+                    try:
+                        field = Lead._meta.get_field(django_field)
+                        if hasattr(field, 'max_length') and field.max_length:
+                            value = value[:field.max_length]
+                    except Exception:
+                        # Field doesn't exist or doesn't have max_length - skip truncation
+                        pass
+                
+                lead_data[django_field] = value
+            
             if not dry_run:
-                Lead.objects.create(
-                    name=name[:255],
-                    email=email,
-                    telefon=telefon,
-                    source=Lead.Source.SCRAPER,
-                    source_url=source_url[:200] if source_url else None,
-                    quality_score=score,
-                    lead_type=lead_type,
-                    company=company[:255] if company else None,
-                    role=role[:255] if role else None,
-                    location=location[:255] if location else None,
-                    linkedin_url=linkedin_url,
-                    xing_url=xing_url,
-                )
+                Lead.objects.create(**lead_data)
             
             self.stdout.write(
                 self.style.SUCCESS(
