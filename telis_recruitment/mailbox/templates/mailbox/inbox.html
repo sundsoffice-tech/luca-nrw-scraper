@@ -109,19 +109,19 @@
         color: #64748b;
         font-size: 12px;
     }
-    .badge-info {
-        background: #06b6d4;
+    /* Badge styles */
+    .badge-base {
         color: #fff;
         font-size: 11px;
         padding: 2px 8px;
-        border-radius: 4px;
         display: inline-block;
+    }
+    .badge-info {
+        background: #06b6d4;
+        border-radius: 4px;
     }
     .badge-count-conversation {
         background: #6366f1;
-        color: #fff;
-        font-size: 11px;
-        padding: 2px 8px;
         border-radius: 12px;
     }
     .star-btn {
@@ -225,8 +225,14 @@
         border-top: 1px solid #334155;
     }
     /* Secondary Navigation */
-    .secondary-nav {
-        margin-top: 1rem;
+    .secondary-nav-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
     }
     .secondary-nav-title {
         color: #64748b;
@@ -295,7 +301,7 @@
     </div>
     
     <!-- Secondary Navigation (Settings) -->
-    <div class="mailbox-nav secondary-nav">
+    <div class="secondary-nav-container" style="margin-top: 1rem;">
         <div class="secondary-nav-title">Verwaltung</div>
         <a href="{% url 'mailbox:settings' %}" class="nav-tab">
             ⚙️ Einstellungen
@@ -345,7 +351,7 @@
                             <span class="contact">
                                 {{ conv.contact_name|default:conv.contact_email }}
                                 {% if conv.lead %}
-                                    <span class="badge-info ml-2">Lead</span>
+                                    <span class="badge-base badge-info ml-2">Lead</span>
                                 {% endif %}
                             </span>
                             <span class="time">{{ conv.last_message_at|timesince }} ago</span>
@@ -354,7 +360,7 @@
                         <div class="snippet">{{ conv.messages.last.snippet|default:"" }}</div>
                     </div>
                     {% if conv.message_count > 1 %}
-                    <span class="badge-count-conversation">{{ conv.message_count }}</span>
+                    <span class="badge-base badge-count-conversation">{{ conv.message_count }}</span>
                     {% endif %}
                 </div>
             </div>
