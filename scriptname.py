@@ -261,7 +261,6 @@ try:
     from luca_scraper.search import (
         DEFAULT_QUERIES as _DEFAULT_QUERIES,
         INDUSTRY_QUERIES as _INDUSTRY_QUERIES,
-        RECRUITER_QUERIES as _RECRUITER_QUERIES,
         build_queries as _build_queries,
     )
     from luca_scraper.scoring import (
@@ -3166,23 +3165,6 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:xing.com/profile "Inhaber" "Handelsvertreter" kontakt',
         '"Selbstständiger Vertriebsprofi" kontakt NRW',
     ],
-}
-
-# NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
-RECRUITER_QUERIES = {
-    'recruiter': [
-        'site:kleinanzeigen.de/s-stellengesuche/ "außendienst" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "handelsvertreter" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "kundenberater" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "suche job" "vertrieb" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "arbeit" "verkauf" NRW',
-        'site:kleinanzeigen.de/s-stellengesuche/ "quereinsteiger" "vertrieb" NRW',
-        # Facebook Gruppen & Profile
-        'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
-        'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
-        'site:facebook.com "jobsuche" "verkauf" ("017" OR "016" OR "015")',
-    ]
 }
 
 
