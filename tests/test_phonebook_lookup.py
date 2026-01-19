@@ -262,9 +262,8 @@ def test_rate_limiting(lookup):
     # Second call should have been delayed
     delay = second_time - first_time
     
-    # Should be at least close to min_delay (2 seconds)
-    # Allow some tolerance for test execution time
-    assert delay >= 1.5  # At least 1.5 seconds (some tolerance)
+    # min_delay is 2.0 seconds, but allow 0.5s tolerance for test execution time
+    assert delay >= 1.5  # At least 1.5 seconds (tolerance for 2.0s min_delay)
 
 
 def test_lookup_with_cache(lookup, temp_db):

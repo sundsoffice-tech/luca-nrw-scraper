@@ -124,9 +124,10 @@ class PhonebookLookup:
         # Add company column if it doesn't exist (migration for existing databases)
         try:
             conn.execute("ALTER TABLE phone_lookup_cache ADD COLUMN company TEXT")
-        except sqlite3.OperationalError:
-            # Column already exists, ignore
-            pass
+        except sqlite3.OperationalError as e:
+            # Column already exists - this is expected for existing databases
+            if "duplicate column name" not in str(e).lower():
+                raise  # Re-raise unexpected errors
         conn.commit()
         conn.close()
     
@@ -286,12 +287,13 @@ class PhonebookLookup:
             for selector in source["selectors"].get("company", []):
                 elem = soup.select_one(selector)
                 if elem:
-                    company = elem.get_text(strip=True)
-                    company = re.sub(r'\s+', ' ', company).strip()
-                    # Skip if company looks like a duplicate of the name
-                    if company and company.lower() != name.lower():
+                    candidate_company = elem.get_text(strip=True)
+                    candidate_company = re.sub(r'\s+', ' ', candidate_company).strip()
+                    # Only use if not a duplicate of the name
+                    if candidate_company and candidate_company.lower() != name.lower():
+                        company = candidate_company
                         break
-                    company = ""  # Reset if it's a duplicate
+                    # If it's a duplicate of the name, continue looking for other selectors
             
             return {
                 "name": name,
