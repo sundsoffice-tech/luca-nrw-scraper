@@ -202,10 +202,36 @@ class SearchRegionAdmin(ModelAdmin):
 class SearchDorkAdmin(ModelAdmin):
     """Admin interface for SearchDork"""
     
-    list_display = ['query_short', 'category', 'is_active', 'priority', 'times_used', 'leads_found', 'success_rate']
+    list_display = ['query_short', 'category', 'is_active', 'priority', 'times_used', 'leads_found', 'leads_with_phone', 'success_rate', 'last_synced_at']
     list_filter = ['category', 'is_active', 'ai_generated']
     list_editable = ['is_active', 'priority']
     search_fields = ['query', 'description']
+    
+    fieldsets = (
+        ('Such-Query', {
+            'fields': ('query', 'category', 'description', 'is_active', 'priority')
+        }),
+        ('Performance-Tracking', {
+            'fields': ('times_used', 'leads_found', 'leads_with_phone', 'total_search_results', 'success_rate', 'last_used'),
+            'classes': ('collapse',)
+        }),
+        ('KI-Lern-Daten', {
+            'fields': ('extraction_patterns', 'top_domains', 'phone_patterns', 'last_synced_at'),
+            'classes': ('collapse',),
+            'description': 'Automatisch gelernte Muster aus dem AI-System'
+        }),
+        ('KI-Generierung', {
+            'fields': ('ai_generated', 'ai_prompt'),
+            'classes': ('collapse',)
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['times_used', 'leads_found', 'leads_with_phone', 'total_search_results', 'success_rate', 
+                       'last_used', 'extraction_patterns', 'top_domains', 'phone_patterns', 'last_synced_at',
+                       'created_at', 'updated_at']
     
     def query_short(self, obj):
         return obj.query[:60] + '...' if len(obj.query) > 60 else obj.query

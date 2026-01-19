@@ -548,6 +548,20 @@ class SearchDork(models.Model):
     success_rate = models.FloatField(default=0.0, verbose_name="Erfolgsrate")
     last_used = models.DateTimeField(null=True, blank=True, verbose_name="Zuletzt verwendet")
     
+    # Extended AI Learning Fields - Track what patterns work with this dork
+    leads_with_phone = models.IntegerField(default=0, verbose_name="Leads mit Telefon",
+        help_text="Anzahl der Leads mit erfolgreicher Telefonnummer-Extraktion")
+    total_search_results = models.IntegerField(default=0, verbose_name="Gesamte Suchergebnisse",
+        help_text="Kumulierte Anzahl der Google-Suchergebnisse")
+    extraction_patterns = models.JSONField(default=list, blank=True, verbose_name="Extraktionsmuster",
+        help_text="Erfolgreiche CSS/XPath-Muster die mit diesem Dork funktionieren")
+    top_domains = models.JSONField(default=list, blank=True, verbose_name="Top-Domains",
+        help_text="Domains mit höchster Erfolgsrate für diesen Dork")
+    phone_patterns = models.JSONField(default=list, blank=True, verbose_name="Telefon-Muster",
+        help_text="Erfolgreiche Telefonnummer-Patterns")
+    last_synced_at = models.DateTimeField(null=True, blank=True, verbose_name="Letzte Synchronisierung",
+        help_text="Zeitpunkt der letzten Sync mit SQLite Learning-DB")
+    
     # AI-Generierung
     ai_generated = models.BooleanField(default=False, verbose_name="KI-generiert")
     ai_prompt = models.TextField(blank=True, verbose_name="KI-Prompt")
@@ -562,6 +576,23 @@ class SearchDork(models.Model):
     
     def __str__(self):
         return f"[{self.category}] {self.query[:50]}..."
+    
+    def update_from_learning_metrics(self, times_used: int = 0, total_results: int = 0,
+                                      leads_found: int = 0, leads_with_phone: int = 0,
+                                      score: float = 0.0):
+        """
+        Update dork metrics from SQLite learning data.
+        Called by DorkSyncService to sync AI learning results to CRM.
+        """
+        from django.utils import timezone
+        
+        self.times_used = times_used
+        self.total_search_results = total_results
+        self.leads_found = leads_found
+        self.leads_with_phone = leads_with_phone
+        self.success_rate = score
+        self.last_synced_at = timezone.now()
+        self.last_used = timezone.now()
 
 
 class PortalSource(models.Model):
