@@ -1,0 +1,101 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Neue Email - Mailbox{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <h2 class="mb-4">Neue Email schreiben</h2>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form id="compose-form">
+                        <!-- Account selection -->
+                        <div class="mb-3">
+                            <label for="account" class="form-label">Von</label>
+                            <select class="form-select" id="account" name="account" required>
+                                <option value="">Wählen Sie ein Konto...</option>
+                                {% for account in accounts %}
+                                <option value="{{ account.id }}">{{ account.name }} ({{ account.email_address }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- To -->
+                        <div class="mb-3">
+                            <label for="to" class="form-label">An</label>
+                            <input type="email" class="form-control" id="to" name="to" value="{{ to_email }}" required multiple>
+                            <small class="form-text text-muted">Mehrere Empfänger mit Komma trennen</small>
+                        </div>
+                        
+                        <!-- CC -->
+                        <div class="mb-3">
+                            <label for="cc" class="form-label">CC</label>
+                            <input type="email" class="form-control" id="cc" name="cc" multiple>
+                        </div>
+                        
+                        <!-- Subject -->
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Betreff</label>
+                            <input type="text" class="form-control" id="subject" name="subject" required>
+                        </div>
+                        
+                        <!-- Template selection -->
+                        {% if templates %}
+                        <div class="mb-3">
+                            <label for="template" class="form-label">Template</label>
+                            <select class="form-select" id="template" name="template">
+                                <option value="">Kein Template</option>
+                                {% for template in templates %}
+                                <option value="{{ template.id }}">{{ template.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Body -->
+                        <div class="mb-3">
+                            <label for="body" class="form-label">Nachricht</label>
+                            <textarea class="form-control" id="body" name="body" rows="10" required></textarea>
+                            <small class="form-text text-muted">Rich-Text-Editor wird in einer zukünftigen Version hinzugefügt</small>
+                        </div>
+                        
+                        <!-- Signature selection -->
+                        {% if signatures %}
+                        <div class="mb-3">
+                            <label for="signature" class="form-label">Signatur</label>
+                            <select class="form-select" id="signature" name="signature">
+                                <option value="">Keine Signatur</option>
+                                {% for sig in signatures %}
+                                <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>{{ sig.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Actions -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send"></i> Senden
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary">
+                                <i class="bi bi-save"></i> Als Entwurf speichern
+                            </button>
+                            <a href="{% url 'mailbox:inbox' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x"></i> Abbrechen
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <strong>Hinweis:</strong> Die Sende-Funktionalität ist über die API verfügbar. 
+                Verwenden Sie die Admin-Oberfläche oder nutzen Sie die REST API unter 
+                <code>/crm/mailbox/api/emails/send/</code>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

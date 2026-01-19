@@ -1,0 +1,140 @@
+{% extends "crm/base.html" %}
+
+{% block title %}{{ conversation.subject }} - Mailbox{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-9">
+            <!-- Back button -->
+            <a href="{% url 'mailbox:inbox' %}" class="btn btn-sm btn-outline-secondary mb-3">
+                <i class="bi bi-arrow-left"></i> Zurück zum Posteingang
+            </a>
+            
+            <!-- Conversation header -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h4 class="mb-2">{{ conversation.subject }}</h4>
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <span class="badge bg-secondary">{{ conversation.message_count }} Nachrichten</span>
+                            {% if conversation.lead %}
+                            <a href="/admin/leads/lead/{{ conversation.lead.id }}/change/" class="badge bg-info text-decoration-none">
+                                Lead: {{ conversation.lead.name }}
+                            </a>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <span class="badge bg-light text-dark">{{ conversation.get_status_display }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Email messages -->
+            {% for email in emails %}
+            <div class="card mb-3 {% if email.direction == 'outbound' %}border-primary{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <strong>
+                                {% if email.direction == 'inbound' %}
+                                    {{ email.from_name|default:email.from_email }}
+                                {% else %}
+                                    <i class="bi bi-send"></i> {{ email.from_name|default:email.from_email }}
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted ms-2">{{ email.to_emails.0.email }}</small>
+                        </div>
+                        <small class="text-muted">
+                            {% if email.sent_at %}
+                                {{ email.sent_at|date:"d.m.Y H:i" }}
+                            {% elif email.received_at %}
+                                {{ email.received_at|date:"d.m.Y H:i" }}
+                            {% else %}
+                                {{ email.created_at|date:"d.m.Y H:i" }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    
+                    {% if email.status != 'sent' and email.direction == 'outbound' %}
+                    <div class="alert alert-sm alert-info">
+                        Status: {{ email.get_status_display }}
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    {% if email.body_html %}
+                        <div class="email-content">
+                            {{ email.body_html|safe }}
+                        </div>
+                    {% else %}
+                        <pre class="mb-0">{{ email.body_text }}</pre>
+                    {% endif %}
+                    
+                    {% if email.attachments.exists %}
+                    <hr>
+                    <div>
+                        <strong>Anhänge:</strong>
+                        {% for attachment in email.attachments.all %}
+                        <div class="badge bg-secondary">
+                            <i class="bi bi-paperclip"></i> {{ attachment.filename }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            
+            <!-- Reply form -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Antworten</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Antwortfunktion in Entwicklung. Nutzen Sie vorerst die API oder den Admin-Bereich.</p>
+                    <a href="{% url 'mailbox:compose' %}" class="btn btn-primary">Neue Email schreiben</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Konversationsdetails</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>Kontakt:</strong><br>
+                        {{ conversation.contact_email }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Konto:</strong><br>
+                        {{ conversation.account.name }}
+                    </div>
+                    {% if conversation.assigned_to %}
+                    <div class="mb-2">
+                        <strong>Zugewiesen an:</strong><br>
+                        {{ conversation.assigned_to.username }}
+                    </div>
+                    {% endif %}
+                    <div class="mb-2">
+                        <strong>Erstellt:</strong><br>
+                        {{ conversation.created_at|date:"d.m.Y H:i" }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .email-content {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Email-Konten - Mailbox{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <h2 class="mb-4">Email-Konten</h2>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Ihre Email-Konten</h5>
+                <a href="/admin/mailbox/emailaccount/add/" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle"></i> Neues Konto
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if accounts %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Typ</th>
+                                <th>Status</th>
+                                <th>Letzte Synchronisation</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in accounts %}
+                            <tr>
+                                <td>
+                                    {{ account.name }}
+                                    {% if account.is_default %}
+                                    <span class="badge bg-primary">Standard</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ account.email_address }}</td>
+                                <td>{{ account.get_account_type_display }}</td>
+                                <td>
+                                    {% if account.is_active %}
+                                    <span class="badge bg-success">Aktiv</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inaktiv</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if account.last_sync_at %}
+                                        {{ account.last_sync_at|date:"d.m.Y H:i" }}
+                                    {% else %}
+                                        Nie
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="/admin/mailbox/emailaccount/{{ account.id }}/change/" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> Bearbeiten
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted">Sie haben noch keine Email-Konten konfiguriert.</p>
+                <a href="/admin/mailbox/emailaccount/add/" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Erstes Konto hinzufügen
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Signaturen</h5>
+                </div>
+                <div class="card-body">
+                    <a href="/admin/mailbox/emailsignature/" class="btn btn-outline-primary">
+                        Signaturen verwalten
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Schnellantworten</h5>
+                </div>
+                <div class="card-body">
+                    <a href="/admin/mailbox/quickreply/" class="btn btn-outline-primary">
+                        Schnellantworten verwalten
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="alert alert-info mt-4">
+        <strong>Tipp:</strong> Konfigurieren Sie IMAP/SMTP-Einstellungen in den Konto-Details im Admin-Bereich.
+        Für Brevo-Integration fügen Sie Ihren API-Schlüssel hinzu.
+    </div>
+</div>
+{% endblock %}
