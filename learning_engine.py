@@ -78,13 +78,30 @@ class LearningEngine:
         """
         self.db_path = db_path
         
-        # Load AI configuration (from Django DB if available, else defaults)
-        self.ai_config = get_ai_config()
-        if AI_CONFIG_AVAILABLE:
-            logger.info(f"AI config loaded from Django DB: provider={self.ai_config.get('default_provider')}, "
-                       f"model={self.ai_config.get('default_model')}")
-        else:
-            logger.info("AI config using fallback defaults (Django not available)")
+        # Load AI configuration with fallback (defense in depth)
+        try:
+            self.ai_config = get_ai_config()
+            if AI_CONFIG_AVAILABLE:
+                logger.info(f"AI config loaded from Django DB: provider={self.ai_config.get('default_provider')}, "
+                           f"model={self.ai_config.get('default_model')}")
+            else:
+                logger.info("AI config using fallback defaults (Django not available)")
+        except Exception as e:
+            # Fallback if get_ai_config() fails for any reason
+            logger.warning(f"Failed to load AI config, using defaults: {e}")
+            self.ai_config = {
+                'temperature': 0.3,
+                'top_p': 1.0,
+                'max_tokens': 4000,
+                'learning_rate': 0.01,
+                'daily_budget': 5.0,
+                'monthly_budget': 150.0,
+                'confidence_threshold': 0.35,
+                'retry_limit': 2,
+                'timeout_seconds': 30,
+                'default_provider': 'OpenAI',
+                'default_model': 'gpt-4o-mini',
+            }
         
         self._ensure_learning_tables()
     
