@@ -51,6 +51,26 @@ from .validation import (
     should_skip_url_prefetch,
 )
 
+from .enrichment import (
+    # Enrichment functions
+    get_cached_telefonbuch_result,
+    cache_telefonbuch_result,
+    query_dasoertliche,
+    should_accept_enrichment,
+    enrich_phone_from_telefonbuch,
+    enrich_leads_with_telefonbuch,
+)
+
+from .quality import (
+    # Scoring & Quality functions
+    compute_score,
+    etld1,
+    _dedup_run,
+    deduplicate_parallel_leads,
+    detect_recency,
+    is_commercial_agent,
+)
+
 __all__ = [
     # Patterns
     "EMAIL_RE",
@@ -88,11 +108,27 @@ __all__ = [
     "AGENT_FINGERPRINTS",
     "RETAIL_ROLES",
     
-    # Functions
+    # Validation Functions
     "is_candidate_seeking_job",
     "is_job_advertisement",
     "classify_lead",
     "is_garbage_context",
     "should_drop_lead",
     "should_skip_url_prefetch",
+    
+    # Enrichment Functions
+    "get_cached_telefonbuch_result",
+    "cache_telefonbuch_result",
+    "query_dasoertliche",
+    "should_accept_enrichment",
+    "enrich_phone_from_telefonbuch",
+    "enrich_leads_with_telefonbuch",
+    
+    # Scoring & Quality Functions
+    "compute_score",
+    "etld1",
+    "_dedup_run",
+    "deduplicate_parallel_leads",
+    "detect_recency",
+    "is_commercial_agent",
 ]
