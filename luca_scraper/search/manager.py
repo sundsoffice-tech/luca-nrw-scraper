@@ -556,32 +556,103 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
     # NEU: HANDELSVERTRETER
     # ══════════════════════════════════════════════════════════════
     "handelsvertreter": [
-        'site:de "Unsere Vertriebspartner" "PLZ" "Mobil" -jobs',
-        'site:de "Unsere Vertretungen" "Industrievertretung" "Kontakt"',
-        'site:de "Vertriebsnetz" "Handelsvertretung" "Ansprechpartner"',
-        'site:de "Gebietsvertretung" "PLZ" "Telefon" -stepstone -indeed',
-        'site:de "Vertragshändler" "Maschinenbau" "Ansprechpartner"',
-        '"Handelsvertreter" "Provision" "Vertriebspartner" NRW telefon',
-        '"freie Handelsvertretung" "suche" "Vertriebsgebiet"',
-        'site:kleinanzeigen.de handelsvertreter provision kontakt',
-        'site:xing.com "Handelsvertreter" "Industrievertretung"',
-        '"Handelsvertretung" "Maschinenbau" "Außendienst" NRW',
-        'site:cdh.de "Mitglied" "Kontakt"',
-        'site:handelskammer.de "Handelsvertreter" telefon',
-        '"Handelsvertreterregister" NRW kontakt email',
-        'site:ihk.de "Handelsvertreter" "Vertretung" kontakt',
-        'site:bdvi.de "Mitglied" "NRW" kontakt',
-        'filetype:pdf "Vertreterliste" "Mobil" "PLZ" -bewerbung',
-        'filetype:pdf "Preisliste" "Industrievertretung" "Kontakt"',
-        '"Inhaltlich Verantwortlicher" "Handelsvertretung" "Mobil" -GmbH -UG',
-        '"Angaben gemäß § 5 TMG" "Handelsvertretung" "Inhaber" "Mobil"',
-        'inurl:impressum "Handelsvertretung" "powered by WordPress" "Mobil"',
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 1: KLEINANZEIGEN STELLENGESUCHE (Primäre Quelle!)
+        # ──────────────────────────────────────────────────────────
+        'site:kleinanzeigen.de/s-stellengesuche "handelsvertreter"',
+        'site:kleinanzeigen.de/s-stellengesuche "freier handelsvertreter"',
+        'site:kleinanzeigen.de/s-stellengesuche "industrievertretung"',
+        'site:kleinanzeigen.de/s-stellengesuche "handelsvertretung" "suche"',
+        'site:kleinanzeigen.de/s-stellengesuche "vertretung" "provision"',
+        'site:kleinanzeigen.de/s-stellengesuche "selbstständiger vertreter"',
+        'site:kleinanzeigen.de "handelsvertreter" "suche vertretung"',
+        'site:kleinanzeigen.de "freiberuflicher handelsvertreter" "suche"',
+        'site:markt.de/stellengesuche "handelsvertreter"',
+        'site:markt.de/stellengesuche "industrievertretung"',
+        'site:markt.de "handelsvertretung" "suche"',
+        'site:quoka.de/stellengesuche "handelsvertreter"',
+        'site:quoka.de "suche vertretung" "provision"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 2: BUSINESS NETZWERKE (Xing, LinkedIn)
+        # ──────────────────────────────────────────────────────────
+        'site:xing.com/profile "Handelsvertreter" "offen für angebote"',
+        'site:xing.com/profile "Handelsvertretung" "suche"',
+        'site:xing.com/profile "freie Handelsvertretung" "NRW"',
+        'site:xing.com/profile "Industrievertretung" "Vertretung gesucht"',
+        'site:xing.com "Handelsvertreter" "neue Vertretung" kontakt',
+        'site:xing.com "selbstständiger Handelsvertreter" "suche"',
+        'site:linkedin.com/in "Handelsvertreter" "open to" germany',
+        'site:linkedin.com/in "freier Handelsvertreter" "suche"',
+        'site:linkedin.com/in "Industrievertretung" "verfügbar"',
+        'site:linkedin.com/in "Handelsvertretung" "neue Mandate"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 3: VERBÄNDE & REGISTER (Offizielle Quellen)
+        # ──────────────────────────────────────────────────────────
+        'site:cdh.de "Handelsvertreter" "sucht Vertretung" kontakt',
+        'site:cdh.de "freie Kapazitäten" "Handelsvertreter"',
+        'site:cdh.de/boerse "Handelsvertretersuche"',
+        'site:handelskammer.de "Handelsvertreter" "Vertretung gesucht"',
+        'site:ihk.de "Handelsvertreterbörse" kontakt',
+        '"CDH Handelsvertreterbörse" "sucht Vertretung"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 4: SOCIAL MEDIA
+        # ──────────────────────────────────────────────────────────
+        'site:facebook.com "Handelsvertreter" "suche Vertretung"',
+        'site:facebook.com/groups "Handelsvertreter" "freie Kapazitäten"',
+        'site:facebook.com "freier Handelsvertreter" "suche Mandate"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 5: BRANCHEN-SPEZIFISCH
+        # ──────────────────────────────────────────────────────────
+        # SHK/Sanitär/Heizung
+        '"Handelsvertreter" "SHK" "suche Vertretung" kontakt',
+        '"Industrievertretung" "Sanitär" "Heizung" "freie Kapazitäten"',
+        'site:kleinanzeigen.de "Handelsvertreter" "SHK" "suche"',
+        
+        # Elektro/Elektronik
+        '"Handelsvertreter" "Elektrotechnik" "suche Vertretung"',
+        '"Industrievertretung" "Elektronik" "freie Kapazität"',
+        
+        # Maschinenbau
+        '"Handelsvertreter" "Maschinenbau" "suche Mandate"',
+        '"Industrievertretung" "Werkzeug" "suche"',
+        
+        # Lebensmittel/Food
+        '"Handelsvertreter" "Lebensmittel" "suche Vertretung"',
+        '"Handelsvertreter" "Food" "freie Kapazitäten"',
+        
+        # Bau/Bauelemente
+        '"Handelsvertreter" "Bauelemente" "suche"',
+        '"Industrievertretung" "Baustoffe" "freie Kapazität"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 6: REGIONALE NRW-SUCHE
+        # ──────────────────────────────────────────────────────────
+        '"Handelsvertreter" "suche Vertretung" "Düsseldorf" kontakt',
+        '"Handelsvertreter" "suche" "Köln" "NRW"',
+        '"Industrievertretung" "Ruhrgebiet" "freie Kapazitäten"',
+        '"freier Handelsvertreter" "Münsterland" "suche"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE 7: SPEZIFISCHE SUCHFORMULIERUNGEN
+        # ──────────────────────────────────────────────────────────
+        '"suche Vertretung" "Handelsvertreter" "Provision" kontakt',
+        '"freie Kapazitäten" "Handelsvertreter" "Außendienst" telefon',
+        '"Vertretung gesucht" "selbstständig" "Provision" mobil',
+        '"neue Mandate" "Handelsvertreter" "Deutschland" kontakt',
+        '"Industrievertretung" "suche Hersteller" kontakt',
+        '"biete Handelsvertretung" "Erfahrung" telefon',
+        '"Handelsvertreter" "Sortimentserweiterung" "suche"',
     ],
     
     # ══════════════════════════════════════════════════════════════
     # NEU: D2D (Door-to-Door)
     # ══════════════════════════════════════════════════════════════
     "d2d": [
+        # Bestehende Queries
         '"door to door" "vertriebler" "sucht" "mobil"',
         '"haustürgeschäft" "erfahrung" "suche arbeit"',
         'site:kleinanzeigen.de/s-stellengesuche "d2d" "NRW"',
@@ -597,12 +668,44 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:linkedin.com/in "door to door" "sales" "germany"',
         '"field sales" "d2d" "erfahrung" telefon',
         '"direktvertrieb" "haustür" "suche stelle"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: SOLAR/PHOTOVOLTAIK (größter D2D Markt!)
+        # ──────────────────────────────────────────────────────────
+        'site:kleinanzeigen.de/s-stellengesuche "d2d" "solar"',
+        'site:kleinanzeigen.de/s-stellengesuche "haustürvertrieb" "photovoltaik"',
+        '"door to door" "solar" "erfahrung" "suche"',
+        '"d2d" "photovoltaik" "vertriebler" "suche job"',
+        'site:facebook.com/groups "d2d" "solar" "jobs"',
+        '"solarvertrieb" "haustür" "erfahrung" "suche"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: GLASFASER (neuer Trend!)
+        # ──────────────────────────────────────────────────────────
+        '"glasfaser" "d2d" "vertriebler" "suche"',
+        '"door to door" "telekom" "glasfaser" "erfahrung"',
+        '"glasfaser ausbau" "haustür" "vertrieb" "suche"',
+        'site:kleinanzeigen.de "glasfaser" "d2d" "suche"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: ENERGIE/STROM
+        # ──────────────────────────────────────────────────────────
+        '"strom" "haustürvertrieb" "erfahrung" "suche"',
+        '"energievertrieb" "d2d" "suche stelle"',
+        '"door to door" "energieversorger" "erfahrung"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: ALLGEMEIN VERBESSERT
+        # ──────────────────────────────────────────────────────────
+        'site:xing.com/profile "door to door" "verfügbar"',
+        'site:linkedin.com/in "d2d sales" "germany" "open"',
     ],
     
     # ══════════════════════════════════════════════════════════════
     # NEU: CALLCENTER
     # ══════════════════════════════════════════════════════════════
     "callcenter": [
+        # Bestehende Queries
         '"call center agent" "suche" "homeoffice" "NRW"',
         '"telesales" "erfahrung" "suche stelle"',
         '"kundenservice" "telefon" "suche job"',
@@ -618,12 +721,40 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"kundenberater telefon" "suche" "homeoffice"',
         '"callcenter erfahrung" "suche neue" NRW',
         '"telefonist" "suche stelle" "erfahrung"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: REMOTE/HOMEOFFICE SPEZIFISCH (sehr gefragt!)
+        # ──────────────────────────────────────────────────────────
+        '"call center" "remote" "suche stelle" "sofort"',
+        '"telesales" "100% homeoffice" "suche"',
+        '"kundenservice" "von zuhause" "suche job"',
+        '"callcenter" "homeoffice" "erfahrung" "suche"',
+        'site:kleinanzeigen.de/s-stellengesuche "call center" "remote"',
+        'site:kleinanzeigen.de/s-stellengesuche "homeoffice" "telefon"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: OUTBOUND SPEZIFISCH
+        # ──────────────────────────────────────────────────────────
+        '"outbound" "b2b" "terminierung" "suche"',
+        '"kaltakquise" "telefon" "erfahrung" "suche stelle"',
+        '"telefonakquise" "leadgenerierung" "suche"',
+        '"neukundenakquise" "telefon" "suche job"',
+        'site:kleinanzeigen.de/s-stellengesuche "outbound" "NRW"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: INBOUND SPEZIFISCH
+        # ──────────────────────────────────────────────────────────
+        '"inbound" "first level" "support" "suche"',
+        '"kundenhotline" "erfahrung" "suche stelle"',
+        '"technischer support" "telefon" "suche"',
+        '"customer service" "deutsch" "suche job"',
     ],
     
     # ══════════════════════════════════════════════════════════════
     # RECRUITER (Vertriebler-Rekrutierung)
     # ══════════════════════════════════════════════════════════════
     "recruiter": [
+        # Bestehende Queries
         'site:kleinanzeigen.de/s-stellengesuche/ "außendienst" NRW',
         'site:kleinanzeigen.de/s-stellengesuche/ "handelsvertreter" NRW',
         'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" NRW',
@@ -635,6 +766,55 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
         'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
         'site:facebook.com "jobsuche" "verkauf" ("017" OR "016" OR "015")',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: LINKEDIN RECRUITER
+        # ──────────────────────────────────────────────────────────
+        'site:linkedin.com/in "Recruiter" "Vertrieb" "NRW"',
+        'site:linkedin.com/in "Personalberater" "Sales" "Deutschland"',
+        'site:linkedin.com/in "Talent Acquisition" "Sales" "germany"',
+        'site:linkedin.com/in "HR" "Vertrieb" "recruiting"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: XING RECRUITER
+        # ──────────────────────────────────────────────────────────
+        'site:xing.com/profile "Personalberater" "Vertrieb"',
+        'site:xing.com/profile "Recruiter" "Sales" "NRW"',
+        'site:xing.com/profile "Headhunter" "Vertrieb"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: PERSONALDIENSTLEISTER
+        # ──────────────────────────────────────────────────────────
+        '"Personalvermittlung" "Vertrieb" kontakt telefon',
+        '"Headhunter" "Sales" "NRW" kontakt',
+        '"Personalberatung" "Vertriebspositionen" kontakt',
+        '"Zeitarbeit" "Vertrieb" "NRW" telefon',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: STELLENGESUCHE VON RECRUITERN
+        # ──────────────────────────────────────────────────────────
+        'site:kleinanzeigen.de/s-stellengesuche "recruiter" "vertrieb"',
+        'site:kleinanzeigen.de/s-stellengesuche "personalberater"',
+        'site:markt.de "recruiter" "suche" "vertrieb"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: SPEZIALISIERTE RECRUITER
+        # ──────────────────────────────────────────────────────────
+        '"IT Recruiter" "Sales" kontakt',
+        '"Pharma Recruiter" "Außendienst" telefon',
+        '"Finance Recruiter" "Vertrieb" kontakt',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: FACEBOOK GRUPPEN FÜR RECRUITER
+        # ──────────────────────────────────────────────────────────
+        'site:facebook.com/groups "recruiter" "vertrieb" "deutschland"',
+        'site:facebook.com/groups "personalvermittlung" "sales"',
+        
+        # ──────────────────────────────────────────────────────────
+        # NEU: RECRUITING EVENTS
+        # ──────────────────────────────────────────────────────────
+        '"Recruiting Event" "Vertrieb" "NRW" kontakt',
+        '"Karrieremesse" "Recruiter" "Sales"',
     ],
 }
 
