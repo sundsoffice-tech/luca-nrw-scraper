@@ -113,6 +113,18 @@ def scraper_start(request):
         result = manager.start(params, user=request.user)
         
         if result['success']:
+            # Save config settings for next page load
+            config = ScraperConfig.get_config()
+            config.industry = params.get('industry', config.industry)
+            config.qpi = qpi  # Use validated qpi value
+            config.mode = params.get('mode', config.mode)
+            config.smart = params.get('smart', config.smart)
+            config.once = params.get('once', config.once)
+            config.force = params.get('force', config.force)
+            config.dry_run = params.get('dry_run', config.dry_run)
+            config.updated_by = request.user
+            config.save()
+            
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
