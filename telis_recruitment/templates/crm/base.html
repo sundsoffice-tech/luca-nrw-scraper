@@ -242,7 +242,7 @@
                 </p>
             </div>
             <div class="flex gap-3">
-                <button id="accept-cookies" class="px-6 py-2 bg-primary hover:bg-cyan-400 text-dark-900 font-bold rounded-lg text-sm transition shadow-lg shadow-primary/20">
+                <button id="accept-cookies" class="px-6 py-2 bg-primary hover:bg-primary/80 text-dark-900 font-bold rounded-lg text-sm transition shadow-lg shadow-primary/20">
                     Verstanden
                 </button>
             </div>
@@ -266,9 +266,9 @@
             if (!getCookie(cookieName)) {
                 banner.style.display = 'block';
                 // Small delay to allow display:block to apply before removing translate class for animation
-                requestAnimationFrame(() => {
+                setTimeout(() => {
                     banner.classList.remove('translate-y-full');
-                });
+                }, 10);
             }
 
             acceptBtn.addEventListener('click', function() {
