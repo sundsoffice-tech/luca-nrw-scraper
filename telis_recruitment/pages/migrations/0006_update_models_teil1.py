@@ -2,7 +2,24 @@
 
 from django.conf import settings
 from django.db import migrations, models
+from django.utils.text import slugify
 import django.db.models.deletion
+
+
+def populate_template_slugs(apps, schema_editor):
+    """Populate slug field from name for existing templates"""
+    PageTemplate = apps.get_model('pages', 'PageTemplate')
+    for template in PageTemplate.objects.all():
+        if not template.slug:
+            base_slug = slugify(template.name)
+            slug = base_slug
+            counter = 1
+            # Ensure uniqueness
+            while PageTemplate.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            template.slug = slug
+            template.save()
 
 
 class Migration(migrations.Migration):
@@ -174,11 +191,11 @@ class Migration(migrations.Migration):
         ),
         
         # PageTemplate updates
+        # First add slug field as nullable
         migrations.AddField(
             model_name='pagetemplate',
             name='slug',
-            field=models.SlugField(default='', unique=True),
-            preserve_default=False,
+            field=models.SlugField(null=True, blank=True),
         ),
         migrations.AddField(
             model_name='pagetemplate',
@@ -218,5 +235,15 @@ class Migration(migrations.Migration):
         migrations.AlterModelOptions(
             name='pagetemplate',
             options={'ordering': ['category', 'name'], 'verbose_name': 'Seiten-Template'},
+        ),
+        
+        # Populate slugs for existing templates
+        migrations.RunPython(populate_template_slugs, migrations.RunPython.noop),
+        
+        # Now make slug unique and non-nullable
+        migrations.AlterField(
+            model_name='pagetemplate',
+            name='slug',
+            field=models.SlugField(unique=True),
         ),
     ]

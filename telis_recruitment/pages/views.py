@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.db import transaction
 
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset
+from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
 
@@ -254,13 +254,22 @@ def upload_asset(request):
             img = Image.open(file)
             width, height = img.size
             file.seek(0)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not extract image dimensions: {e}")
     else:
         asset_type = 'document'
     
+    landing_page_id = request.POST.get('landing_page_id')
+    if landing_page_id and landing_page_id.strip():
+        try:
+            landing_page_id = int(landing_page_id)
+        except (ValueError, TypeError):
+            landing_page_id = None
+    else:
+        landing_page_id = None
+    
     asset = PageAsset.objects.create(
-        landing_page_id=request.POST.get('landing_page_id') or None,
+        landing_page_id=landing_page_id,
         file=file,
         name=file.name,
         asset_type=asset_type,
@@ -329,12 +338,19 @@ def brand_settings(request):
     settings = BrandSettings.get_settings()
     
     if request.method == 'POST':
-        for field in ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'text_light_color',
-                      'heading_font', 'body_font', 'company_name', 'contact_email', 'contact_phone',
-                      'facebook_url', 'instagram_url', 'linkedin_url', 'privacy_url', 'imprint_url']:
+        # Define allowed text fields to update from POST
+        allowed_fields = [
+            'primary_color', 'secondary_color', 'accent_color', 'text_color', 
+            'text_light_color', 'heading_font', 'body_font', 'company_name', 
+            'contact_email', 'contact_phone', 'facebook_url', 'instagram_url', 
+            'linkedin_url', 'privacy_url', 'imprint_url'
+        ]
+        
+        for field in allowed_fields:
             if field in request.POST:
                 setattr(settings, field, request.POST[field])
         
+        # Handle file uploads
         if 'logo' in request.FILES:
             settings.logo = request.FILES['logo']
         if 'favicon' in request.FILES:

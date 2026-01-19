@@ -335,7 +335,14 @@ class BrandSettings(models.Model):
         return obj
     
     def get_css_variables(self):
-        return f":root {{ --color-primary: {self.primary_color}; --color-secondary: {self.secondary_color}; }}"
+        return f""":root {{ 
+    --color-primary: {self.primary_color}; 
+    --color-secondary: {self.secondary_color}; 
+    --color-accent: {self.accent_color}; 
+    --color-text: {self.text_color}; 
+    --color-text-light: {self.text_light_color}; 
+    --color-background: {self.background_color};
+}}"""
     
     def __str__(self):
         return f"Brand Settings (ID: {self.id})"
