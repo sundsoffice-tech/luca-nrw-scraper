@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'email_templates.apps.EmailTemplatesConfig',
     'reports',
     'mailbox.apps.MailboxConfig',
+    'app_settings.apps.AppSettingsConfig',
 ]
 
 MIDDLEWARE = [

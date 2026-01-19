@@ -47,6 +47,9 @@ urlpatterns = [
     # Mailbox (email inbox/outbox system)
     path('crm/mailbox/', include('mailbox.urls')),
     
+    # App Settings (centralized settings interface)
+    path('crm/settings/', include('app_settings.urls')),
+    
     # Reports (analytics and reporting)
     path('crm/reports/', include('reports.urls')),
     

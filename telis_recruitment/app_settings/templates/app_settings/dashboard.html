@@ -1,0 +1,175 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Einstellungen - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">/</span>
+<span class="text-gray-300">Einstellungen</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">⚙️ Einstellungen</h1>
+        <p class="text-gray-400">Verwalten Sie Ihre persönlichen und Systemeinstellungen</p>
+    </div>
+
+    <!-- Settings Categories Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- User Preferences -->
+        <a href="{% url 'app_settings:user-preferences' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    👤
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Benutzerprofil</h3>
+                    <p class="text-sm text-gray-400">Persönliche Einstellungen</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                Theme, Sprache, Benachrichtigungen und Ansichtsoptionen
+            </p>
+        </a>
+
+        <!-- System Settings (Admin only) -->
+        {% if is_admin %}
+        <a href="{% url 'app_settings:system-settings' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    🔧
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">System</h3>
+                    <p class="text-sm text-gray-400">Globale Einstellungen</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                Seitenkonfiguration, Module, Wartung und Sicherheit
+            </p>
+        </a>
+        {% endif %}
+
+        <!-- Email Settings -->
+        <a href="{% url 'mailbox:settings' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    📧
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">E-Mail</h3>
+                    <p class="text-sm text-gray-400">E-Mail-Konten</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                E-Mail-Konten, Signaturen und Schnellantworten
+            </p>
+        </a>
+
+        <!-- Email Templates -->
+        <a href="{% url 'email_templates:brevo-settings' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    📝
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Brevo Integration</h3>
+                    <p class="text-sm text-gray-400">E-Mail-Versand</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                API-Schlüssel und E-Mail-Versandeinstellungen
+            </p>
+        </a>
+
+        <!-- Scraper Settings (Admin only) -->
+        {% if is_admin %}
+        <a href="/admin/scraper_control/scraperconfig/" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    🤖
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Scraper</h3>
+                    <p class="text-sm text-gray-400">Scraper-Konfiguration</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                Branchen, Modi, Concurrency und HTTP-Einstellungen
+            </p>
+        </a>
+        {% endif %}
+
+        <!-- AI Settings (Admin only) -->
+        {% if is_admin %}
+        <a href="/admin/ai_config/aimodel/" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    🧠
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">KI-Konfiguration</h3>
+                    <p class="text-sm text-gray-400">AI-Modelle</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                AI-Provider, Modelle und Token-Einstellungen
+            </p>
+        </a>
+        {% endif %}
+
+        <!-- Brand Settings (Admin only) -->
+        {% if is_admin %}
+        <a href="{% url 'pages:brand-settings' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    🎨
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Marke & Design</h3>
+                    <p class="text-sm text-gray-400">Brand-Einstellungen</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                Farben, Logos, Schriften und Unternehmensdetails
+            </p>
+        </a>
+        {% endif %}
+
+        <!-- Integrations (Admin only) -->
+        {% if is_admin %}
+        <a href="{% url 'app_settings:integrations' %}" class="block bg-dark-800 border border-dark-700 rounded-lg p-6 hover:border-primary transition-all duration-200 hover:shadow-lg hover:shadow-primary/10">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-indigo-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    🔌
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Integrationen</h3>
+                    <p class="text-sm text-gray-400">Externe Services</p>
+                </div>
+            </div>
+            <p class="text-gray-400 text-sm">
+                API-Integrationen und externe Dienste verwalten
+            </p>
+        </a>
+        {% endif %}
+
+    </div>
+
+    <!-- Quick Info -->
+    <div class="mt-8 bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <div class="flex items-start">
+            <div class="text-3xl mr-4">💡</div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Hinweis</h3>
+                <p class="text-gray-400">
+                    Alle Einstellungen werden automatisch gespeichert und sofort angewendet. 
+                    Systemweite Einstellungen erfordern Administrator-Rechte.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

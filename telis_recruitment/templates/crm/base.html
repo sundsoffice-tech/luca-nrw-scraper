@@ -151,10 +151,9 @@
                     <span>Landing Pages</span>
                 </a>
                 
-                <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                <a href="{% url 'app_settings:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'app_settings' %}active{% endif %}">
                     <span class="text-xl mr-3">⚙️</span>
                     <span>Einstellungen</span>
-                    <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
                 
                 <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">

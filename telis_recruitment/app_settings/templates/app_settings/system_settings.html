@@ -1,0 +1,159 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Systemeinstellungen - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">/</span>
+<a href="{% url 'app_settings:dashboard' %}" class="text-gray-400 hover:text-primary">Einstellungen</a>
+<span class="text-gray-500">/</span>
+<span class="text-gray-300">System</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">🔧 Systemeinstellungen</h1>
+        <p class="text-gray-400">Globale Einstellungen für die gesamte Anwendung</p>
+    </div>
+
+    {% if messages %}
+    <div class="mb-6">
+        {% for message in messages %}
+        <div class="{% if message.tags == 'error' %}bg-red-500/20 border-red-500 text-red-500{% else %}bg-green-500/20 border-green-500 text-green-500{% endif %} border px-4 py-3 rounded-lg mb-2">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- General -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🏢 Allgemein
+            </h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Seitenname</label>
+                    <input type="text" name="site_name" value="{{ system_settings.site_name }}" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Seiten-URL</label>
+                    <input type="url" name="site_url" value="{{ system_settings.site_url }}" placeholder="https://example.com" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Administrator E-Mail</label>
+                    <input type="email" name="admin_email" value="{{ system_settings.admin_email }}" placeholder="admin@example.com" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+            </div>
+        </div>
+
+        <!-- Modules -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                📦 Module
+            </h2>
+            
+            <div class="space-y-4">
+                <label class="flex items-center justify-between cursor-pointer p-3 bg-dark-700/50 rounded hover:bg-dark-700">
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">📧</span>
+                        <div>
+                            <div class="text-gray-300 font-medium">E-Mail-Modul</div>
+                            <div class="text-sm text-gray-500">E-Mail-Postfach und Templates</div>
+                        </div>
+                    </div>
+                    <input type="checkbox" name="enable_email_module" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.enable_email_module %}checked{% endif %}>
+                </label>
+                
+                <label class="flex items-center justify-between cursor-pointer p-3 bg-dark-700/50 rounded hover:bg-dark-700">
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">🤖</span>
+                        <div>
+                            <div class="text-gray-300 font-medium">Scraper</div>
+                            <div class="text-sm text-gray-500">Lead-Scraping-Funktionalität</div>
+                        </div>
+                    </div>
+                    <input type="checkbox" name="enable_scraper" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.enable_scraper %}checked{% endif %}>
+                </label>
+                
+                <label class="flex items-center justify-between cursor-pointer p-3 bg-dark-700/50 rounded hover:bg-dark-700">
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">🧠</span>
+                        <div>
+                            <div class="text-gray-300 font-medium">KI-Funktionen</div>
+                            <div class="text-sm text-gray-500">AI-gestützte Features</div>
+                        </div>
+                    </div>
+                    <input type="checkbox" name="enable_ai_features" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.enable_ai_features %}checked{% endif %}>
+                </label>
+                
+                <label class="flex items-center justify-between cursor-pointer p-3 bg-dark-700/50 rounded hover:bg-dark-700">
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">📄</span>
+                        <div>
+                            <div class="text-gray-300 font-medium">Landing Pages</div>
+                            <div class="text-sm text-gray-500">Landing Page Builder</div>
+                        </div>
+                    </div>
+                    <input type="checkbox" name="enable_landing_pages" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.enable_landing_pages %}checked{% endif %}>
+                </label>
+            </div>
+        </div>
+
+        <!-- Maintenance -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🔨 Wartung
+            </h2>
+            
+            <div class="space-y-4">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" name="maintenance_mode" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.maintenance_mode %}checked{% endif %}>
+                    <span class="ml-3 text-gray-300">Wartungsmodus aktivieren</span>
+                </label>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Wartungsnachricht</label>
+                    <textarea name="maintenance_message" rows="3" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Die Seite wird gerade gewartet...">{{ system_settings.maintenance_message }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🔒 Sicherheit
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Sitzungszeitlimit (Minuten)</label>
+                    <input type="number" name="session_timeout_minutes" value="{{ system_settings.session_timeout_minutes }}" min="5" max="1440" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Max. Login-Versuche</label>
+                    <input type="number" name="max_login_attempts" value="{{ system_settings.max_login_attempts }}" min="3" max="10" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4 justify-end">
+            <a href="{% url 'app_settings:dashboard' %}" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-white font-semibold rounded-lg transition">
+                Abbrechen
+            </a>
+            <button type="submit" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white font-semibold rounded-lg transition shadow-lg shadow-primary/20">
+                💾 Speichern
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
