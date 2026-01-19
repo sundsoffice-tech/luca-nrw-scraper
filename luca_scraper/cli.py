@@ -7,46 +7,51 @@ Extracted from scriptname.py in Phase 3 refactoring.
 
 import argparse
 import os
-from typing import Any
+from typing import Any, Optional, Callable
+
+# Import config from centralized location
+from .config import (
+    OPENAI_API_KEY,
+    GCS_API_KEY,
+    GCS_CX,
+    GCS_KEYS,
+    GCS_CXS,
+)
 
 
-# These will need to be imported from scriptname.py when integrated
-# INDUSTRY_ORDER = ["nrw","social","solar","telekom","versicherung","bau","ecom","household"]
-
-
-def validate_config() -> None:
+def validate_config(log_func: Optional[Callable] = None) -> None:
     """
     Validate configuration settings (API keys, etc.).
     
-    NOTE: This function requires access to config variables:
-    - OPENAI_API_KEY
-    - GCS_KEYS, GCS_CXS
-    - GCS_API_KEY, GCS_CX
-    - log() function
+    Args:
+        log_func: Optional logging function with signature log(level, message, **kwargs).
+                  If None, prints warnings to stdout.
     
-    These will need to be imported from config module or scriptname.py
+    Validates:
+        - OPENAI_API_KEY length
+        - GCS_KEYS/GCS_CXS consistency (both must be set or both empty)
+        - GCS_API_KEY/GCS_CX consistency for legacy single-config
     """
-    # Placeholder - actual implementation requires config access
     errs = []
     
-    # Get config from environment for now
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    GCS_API_KEY = os.getenv("GCS_API_KEY", "")
-    GCS_CX = os.getenv("GCS_CX", "")
-    
+    # Validate OpenAI API Key
     if not OPENAI_API_KEY or len(OPENAI_API_KEY) < 40:
         errs.append("OPENAI_API_KEY zu kurz/leer (für KI-Extraktion). Regex-Fallback läuft dennoch.")
     
-    # GCS_KEYS/GCS_CXS are lists - would need proper config module
-    # if (GCS_KEYS and not GCS_CXS) or (GCS_CXS and not GCS_KEYS):
-    #     errs.append("GCS_KEYS/GCS_CXS unvollständig (beide listenbasiert setzen oder deaktivieren).")
+    # Validate Google Custom Search configuration (list-based)
+    if (GCS_KEYS and not GCS_CXS) or (GCS_CXS and not GCS_KEYS):
+        errs.append("GCS_KEYS/GCS_CXS unvollständig (beide listenbasiert setzen oder deaktivieren).")
     
-    if GCS_API_KEY and not GCS_CX:
+    # Validate legacy single Google Custom Search configuration
+    if not (GCS_KEYS and GCS_CXS) and (GCS_API_KEY and not GCS_CX):
         errs.append("GCS_CX fehlt trotz GCS_API_KEY (Legacy-Single-Config).")
     
+    # Report errors
     if errs:
-        # Would need log() function
-        print(f"⚠️ Konfiguration Hinweise: {'; '.join(errs)}")
+        if log_func:
+            log_func("warn", "Konfiguration Hinweise", errors=errs)
+        else:
+            print(f"⚠️ Konfiguration Hinweise: {'; '.join(errs)}")
 
 
 def parse_args() -> Any:

@@ -9529,6 +9529,13 @@ def _ui_controller():
 # =========================
 
 def validate_config():
+    """
+    Validate configuration settings (API keys, etc.).
+    Uses luca_scraper.cli if available, otherwise falls back to inline implementation.
+    """
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _validate_config(log_func=log)
+    # Fallback: Inline implementation when luca_scraper not available
     errs=[]
     if not OPENAI_API_KEY or len(OPENAI_API_KEY) < 40:
         errs.append("OPENAI_API_KEY zu kurz/leer (für KI-Extraktion). Regex-Fallback läuft dennoch.")
@@ -9539,6 +9546,13 @@ def validate_config():
     if errs: log("warn","Konfiguration Hinweise", errors=errs)
 
 def parse_args():
+    """
+    Parse command-line arguments.
+    Uses luca_scraper.cli if available, otherwise falls back to inline implementation.
+    """
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _parse_args()
+    # Fallback: Inline implementation when luca_scraper not available
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")
