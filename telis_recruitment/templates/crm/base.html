@@ -231,6 +231,62 @@
             overlay.classList.toggle('hidden');
         }
     </script>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookie-banner" class="fixed bottom-0 left-0 right-0 bg-dark-800 border-t border-dark-700 p-4 transform translate-y-full transition-transform duration-300 z-50" style="display: none;">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="text-gray-300 text-sm">
+                <p class="flex items-center">
+                    <span class="text-xl mr-2">🍪</span>
+                    Wir nutzen Cookies, um das Nutzererlebnis zu verbessern und wichtige Funktionen bereitzustellen.
+                </p>
+            </div>
+            <div class="flex gap-3">
+                <button id="accept-cookies" class="px-6 py-2 bg-primary hover:bg-cyan-400 text-dark-900 font-bold rounded-lg text-sm transition shadow-lg shadow-primary/20">
+                    Verstanden
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const banner = document.getElementById('cookie-banner');
+            const acceptBtn = document.getElementById('accept-cookies');
+            const cookieName = 'crm_cookie_consent';
+            
+            // Helper to get cookie
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+            }
+
+            // Show banner if cookie not set
+            if (!getCookie(cookieName)) {
+                banner.style.display = 'block';
+                // Small delay to allow display:block to apply before removing translate class for animation
+                requestAnimationFrame(() => {
+                    banner.classList.remove('translate-y-full');
+                });
+            }
+
+            acceptBtn.addEventListener('click', function() {
+                // Set cookie for 365 days
+                const d = new Date();
+                d.setTime(d.getTime() + (365*24*60*60*1000));
+                const expires = "expires="+ d.toUTCString();
+                document.cookie = cookieName + "=true;" + expires + ";path=/";
+                
+                // Hide banner
+                banner.classList.add('translate-y-full');
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 300);
+            });
+        });
+    </script>
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>
