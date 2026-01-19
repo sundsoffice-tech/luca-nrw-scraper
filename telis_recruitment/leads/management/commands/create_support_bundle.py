@@ -155,7 +155,7 @@ class Command(BaseCommand):
                 'commit': git_hash,
                 'branch': git_branch,
             }
-        except:
+        except (subprocess.CalledProcessError, FileNotFoundError, Exception):
             version_info['git'] = 'not available'
         
         zipf.writestr('version_info.json', json.dumps(version_info, indent=2))

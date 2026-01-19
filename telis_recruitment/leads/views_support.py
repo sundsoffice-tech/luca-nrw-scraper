@@ -42,11 +42,14 @@ def support_bundle_view(request):
             # Generate the bundle using management command
             include_logs = request.POST.get('include_logs') == 'on'
             
+            # Suppress output to devnull
+            import subprocess
+            
             call_command(
                 'create_support_bundle',
                 output=bundle_path,
                 include_logs=include_logs,
-                stdout=open(os.devnull, 'w')  # Suppress output
+                stdout=subprocess.DEVNULL
             )
             
             # Return the file as download
@@ -57,8 +60,8 @@ def support_bundle_view(request):
                 filename=f'support_bundle_{timestamp}.zip'
             )
             
-            # Clean up the temp file after sending (using a flag)
-            response.bundle_path = bundle_path
+            # Note: Temporary file cleanup is handled by the OS or should be done
+            # via scheduled cleanup. FileResponse will close the file handle.
             
             return response
             
@@ -73,9 +76,7 @@ def support_bundle_view(request):
             )
     
     # GET request - show the form
-    context = {
-        'version': settings.APP_VERSION,
-    }
+    context = {}
     return render(request, 'support/bundle.html', context)
 
 
@@ -102,7 +103,6 @@ def system_health_view(request):
     
     context = {
         'health': health_info,
-        'version': settings.APP_VERSION,
         'debug': settings.DEBUG,
     }
     
