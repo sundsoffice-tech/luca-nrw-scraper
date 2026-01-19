@@ -201,22 +201,24 @@ class Command(BaseCommand):
         stats = {
             'timestamp': datetime.now().isoformat(),
             'leads': {
-                'total': Lead.objects.count(),
+                'total': 0,
                 'by_status': {},
                 'by_source': {},
                 'by_lead_type': {},
             },
             'users': {
-                'total': User.objects.count(),
-                'active': User.objects.filter(is_active=True).count(),
-                'staff': User.objects.filter(is_staff=True).count(),
-                'superusers': User.objects.filter(is_superuser=True).count(),
+                'total': 0,
+                'active': 0,
+                'staff': 0,
+                'superusers': 0,
             }
         }
         
         # Lead statistics
         try:
             from django.db.models import Count
+            
+            stats['leads']['total'] = Lead.objects.count()
             
             # By status
             status_counts = Lead.objects.values('status').annotate(count=Count('id'))
@@ -249,6 +251,17 @@ class Command(BaseCommand):
             }
         except Exception as e:
             stats['leads']['error'] = str(e)
+        
+        # User statistics
+        try:
+            stats['users'] = {
+                'total': User.objects.count(),
+                'active': User.objects.filter(is_active=True).count(),
+                'staff': User.objects.filter(is_staff=True).count(),
+                'superusers': User.objects.filter(is_superuser=True).count(),
+            }
+        except Exception as e:
+            stats['users']['error'] = str(e)
         
         zipf.writestr('database_stats.json', json.dumps(stats, indent=2))
         self.stdout.write('  ✓ Database statistics')
