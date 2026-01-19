@@ -183,6 +183,13 @@ class ScraperConfig(models.Model):
         help_text="Standard: 2MB, Max: 100MB"
     )
     
+    # === NEUE FELDER: Sicherheit ===
+    allow_insecure_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Unsichere SSL-Verbindungen erlauben",
+        help_text="⚠️ WARNUNG: Deaktiviert SSL-Zertifikat-Validierung. Nur für Entwicklung/Testing!"
+    )
+    
     # Metadata
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
     updated_by = models.ForeignKey(

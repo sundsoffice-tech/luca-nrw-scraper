@@ -494,8 +494,11 @@ def export_xlsx(filename: str, rows=None):
     df.to_excel(filename, index=False)
 
 
-# Warnungen zu unsicherem SSL dämpfen (bewusstes Fallback via Flag)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# SSL warnings only suppressed when explicitly enabled via ALLOW_INSECURE_SSL
+if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    import logging
+    logging.warning("⚠️  UNSICHERER MODUS: SSL-Zertifikat-Validierung ist deaktiviert! Nur für Entwicklung verwenden.")
 
 # =========================
 # Konfiguration & Globals
@@ -519,7 +522,7 @@ MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB d
 POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
 
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
-ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
+ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 
 # Neue Async-ENV
 ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
@@ -9529,6 +9532,13 @@ def _ui_controller():
 # =========================
 
 def validate_config():
+    """
+    Validate configuration settings (API keys, etc.).
+    Uses luca_scraper.cli if available, otherwise falls back to inline implementation.
+    """
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _validate_config(log_func=log)
+    # Fallback: Inline implementation when luca_scraper not available
     errs=[]
     if not OPENAI_API_KEY or len(OPENAI_API_KEY) < 40:
         errs.append("OPENAI_API_KEY zu kurz/leer (für KI-Extraktion). Regex-Fallback läuft dennoch.")
@@ -9539,6 +9549,13 @@ def validate_config():
     if errs: log("warn","Konfiguration Hinweise", errors=errs)
 
 def parse_args():
+    """
+    Parse command-line arguments.
+    Uses luca_scraper.cli if available, otherwise falls back to inline implementation.
+    """
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _parse_args()
+    # Fallback: Inline implementation when luca_scraper not available
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")

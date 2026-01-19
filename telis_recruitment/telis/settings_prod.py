@@ -50,6 +50,30 @@ SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'DENY'
 
 # ======================
+# SCRAPER SECURITY
+# ======================
+
+# Validate that scraper is not using insecure SSL in production
+if os.getenv('ALLOW_INSECURE_SSL', '0') == '1':
+    import warnings
+    warnings.warn(
+        "⚠️  SICHERHEITSWARNUNG: ALLOW_INSECURE_SSL ist in der Produktionsumgebung aktiviert! "
+        "Dies deaktiviert die SSL-Zertifikat-Validierung und macht die Anwendung anfällig für "
+        "Man-in-the-Middle-Angriffe. Bitte setzen Sie ALLOW_INSECURE_SSL=0 in der Produktion.",
+        category=SecurityWarning,
+        stacklevel=2
+    )
+
+# Ensure proxy configuration is intentional, not from leaked environment variables
+if not DEBUG:
+    import logging
+    logger = logging.getLogger(__name__)
+    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+    for var in proxy_vars:
+        if os.getenv(var):
+            logger.warning(f"⚠️  Proxy-Variable {var} gesetzt: {os.getenv(var)}")
+
+# ======================
 # STATIC FILES (Whitenoise)
 # ======================
 

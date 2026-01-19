@@ -81,15 +81,41 @@
                     <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
                 
-                <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'email_templates' in request.resolver_match.namespace %}active{% endif %}">
-                    <span class="text-xl mr-3">📧</span>
-                    <span>Email Templates</span>
+                <!-- Trennlinie -->
+                <div class="my-4 mx-4 border-t border-dark-700"></div>
+                
+                <!-- Email Sektion Header -->
+                <span class="text-xs text-gray-500 uppercase px-4 py-2 block font-semibold">📧 Email</span>
+                
+                <!-- Postfach (NEU - Hauptlink) -->
+                <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'mailbox' in request.resolver_match.namespace %}active{% endif %}">
+                    <span class="text-xl mr-3">📬</span>
+                    <span>Postfach</span>
+                    {% if unread_email_count %}
+                    <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{{ unread_email_count }}</span>
+                    {% endif %}
                 </a>
                 
-                <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="text-xl mr-3">🔄</span>
-                    <span>Automationen</span>
+                <!-- Email Templates -->
+                <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}">
+                    <span class="text-lg mr-3">📝</span>
+                    <span>Templates</span>
                 </a>
+                
+                <!-- Flows -->
+                <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="text-lg mr-3">🔄</span>
+                    <span>Flows</span>
+                </a>
+                
+                <!-- Versand-Logs -->
+                <a href="{% url 'email_templates:send-logs' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if 'send-logs' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="text-lg mr-3">📊</span>
+                    <span>Logs</span>
+                </a>
+                
+                <!-- Trennlinie -->
+                <div class="my-4 mx-4 border-t border-dark-700"></div>
                 
                 <!-- Manager/Admin only -->
                 {% if user.groups.exists %}

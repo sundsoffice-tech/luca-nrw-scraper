@@ -14,16 +14,17 @@ urlpatterns = [
     path('api/<slug:slug>/load/', views.builder_load, name='builder-load'),
     
     # Asset Manager
-    path('assets/', views.list_assets, name='list_assets'),
-    path('assets/upload/', views.upload_asset, name='upload_asset'),
+    path('api/assets/upload/', views.upload_asset, name='upload-asset'),
+    path('api/assets/', views.list_assets, name='list-assets'),
     path('assets/<int:asset_id>/delete/', views.delete_asset, name='delete_asset'),
     
     # Brand Settings
-    path('brand-settings/', views.brand_settings, name='brand_settings'),
+    path('brand/', views.brand_settings_view, name='brand-settings'),
     path('brand-settings/css/', views.get_brand_css, name='brand_css'),
     
     # Templates
-    path('templates/', views.select_template, name='select_template'),
+    path('templates/', views.template_list, name='template-list'),
+    path('templates/select/', views.select_template, name='select_template'),
     path('templates/<int:template_id>/apply/', views.apply_template, name='apply_template'),
     
     # Upload Management (Staff Only)
