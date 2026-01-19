@@ -38,7 +38,7 @@ def db() -> sqlite3.Connection:
     # Check if connection exists AND is still open/valid
     if hasattr(_db_local, "conn") and _db_local.conn is not None:
         try:
-            # Test if connection still works
+            # Test if connection is still open/valid by executing a simple query
             _db_local.conn.execute("SELECT 1")
         except (sqlite3.ProgrammingError, sqlite3.OperationalError):
             # Connection is closed or broken - reset it
