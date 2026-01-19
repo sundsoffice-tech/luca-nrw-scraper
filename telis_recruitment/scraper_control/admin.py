@@ -1,6 +1,6 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import ScraperConfig, ScraperRun, ScraperLog
+from .models import ScraperConfig, ScraperRun, ScraperLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
 
 
 @admin.register(ScraperConfig)
@@ -12,13 +12,31 @@ class ScraperConfigAdmin(ModelAdmin):
     readonly_fields = ['updated_at', 'updated_by']
     
     fieldsets = (
-        ('Grundeinstellungen', {
+        ('Basis-Einstellungen', {
             'fields': ('industry', 'mode', 'qpi', 'daterestrict'),
-            'description': 'Basis-Scraper-Einstellungen',
         }),
         ('Flags', {
             'fields': ('smart', 'force', 'once', 'dry_run'),
-            'description': 'Erweiterte Optionen und Flags',
+        }),
+        ('HTTP & Performance', {
+            'fields': ('http_timeout', 'async_limit', 'pool_size', 'http2_enabled'),
+            'classes': ('collapse',)
+        }),
+        ('Rate Limiting', {
+            'fields': ('sleep_between_queries', 'max_google_pages', 'circuit_breaker_penalty', 'retry_max_per_url'),
+            'classes': ('collapse',)
+        }),
+        ('Scoring', {
+            'fields': ('min_score', 'max_per_domain', 'default_quality_score', 'confidence_threshold'),
+            'classes': ('collapse',)
+        }),
+        ('Feature Flags', {
+            'fields': ('enable_kleinanzeigen', 'enable_telefonbuch', 'enable_perplexity', 'enable_bing', 'parallel_portal_crawl', 'max_concurrent_portals'),
+            'classes': ('collapse',)
+        }),
+        ('Content', {
+            'fields': ('allow_pdf', 'max_content_length'),
+            'classes': ('collapse',)
         }),
         ('Metadaten', {
             'fields': ('updated_at', 'updated_by'),
@@ -109,3 +127,48 @@ class ScraperLogAdmin(ModelAdmin):
     def has_add_permission(self, request):
         """Logs are created automatically"""
         return False
+
+
+@admin.register(SearchRegion)
+class SearchRegionAdmin(ModelAdmin):
+    """Admin interface for SearchRegion"""
+    
+    list_display = ['name', 'is_active', 'is_metropolis', 'priority']
+    list_filter = ['is_active', 'is_metropolis']
+    list_editable = ['is_active', 'is_metropolis', 'priority']
+    search_fields = ['name']
+    prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(SearchDork)
+class SearchDorkAdmin(ModelAdmin):
+    """Admin interface for SearchDork"""
+    
+    list_display = ['query_short', 'category', 'is_active', 'priority', 'times_used', 'leads_found', 'success_rate']
+    list_filter = ['category', 'is_active', 'ai_generated']
+    list_editable = ['is_active', 'priority']
+    search_fields = ['query', 'description']
+    
+    def query_short(self, obj):
+        return obj.query[:60] + '...' if len(obj.query) > 60 else obj.query
+    query_short.short_description = 'Query'
+
+
+@admin.register(PortalSource)
+class PortalSourceAdmin(ModelAdmin):
+    """Admin interface for PortalSource"""
+    
+    list_display = ['display_name', 'name', 'is_active', 'rate_limit_seconds', 'difficulty']
+    list_filter = ['is_active', 'difficulty', 'requires_login']
+    list_editable = ['is_active', 'rate_limit_seconds']
+    search_fields = ['name', 'display_name']
+
+
+@admin.register(BlacklistEntry)
+class BlacklistEntryAdmin(ModelAdmin):
+    """Admin interface for BlacklistEntry"""
+    
+    list_display = ['value', 'entry_type', 'reason', 'is_active']
+    list_filter = ['entry_type', 'is_active']
+    list_editable = ['is_active']
+    search_fields = ['value', 'reason']
