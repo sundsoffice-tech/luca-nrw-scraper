@@ -41,7 +41,7 @@ class EmailReceiverService:
             if self.connection:
                 try:
                     self.connection.logout()
-                except:
+                except Exception:
                     pass
             
             # Decrypt credentials
@@ -77,7 +77,7 @@ class EmailReceiverService:
         if self.connection:
             try:
                 self.connection.logout()
-            except:
+            except Exception:
                 pass
             self.connection = None
     

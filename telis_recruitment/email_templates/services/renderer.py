@@ -1,5 +1,9 @@
 """Template-Rendering mit Variablen"""
-from typing import Dict, Any
+import logging
+import re
+from typing import Dict, Any, List, Set
+
+logger = logging.getLogger(__name__)
 
 
 def render_template(template_str: str, variables: Dict[str, Any]) -> str:
@@ -17,12 +21,37 @@ def render_template(template_str: str, variables: Dict[str, Any]) -> str:
         >>> render_template("Hallo {name}!", {"name": "Max"})
         "Hallo Max!"
     """
+    if not template_str:
+        return template_str
+        
     try:
+        # First extract what variables are in the template
+        required_vars = extract_variables_from_template(template_str)
+        
+        # Check for missing variables and log warnings
+        missing_vars = set(required_vars) - set(variables.keys())
+        if missing_vars:
+            logger.warning(
+                f"Template rendering: Missing variables {missing_vars}. "
+                f"Template will contain unreplaced placeholders."
+            )
+            # Filter variables to only those that exist in the template
+            # This prevents KeyError while keeping unmatched placeholders
+            filtered_vars = {k: v for k, v in variables.items() if k in required_vars}
+            # Use a custom format that preserves missing placeholders
+            result = template_str
+            for var_name in required_vars:
+                placeholder = '{' + var_name + '}'
+                if var_name in filtered_vars:
+                    result = result.replace(placeholder, str(filtered_vars[var_name]))
+            return result
+        
         return template_str.format(**variables)
     except KeyError as e:
-        # Falls Variable fehlt, lasse Platzhalter stehen
+        logger.warning(f"Template rendering: Variable {e} not found in provided variables")
         return template_str
-    except Exception:
+    except Exception as e:
+        logger.error(f"Template rendering error: {e}")
         return template_str
 
 
@@ -69,7 +98,8 @@ def extract_variables_from_template(template_str: str) -> list:
         >>> extract_variables_from_template("Hallo {name}, von {company}!")
         ['name', 'company']
     """
-    import re
+    if not template_str:
+        return []
     # Findet alle {variable} Muster
     pattern = r'\{(\w+)\}'
     matches = re.findall(pattern, template_str)
