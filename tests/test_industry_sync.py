@@ -152,7 +152,11 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
     
-    os.chdir('/home/runner/work/luca-nrw-scraper/luca-nrw-scraper')
+    # Get to the repository root
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(script_dir)
+    os.chdir(repo_root)
     
     test_new_industries_in_model()
     test_new_industries_in_cli()

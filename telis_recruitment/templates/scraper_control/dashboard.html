@@ -258,8 +258,8 @@ function updateHints() {
     }
     
     if (hints.length > 0) {
-        // Use textContent to prevent XSS, then parse each hint separately
-        hintsDiv.innerHTML = ''; // Clear first
+        // Clear and build hints safely to prevent XSS
+        hintsDiv.textContent = ''; // Clear using textContent
         hints.forEach(hint => {
             const p = document.createElement('p');
             p.className = 'text-yellow-400';
