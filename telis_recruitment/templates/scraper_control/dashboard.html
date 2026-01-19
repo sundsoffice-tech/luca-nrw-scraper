@@ -164,13 +164,15 @@
                         <td class="py-3 px-4 text-gray-300">#{{ run.id }}</td>
                         <td class="py-3 px-4">
                             {% if run.status == 'running' %}
-                            <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm">Läuft</span>
+                            <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm">{{ run.get_status_display }}</span>
                             {% elif run.status == 'completed' %}
-                            <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">Fertig</span>
+                            <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% elif run.status == 'failed' or run.status == 'error' %}
-                            <span class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm">Fehler</span>
+                            <span class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm">{{ run.get_status_display }}</span>
+                            {% elif run.status == 'stopped' %}
+                            <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% else %}
-                            <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">Gestoppt</span>
+                            <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% endif %}
                         </td>
                         <td class="py-3 px-4 text-gray-400 text-sm">{{ run.started_at|date:"d.m.Y H:i" }}</td>

@@ -36,9 +36,9 @@ class ScraperConfig(models.Model):
     
     MODE_CHOICES = [
         ('standard', 'Standard'),
-        ('learning', 'Learning'),
-        ('aggressive', 'Aggressive'),
-        ('snippet_only', 'Snippet Only'),
+        ('learning', 'Selbstlernend'),
+        ('aggressive', 'Aggressiv'),
+        ('snippet_only', 'Nur Snippets'),
     ]
     
     industry = models.CharField(

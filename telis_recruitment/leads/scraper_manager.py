@@ -93,7 +93,7 @@ class ScraperManager:
             params: Dictionary of scraper parameters
                 - industry: str (recruiter, candidates, talent_hunt, all)
                 - qpi: int (queries per industry)
-                - mode: str (standard, headhunter, aggressive, etc.)
+                - mode: str (standard, aggressive, snippet_only, learning)
                 - smart: bool
                 - force: bool
                 - once: bool
