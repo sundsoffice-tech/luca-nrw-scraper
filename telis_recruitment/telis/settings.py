@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'pages.apps.PagesConfig',
     'email_templates.apps.EmailTemplatesConfig',
     'reports',
+    'mailbox.apps.MailboxConfig',
 ]
 
 MIDDLEWARE = [
@@ -136,8 +137,15 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 if (BASE_DIR / 'static').exists():
     STATICFILES_DIRS = [BASE_DIR / 'static']
 
+# Media files (User-uploaded content)
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Whitenoise configuration for serving static files
 STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
@@ -379,6 +387,48 @@ UNFOLD = {
                         "title": "Versand-Logs",
                         "icon": "send",
                         "link": "/admin/email_templates/emailsendlog/",
+                    },
+                ],
+            },
+            {
+                "title": "Mailbox",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Posteingang",
+                        "icon": "inbox",
+                        "link": "/crm/mailbox/",
+                    },
+                    {
+                        "title": "Email-Konten",
+                        "icon": "account_circle",
+                        "link": "/admin/mailbox/emailaccount/",
+                    },
+                    {
+                        "title": "Konversationen",
+                        "icon": "forum",
+                        "link": "/admin/mailbox/emailconversation/",
+                    },
+                    {
+                        "title": "Emails",
+                        "icon": "mail",
+                        "link": "/admin/mailbox/email/",
+                    },
+                    {
+                        "title": "Schnellantworten",
+                        "icon": "speed",
+                        "link": "/admin/mailbox/quickreply/",
+                    },
+                    {
+                        "title": "Signaturen",
+                        "icon": "draw",
+                        "link": "/admin/mailbox/emailsignature/",
+                    },
+                    {
+                        "title": "Labels",
+                        "icon": "label",
+                        "link": "/admin/mailbox/emaillabel/",
                     },
                 ],
             },
