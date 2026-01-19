@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS phone_lookup_cache (
     phone TEXT PRIMARY KEY,
     name TEXT,
     address TEXT,
+    company TEXT,
     source TEXT,
     confidence REAL,
     lookup_date TEXT,
@@ -62,7 +63,8 @@ class PhonebookLookup:
             "url_template": "https://www.dastelefonbuch.de/R%C3%BCckw%C3%A4rts-Suche/{phone}",
             "selectors": {
                 "name": [".vcard .fn", ".entry-name", "h2.name", ".hititem .name", ".name"],
-                "address": [".adr", ".address", ".street-address", ".entry-address"]
+                "address": [".adr", ".address", ".street-address", ".entry-address"],
+                "company": [".org", ".organization", ".company", ".firma", ".vcard .org", ".entry-company"]
             }
         },
         {
@@ -70,7 +72,8 @@ class PhonebookLookup:
             "url_template": "https://www.dasoertliche.de/Controller?form_name=search_inv&ph={phone}",
             "selectors": {
                 "name": [".hit__name", ".name", "h2", ".entry-name", ".vcard-name"],
-                "address": [".hit__address", ".address", ".street", ".adr"]
+                "address": [".hit__address", ".address", ".street", ".adr"],
+                "company": [".hit__company", ".organization", ".company", ".org", ".firma"]
             }
         },
         {
@@ -78,7 +81,8 @@ class PhonebookLookup:
             "url_template": "https://www.11880.com/suche/{phone}/deutschland",
             "selectors": {
                 "name": [".entry-title", ".result-name", "h3", ".name"],
-                "address": [".entry-address", ".result-address", ".address"]
+                "address": [".entry-address", ".result-address", ".address"],
+                "company": [".entry-company", ".result-company", ".organization", ".firma"]
             }
         },
         {
@@ -86,7 +90,8 @@ class PhonebookLookup:
             "url_template": "https://www.goyellow.de/suche/telefon/{phone}",
             "selectors": {
                 "name": [".entry-name", ".result-title", ".name"],
-                "address": [".entry-address", ".address"]
+                "address": [".entry-address", ".address"],
+                "company": [".entry-company", ".company", ".organization", ".firma"]
             }
         },
         {
@@ -94,7 +99,8 @@ class PhonebookLookup:
             "url_template": "https://www.klicktel.de/rueckwaertssuche/{phone}",
             "selectors": {
                 "name": [".result-name", ".entry-title", ".name"],
-                "address": [".result-address", ".address"]
+                "address": [".result-address", ".address"],
+                "company": [".result-company", ".company", ".organization", ".firma"]
             }
         }
     ]
@@ -112,9 +118,15 @@ class PhonebookLookup:
         self._init_cache()
     
     def _init_cache(self):
-        """Create cache table if it doesn't exist."""
+        """Create cache table if it doesn't exist and ensure schema is up to date."""
         conn = sqlite3.connect(self.db_path)
         conn.execute(CACHE_TABLE)
+        # Add company column if it doesn't exist (migration for existing databases)
+        try:
+            conn.execute("ALTER TABLE phone_lookup_cache ADD COLUMN company TEXT")
+        except sqlite3.OperationalError:
+            # Column already exists, ignore
+            pass
         conn.commit()
         conn.close()
     
@@ -137,13 +149,13 @@ class PhonebookLookup:
         """
         conn = sqlite3.connect(self.db_path)
         cur = conn.execute(
-            "SELECT name, address, source, confidence FROM phone_lookup_cache WHERE phone = ?",
+            "SELECT name, address, company, source, confidence FROM phone_lookup_cache WHERE phone = ?",
             (phone,)
         )
         row = cur.fetchone()
         conn.close()
         if row:
-            return {"name": row[0], "address": row[1], "source": row[2], "confidence": row[3]}
+            return {"name": row[0], "address": row[1], "company": row[2], "source": row[3], "confidence": row[4]}
         return None
     
     def _save_cache(self, phone: str, result: Dict):
@@ -157,9 +169,9 @@ class PhonebookLookup:
         conn = sqlite3.connect(self.db_path)
         conn.execute("""
             INSERT OR REPLACE INTO phone_lookup_cache 
-            (phone, name, address, source, confidence, lookup_date)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-        """, (phone, result.get("name"), result.get("address"), 
+            (phone, name, address, company, source, confidence, lookup_date)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (phone, result.get("name"), result.get("address"), result.get("company"),
               result.get("source"), result.get("confidence")))
         conn.commit()
         conn.close()
@@ -233,7 +245,7 @@ class PhonebookLookup:
             source: Source configuration dict
             
         Returns:
-            Dict with name, address, source, confidence or None
+            Dict with name, address, company, source, confidence or None
         """
         clean_phone = self._format_phone_for_german_sites(phone)
         url = source["url_template"].format(phone=clean_phone)
@@ -269,9 +281,22 @@ class PhonebookLookup:
                     address = re.sub(r'\s+', ' ', address).strip()
                     break
             
+            # Try to extract company/organization information
+            company = ""
+            for selector in source["selectors"].get("company", []):
+                elem = soup.select_one(selector)
+                if elem:
+                    company = elem.get_text(strip=True)
+                    company = re.sub(r'\s+', ' ', company).strip()
+                    # Skip if company looks like a duplicate of the name
+                    if company and company.lower() != name.lower():
+                        break
+                    company = ""  # Reset if it's a duplicate
+            
             return {
                 "name": name,
                 "address": address,
+                "company": company,
                 "source": source["name"],
                 "confidence": 0.85,
                 "phone": phone
@@ -477,11 +502,17 @@ class PhonebookLookup:
 
 def enrich_lead_with_phonebook(lead: dict, lookup: PhonebookLookup = None) -> dict:
     """
-    Enrich a single lead with name from phonebook reverse lookup.
+    Enrich a single lead with name and company from phonebook reverse lookup.
     
     Only enriches if:
     - Lead has a phone number
     - Lead has no name OR name is invalid (placeholder, too short, etc.)
+    
+    Enrichment includes:
+    - name: Person/business name from phonebook
+    - private_address: Address if available
+    - company_name: Company/organization if available
+    - name_source: Source of the enrichment data
     
     Args:
         lead: Lead dict with at least "telefon" field
@@ -513,9 +544,15 @@ def enrich_lead_with_phonebook(lead: dict, lookup: PhonebookLookup = None) -> di
             # Also add address if available
             if result.get("address"):
                 lead["private_address"] = result.get("address", "")
+            # Add company/organization if available
+            if result.get("company"):
+                lead["company_name"] = result.get("company", "")
             # Tag the source
             lead["name_source"] = result.get("source", "phonebook")
-            print(f"[OK] Lead enriched: {phone} -> {result['name']}", file=sys.stderr)
+            enrichment_info = f"[OK] Lead enriched: {phone} -> {result['name']}"
+            if result.get("company"):
+                enrichment_info += f" (Company: {result['company']})"
+            print(enrichment_info, file=sys.stderr)
     
     return lead
 
@@ -525,6 +562,7 @@ def enrich_existing_leads(db_path: str = "scraper.db"):
     Batch function: Enrich all existing leads that have phone but no valid name.
     
     This can be run as a one-time migration or periodically to clean up the database.
+    Enrichment includes name, address, and company information when available.
     
     Args:
         db_path: Path to SQLite database
@@ -553,12 +591,16 @@ def enrich_existing_leads(db_path: str = "scraper.db"):
     for lead_id, phone, old_name in leads_to_update:
         result = lookup.lookup(phone)
         if result and result.get("name"):
+            # Update with name, address, and company if available
             conn.execute(
-                "UPDATE leads SET name = ?, private_address = ? WHERE id = ?",
-                (result["name"], result.get("address", ""), lead_id)
+                "UPDATE leads SET name = ?, private_address = ?, company_name = ? WHERE id = ?",
+                (result["name"], result.get("address", ""), result.get("company", ""), lead_id)
             )
             updated += 1
-            print(f"[OK] Lead {lead_id}: {phone} -> {result['name']}")
+            info = f"[OK] Lead {lead_id}: {phone} -> {result['name']}"
+            if result.get("company"):
+                info += f" (Company: {result['company']})"
+            print(info)
         else:
             print(f"[SKIP] Lead {lead_id}: {phone} -> No name found")
     
