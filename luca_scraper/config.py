@@ -34,6 +34,19 @@ except (ImportError, Exception):
     AI_CONFIG_AVAILABLE = False
     _get_ai_config_django = None
 
+# Optional Django scraper_control integration
+try:
+    from telis_recruitment.scraper_control.config_loader import (
+        get_scraper_config as _get_scraper_config_django,
+        get_regions as _get_regions_django,
+        get_dorks as _get_dorks_django,
+        get_portals as _get_portals_django,
+        get_blacklists as _get_blacklists_django,
+    )
+    SCRAPER_CONFIG_AVAILABLE = True
+except (ImportError, Exception):
+    SCRAPER_CONFIG_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 

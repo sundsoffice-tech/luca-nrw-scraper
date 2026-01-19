@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 
 
@@ -75,6 +76,90 @@ class ScraperConfig(models.Model):
         default=False,
         verbose_name="Dry Run",
         help_text="Test-Modus ohne tatsächliche Ausführung"
+    )
+    
+    # === NEUE FELDER: HTTP & Networking ===
+    http_timeout = models.IntegerField(
+        default=10, 
+        validators=[MinValueValidator(1), MaxValueValidator(120)],
+        verbose_name="HTTP Timeout (Sek)",
+        help_text="Request Timeout in Sekunden"
+    )
+    async_limit = models.IntegerField(
+        default=35,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        verbose_name="Async Limit",
+        help_text="Max. parallele Requests"
+    )
+    pool_size = models.IntegerField(
+        default=12,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        verbose_name="Pool Size",
+        help_text="Connection Pool Größe"
+    )
+    http2_enabled = models.BooleanField(default=True, verbose_name="HTTP/2 aktivieren")
+    
+    # === NEUE FELDER: Rate Limiting ===
+    sleep_between_queries = models.FloatField(
+        default=2.7,
+        validators=[MinValueValidator(0.5), MaxValueValidator(30)],
+        verbose_name="Query-Pause (Sek)",
+        help_text="Pause zwischen Google-Queries"
+    )
+    max_google_pages = models.IntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        verbose_name="Max. Google-Seiten",
+        help_text="Seiten pro Query"
+    )
+    circuit_breaker_penalty = models.IntegerField(
+        default=30,
+        validators=[MinValueValidator(0)],
+        verbose_name="Circuit Breaker Penalty (Sek)"
+    )
+    retry_max_per_url = models.IntegerField(
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(10)],
+        verbose_name="Max. Retries pro URL"
+    )
+    
+    # === NEUE FELDER: Scoring ===
+    min_score = models.IntegerField(
+        default=40,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Mindest-Score",
+        help_text="Leads unter diesem Score werden verworfen"
+    )
+    max_per_domain = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        verbose_name="Max. Leads pro Domain"
+    )
+    default_quality_score = models.IntegerField(
+        default=50,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Default Quality Score"
+    )
+    confidence_threshold = models.FloatField(
+        default=0.35,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+        verbose_name="Confidence Threshold"
+    )
+    
+    # === NEUE FELDER: Feature Flags ===
+    enable_kleinanzeigen = models.BooleanField(default=True, verbose_name="Kleinanzeigen aktivieren")
+    enable_telefonbuch = models.BooleanField(default=True, verbose_name="Telefonbuch-Enrichment")
+    enable_perplexity = models.BooleanField(default=False, verbose_name="Perplexity AI aktivieren")
+    enable_bing = models.BooleanField(default=False, verbose_name="Bing Search aktivieren")
+    parallel_portal_crawl = models.BooleanField(default=True, verbose_name="Paralleles Portal-Crawling")
+    max_concurrent_portals = models.IntegerField(default=5, verbose_name="Max. parallele Portale")
+    
+    # === NEUE FELDER: Content ===
+    allow_pdf = models.BooleanField(default=False, verbose_name="PDF-Dateien erlauben")
+    max_content_length = models.IntegerField(
+        default=2097152,
+        verbose_name="Max. Content-Größe (Bytes)",
+        help_text="Standard: 2MB"
     )
     
     # Metadata
@@ -217,3 +302,125 @@ class ScraperLog(models.Model):
     
     def __str__(self):
         return f"[{self.level}] {self.message[:50]}"
+
+
+class SearchRegion(models.Model):
+    """Editierbare Regionen/Städte für Scraper"""
+    name = models.CharField(max_length=100, unique=True, verbose_name="Stadt/Region")
+    slug = models.SlugField(unique=True)
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    is_metropolis = models.BooleanField(default=False, verbose_name="Metropole", help_text="Große Stadt mit mehr Queries")
+    priority = models.IntegerField(default=0, verbose_name="Priorität", help_text="Höher = wird zuerst gescraped")
+    
+    class Meta:
+        ordering = ['-priority', 'name']
+        verbose_name = "Such-Region"
+        verbose_name_plural = "Such-Regionen"
+    
+    def __str__(self):
+        return f"{self.name} {'(Metropole)' if self.is_metropolis else ''}"
+
+
+class SearchDork(models.Model):
+    """Editierbare Such-Queries/Dorks"""
+    
+    CATEGORY_CHOICES = [
+        ('default', 'Standard'),
+        ('candidates', 'Kandidaten'),
+        ('recruiter', 'Recruiter'),
+        ('talent_hunt', 'Talent Hunt'),
+        ('social', 'Social Media'),
+        ('portal', 'Portal-spezifisch'),
+        ('custom', 'Benutzerdefiniert'),
+    ]
+    
+    query = models.TextField(verbose_name="Such-Query", help_text="Google Dork Query")
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='default', verbose_name="Kategorie")
+    description = models.CharField(max_length=255, blank=True, verbose_name="Beschreibung")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    priority = models.IntegerField(default=0, verbose_name="Priorität")
+    
+    # Performance Tracking
+    times_used = models.IntegerField(default=0, verbose_name="Verwendungen")
+    leads_found = models.IntegerField(default=0, verbose_name="Leads gefunden")
+    success_rate = models.FloatField(default=0.0, verbose_name="Erfolgsrate")
+    last_used = models.DateTimeField(null=True, blank=True, verbose_name="Zuletzt verwendet")
+    
+    # AI-Generierung
+    ai_generated = models.BooleanField(default=False, verbose_name="KI-generiert")
+    ai_prompt = models.TextField(blank=True, verbose_name="KI-Prompt")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-priority', '-success_rate']
+        verbose_name = "Such-Dork"
+        verbose_name_plural = "Such-Dorks"
+    
+    def __str__(self):
+        return f"[{self.category}] {self.query[:50]}..."
+
+
+class PortalSource(models.Model):
+    """Editierbare Portal-Quellen"""
+    
+    DIFFICULTY_CHOICES = [
+        ('low', 'Einfach'),
+        ('medium', 'Mittel'),
+        ('high', 'Schwer'),
+        ('very_high', 'Sehr schwer'),
+    ]
+    
+    name = models.CharField(max_length=100, unique=True, verbose_name="Interner Name")
+    display_name = models.CharField(max_length=200, verbose_name="Anzeigename")
+    base_url = models.URLField(verbose_name="Basis-URL")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    
+    # Rate Limiting
+    rate_limit_seconds = models.FloatField(default=3.0, verbose_name="Rate Limit (Sek)", help_text="Pause zwischen Requests")
+    max_results = models.IntegerField(default=20, verbose_name="Max. Ergebnisse")
+    
+    # Technische Config
+    requires_login = models.BooleanField(default=False, verbose_name="Login erforderlich")
+    difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='medium', verbose_name="Schwierigkeit")
+    
+    # Custom URLs als JSON
+    urls = models.JSONField(default=list, blank=True, verbose_name="URLs", help_text="Liste der zu crawlenden URLs")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_name']
+        verbose_name = "Portal-Quelle"
+        verbose_name_plural = "Portal-Quellen"
+    
+    def __str__(self):
+        status = "✓" if self.is_active else "✗"
+        return f"{status} {self.display_name}"
+
+
+class BlacklistEntry(models.Model):
+    """Editierbare Blacklist-Einträge"""
+    
+    TYPE_CHOICES = [
+        ('domain', 'Domain'),
+        ('path_pattern', 'Pfad-Muster'),
+        ('mailbox_prefix', 'Email-Prefix'),
+    ]
+    
+    entry_type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name="Typ")
+    value = models.CharField(max_length=255, verbose_name="Wert")
+    reason = models.CharField(max_length=255, blank=True, verbose_name="Grund")
+    is_active = models.BooleanField(default=True, verbose_name="Aktiv")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['entry_type', 'value']
+        verbose_name = "Blacklist-Eintrag"
+        verbose_name_plural = "Blacklist-Einträge"
+        unique_together = ['entry_type', 'value']
+    
+    def __str__(self):
+        return f"[{self.entry_type}] {self.value}"
