@@ -46,6 +46,7 @@ class ProcessManager:
         self.max_logs: int = 1000
         self.output_thread: Optional[threading.Thread] = None
         self.current_run_id: Optional[int] = None
+        self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
         self._initialized = True
     
     def _read_output(self):
@@ -58,10 +59,10 @@ class ProcessManager:
                     exit_code = self.process.poll()
                     logger.warning(f"Scraper process ended with exit code: {exit_code}")
                     
-                    # Check if it ended too quickly (< 5 seconds)
+                    # Check if it ended too quickly (configurable threshold)
                     if self.start_time:
                         runtime = (timezone.now() - self.start_time).total_seconds()
-                        if runtime < 5:
+                        if runtime < self.early_exit_threshold:
                             error_msg = f"⚠️ Scraper exited after only {runtime:.1f}s - likely a startup error!"
                             logger.error(error_msg)
                             self._log_error(error_msg)
@@ -179,7 +180,8 @@ class ProcessManager:
         """
         # Build base command
         if script_type == 'module':
-            cmd = ['python', '-m', script_path]  # script_path is module name like 'luca_scraper'
+            # script_path contains the module name (e.g., 'luca_scraper'), not a file path
+            cmd = ['python', '-m', script_path]
         else:
             cmd = ['python', script_path]
         
