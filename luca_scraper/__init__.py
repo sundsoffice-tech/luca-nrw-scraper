@@ -165,7 +165,6 @@ from .database import (
 from .search import (
     DEFAULT_QUERIES,
     INDUSTRY_QUERIES,
-    RECRUITER_QUERIES,
     build_queries,
 )
 
@@ -413,7 +412,6 @@ __all__ = [
     # Search Module (Phase 3)
     "DEFAULT_QUERIES",
     "INDUSTRY_QUERIES",
-    "RECRUITER_QUERIES",
     "build_queries",
     
     # Scoring Module - Patterns (Phase 3)

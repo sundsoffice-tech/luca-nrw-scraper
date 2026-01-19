@@ -6,7 +6,10 @@ Extracted from scriptname.py in Phase 3 refactoring.
 """
 
 import random
+import logging
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # =========================
@@ -548,11 +551,79 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:xing.com/profile "Inhaber" "Handelsvertreter" kontakt',
         '"Selbstständiger Vertriebsprofi" kontakt NRW',
     ],
-}
-
-# NEU: Recruiter-spezifische Queries für Vertriebler-Rekrutierung
-RECRUITER_QUERIES = {
-    'recruiter': [
+    
+    # ══════════════════════════════════════════════════════════════
+    # NEU: HANDELSVERTRETER
+    # ══════════════════════════════════════════════════════════════
+    "handelsvertreter": [
+        'site:de "Unsere Vertriebspartner" "PLZ" "Mobil" -jobs',
+        'site:de "Unsere Vertretungen" "Industrievertretung" "Kontakt"',
+        'site:de "Vertriebsnetz" "Handelsvertretung" "Ansprechpartner"',
+        'site:de "Gebietsvertretung" "PLZ" "Telefon" -stepstone -indeed',
+        'site:de "Vertragshändler" "Maschinenbau" "Ansprechpartner"',
+        '"Handelsvertreter" "Provision" "Vertriebspartner" NRW telefon',
+        '"freie Handelsvertretung" "suche" "Vertriebsgebiet"',
+        'site:kleinanzeigen.de handelsvertreter provision kontakt',
+        'site:xing.com "Handelsvertreter" "Industrievertretung"',
+        '"Handelsvertretung" "Maschinenbau" "Außendienst" NRW',
+        'site:cdh.de "Mitglied" "Kontakt"',
+        'site:handelskammer.de "Handelsvertreter" telefon',
+        '"Handelsvertreterregister" NRW kontakt email',
+        'site:ihk.de "Handelsvertreter" "Vertretung" kontakt',
+        'site:bdvi.de "Mitglied" "NRW" kontakt',
+        'filetype:pdf "Vertreterliste" "Mobil" "PLZ" -bewerbung',
+        'filetype:pdf "Preisliste" "Industrievertretung" "Kontakt"',
+        '"Inhaltlich Verantwortlicher" "Handelsvertretung" "Mobil" -GmbH -UG',
+        '"Angaben gemäß § 5 TMG" "Handelsvertretung" "Inhaber" "Mobil"',
+        'inurl:impressum "Handelsvertretung" "powered by WordPress" "Mobil"',
+    ],
+    
+    # ══════════════════════════════════════════════════════════════
+    # NEU: D2D (Door-to-Door)
+    # ══════════════════════════════════════════════════════════════
+    "d2d": [
+        '"door to door" "vertriebler" "sucht" "mobil"',
+        '"haustürgeschäft" "erfahrung" "suche arbeit"',
+        'site:kleinanzeigen.de/s-stellengesuche "d2d" "NRW"',
+        '"außendienst" "haustür" "provision" telefon',
+        'site:kleinanzeigen.de "door to door" "vertrieb"',
+        'site:kleinanzeigen.de/s-stellengesuche "haustür" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung" "NRW"',
+        '"d2d sales" "deutschland" "erfahrung" kontakt',
+        'site:facebook.com "d2d" "vertrieb" "suche"',
+        'site:xing.com "door to door" "sales" "profil"',
+        '"haustürgeschäft" "solar" "erfahrung" NRW',
+        '"tür zu tür" "vertrieb" "kontakt"',
+        'site:linkedin.com/in "door to door" "sales" "germany"',
+        '"field sales" "d2d" "erfahrung" telefon',
+        '"direktvertrieb" "haustür" "suche stelle"',
+    ],
+    
+    # ══════════════════════════════════════════════════════════════
+    # NEU: CALLCENTER
+    # ══════════════════════════════════════════════════════════════
+    "callcenter": [
+        '"call center agent" "suche" "homeoffice" "NRW"',
+        '"telesales" "erfahrung" "suche stelle"',
+        '"kundenservice" "telefon" "suche job"',
+        'site:kleinanzeigen.de/s-stellengesuche "call center"',
+        '"outbound" "telefonie" "erfahrung" suche',
+        'site:kleinanzeigen.de "telefonverkäufer" "suche"',
+        '"inbound" "customer service" "suche" NRW',
+        'site:kleinanzeigen.de/s-stellengesuche "telesales" "homeoffice"',
+        '"telefonakquise" "erfahrung" "suche stelle"',
+        '"telefon sales" "remote" "suche job"',
+        'site:xing.com "call center" "agent" "suche"',
+        'site:linkedin.com/in "telesales" "germany" "open"',
+        '"kundenberater telefon" "suche" "homeoffice"',
+        '"callcenter erfahrung" "suche neue" NRW',
+        '"telefonist" "suche stelle" "erfahrung"',
+    ],
+    
+    # ══════════════════════════════════════════════════════════════
+    # RECRUITER (Vertriebler-Rekrutierung)
+    # ══════════════════════════════════════════════════════════════
+    "recruiter": [
         'site:kleinanzeigen.de/s-stellengesuche/ "außendienst" NRW',
         'site:kleinanzeigen.de/s-stellengesuche/ "handelsvertreter" NRW',
         'site:kleinanzeigen.de/s-stellengesuche/ "verkauf" NRW',
@@ -564,7 +635,7 @@ RECRUITER_QUERIES = {
         'site:facebook.com "suche arbeit" "vertrieb" ("017" OR "016" OR "015" OR "+49")',
         'site:facebook.com/groups/ "stellengesuche" ("017" OR "016")',
         'site:facebook.com "jobsuche" "verkauf" ("017" OR "016" OR "015")',
-    ]
+    ],
 }
 
 
@@ -577,20 +648,36 @@ def build_queries(
     per_industry_limit: int = 20000
 ) -> List[str]:
     """
-    Build a compact set of high-precision Handelsvertreter dorks.
-    If candidates/recruiter/talent_hunt mode is selected, use INDUSTRY_QUERIES accordingly.
+    Build a compact set of high-precision queries based on selected industry.
+    If candidates/recruiter/talent_hunt/handelsvertreter/d2d/callcenter mode is selected,
+    use INDUSTRY_QUERIES accordingly.
     
     Args:
-        selected_industry: Industry/mode to use (candidates, recruiter, talent_hunt, or None for standard)
+        selected_industry: Industry/mode to use (candidates, recruiter, talent_hunt, 
+                          handelsvertreter, d2d, callcenter, or None for standard)
         per_industry_limit: Maximum number of queries to return
         
     Returns:
         List of search queries
     """
-    # CRITICAL FIX: Use appropriate queries based on mode
-    if selected_industry and selected_industry.lower() in ("candidates", "recruiter", "talent_hunt"):
+    # Alle unterstützten Industry-Modi
+    SUPPORTED_INDUSTRIES = [
+        "candidates", "recruiter", "talent_hunt",
+        "handelsvertreter", "d2d", "callcenter"
+    ]
+    
+    # Use industry-specific queries if available
+    if selected_industry and selected_industry.lower() in SUPPORTED_INDUSTRIES:
         base = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
-        queries = list(dict.fromkeys(base))
+        if not base:
+            # Log warning if industry is supported but has no queries
+            logger.warning(
+                f"Industry '{selected_industry}' is in SUPPORTED_INDUSTRIES but has no queries in INDUSTRY_QUERIES. "
+                f"Falling back to DEFAULT_QUERIES."
+            )
+            queries = list(dict.fromkeys(_COMPLETE_DEFAULT_QUERIES))
+        else:
+            queries = list(dict.fromkeys(base))
         random.shuffle(queries)
         cap = min(max(1, per_industry_limit), len(queries))
         return queries[:cap]

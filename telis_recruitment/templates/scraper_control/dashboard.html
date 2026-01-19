@@ -235,21 +235,37 @@ function updateHints() {
     const mode = modeSelect.value;
     const dryRun = dryRunCheckbox.checked;
     
-    let hint = '';
+    let hints = [];
     
     // Check for problematic combinations
     if (dryRun && mode === 'aggressive') {
-        hint = '⚠️ Dry Run mit Aggressive Mode wird automatisch auf Standard umgestellt.';
-    } else if (industry === 'candidates' && mode === 'aggressive') {
-        hint = '⚠️ Aggressive Mode bei Kandidaten-Suche kann zu Blockierungen führen.';
-    } else if (industry === 'social' && mode !== 'snippet_only') {
-        hint = '💡 Für Social Media wird Snippet-Only empfohlen.';
-    } else if (industry === 'talent_hunt' && mode === 'snippet_only') {
-        hint = '💡 Talent Hunt funktioniert besser mit Standard oder Learning Mode.';
+        hints.push('⚠️ Dry Run mit Aggressive Mode wird automatisch auf Standard umgestellt.');
     }
     
-    if (hint) {
-        hintsDiv.textContent = hint;
+    // Industry-specific hints
+    if (industry === 'handelsvertreter') {
+        hints.push('🎯 Handelsvertreter-Modus: Sucht nach Industrievertretungen und Handelsvertretern');
+    } else if (industry === 'd2d') {
+        hints.push('🚪 D2D-Modus: Sucht nach Door-to-Door Vertriebsmitarbeitern');
+    } else if (industry === 'callcenter') {
+        hints.push('📞 Callcenter-Modus: Sucht nach Telesales und Kundenservice');
+    } else if (industry === 'candidates' && mode === 'aggressive') {
+        hints.push('⚠️ Aggressive Mode bei Kandidaten kann zu Rate-Limits führen.');
+    } else if (industry === 'social' && mode !== 'snippet_only') {
+        hints.push('💡 Für Social Media wird Snippet-Only empfohlen.');
+    } else if (industry === 'talent_hunt' && mode === 'snippet_only') {
+        hints.push('💡 Talent Hunt funktioniert besser mit Standard oder Learning Mode.');
+    }
+    
+    if (hints.length > 0) {
+        // Clear and build hints safely to prevent XSS
+        hintsDiv.textContent = ''; // Clear using textContent
+        hints.forEach(hint => {
+            const p = document.createElement('p');
+            p.className = 'text-yellow-400';
+            p.textContent = hint;
+            hintsDiv.appendChild(p);
+        });
         hintsDiv.classList.remove('hidden');
     } else {
         hintsDiv.classList.add('hidden');
