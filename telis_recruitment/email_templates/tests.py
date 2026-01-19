@@ -5,7 +5,10 @@ from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
-from .models import EmailTemplate, EmailTemplateVersion, EmailSendLog
+from .models import (
+    EmailTemplate, EmailTemplateVersion, EmailSendLog,
+    EmailFlow, FlowStep, FlowExecution, FlowStepExecution
+)
 from .services.renderer import (
     render_template, 
     render_email_template, 
@@ -227,5 +230,301 @@ class EmailTemplateAPITest(APITestCase):
         """Test that authentication is required"""
         self.client.force_authenticate(user=None)
         url = '/api/email-templates/templates/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class EmailFlowModelTest(TestCase):
+    """Tests for EmailFlow model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.flow = EmailFlow.objects.create(
+            slug='welcome-flow',
+            name='Welcome Flow',
+            description='Welcome new leads',
+            trigger_type='lead_created',
+            trigger_config={'immediate': True},
+            created_by=self.user
+        )
+    
+    def test_flow_creation(self):
+        """Test that a flow can be created"""
+        self.assertEqual(self.flow.slug, 'welcome-flow')
+        self.assertEqual(self.flow.name, 'Welcome Flow')
+        self.assertEqual(self.flow.trigger_type, 'lead_created')
+        self.assertFalse(self.flow.is_active)  # Default is False
+        self.assertEqual(self.flow.execution_count, 0)
+    
+    def test_flow_str(self):
+        """Test the string representation of a flow"""
+        self.assertEqual(str(self.flow), 'Welcome Flow')
+    
+    def test_flow_defaults(self):
+        """Test default values"""
+        self.assertFalse(self.flow.is_active)
+        self.assertEqual(self.flow.execution_count, 0)
+        self.assertIsNone(self.flow.last_executed_at)
+
+
+class FlowStepModelTest(TestCase):
+    """Tests for FlowStep model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.flow = EmailFlow.objects.create(
+            slug='test-flow',
+            name='Test Flow',
+            trigger_type='lead_created',
+            created_by=self.user
+        )
+        self.template = EmailTemplate.objects.create(
+            slug='test-template',
+            name='Test Template',
+            category='custom',
+            subject='Test',
+            html_content='<p>Test</p>',
+            created_by=self.user
+        )
+        self.step = FlowStep.objects.create(
+            flow=self.flow,
+            order=0,
+            name='Send Welcome Email',
+            action_type='send_email',
+            email_template=self.template,
+            action_config={}
+        )
+    
+    def test_step_creation(self):
+        """Test that a step can be created"""
+        self.assertEqual(self.step.order, 0)
+        self.assertEqual(self.step.action_type, 'send_email')
+        self.assertEqual(self.step.name, 'Send Welcome Email')
+        self.assertTrue(self.step.is_active)
+    
+    def test_step_str(self):
+        """Test the string representation of a step"""
+        expected = f"{self.flow.name} - Step {self.step.order}: {self.step.get_action_type_display()}"
+        self.assertEqual(str(self.step), expected)
+    
+    def test_step_ordering(self):
+        """Test that steps are ordered correctly"""
+        step2 = FlowStep.objects.create(
+            flow=self.flow,
+            order=1,
+            action_type='wait',
+            action_config={'duration': '1 day'}
+        )
+        steps = list(self.flow.steps.all())
+        self.assertEqual(steps[0], self.step)
+        self.assertEqual(steps[1], step2)
+
+
+class FlowExecutionModelTest(TestCase):
+    """Tests for FlowExecution model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.flow = EmailFlow.objects.create(
+            slug='test-flow',
+            name='Test Flow',
+            trigger_type='lead_created',
+            created_by=self.user
+        )
+        self.lead = Lead.objects.create(
+            name='Test Lead',
+            email='test@example.com'
+        )
+        self.execution = FlowExecution.objects.create(
+            flow=self.flow,
+            lead=self.lead,
+            status='pending'
+        )
+    
+    def test_execution_creation(self):
+        """Test that an execution can be created"""
+        self.assertEqual(self.execution.status, 'pending')
+        self.assertEqual(self.execution.flow, self.flow)
+        self.assertEqual(self.execution.lead, self.lead)
+        self.assertIsNone(self.execution.current_step)
+    
+    def test_execution_str(self):
+        """Test the string representation of an execution"""
+        expected = f"{self.flow.name} - {self.lead.name} ({self.execution.get_status_display()})"
+        self.assertEqual(str(self.execution), expected)
+
+
+class FlowStepExecutionModelTest(TestCase):
+    """Tests for FlowStepExecution model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.flow = EmailFlow.objects.create(
+            slug='test-flow',
+            name='Test Flow',
+            trigger_type='lead_created',
+            created_by=self.user
+        )
+        self.lead = Lead.objects.create(
+            name='Test Lead',
+            email='test@example.com'
+        )
+        self.step = FlowStep.objects.create(
+            flow=self.flow,
+            order=0,
+            action_type='send_email',
+            action_config={}
+        )
+        self.execution = FlowExecution.objects.create(
+            flow=self.flow,
+            lead=self.lead
+        )
+        self.step_execution = FlowStepExecution.objects.create(
+            execution=self.execution,
+            step=self.step,
+            status='completed',
+            result_data={'email_sent': True}
+        )
+    
+    def test_step_execution_creation(self):
+        """Test that a step execution can be created"""
+        self.assertEqual(self.step_execution.status, 'completed')
+        self.assertEqual(self.step_execution.result_data, {'email_sent': True})
+
+
+class EmailFlowAPITest(APITestCase):
+    """Tests for EmailFlow API"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+        
+        self.template = EmailTemplate.objects.create(
+            slug='test-template',
+            name='Test Template',
+            category='custom',
+            subject='Test',
+            html_content='<p>Test</p>',
+            created_by=self.user
+        )
+        
+        self.flow = EmailFlow.objects.create(
+            slug='test-flow',
+            name='Test Flow',
+            description='Test flow description',
+            trigger_type='lead_created',
+            trigger_config={},
+            created_by=self.user
+        )
+        
+        FlowStep.objects.create(
+            flow=self.flow,
+            order=0,
+            action_type='send_email',
+            email_template=self.template,
+            action_config={}
+        )
+    
+    def test_list_flows(self):
+        """Test listing flows"""
+        url = '/api/email-templates/flows/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+    
+    def test_retrieve_flow(self):
+        """Test retrieving a single flow"""
+        url = f'/api/email-templates/flows/{self.flow.slug}/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['slug'], 'test-flow')
+        self.assertEqual(len(response.data['steps']), 1)
+    
+    def test_create_flow(self):
+        """Test creating a new flow"""
+        url = '/api/email-templates/flows/'
+        data = {
+            'name': 'New Flow',
+            'slug': 'new-flow',
+            'description': 'New test flow',
+            'trigger_type': 'lead_created',
+            'trigger_config': {},
+            'is_active': False,
+            'steps': [
+                {
+                    'order': 0,
+                    'action_type': 'send_email',
+                    'email_template': self.template.id,
+                    'action_config': {},
+                    'is_active': True
+                }
+            ]
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'New Flow')
+        
+        # Verify flow was created with steps
+        flow = EmailFlow.objects.get(slug='new-flow')
+        self.assertEqual(flow.steps.count(), 1)
+    
+    def test_activate_flow(self):
+        """Test activating a flow"""
+        url = f'/api/email-templates/flows/{self.flow.slug}/activate/'
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'activated')
+        
+        # Verify flow is active
+        self.flow.refresh_from_db()
+        self.assertTrue(self.flow.is_active)
+    
+    def test_deactivate_flow(self):
+        """Test deactivating a flow"""
+        self.flow.is_active = True
+        self.flow.save()
+        
+        url = f'/api/email-templates/flows/{self.flow.slug}/deactivate/'
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'deactivated')
+        
+        # Verify flow is inactive
+        self.flow.refresh_from_db()
+        self.assertFalse(self.flow.is_active)
+    
+    def test_duplicate_flow(self):
+        """Test duplicating a flow"""
+        url = f'/api/email-templates/flows/{self.flow.slug}/duplicate/'
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'duplicated')
+        
+        # Verify duplicate was created
+        self.assertEqual(EmailFlow.objects.count(), 2)
+        duplicate = EmailFlow.objects.get(slug='test-flow-copy')
+        self.assertEqual(duplicate.name, 'Test Flow (Kopie)')
+        self.assertFalse(duplicate.is_active)
+        self.assertEqual(duplicate.steps.count(), 1)
+    
+    def test_flow_statistics(self):
+        """Test flow statistics endpoint"""
+        url = f'/api/email-templates/flows/{self.flow.slug}/statistics/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('total_executions', response.data)
+        self.assertIn('status_counts', response.data)
+        self.assertIn('steps_count', response.data)
+    
+    def test_authentication_required_for_flows(self):
+        """Test that authentication is required"""
+        self.client.force_authenticate(user=None)
+        url = '/api/email-templates/flows/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
