@@ -113,6 +113,20 @@ def scraper_start(request):
         result = manager.start(params, user=request.user)
         
         if result['success']:
+            # Save config settings for next page load
+            config = ScraperConfig.get_config()
+            config.industry = params.get('industry', config.industry)
+            config.qpi = qpi  # Use validated qpi value
+            config.mode = params.get('mode', config.mode)
+            # Boolean fields: JavaScript getFormData() converts checkbox 'on'/'off' to true/false
+            # and sends them as JSON booleans, so we always receive explicit boolean values
+            config.smart = bool(params.get('smart', False))
+            config.once = bool(params.get('once', False))
+            config.force = bool(params.get('force', False))
+            config.dry_run = bool(params.get('dry_run', False))
+            config.updated_by = request.user
+            config.save()
+            
             return Response(result, status=status.HTTP_200_OK)
         else:
             return Response(result, status=status.HTTP_400_BAD_REQUEST)

@@ -59,59 +59,59 @@
                     <label class="block text-sm font-medium text-gray-300 mb-2">Industry</label>
                     <select name="industry" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
                         <!-- Basis-Modi -->
-                        <option value="all">Alle</option>
-                        <option value="recruiter">Recruiter</option>
-                        <option value="candidates">Kandidaten</option>
-                        <option value="talent_hunt">Talent Hunt</option>
-                        <option value="handelsvertreter">Handelsvertreter</option>
+                        <option value="all" {% if config.industry == 'all' %}selected{% endif %}>Alle</option>
+                        <option value="recruiter" {% if config.industry == 'recruiter' %}selected{% endif %}>Recruiter</option>
+                        <option value="candidates" {% if config.industry == 'candidates' %}selected{% endif %}>Kandidaten</option>
+                        <option value="talent_hunt" {% if config.industry == 'talent_hunt' %}selected{% endif %}>Talent Hunt</option>
+                        <option value="handelsvertreter" {% if config.industry == 'handelsvertreter' %}selected{% endif %}>Handelsvertreter</option>
                         <!-- Erweiterte Branchen -->
-                        <option value="nrw">NRW Regional</option>
-                        <option value="social">Social Media</option>
-                        <option value="solar">Solar/Energie</option>
-                        <option value="telekom">Telekommunikation</option>
-                        <option value="versicherung">Versicherung</option>
-                        <option value="bau">Baubranche</option>
-                        <option value="ecom">E-Commerce</option>
-                        <option value="household">Haushalt</option>
+                        <option value="nrw" {% if config.industry == 'nrw' %}selected{% endif %}>NRW Regional</option>
+                        <option value="social" {% if config.industry == 'social' %}selected{% endif %}>Social Media</option>
+                        <option value="solar" {% if config.industry == 'solar' %}selected{% endif %}>Solar/Energie</option>
+                        <option value="telekom" {% if config.industry == 'telekom' %}selected{% endif %}>Telekommunikation</option>
+                        <option value="versicherung" {% if config.industry == 'versicherung' %}selected{% endif %}>Versicherung</option>
+                        <option value="bau" {% if config.industry == 'bau' %}selected{% endif %}>Baubranche</option>
+                        <option value="ecom" {% if config.industry == 'ecom' %}selected{% endif %}>E-Commerce</option>
+                        <option value="household" {% if config.industry == 'household' %}selected{% endif %}>Haushalt</option>
                         <!-- Weitere spezifische -->
-                        <option value="d2d">Door-to-Door</option>
-                        <option value="callcenter">Call Center</option>
+                        <option value="d2d" {% if config.industry == 'd2d' %}selected{% endif %}>Door-to-Door</option>
+                        <option value="callcenter" {% if config.industry == 'callcenter' %}selected{% endif %}>Call Center</option>
                     </select>
                 </div>
                 
                 <!-- QPI -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Queries per Industry</label>
-                    <input type="number" name="qpi" value="15" min="1" max="100" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                    <input type="number" name="qpi" value="{{ config.qpi }}" min="1" max="100" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
                 </div>
                 
                 <!-- Mode -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Modus</label>
                     <select name="mode" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="standard">Standard</option>
-                        <option value="learning">Selbstlernend</option>
-                        <option value="aggressive">Aggressiv</option>
-                        <option value="snippet_only">Nur Snippets</option>
+                        <option value="standard" {% if config.mode == 'standard' %}selected{% endif %}>Standard</option>
+                        <option value="learning" {% if config.mode == 'learning' %}selected{% endif %}>Selbstlernend</option>
+                        <option value="aggressive" {% if config.mode == 'aggressive' %}selected{% endif %}>Aggressiv</option>
+                        <option value="snippet_only" {% if config.mode == 'snippet_only' %}selected{% endif %}>Nur Snippets</option>
                     </select>
                 </div>
                 
                 <!-- Checkboxes -->
                 <div class="space-y-2">
                     <label class="flex items-center">
-                        <input type="checkbox" name="smart" checked class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                        <input type="checkbox" name="smart" {% if config.smart %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
                         <span class="text-sm text-gray-300">Smart Mode</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="checkbox" name="once" checked class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                        <input type="checkbox" name="once" {% if config.once %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
                         <span class="text-sm text-gray-300">Einmal ausführen</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="checkbox" name="force" class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                        <input type="checkbox" name="force" {% if config.force %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
                         <span class="text-sm text-gray-300">Force (Cache ignorieren)</span>
                     </label>
                     <label class="flex items-center">
-                        <input type="checkbox" name="dry_run" class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                        <input type="checkbox" name="dry_run" {% if config.dry_run %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
                         <span class="text-sm text-gray-300">Dry Run (Testmodus)</span>
                     </label>
                 </div>
