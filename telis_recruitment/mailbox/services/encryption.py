@@ -7,7 +7,7 @@ import base64
 from typing import Optional
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from django.conf import settings
 import logging
 
@@ -26,7 +26,7 @@ def _get_encryption_key() -> bytes:
     salt = b'mailbox_encryption_salt_v1'
     
     # Derive a 32-byte key using PBKDF2
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
