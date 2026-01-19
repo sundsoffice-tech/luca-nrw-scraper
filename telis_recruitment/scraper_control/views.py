@@ -86,11 +86,11 @@ def api_scraper_start(request):
     """
     POST /crm/scraper/api/scraper/start/
     
-    Start the scraper with given parameters.
+    Start the scraper with validated parameters.
     
     POST data:
     {
-        "industry": "recruiter|candidates|talent_hunt|all",
+        "industry": "recruiter|candidates|talent_hunt|all|nrw|social|solar|telekom|versicherung|bau|ecom|household",
         "qpi": 15,
         "mode": "standard|learning|aggressive|snippet_only",
         "daterestrict": "d30",
@@ -101,28 +101,43 @@ def api_scraper_start(request):
     }
     """
     try:
-        params = request.data
+        # Get available choices from model
+        from .models import ScraperConfig
+        valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
+        valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
         
-        # Validate parameters
+        params = request.data.copy()  # Mutable copy - request.data is immutable, we need to modify for parameter sanitization
+        
+        # Validate and set defaults for industry
         industry = params.get('industry', 'recruiter')
-        if industry not in ['recruiter', 'candidates', 'talent_hunt', 'all']:
+        if industry not in valid_industries:
             return Response({
                 'success': False,
-                'error': 'Ungültige Industry-Auswahl'
+                'error': f'Ungültige Industry: {industry}. Erlaubt: {", ".join(valid_industries)}'
             }, status=http_status.HTTP_400_BAD_REQUEST)
         
+        # Validate and sanitize mode with fallback
+        mode = params.get('mode', 'standard')
+        if mode not in valid_modes:
+            logger.warning(f"Unknown mode '{mode}', falling back to 'standard'")
+            params['mode'] = 'standard'
+        
+        # Validate and clamp QPI
         qpi = params.get('qpi', 15)
         try:
             qpi = int(qpi)
-            if qpi < 1 or qpi > 100:
-                raise ValueError
+            qpi = max(1, min(100, qpi))  # Clamp between 1 and 100
+            params['qpi'] = qpi
         except (ValueError, TypeError):
-            return Response({
-                'success': False,
-                'error': 'QPI muss zwischen 1 und 100 liegen'
-            }, status=http_status.HTTP_400_BAD_REQUEST)
+            logger.warning(f"Invalid QPI value '{qpi}', using default 15")
+            params['qpi'] = 15
         
-        # Start scraper
+        # Check parameter dependencies
+        if params.get('dry_run') and params.get('mode') == 'aggressive':
+            logger.warning("dry_run + aggressive mode is not recommended, falling back to standard")
+            params['mode'] = 'standard'
+        
+        # Start scraper with validated params
         manager = get_manager()
         result = manager.start(params, user=request.user)
         

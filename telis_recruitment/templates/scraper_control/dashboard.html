@@ -57,11 +57,12 @@
                 <!-- Industry -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Industry</label>
-                    <select name="industry" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="recruiter" {% if config.industry == 'recruiter' %}selected{% endif %}>Recruiter</option>
-                        <option value="candidates" {% if config.industry == 'candidates' %}selected{% endif %}>Kandidaten</option>
-                        <option value="talent_hunt" {% if config.industry == 'talent_hunt' %}selected{% endif %}>Talent Hunt</option>
-                        <option value="all" {% if config.industry == 'all' %}selected{% endif %}>Alle</option>
+                    <select name="industry" id="industry-select" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                        {% for value, label in config.INDUSTRY_CHOICES %}
+                        <option value="{{ value }}" {% if config.industry == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                 
@@ -74,11 +75,12 @@
                 <!-- Mode -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-2">Modus</label>
-                    <select name="mode" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="standard" {% if config.mode == 'standard' %}selected{% endif %}>Standard</option>
-                        <option value="learning" {% if config.mode == 'learning' %}selected{% endif %}>Learning</option>
-                        <option value="aggressive" {% if config.mode == 'aggressive' %}selected{% endif %}>Aggressive</option>
-                        <option value="snippet_only" {% if config.mode == 'snippet_only' %}selected{% endif %}>Snippet Only</option>
+                    <select name="mode" id="mode-select" class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                        {% for value, label in config.MODE_CHOICES %}
+                        <option value="{{ value }}" {% if config.mode == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                 
@@ -104,9 +106,14 @@
                     <span class="text-sm text-gray-300">Force (Cache ignorieren)</span>
                 </label>
                 <label class="flex items-center">
-                    <input type="checkbox" name="dry_run" {% if config.dry_run %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
+                    <input type="checkbox" name="dry_run" id="dry-run-checkbox" {% if config.dry_run %}checked{% endif %} class="mr-2 rounded bg-dark-900 border-dark-700 text-primary focus:ring-primary">
                     <span class="text-sm text-gray-300">Dry Run (Testmodus)</span>
                 </label>
+            </div>
+            
+            <!-- Dependency hints -->
+            <div id="dependency-hints" class="text-sm text-yellow-500 mt-2 hidden">
+                <!-- JavaScript will populate this dynamically -->
             </div>
             
             <div class="flex space-x-4">
@@ -216,5 +223,45 @@ const scraperControl = new ScraperControl({
     logsEndpoint: '{% url "scraper_control:api-logs-stream" %}',
     csrfToken: '{{ csrf_token }}'
 });
+
+// Dependency hints
+const industrySelect = document.getElementById('industry-select');
+const modeSelect = document.getElementById('mode-select');
+const dryRunCheckbox = document.getElementById('dry-run-checkbox');
+const hintsDiv = document.getElementById('dependency-hints');
+
+function updateHints() {
+    const industry = industrySelect.value;
+    const mode = modeSelect.value;
+    const dryRun = dryRunCheckbox.checked;
+    
+    let hint = '';
+    
+    // Check for problematic combinations
+    if (dryRun && mode === 'aggressive') {
+        hint = '⚠️ Dry Run mit Aggressive Mode wird automatisch auf Standard umgestellt.';
+    } else if (industry === 'candidates' && mode === 'aggressive') {
+        hint = '⚠️ Aggressive Mode bei Kandidaten-Suche kann zu Blockierungen führen.';
+    } else if (industry === 'social' && mode !== 'snippet_only') {
+        hint = '💡 Für Social Media wird Snippet-Only empfohlen.';
+    } else if (industry === 'talent_hunt' && mode === 'snippet_only') {
+        hint = '💡 Talent Hunt funktioniert besser mit Standard oder Learning Mode.';
+    }
+    
+    if (hint) {
+        hintsDiv.textContent = hint;
+        hintsDiv.classList.remove('hidden');
+    } else {
+        hintsDiv.classList.add('hidden');
+    }
+}
+
+// Add event listeners
+industrySelect.addEventListener('change', updateHints);
+modeSelect.addEventListener('change', updateHints);
+dryRunCheckbox.addEventListener('change', updateHints);
+
+// Initial update
+updateHints();
 </script>
 {% endblock %}
