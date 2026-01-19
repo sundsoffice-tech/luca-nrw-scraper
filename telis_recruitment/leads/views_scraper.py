@@ -77,7 +77,7 @@ def scraper_start(request):
     {
         "industry": "recruiter|candidates|talent_hunt|all|handelsvertreter|...",
         "qpi": 15,
-        "mode": "standard|headhunter|aggressive|snippet_only|learning",
+        "mode": "standard|aggressive|snippet_only|learning",
         "smart": true,
         "force": false,
         "once": true,
