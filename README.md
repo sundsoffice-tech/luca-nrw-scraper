@@ -1,5 +1,25 @@
 Zweck: NRW-Vertriebsleads automatisch finden, bewerten, exportieren.
 
+---
+
+## ⚡ NEU: Weltklasse Onboarding in 20 Minuten
+
+**Neu bei LUCA?** → **[📖 QUICKSTART GUIDE](docs/QUICKSTART.md)** - Deine ersten Leads in 20 Minuten!
+
+```
+Installation (5 min) → Erststart (2 min) → API-Keys (5 min) → Testlauf (5 min) → Leads ansehen (2 min) ✓
+```
+
+Der komplette Weg von Installation bis zu deinen ersten 10 Leads:
+- ✅ Schritt-für-Schritt Anleitung (Docker oder Manuell)
+- ✅ Keine Vorkenntnisse erforderlich
+- ✅ Funktioniert ohne API-Keys (für erste Tests)
+- ✅ Sofort produktiv
+
+**[→ Zum QUICKSTART Guide](docs/QUICKSTART.md)** | **[Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** | **[Troubleshooting](docs/TROUBLESHOOTING.md)**
+
+---
+
 ## 🚀 Quick Start
 
 ### 🐳 Docker (Recommended)
@@ -83,7 +103,13 @@ python scriptname.py --ui
 
 ## 📚 Documentation
 
-- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual, troubleshooting)
+### 🎯 Onboarding (Neu!)
+- **[⚡ QUICKSTART (20 Min)](docs/QUICKSTART.md)** - Von 0 zu deinen ersten Leads
+- **[⚙️ Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** - Safe/Balanced/Aggressive Modi
+- **[🆘 Troubleshooting](docs/TROUBLESHOOTING.md)** - Problemlösung nach Symptomen
+
+### 📖 Setup & Deployment
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual)
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment to Railway, Render, Fly.io, Hetzner
 - **[Django CRM Details](telis_recruitment/README.md)** - Detailed Django CRM documentation
 
