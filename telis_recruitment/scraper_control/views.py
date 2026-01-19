@@ -245,6 +245,79 @@ def api_scraper_logs_stream(request):
     return response
 
 
+@require_GET
+@staff_member_required
+def api_scraper_metrics_stream(request):
+    """
+    GET /crm/scraper/api/scraper/metrics/stream/
+    
+    Stream live metrics via Server-Sent Events (SSE).
+    Streams CPU, memory usage, and leads count in real-time.
+    """
+    import psutil
+    
+    def event_stream():
+        """Generator for SSE events"""
+        manager = get_manager()
+        
+        # Send initial message
+        yield f"data: {json.dumps({'type': 'connected', 'message': 'Verbunden mit Metriken-Stream'})}\n\n"
+        
+        # Stream metrics
+        while True:
+            try:
+                status_info = manager.get_status()
+                is_running = status_info.get('status') == 'running'
+                
+                # Build metrics data
+                metrics_data = {
+                    'type': 'metrics',
+                    'status': status_info.get('status', 'stopped'),
+                    'cpu_percent': status_info.get('cpu_percent', 0),
+                    'memory_mb': status_info.get('memory_mb', 0),
+                    'leads_found': status_info.get('leads_found', 0),
+                    'leads_accepted': status_info.get('leads_accepted', 0),
+                    'leads_rejected': status_info.get('leads_rejected', 0),
+                    'uptime_seconds': status_info.get('uptime_seconds', 0),
+                    'links_checked': status_info.get('links_checked', 0),
+                    'success_rate': status_info.get('success_rate', 0),
+                    'block_rate': status_info.get('block_rate', 0),
+                    'avg_request_time_ms': status_info.get('avg_request_time_ms', 0),
+                }
+                
+                # Add system-wide metrics
+                try:
+                    metrics_data['system_cpu_percent'] = psutil.cpu_percent(interval=0)
+                    memory = psutil.virtual_memory()
+                    metrics_data['system_memory_percent'] = memory.percent
+                    metrics_data['system_memory_available_mb'] = round(memory.available / 1024 / 1024, 2)
+                except Exception:
+                    pass
+                
+                yield f"data: {json.dumps(metrics_data)}\n\n"
+                
+                # If scraper stopped, send final update and end stream
+                if not is_running:
+                    yield f"data: {json.dumps({'type': 'stopped', 'message': 'Scraper gestoppt'})}\n\n"
+                    break
+                
+                # Wait before next update (2 seconds for metrics)
+                time.sleep(2)
+                
+            except GeneratorExit:
+                # Client disconnected
+                break
+            except Exception as e:
+                logger.error(f"Error in metrics stream: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                break
+    
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def api_scraper_config(request):
