@@ -35,6 +35,10 @@ urlpatterns = [
     path('api/export/csv/', views_export.export_leads_csv, name='export-csv'),
     path('api/export/excel/', views_export.export_leads_excel, name='export-excel'),
     
+    # Saved Filters API
+    path('api/saved-filters/', views.saved_filters, name='saved-filters'),
+    path('api/saved-filters/<int:filter_id>/', views.saved_filter_detail, name='saved-filter-detail'),
+    
     # Future: Add more CRM routes here
     # path('phone/', views.crm_phone, name='crm-phone'),
     # path('emails/', views.crm_emails, name='crm-emails'),

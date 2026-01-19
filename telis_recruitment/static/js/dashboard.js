@@ -7,6 +7,7 @@
 let leadTrendChart = null;
 let statusDistChart = null;
 let sourceDistChart = null;
+let qualityTrendChart = null;
 
 // Dark theme colors
 const COLORS = {
@@ -73,6 +74,7 @@ async function loadDashboardStats() {
         updateLeadTrendChart(data.trend_7_days);
         updateStatusDistChart(data.status_distribution);
         updateSourceDistChart(data.source_distribution);
+        updateQualityTrendChart(data.quality_trend);
         
     } catch (error) {
         console.error('Error loading dashboard stats:', error);
@@ -288,6 +290,73 @@ function updateSourceDistChart(sourceDist) {
                     y: {
                         grid: { display: false, drawBorder: false },
                         ticks: { color: '#9ca3af', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Initialize and update Quality Trend Chart (Line Chart)
+ */
+function updateQualityTrendChart(qualityData) {
+    const ctx = document.getElementById('qualityTrendChart');
+    if (!ctx) return;
+    
+    const labels = qualityData.map(d => d.label);
+    const qualityScores = qualityData.map(d => d.avg_quality);
+    
+    if (qualityTrendChart) {
+        // Update existing chart
+        qualityTrendChart.data.labels = labels;
+        qualityTrendChart.data.datasets[0].data = qualityScores;
+        qualityTrendChart.update('none');
+    } else {
+        // Create new chart
+        qualityTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Ø Qualitäts-Score',
+                    data: qualityScores,
+                    borderColor: COLORS.purple,
+                    backgroundColor: COLORS.purple + '20',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 12 } }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: '#1e293b',
+                        titleColor: '#f3f4f6',
+                        bodyColor: '#d1d5db',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: '#334155', drawBorder: false },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: '#334155', drawBorder: false },
+                        ticks: { color: '#9ca3af', precision: 0 }
                     }
                 }
             }

@@ -40,8 +40,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.decorators import action
 
-from .models import Lead, CallLog, EmailLog
+from .models import Lead, CallLog, EmailLog, SavedFilter
 from .serializers import LeadSerializer, LeadListSerializer, CallLogSerializer, EmailLogSerializer
 from .permissions import IsManager, IsTelefonist
 from telis.config import API_RATE_LIMIT_OPT_IN, API_RATE_LIMIT_IMPORT
@@ -135,6 +136,111 @@ class LeadViewSet(viewsets.ModelViewSet):
             )
         
         return queryset
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def batch_update_status(self, request):
+        """Batch update status for multiple leads."""
+        lead_ids = request.data.get('lead_ids', [])
+        new_status = request.data.get('status')
+        
+        if not lead_ids or not new_status:
+            return Response({
+                'success': False,
+                'error': 'lead_ids and status are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if new_status not in dict(Lead.Status.choices):
+            return Response({
+                'success': False,
+                'error': 'Invalid status value'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        updated_count = leads_qs.filter(id__in=lead_ids).update(status=new_status)
+        
+        return Response({
+            'success': True,
+            'updated_count': updated_count
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def batch_add_tags(self, request):
+        """Batch add tags to multiple leads."""
+        lead_ids = request.data.get('lead_ids', [])
+        tags_to_add = request.data.get('tags', [])
+        
+        if not lead_ids or not tags_to_add:
+            return Response({
+                'success': False,
+                'error': 'lead_ids and tags are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        leads = leads_qs.filter(id__in=lead_ids)
+        
+        updated_count = 0
+        for lead in leads:
+            current_tags = lead.tags or []
+            # Add new tags if not already present
+            for tag in tags_to_add:
+                if tag not in current_tags:
+                    current_tags.append(tag)
+            lead.tags = current_tags
+            lead.save()
+            updated_count += 1
+        
+        return Response({
+            'success': True,
+            'updated_count': updated_count
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def batch_assign(self, request):
+        """Batch assign leads to a user."""
+        lead_ids = request.data.get('lead_ids', [])
+        user_id = request.data.get('user_id')
+        
+        if not lead_ids or not user_id:
+            return Response({
+                'success': False,
+                'error': 'lead_ids and user_id are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            assigned_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        updated_count = leads_qs.filter(id__in=lead_ids).update(assigned_to=assigned_user)
+        
+        return Response({
+            'success': True,
+            'updated_count': updated_count,
+            'assigned_to': assigned_user.get_full_name() or assigned_user.username
+        })
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def batch_delete(self, request):
+        """Batch delete leads."""
+        lead_ids = request.data.get('lead_ids', [])
+        
+        if not lead_ids:
+            return Response({
+                'success': False,
+                'error': 'lead_ids are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        deleted_count, _ = leads_qs.filter(id__in=lead_ids).delete()
+        
+        return Response({
+            'success': True,
+            'deleted_count': deleted_count
+        })
 
 
 class CallLogViewSet(viewsets.ModelViewSet):
@@ -829,10 +935,13 @@ def _build_dashboard_stats(user):
     total_leads = leads_qs.count()
     today = timezone.localdate()
     week_start_date = today - timedelta(days=6)
+    month_start_date = today - timedelta(days=29)
     prev_week_start = today - timedelta(days=13)
     prev_week_end = today - timedelta(days=7)
 
     leads_today = leads_qs.filter(created_at__date=today).count()
+    leads_week = leads_qs.filter(created_at__date__gte=week_start_date).count()
+    leads_month = leads_qs.filter(created_at__date__gte=month_start_date).count()
     hot_leads = leads_qs.filter(quality_score__gte=80, interest_level__gte=3).count()
 
     calls_today = CallLog.objects.filter(
@@ -894,10 +1003,55 @@ def _build_dashboard_stats(user):
             'count': count,
             'percentage': percentage
         }
+    
+    # Top sources by conversion rate (quality)
+    top_sources = []
+    for key, label in Lead.Source.choices:
+        source_leads = leads_qs.filter(source=key)
+        source_count = source_leads.count()
+        if source_count > 0:
+            converted = source_leads.filter(status__in=_CONVERTED_STATUSES).count()
+            conversion_rate_src = round((converted / source_count) * 100, 1)
+            avg_quality = source_leads.aggregate(Avg('quality_score'))['quality_score__avg'] or 0
+            top_sources.append({
+                'source': label,
+                'count': source_count,
+                'conversion_rate': conversion_rate_src,
+                'avg_quality': round(avg_quality, 1)
+            })
+    top_sources.sort(key=lambda x: x['conversion_rate'], reverse=True)
+    
+    # Top error reasons (optimized with single query)
+    error_reasons = []
+    error_counts = leads_qs.aggregate(
+        no_mobile=Count('id', filter=Q(telefon__isnull=True) | Q(telefon='')),
+        invalid_status=Count('id', filter=Q(status=Lead.Status.INVALID)),
+        no_email=Count('id', filter=Q(email__isnull=True) | Q(email=''))
+    )
+    
+    if error_counts['no_mobile'] > 0:
+        error_reasons.append({'reason': 'Kein Telefon gefunden', 'count': error_counts['no_mobile']})
+    if error_counts['invalid_status'] > 0:
+        error_reasons.append({'reason': 'Ungültiger Lead', 'count': error_counts['invalid_status']})
+    if error_counts['no_email'] > 0:
+        error_reasons.append({'reason': 'Keine E-Mail gefunden', 'count': error_counts['no_email']})
+    
+    # Data quality trends (last 7 days)
+    quality_trend = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        day_leads = leads_qs.filter(created_at__date=day)
+        avg_quality = day_leads.aggregate(Avg('quality_score'))['quality_score__avg'] or 0
+        quality_trend.append({
+            'label': day.strftime('%d.%m'),
+            'avg_quality': round(avg_quality, 1)
+        })
 
     return {
         'leads_total': total_leads,
         'leads_today': leads_today,
+        'leads_week': leads_week,
+        'leads_month': leads_month,
         'calls_today': calls_today,
         'avg_calls_per_day': avg_calls_per_day,
         'conversion_rate': conversion_rate,
@@ -906,6 +1060,9 @@ def _build_dashboard_stats(user):
         'trend_7_days': trend_7_days,
         'status_distribution': status_distribution,
         'source_distribution': source_distribution,
+        'top_sources': top_sources,
+        'error_reasons': error_reasons,
+        'quality_trend': quality_trend,
     }
 
 
@@ -1006,8 +1163,14 @@ def crm_dashboard(request):
         'stats': {
             'total': stats['leads_total'],
             'today': stats['leads_today'],
+            'week': stats['leads_week'],
+            'month': stats['leads_month'],
             'calls_today': stats['calls_today'],
             'hot_leads': stats['hot_leads'],
+            'conversion_rate': stats['conversion_rate'],
+            'top_sources': stats['top_sources'][:5],
+            'error_reasons': stats['error_reasons'][:5],
+            'quality_trend': stats['quality_trend'],
         }
     })
 
@@ -1054,6 +1217,124 @@ def team_performance(request):
     """Return aggregated team performance metrics (Admin/Manager only)."""
     performers = _build_team_performance()
     return Response(performers, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def saved_filters(request):
+    """
+    GET: List all saved filters for the user
+    POST: Create a new saved filter
+    """
+    if request.method == 'GET':
+        # Get user's own filters + shared filters
+        user_filters = SavedFilter.objects.filter(user=request.user)
+        shared_filters = SavedFilter.objects.filter(is_shared=True).exclude(user=request.user)
+        
+        filters_data = []
+        for f in user_filters:
+            filters_data.append({
+                'id': f.id,
+                'name': f.name,
+                'description': f.description,
+                'filter_params': f.filter_params,
+                'is_shared': f.is_shared,
+                'is_owner': True,
+                'created_at': f.created_at.isoformat()
+            })
+        
+        for f in shared_filters:
+            filters_data.append({
+                'id': f.id,
+                'name': f.name,
+                'description': f.description,
+                'filter_params': f.filter_params,
+                'is_shared': True,
+                'is_owner': False,
+                'owner': f.user.get_full_name() or f.user.username,
+                'created_at': f.created_at.isoformat()
+            })
+        
+        return Response(filters_data, status=status.HTTP_200_OK)
+    
+    elif request.method == 'POST':
+        name = request.data.get('name')
+        description = request.data.get('description', '')
+        filter_params = request.data.get('filter_params', {})
+        is_shared = request.data.get('is_shared', False)
+        
+        if not name or not filter_params:
+            return Response({
+                'success': False,
+                'error': 'name and filter_params are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if filter with same name exists
+        if SavedFilter.objects.filter(user=request.user, name=name).exists():
+            return Response({
+                'success': False,
+                'error': 'A filter with this name already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        saved_filter = SavedFilter.objects.create(
+            user=request.user,
+            name=name,
+            description=description,
+            filter_params=filter_params,
+            is_shared=is_shared
+        )
+        
+        return Response({
+            'success': True,
+            'filter': {
+                'id': saved_filter.id,
+                'name': saved_filter.name,
+                'description': saved_filter.description,
+                'filter_params': saved_filter.filter_params,
+                'is_shared': saved_filter.is_shared
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def saved_filter_detail(request, filter_id):
+    """
+    PUT: Update a saved filter
+    DELETE: Delete a saved filter
+    """
+    try:
+        saved_filter = SavedFilter.objects.get(id=filter_id, user=request.user)
+    except SavedFilter.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Filter not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'PUT':
+        saved_filter.name = request.data.get('name', saved_filter.name)
+        saved_filter.description = request.data.get('description', saved_filter.description)
+        saved_filter.filter_params = request.data.get('filter_params', saved_filter.filter_params)
+        saved_filter.is_shared = request.data.get('is_shared', saved_filter.is_shared)
+        saved_filter.save()
+        
+        return Response({
+            'success': True,
+            'filter': {
+                'id': saved_filter.id,
+                'name': saved_filter.name,
+                'description': saved_filter.description,
+                'filter_params': saved_filter.filter_params,
+                'is_shared': saved_filter.is_shared
+            }
+        })
+    
+    elif request.method == 'DELETE':
+        saved_filter.delete()
+        return Response({
+            'success': True,
+            'message': 'Filter deleted successfully'
+        })
 
 
 # Template views for public pages
