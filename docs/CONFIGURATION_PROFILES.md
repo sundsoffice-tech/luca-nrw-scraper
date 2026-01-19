@@ -1,464 +1,520 @@
-# ⚙️ Scraper Configuration Profiles
+# Configuration Profiles Guide
 
-Dieser Guide zeigt dir drei vorkonfigurierte Profile für unterschiedliche Anwendungsfälle. Wähle das Profil, das zu deinem Usecase passt.
+This guide explains how to use LUCA NRW Scraper's configuration profiles for different deployment scenarios.
 
----
+## 📋 Overview
 
-## 📋 Übersicht der Profile
+LUCA provides pre-configured environment profiles optimized for different use cases:
 
-| Profil | QPI | Date Restrict | Runtime | Leads | Kosten | Empfohlen für |
-|--------|-----|---------------|---------|-------|--------|---------------|
-| **Safe Mode** | 6 | d30 | 3-5 min | 10-30 | €0 | Erste Tests, keine API-Keys |
-| **Balanced Mode** | 12 | d60 | 8-12 min | 30-80 | €0-0.20 | Standard-Betrieb, tägliche Runs |
-| **Aggressive Mode** | 20 | d90 | 15-25 min | 80-200 | €0.50-1.00 | Voller Durchsatz, mit Proxy empfohlen |
+1. **Production Safe** - Secure, stable, production-ready
+2. **High Volume** - Maximum throughput for bulk operations
+3. **Debug Mode** - Development and troubleshooting
 
----
+Each profile is a complete `.env` configuration file with settings tuned for specific scenarios.
 
-## 🛡️ Safe Mode (Starter & Test)
+## 🎯 When to Use Each Profile
 
-**Ideal für:**
-- 🎯 Erste Tests ohne Risiko
-- 🆓 Keine API-Keys erforderlich
-- 🧪 Verständnis für den Workflow
-- 📊 Kleine Lead-Mengen für Qualitätschecks
+### Production Safe Profile
 
-### Konfiguration
+**Best for:**
+- Production deployments
+- Customer-facing systems
+- Environments handling real/sensitive data
+- Compliance-required systems (GDPR, etc.)
+- Small to medium volume operations
 
-#### .env Datei
+**Characteristics:**
+- Maximum security (SSL validation, secure cookies, HSTS)
+- Conservative resource limits
+- Balanced performance
+- Minimal logging (INFO level)
+- Single-run scraper mode
 
-**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
+**Not suitable for:**
+- High-volume bulk scraping
+- Development/debugging
+- Systems behind corporate proxies with self-signed certs (use with caution)
+
+### High Volume Profile
+
+**Best for:**
+- Bulk lead generation campaigns
+- Data collection projects
+- High-throughput requirements
+- Continuous operation scenarios
+- Systems with robust infrastructure
+
+**Characteristics:**
+- Aggressive scraping (continuous mode, QPI=15)
+- High async limits (50 concurrent, 5 per host)
+- Extended date ranges (90 days)
+- Still maintains core security (SSL enabled)
+- Moderate logging
+
+**Not suitable for:**
+- Limited hardware resources
+- Systems with strict rate limiting
+- Development/testing
+- First-time deployments (start with production profile)
+
+### Debug Mode Profile
+
+**Best for:**
+- Local development
+- Troubleshooting production issues
+- Testing new features
+- Learning the system
+- Integration development
+
+**Characteristics:**
+- DEBUG mode enabled
+- Maximum logging (DEBUG level)
+- Relaxed security (SSL validation optional)
+- Small test batches (QPI=2, 7 days)
+- Extended timeouts for debugging
+
+**Not suitable for:**
+- Production environments (NEVER!)
+- Any system accessible from the internet
+- Systems handling real customer data
+- Performance testing (logging overhead)
+
+## 🚀 Quick Start
+
+### 1. Choose Your Profile
+
 ```bash
-# Kopiere die Safe Mode Vorlage
-cp .env.example.safe .env
+# Navigate to project directory
+cd luca-nrw-scraper
 
-# Bearbeite nur SECRET_KEY (erforderlich)
+# Copy the appropriate profile
+cp configs/production.env .env      # For production
+cp configs/high-volume.env .env     # For high volume
+cp configs/debug.env .env           # For development
+```
+
+### 2. Customize Required Settings
+
+Edit `.env` and update these critical values:
+
+```bash
 nano .env
 ```
 
-**Option 2: Manuell konfigurieren**
-```bash
-# Minimal Configuration (Safe Mode)
-SECRET_KEY=your-secret-key-here
-DEBUG=False
-ALLOWED_HOSTS=localhost,127.0.0.1
+**Required changes:**
 
-# Scraper Settings
-SCRAPER_MODE=once
-SCRAPER_QPI=6
-SCRAPER_DATE_RESTRICT=d30
-SCRAPER_DEFAULT_INDUSTRY=recruiter
+1. **SECRET_KEY** - Generate unique key:
+   ```bash
+   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   ```
 
-# Optional (nicht erforderlich für Safe Mode)
-OPENAI_API_KEY=
-PERPLEXITY_API_KEY=
-```
+2. **ALLOWED_HOSTS** - Set your domain(s):
+   ```env
+   ALLOWED_HOSTS=your-domain.com,www.your-domain.com
+   ```
 
-#### Command-Line
-```bash
-# Docker
-docker-compose --profile scraper up scraper
+3. **CSRF_TRUSTED_ORIGINS** - Set your URL(s):
+   ```env
+   CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+   ```
 
-# Manuell
-python scriptname.py --once --industry recruiter --qpi 6 --daterestrict d30
-```
+4. **API Keys** - Add your keys (if needed):
+   ```env
+   OPENAI_API_KEY=sk-...
+   PERPLEXITY_API_KEY=pplx-...
+   BREVO_API_KEY=xkeysib-...
+   ```
 
-#### Im CRM
-1. Gehe zu: http://localhost:8000/crm/scraper/
-2. Einstellungen:
-   - **Modus:** Once
-   - **Industry:** recruiter
-   - **QPI:** 6
-   - **Date Restrict:** d30
-3. Klicke "Start Scraper"
-
-### Erwartete Ergebnisse
-
-```
-⏱️  Laufzeit:        3-5 Minuten
-📊 Leads:            10-30
-💰 Kosten:           €0
-🔍 Queries:          6
-🌐 API Calls:        0 (ohne OpenAI)
-📈 Lead Quality:     Mittel (ohne AI-Enrichment)
-⚠️  Rate Limits:     Sehr niedrig
-🔒 Block-Risiko:     Minimal
-```
-
-### Best Practices
-
-✅ **Gut für:**
-- Ersten Durchlauf zum Testen
-- Verständnis der Datenstruktur
-- Überprüfung der CRM-Integration
-- Setup-Validierung
-
-❌ **Nicht gut für:**
-- Produktiveinsatz mit hohem Volumen
-- Schnelle Lead-Generierung
-- Vollständige Marktabdeckung
-
----
-
-## ⚖️ Balanced Mode (Standard-Betrieb)
-
-**Ideal für:**
-- 🏢 Täglicher Produktivbetrieb
-- 📈 Gute Balance zwischen Qualität und Quantität
-- 💰 Geringe bis moderate Kosten
-- 🔄 Regelmäßige, planbare Runs
-
-### Konfiguration
-
-#### .env Datei
-
-**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
-```bash
-# Kopiere die Balanced Mode Vorlage
-cp .env.example.balanced .env
-
-# Bearbeite die Werte:
-# - SECRET_KEY (erforderlich)
-# - OPENAI_API_KEY (empfohlen)
-# - ALLOWED_HOSTS (für Produktion)
-nano .env
-```
-
-**Option 2: Manuell konfigurieren**
-```bash
-# Balanced Configuration
-SECRET_KEY=your-secret-key-here
-DEBUG=False
-ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
-
-# Scraper Settings
-SCRAPER_MODE=once
-SCRAPER_QPI=12
-SCRAPER_DATE_RESTRICT=d60
-SCRAPER_DEFAULT_INDUSTRY=recruiter
-
-# Optional: AI für bessere Lead-Qualität
-OPENAI_API_KEY=sk-your-key-here
-PERPLEXITY_API_KEY=pplx-your-key-here
-```
-
-#### Command-Line
-```bash
-# Docker
-docker-compose --profile scraper up scraper
-
-# Manuell
-python scriptname.py --once --industry recruiter --qpi 12 --daterestrict d60
-```
-
-#### Im CRM
-1. Gehe zu: http://localhost:8000/crm/scraper/
-2. Einstellungen:
-   - **Modus:** Once
-   - **Industry:** recruiter
-   - **QPI:** 12
-   - **Date Restrict:** d60
-3. Klicke "Start Scraper"
-
-### Erwartete Ergebnisse
-
-```
-⏱️  Laufzeit:        8-12 Minuten
-📊 Leads:            30-80
-💰 Kosten:           €0.10-0.30 (mit OpenAI)
-🔍 Queries:          12
-🌐 API Calls:        ~30-80 (für AI-Enrichment)
-📈 Lead Quality:     Hoch (mit AI)
-⚠️  Rate Limits:     Moderat
-🔒 Block-Risiko:     Gering
-```
-
-### Best Practices
-
-✅ **Empfohlene Frequenz:**
-- 1x täglich (z.B. morgens 6 Uhr)
-- 2-3x pro Woche für geringeren Durchsatz
-- Automatisiert via Cron oder Scheduler
-
-✅ **Optimierungen:**
-```bash
-# Mehrere Industries parallel
-python scriptname.py --once --industry recruiter --qpi 12 &
-python scriptname.py --once --industry talent_hunt --qpi 8 &
-wait
-
-# Mit zusätzlichen Filtern
-python scriptname.py --once --industry recruiter --qpi 12 --daterestrict d60 --min-score 70
-```
-
-✅ **Monitoring:**
-- Überwache Lead-Quality über CRM-Dashboard
-- Prüfe API-Kosten wöchentlich
-- Adjustiere QPI basierend auf Results
-
----
-
-## 🚀 Aggressive Mode (Maximaler Durchsatz)
-
-**Ideal für:**
-- 💪 Maximale Lead-Generierung
-- 🎯 Schnelle Marktabdeckung
-- 🔄 One-Time Campaigns
-- 🌐 Mit Proxy-Infrastruktur
-
-### ⚠️ Wichtige Voraussetzungen
-
-Bevor du Aggressive Mode nutzt:
-
-1. **Proxy oder VPN empfohlen:**
-   - Reduziert Block-Risiko
-   - Verteilt Requests auf mehrere IPs
-   - Siehe: [Proxy Setup Guide](../PROXY_FIX_SUMMARY.md)
-
-2. **API-Keys konfiguriert:**
-   - OpenAI für AI-Enrichment
-   - Google Custom Search API (optional, für mehr Queries)
-
-3. **Monitoring aktiv:**
-   - Live-Logs überwachen
-   - Error-Rate beobachten
-   - Bei >20% 403s: Pause einlegen
-
-### Konfiguration
-
-#### .env Datei
-
-**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
-```bash
-# Kopiere die Aggressive Mode Vorlage
-cp .env.example.aggressive .env
-
-# Bearbeite die Werte (alle erforderlich!):
-# - SECRET_KEY
-# - OPENAI_API_KEY (erforderlich für Aggressive)
-# - HTTP_PROXY / HTTPS_PROXY (dringend empfohlen)
-# - ALLOWED_HOSTS (für Produktion)
-nano .env
-```
-
-**Option 2: Manuell konfigurieren**
-```bash
-# Aggressive Configuration
-SECRET_KEY=your-secret-key-here
-DEBUG=False
-ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
-
-# Scraper Settings
-SCRAPER_MODE=once
-SCRAPER_QPI=20
-SCRAPER_DATE_RESTRICT=d90
-SCRAPER_DEFAULT_INDUSTRY=recruiter
-
-# Required: AI APIs
-OPENAI_API_KEY=sk-your-key-here
-PERPLEXITY_API_KEY=pplx-your-key-here
-
-# Optional: Google CSE für mehr Queries
-GOOGLE_API_KEY=your-google-key
-GOOGLE_CSE_ID=your-cse-id
-
-# Optional: Proxy Configuration (siehe Proxy Guide)
-HTTP_PROXY=http://your-proxy:port
-HTTPS_PROXY=https://your-proxy:port
-```
-
-#### Command-Line
-```bash
-# Mit allen Features
-python scriptname.py --once --industry recruiter --qpi 20 --daterestrict d90
-
-# Mehrere Industries gleichzeitig
-python scriptname.py --once --industry recruiter --qpi 20 --daterestrict d90 &
-python scriptname.py --once --industry talent_hunt --qpi 15 --daterestrict d90 &
-python scriptname.py --once --industry callcenter --qpi 10 --daterestrict d90 &
-wait
-```
-
-#### Im CRM
-1. Gehe zu: http://localhost:8000/crm/scraper/
-2. Einstellungen:
-   - **Modus:** Once
-   - **Industry:** recruiter
-   - **QPI:** 20
-   - **Date Restrict:** d90
-3. Klicke "Start Scraper"
-4. **Wichtig:** Überwache die Live-Logs!
-
-### Erwartete Ergebnisse
-
-```
-⏱️  Laufzeit:        15-25 Minuten
-📊 Leads:            80-200
-💰 Kosten:           €0.50-1.50 (mit OpenAI)
-🔍 Queries:          20+
-🌐 API Calls:        ~100-200 (für AI-Enrichment)
-📈 Lead Quality:     Sehr hoch (mit AI)
-⚠️  Rate Limits:     Hoch
-🔒 Block-Risiko:     Mittel-Hoch (ohne Proxy)
-```
-
-### Best Practices
-
-✅ **Vorbereitung:**
-- Proxy/VPN aktivieren
-- API-Keys validieren
-- Monitoring Dashboard öffnen
-- Zeitfenster planen (nicht zu Spitzenzeiten)
-
-✅ **Während des Runs:**
-- Live-Logs beobachten
-- Bei >20% Fehlerrate: Pause (Ctrl+C)
-- Bei Blocks: Proxy wechseln oder Delay erhöhen
-
-✅ **Nach dem Run:**
-- Lead-Quality prüfen (Score-Verteilung)
-- Duplikate entfernen (automatisch)
-- API-Kosten tracken
-- Lessons learned dokumentieren
-
-❌ **Nicht empfohlen:**
-- Ohne Proxy/VPN auf Heimnetzwerk
-- Mehrfach täglich (Block-Risiko!)
-- Ohne Monitoring
-- Ohne API-Budget
-
----
-
-## 🔧 Custom Configuration
-
-Du kannst auch eigene Profile erstellen:
-
-### Eigenes Profil definieren
+### 3. Start Your Application
 
 ```bash
-# Beispiel: "Weekend Warrior" - Samstags großer Run
-SCRAPER_QPI=15
-SCRAPER_DATE_RESTRICT=d45
-SCRAPER_DEFAULT_INDUSTRY=recruiter
+# Using Docker (recommended)
+docker-compose up -d
 
-# Beispiel: "Nightly Crawl" - Nachts moderate Runs
+# Create admin user
+docker-compose exec web python manage.py createsuperuser
+
+# Or manual installation
+cd telis_recruitment
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
+```
+
+### 4. Verify Configuration
+
+Access your application:
+- CRM Dashboard: http://localhost:8000/crm/ (or your domain)
+- Check version in footer
+- Test scraper functionality
+- Review logs for issues
+
+## 📊 Detailed Profile Comparison
+
+### Security Settings
+
+| Setting | Production | High Volume | Debug |
+|---------|-----------|-------------|-------|
+| DEBUG | False | False | True |
+| SSL Validation | Strict (0) | Strict (0) | Relaxed (1) |
+| SECURE_SSL_REDIRECT | True | True | False |
+| SESSION_COOKIE_SECURE | True | True | False |
+| CSRF_COOKIE_SECURE | True | True | False |
+| HSTS (seconds) | 31536000 | 31536000 | 0 |
+| LOG_LEVEL | INFO | INFO | DEBUG |
+
+### Scraper Configuration
+
+| Setting | Production | High Volume | Debug |
+|---------|-----------|-------------|-------|
+| SCRAPER_MODE | once | continuous | once |
+| SCRAPER_QPI | 6 | 15 | 2 |
+| SCRAPER_DATE_RESTRICT | d30 | d90 | d7 |
+| HTTP_TIMEOUT | 15 | 10 | 30 |
+| ASYNC_LIMIT | 25 | 50 | 10 |
+| ASYNC_PER_HOST | 2 | 5 | 2 |
+| MAX_FETCH_SIZE | 2MB | 5MB | 2MB |
+
+### Performance Characteristics
+
+| Metric | Production | High Volume | Debug |
+|--------|-----------|-------------|-------|
+| Leads per hour | ~300-500 | ~1000-2000 | ~50-100 |
+| Resource usage | Low-Medium | High | Low |
+| Network load | Moderate | High | Low |
+| Disk I/O | Low | Medium | High (logs) |
+| CPU usage | 10-30% | 50-80% | 10-20% |
+
+*Note: Metrics vary based on hardware and network conditions*
+
+## 🔧 Customization
+
+### Creating a Custom Profile
+
+1. **Start with closest profile**:
+   ```bash
+   cp configs/production.env configs/custom.env
+   ```
+
+2. **Adjust specific settings**:
+   ```env
+   # Example: Production base with higher scraping
+   SCRAPER_QPI=10
+   ASYNC_LIMIT=35
+   ASYNC_PER_HOST=3
+   ```
+
+3. **Document your changes**:
+   ```env
+   # ==========================
+   # CUSTOM PROFILE: Production + Enhanced Scraping
+   # ==========================
+   # Based on: production.env
+   # Modified: 2026-01-19
+   # Purpose: Production deployment with moderate high-volume scraping
+   ```
+
+4. **Test thoroughly**:
+   ```bash
+   cp configs/custom.env .env
+   # Run tests
+   # Monitor resources
+   # Verify security
+   ```
+
+### Common Customizations
+
+#### Moderate Volume (Between Production and High Volume)
+
+```env
+# Start with production.env, then adjust:
+SCRAPER_MODE=continuous
 SCRAPER_QPI=10
-SCRAPER_DATE_RESTRICT=d30
-SCRAPER_DEFAULT_INDUSTRY=talent_hunt
+ASYNC_LIMIT=35
+ASYNC_PER_HOST=3
+SCRAPER_DATE_RESTRICT=d60
 ```
 
-### Parameter-Referenz
+#### Production with Debug Logging (Temporary)
 
-| Parameter | Werte | Beschreibung |
-|-----------|-------|--------------|
-| `SCRAPER_MODE` | `once`, `continuous` | Einmaliger Run vs. Dauerbetrieb |
-| `SCRAPER_QPI` | 1-30 | Queries per Industry (höher = mehr Leads) |
-| `SCRAPER_DATE_RESTRICT` | `d7`, `d30`, `d60`, `d90` | Zeitfenster für Suchergebnisse |
-| `SCRAPER_DEFAULT_INDUSTRY` | `recruiter`, `talent_hunt`, `callcenter` | Ziel-Industry |
+```env
+# Start with production.env, then adjust:
+LOG_LEVEL=DEBUG
+# Remember to change back to INFO after debugging!
+```
 
-### Industries verfügbar
+#### High Volume with Extra Security
+
+```env
+# Start with high-volume.env, then adjust:
+ASYNC_LIMIT=35  # Reduce from 50
+ASYNC_PER_HOST=3  # Reduce from 5
+HTTP_TIMEOUT=15  # Increase from 10
+```
+
+## 🔍 Profile Selection Decision Tree
+
+```
+Are you deploying to production?
+├─ Yes → Is this a high-volume use case?
+│  ├─ Yes → Use high-volume.env
+│  │  └─ Monitor resources closely
+│  └─ No → Use production.env ✅
+│     └─ Scale up later if needed
+│
+└─ No → Are you developing/debugging?
+   ├─ Yes → Use debug.env
+   │  └─ Never deploy this to production!
+   └─ No → Are you testing?
+      └─ Use debug.env or production.env with LOG_LEVEL=DEBUG
+```
+
+## 📈 Migration Between Profiles
+
+### From Debug to Production
+
+1. **Backup current database**:
+   ```bash
+   cp telis_recruitment/db.sqlite3 telis_recruitment/db.sqlite3.backup
+   ```
+
+2. **Switch profile**:
+   ```bash
+   cp configs/production.env .env
+   ```
+
+3. **Update settings**:
+   - Generate new SECRET_KEY
+   - Set production ALLOWED_HOSTS
+   - Set production CSRF_TRUSTED_ORIGINS
+   - Add production API keys
+
+4. **Test**:
+   ```bash
+   # Test SSL works
+   python scriptname.py --once --industry recruiter --qpi 1
+   
+   # Test CRM access
+   cd telis_recruitment
+   python manage.py check --deploy
+   ```
+
+### From Production to High Volume
+
+1. **Monitor baseline**:
+   - Note current resource usage
+   - Document current lead generation rate
+   - Check for any errors in logs
+
+2. **Switch profile**:
+   ```bash
+   cp configs/high-volume.env .env
+   # Update SECRET_KEY, ALLOWED_HOSTS, etc.
+   ```
+
+3. **Gradual ramp-up** (recommended):
+   ```env
+   # Week 1: Moderate increase
+   SCRAPER_QPI=8
+   ASYNC_LIMIT=30
+   
+   # Week 2: Further increase
+   SCRAPER_QPI=12
+   ASYNC_LIMIT=40
+   
+   # Week 3: Full high volume
+   SCRAPER_QPI=15
+   ASYNC_LIMIT=50
+   ```
+
+4. **Monitor closely**:
+   - Watch CPU/memory usage
+   - Monitor network bandwidth
+   - Check for rate limiting (429 errors)
+   - Review lead quality
+
+## ⚠️ Common Pitfalls
+
+### 1. Using Debug Profile in Production
+**Problem**: Security vulnerabilities, exposed error pages, performance issues
+
+**Solution**: Always use production.env for production deployments
+
+### 2. Not Updating SECRET_KEY
+**Problem**: Security risk, session issues
+
+**Solution**: Generate unique key for each environment:
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+### 3. Insufficient Resources for High Volume
+**Problem**: System crashes, slow performance, memory errors
+
+**Solution**: 
+- Start with production profile
+- Monitor resources
+- Scale gradually
+- Consider upgrading hardware
+
+### 4. Incorrect ALLOWED_HOSTS
+**Problem**: "DisallowedHost" errors
+
+**Solution**: Set all domains that will access your app:
+```env
+ALLOWED_HOSTS=example.com,www.example.com,api.example.com
+```
+
+### 5. Disabling SSL Validation in Production
+**Problem**: Security vulnerability (MITM attacks)
+
+**Solution**: Keep `ALLOW_INSECURE_SSL=0` in production
+
+## 🧪 Testing Your Configuration
+
+### Configuration Validation Script
 
 ```bash
-# B2B Vertriebskontakte
---industry recruiter
+#!/bin/bash
+# Save as: validate_config.sh
 
-# Aktive Jobsuchende im Sales
---industry talent_hunt
+echo "🔍 Validating LUCA Configuration..."
 
-# Callcenter & Telemarketing
---industry callcenter
+# Check .env exists
+if [ ! -f .env ]; then
+    echo "❌ .env file not found!"
+    exit 1
+fi
 
-# Construction Industry
---industry construction
+# Load .env
+source .env
 
-# Medical Industry
---industry medical
+# Check critical settings
+echo "Checking DEBUG mode..."
+if [ "$DEBUG" = "True" ]; then
+    echo "⚠️  WARNING: DEBUG is enabled! Not suitable for production."
+else
+    echo "✅ DEBUG is disabled"
+fi
 
-# Food & Beverage
---industry food
+echo "Checking SSL validation..."
+if [ "$ALLOW_INSECURE_SSL" = "1" ]; then
+    echo "⚠️  WARNING: SSL validation is disabled!"
+else
+    echo "✅ SSL validation is enabled"
+fi
+
+echo "Checking SECRET_KEY..."
+if [[ "$SECRET_KEY" == *"change-me"* ]] || [[ "$SECRET_KEY" == *"dev-secret"* ]]; then
+    echo "❌ SECRET_KEY must be changed!"
+else
+    echo "✅ SECRET_KEY is customized"
+fi
+
+echo "Checking ALLOWED_HOSTS..."
+if [ -z "$ALLOWED_HOSTS" ]; then
+    echo "⚠️  ALLOWED_HOSTS is empty"
+else
+    echo "✅ ALLOWED_HOSTS: $ALLOWED_HOSTS"
+fi
+
+echo ""
+echo "✅ Configuration validation complete"
 ```
 
----
-
-## 📊 Performance-Vergleich
-
-### Lead-Quality nach Profil
-
-```
-Safe Mode:       ⭐⭐⭐☆☆ (Mittel, ohne AI)
-Balanced Mode:   ⭐⭐⭐⭐☆ (Hoch, mit AI)
-Aggressive Mode: ⭐⭐⭐⭐⭐ (Sehr hoch, mit AI + Volume)
+Usage:
+```bash
+chmod +x validate_config.sh
+./validate_config.sh
 ```
 
-### Kosten-Nutzen-Analyse
+### Django Deployment Check
 
-```
-Safe Mode:       Cost/Lead: €0      (kein AI, keine API)
-Balanced Mode:   Cost/Lead: €0.005  (50 Leads für €0.25)
-Aggressive Mode: Cost/Lead: €0.008  (150 Leads für €1.20)
-```
-
-### Block-Risiko
-
-```
-Safe Mode:       🟢 Sehr gering (6 Queries)
-Balanced Mode:   🟡 Gering (12 Queries, moderate Frequenz)
-Aggressive Mode: 🔴 Mittel-Hoch (20+ Queries, Proxy empfohlen)
+```bash
+cd telis_recruitment
+python manage.py check --deploy
 ```
 
----
+This checks for common deployment issues.
+
+## 📚 Additional Resources
+
+- **Security Checklist**: [SECURITY_CHECKLIST.md](SECURITY_CHECKLIST.md)
+- **Installation Guide**: [INSTALLATION.md](INSTALLATION.md)
+- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
+- **Release Process**: [RELEASE_PROCESS.md](RELEASE_PROCESS.md)
 
 ## 🆘 Troubleshooting
 
-### "Zu wenige Leads" (< 10 bei Balanced)
+### Profile Not Working
 
-```bash
-# Check 1: Date Restrict erweitern
-SCRAPER_DATE_RESTRICT=d90
+1. **Verify .env is loaded**:
+   ```bash
+   cd telis_recruitment
+   python -c "from dotenv import load_dotenv; import os; load_dotenv(); print(os.getenv('DEBUG'))"
+   ```
 
-# Check 2: QPI erhöhen
-SCRAPER_QPI=15
+2. **Check for syntax errors**:
+   ```bash
+   cat .env | grep -v '^#' | grep -v '^$'
+   ```
 
-# Check 3: Andere Industry testen
---industry talent_hunt
-```
+3. **Restart application**:
+   ```bash
+   docker-compose restart  # For Docker
+   # Or restart Django manually
+   ```
 
-### "Zu viele 403 Errors"
+### Performance Issues
 
-```bash
-# Lösung 1: QPI reduzieren
-SCRAPER_QPI=8
+1. **Generate support bundle**:
+   ```bash
+   python manage.py create_support_bundle
+   ```
 
-# Lösung 2: Delay erhöhen (im Script)
-# Edit scriptname.py: DELAY_BETWEEN_REQUESTS = 3
+2. **Review resource usage**:
+   ```bash
+   # Check system resources
+   top
+   htop
+   docker stats  # For Docker
+   ```
 
-# Lösung 3: Proxy aktivieren
-HTTP_PROXY=http://your-proxy:port
-```
+3. **Consider profile adjustment**:
+   - Too slow? Switch to high-volume
+   - System overloaded? Switch to production
+   - Adjust specific settings between profiles
 
-### "API-Kosten zu hoch"
+### SSL Issues
 
-```bash
-# Lösung 1: AI-Enrichment deaktivieren
-OPENAI_API_KEY=  # leer lassen
+1. **Test certificate**:
+   ```bash
+   curl -I https://your-domain.com
+   ```
 
-# Lösung 2: QPI reduzieren
-SCRAPER_QPI=6
+2. **Check SSL in scraper**:
+   ```bash
+   python scriptname.py --once --industry recruiter --qpi 1
+   ```
 
-# Lösung 3: Weniger häufige Runs
-# z.B. nur 2x pro Woche statt täglich
-```
+3. **Review logs**:
+   ```bash
+   tail -f telis_recruitment/logs/*.log
+   ```
 
-**Mehr Hilfe:** [Troubleshooting Guide](TROUBLESHOOTING.md)
+## 💡 Best Practices
+
+1. **Start conservative**: Begin with production profile, scale up as needed
+2. **Test in staging**: Always test profile changes in staging first
+3. **Monitor after changes**: Watch resources and logs after switching profiles
+4. **Document customizations**: Keep notes on why you changed specific settings
+5. **Regular reviews**: Review configuration quarterly
+6. **Keep profiles updated**: Update profiles when upgrading LUCA
 
 ---
 
-## 📚 Weiterführende Dokumentation
-
-- **[Quickstart Guide](QUICKSTART.md)** - Erste Schritte in 20 Minuten
-- **[Installation Guide](INSTALLATION.md)** - Detaillierte Setup-Anleitung
-- **[Deployment Guide](DEPLOYMENT.md)** - Produktiv-Deployment
-- **[Troubleshooting](TROUBLESHOOTING.md)** - Problemlösungen
-
----
-
-**Feedback?** [GitHub Issues](https://github.com/sundsoffice-tech/luca-nrw-scraper/issues) | **Fragen?** [README.md](../README.md)
+**Need help?** Generate a support bundle for faster assistance:
+```bash
+cd telis_recruitment
+python manage.py create_support_bundle
+```

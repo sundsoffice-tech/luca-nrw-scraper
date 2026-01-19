@@ -14,6 +14,13 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Application version
+VERSION_FILE = Path(__file__).resolve().parent.parent.parent / 'VERSION'
+try:
+    with open(VERSION_FILE, 'r') as f:
+        APP_VERSION = f.read().strip()
+except FileNotFoundError:
+    APP_VERSION = 'unknown'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -77,6 +84,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'mailbox.context_processors.unread_email_count',
+                'telis.context_processors.version_context',
             ],
         },
     },
