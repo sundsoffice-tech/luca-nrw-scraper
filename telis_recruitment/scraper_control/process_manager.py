@@ -1,25 +1,38 @@
 """
 Scraper Process Manager - Manages scraper subprocess lifecycle.
 Singleton class to start, stop, and monitor the scraper subprocess.
+
+Enhanced with automatic retry logic and circuit breaker for reliable error handling.
 """
 
 import os
 import subprocess
 import psutil
 import threading
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
+from collections import deque
+from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class CircuitBreakerState(Enum):
+    """Circuit breaker states for error handling."""
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Too many errors, blocking requests
+    HALF_OPEN = "half_open"  # Testing if service recovered
 
 
 class ProcessManager:
     """
     Singleton class to manage the scraper process lifecycle.
     Handles starting, stopping, and monitoring the scraper subprocess.
+    
+    Enhanced with automatic retry logic and circuit breaker for reliable error handling.
     """
     
     _instance = None
@@ -47,6 +60,33 @@ class ProcessManager:
         self.output_thread: Optional[threading.Thread] = None
         self.current_run_id: Optional[int] = None
         self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
+        
+        # Error tracking for retry logic
+        self.error_counts: Dict[str, int] = {
+            'missing_module': 0,
+            'rate_limit': 0,
+            'config_error': 0,
+            'crash': 0,
+            'other': 0
+        }
+        self.error_timestamps: deque = deque(maxlen=100)  # Track last 100 errors for rate calculation
+        self.consecutive_failures: int = 0
+        self.retry_count: int = 0
+        self.last_failure_time: Optional[datetime] = None
+        
+        # Circuit breaker state
+        self.circuit_breaker_state: CircuitBreakerState = CircuitBreakerState.CLOSED
+        self.circuit_breaker_opened_at: Optional[datetime] = None
+        self.circuit_breaker_failures: int = 0
+        
+        # Configuration for retry and circuit breaker
+        self.max_retry_attempts: int = 3
+        self.qpi_reduction_factor: float = 0.7  # Reduce QPI to 70% on rate limit
+        self.error_rate_threshold: float = 0.5  # 50% error rate triggers circuit breaker
+        self.error_rate_window_seconds: int = 300  # 5 minute window for error rate calculation
+        self.circuit_breaker_failure_threshold: int = 5  # Open circuit after 5 failures
+        self.retry_backoff_base: float = 30.0  # Base backoff in seconds (30s, 60s, 120s, ...)
+        
         self._initialized = True
     
     def _read_output(self):
@@ -67,6 +107,44 @@ class ProcessManager:
                             logger.error(error_msg)
                             self._log_error(error_msg)
                             self._log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
+                            
+                            # Track as crash and potentially retry
+                            self._track_error('crash')
+                            self.consecutive_failures += 1
+                            self.last_failure_time = timezone.now()
+                            
+                            # Mark run as failed
+                            if self.current_run_id:
+                                try:
+                                    from .models import ScraperRun
+                                    run = ScraperRun.objects.get(id=self.current_run_id)
+                                    run.status = 'failed'
+                                    run.finished_at = timezone.now()
+                                    run.save(update_fields=['status', 'finished_at'])
+                                except Exception as e:
+                                    logger.error(f"Failed to update ScraperRun: {e}")
+                            
+                            # Schedule retry if appropriate
+                            if self._should_retry():
+                                # Get the user from the current run
+                                user = None
+                                if self.current_run_id:
+                                    try:
+                                        from .models import ScraperRun
+                                        run = ScraperRun.objects.get(id=self.current_run_id)
+                                        user = run.started_by
+                                    except Exception:
+                                        pass
+                                
+                                self._schedule_retry(self.params, user=user)
+                        else:
+                            # Normal completion - reset error counters
+                            self.consecutive_failures = 0
+                            self.retry_count = 0
+                            
+                            # If circuit breaker is half-open, close it on success
+                            if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
+                                self._close_circuit_breaker()
                     break
                 if line.strip():
                     timestamp = timezone.now()
@@ -113,13 +191,16 @@ class ProcessManager:
                                 message=line.strip()
                             )
                             
-                            # Detect common errors
+                            # Detect common errors and track them
                             if 'ModuleNotFoundError' in line:
                                 self._log_error("Missing module - check dependencies")
-                            if 'KeyError' in line or 'AttributeError' in line:
+                                self._track_error('missing_module')
+                            elif 'KeyError' in line or 'AttributeError' in line:
                                 self._log_error(f"Configuration error: {line.strip()}")
-                            if 'rate limit' in message_lower:
+                                self._track_error('config_error')
+                            elif 'rate limit' in message_lower:
                                 self._log_error("Rate limit hit - consider reducing QPI")
+                                self._track_error('rate_limit')
                             
                         except Exception as e:
                             logger.error(f"Failed to update ScraperRun logs: {e}")
@@ -139,6 +220,195 @@ class ProcessManager:
                 )
             except Exception as e:
                 logger.error(f"Failed to log error: {e}")
+    
+    def _track_error(self, error_type: str):
+        """
+        Track an error for retry and circuit breaker logic.
+        
+        Args:
+            error_type: Type of error ('missing_module', 'rate_limit', 'config_error', 'crash', 'other')
+        """
+        self.error_counts[error_type] = self.error_counts.get(error_type, 0) + 1
+        self.error_timestamps.append(timezone.now())
+        self.circuit_breaker_failures += 1
+        
+        logger.info(f"Error tracked: {error_type}, total: {self.error_counts[error_type]}, "
+                   f"circuit breaker failures: {self.circuit_breaker_failures}")
+        
+        # Check if circuit breaker should open
+        if (self.circuit_breaker_state == CircuitBreakerState.CLOSED and 
+            self.circuit_breaker_failures >= self.circuit_breaker_failure_threshold):
+            self._open_circuit_breaker()
+        
+        # Check error rate
+        error_rate = self._calculate_error_rate()
+        if error_rate > self.error_rate_threshold:
+            logger.warning(f"High error rate detected: {error_rate:.2%}")
+            if self.circuit_breaker_state == CircuitBreakerState.CLOSED:
+                self._open_circuit_breaker()
+    
+    def _calculate_error_rate(self) -> float:
+        """
+        Calculate error rate over the configured time window.
+        
+        Returns:
+            Error rate as a float between 0 and 1
+        """
+        if not self.error_timestamps:
+            return 0.0
+        
+        now = timezone.now()
+        window_start = now - timedelta(seconds=self.error_rate_window_seconds)
+        
+        # Count errors in the time window
+        recent_errors = sum(1 for ts in self.error_timestamps if ts >= window_start)
+        
+        # Calculate rate (errors per second)
+        if recent_errors == 0:
+            return 0.0
+        
+        # Estimate total operations (assuming at least 1 operation per second)
+        total_operations = max(self.error_rate_window_seconds, 1)
+        return min(recent_errors / total_operations, 1.0)
+    
+    def _open_circuit_breaker(self):
+        """Open the circuit breaker to prevent further operations."""
+        self.circuit_breaker_state = CircuitBreakerState.OPEN
+        self.circuit_breaker_opened_at = timezone.now()
+        
+        logger.error(f"Circuit breaker OPENED after {self.circuit_breaker_failures} failures")
+        self._log_error(f"🔴 Circuit breaker OPENED - too many errors detected. "
+                       f"Pausing operations for safety.")
+        
+        # Stop the running process if any
+        if self.is_running():
+            logger.info("Stopping scraper due to circuit breaker opening")
+            self.stop()
+    
+    def _check_circuit_breaker(self) -> bool:
+        """
+        Check if circuit breaker allows operation.
+        
+        Returns:
+            True if operation is allowed, False if blocked
+        """
+        if self.circuit_breaker_state == CircuitBreakerState.CLOSED:
+            return True
+        
+        if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
+            # Allow one test operation
+            return True
+        
+        # Check if enough time has passed to try again
+        if self.circuit_breaker_opened_at:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            penalty_seconds = config.circuit_breaker_penalty
+            
+            elapsed = (timezone.now() - self.circuit_breaker_opened_at).total_seconds()
+            if elapsed >= penalty_seconds:
+                # Transition to half-open state
+                self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
+                logger.info(f"Circuit breaker transitioning to HALF_OPEN after {elapsed:.1f}s penalty")
+                self._log_error(f"⚠️ Circuit breaker HALF_OPEN - attempting test operation")
+                return True
+        
+        logger.warning("Circuit breaker is OPEN - operation blocked")
+        return False
+    
+    def _close_circuit_breaker(self):
+        """Close the circuit breaker after successful operation."""
+        self.circuit_breaker_state = CircuitBreakerState.CLOSED
+        self.circuit_breaker_failures = 0
+        self.circuit_breaker_opened_at = None
+        logger.info("Circuit breaker CLOSED - normal operation resumed")
+        self._log_error("✅ Circuit breaker CLOSED - operations resumed successfully")
+    
+    def _should_retry(self) -> bool:
+        """
+        Determine if a retry should be attempted.
+        
+        Returns:
+            True if retry should be attempted, False otherwise
+        """
+        # Don't retry if max attempts reached
+        if self.retry_count >= self.max_retry_attempts:
+            logger.info(f"Max retry attempts ({self.max_retry_attempts}) reached")
+            return False
+        
+        # Don't retry if circuit breaker is open and penalty hasn't passed
+        if not self._check_circuit_breaker():
+            logger.info("Circuit breaker is blocking retry")
+            return False
+        
+        return True
+    
+    def _calculate_retry_backoff(self) -> float:
+        """
+        Calculate exponential backoff for retry.
+        
+        Returns:
+            Backoff time in seconds
+        """
+        return self.retry_backoff_base * (2 ** self.retry_count)
+    
+    def _adjust_qpi_for_rate_limit(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Adjust QPI downward if rate limit errors detected.
+        
+        Args:
+            params: Original scraper parameters
+            
+        Returns:
+            Updated parameters with adjusted QPI
+        """
+        if self.error_counts.get('rate_limit', 0) > 0:
+            original_qpi = params.get('qpi', 15)
+            new_qpi = max(1, int(original_qpi * self.qpi_reduction_factor))
+            
+            if new_qpi != original_qpi:
+                logger.info(f"Reducing QPI from {original_qpi} to {new_qpi} due to rate limit errors")
+                self._log_error(f"⚙️ Automatically reducing QPI: {original_qpi} → {new_qpi} "
+                               f"to avoid rate limits")
+                params = params.copy()
+                params['qpi'] = new_qpi
+        
+        return params
+    
+    def _schedule_retry(self, params: Dict[str, Any], user=None):
+        """
+        Schedule an automatic retry with adjusted parameters.
+        
+        Args:
+            params: Scraper parameters
+            user: User who started the scraper
+        """
+        if not self._should_retry():
+            logger.info("Retry not scheduled - conditions not met")
+            return
+        
+        self.retry_count += 1
+        backoff_time = self._calculate_retry_backoff()
+        
+        logger.info(f"Scheduling retry {self.retry_count}/{self.max_retry_attempts} "
+                   f"after {backoff_time:.1f}s backoff")
+        self._log_error(f"🔄 Scheduling automatic retry {self.retry_count}/{self.max_retry_attempts} "
+                       f"in {backoff_time:.1f}s")
+        
+        # Adjust parameters if needed
+        adjusted_params = self._adjust_qpi_for_rate_limit(params)
+        
+        # Schedule retry in a separate thread
+        def retry_after_backoff():
+            import time
+            time.sleep(backoff_time)
+            
+            logger.info(f"Executing scheduled retry {self.retry_count}")
+            self._log_error(f"🔄 Executing automatic retry {self.retry_count}")
+            self.start(adjusted_params, user=user)
+        
+        retry_thread = threading.Thread(target=retry_after_backoff, daemon=True)
+        retry_thread.start()
     
     def _find_scraper_script(self):
         """Find the scraper script to execute."""
@@ -248,6 +518,24 @@ class ProcessManager:
                 'error': 'Scraper läuft bereits',
                 'status': self.status
             }
+        
+        # Check circuit breaker
+        if not self._check_circuit_breaker():
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            penalty_seconds = config.circuit_breaker_penalty
+            
+            if self.circuit_breaker_opened_at:
+                elapsed = (timezone.now() - self.circuit_breaker_opened_at).total_seconds()
+                remaining = max(0, penalty_seconds - elapsed)
+                
+                return {
+                    'success': False,
+                    'error': f'Circuit breaker is OPEN - please wait {remaining:.0f}s before retrying',
+                    'status': 'circuit_breaker_open',
+                    'circuit_breaker_state': self.circuit_breaker_state.value,
+                    'remaining_penalty_seconds': remaining
+                }
         
         try:
             # Create ScraperRun record
@@ -398,6 +686,10 @@ class ProcessManager:
             self.start_time = None
             self.current_run_id = None
             
+            # Reset retry counter on manual stop (user intervention)
+            self.retry_count = 0
+            self.consecutive_failures = 0
+            
             logger.info("Scraper stopped successfully")
             
             return {
@@ -418,7 +710,7 @@ class ProcessManager:
         Get current scraper status.
         
         Returns:
-            Dictionary with detailed status information
+            Dictionary with detailed status information including error tracking and circuit breaker state
         """
         # Check if process is actually running
         if self.process and self.process.poll() is not None:
@@ -443,8 +735,29 @@ class ProcessManager:
             'status': self.status,
             'pid': self.pid,
             'run_id': self.current_run_id,
-            'params': self.params if self.status != 'stopped' else {}
+            'params': self.params if self.status != 'stopped' else {},
+            # Error tracking information
+            'error_counts': self.error_counts.copy(),
+            'consecutive_failures': self.consecutive_failures,
+            'retry_count': self.retry_count,
+            'max_retry_attempts': self.max_retry_attempts,
+            'error_rate': self._calculate_error_rate(),
+            # Circuit breaker information
+            'circuit_breaker_state': self.circuit_breaker_state.value,
+            'circuit_breaker_failures': self.circuit_breaker_failures,
         }
+        
+        # Add circuit breaker penalty info if open
+        if self.circuit_breaker_state != CircuitBreakerState.CLOSED and self.circuit_breaker_opened_at:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            penalty_seconds = config.circuit_breaker_penalty
+            elapsed = (timezone.now() - self.circuit_breaker_opened_at).total_seconds()
+            remaining = max(0, penalty_seconds - elapsed)
+            
+            status_info['circuit_breaker_penalty_seconds'] = penalty_seconds
+            status_info['circuit_breaker_elapsed_seconds'] = elapsed
+            status_info['circuit_breaker_remaining_seconds'] = remaining
         
         if self.start_time:
             uptime = (timezone.now() - self.start_time).total_seconds()
@@ -502,6 +815,35 @@ class ProcessManager:
             List of log entries (most recent first)
         """
         return self.logs[-lines:] if self.logs else []
+    
+    def reset_error_tracking(self):
+        """
+        Manually reset error tracking and circuit breaker.
+        Useful for admin operations or after fixing issues.
+        """
+        logger.info("Manually resetting error tracking and circuit breaker")
+        
+        self.error_counts = {
+            'missing_module': 0,
+            'rate_limit': 0,
+            'config_error': 0,
+            'crash': 0,
+            'other': 0
+        }
+        self.error_timestamps.clear()
+        self.consecutive_failures = 0
+        self.retry_count = 0
+        self.last_failure_time = None
+        
+        # Reset circuit breaker
+        if self.circuit_breaker_state != CircuitBreakerState.CLOSED:
+            self._log_error("🔧 Manual reset: Circuit breaker closed, error counters reset")
+        
+        self.circuit_breaker_state = CircuitBreakerState.CLOSED
+        self.circuit_breaker_opened_at = None
+        self.circuit_breaker_failures = 0
+        
+        logger.info("Error tracking and circuit breaker reset complete")
 
 
 # Global manager instance
