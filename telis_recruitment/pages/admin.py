@@ -4,7 +4,10 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
 from unfold.admin import ModelAdmin, TabularInline
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission, UploadedFile, DomainConfiguration
+from .models import (
+    LandingPage, PageVersion, PageComponent, PageSubmission, 
+    UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate
+)
 
 
 class PageVersionInline(TabularInline):
@@ -311,3 +314,120 @@ class DomainConfigurationAdmin(ModelAdmin):
     
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(PageAsset)
+class PageAssetAdmin(ModelAdmin):
+    """Admin interface for page assets"""
+    
+    list_display = ['filename', 'folder', 'file_size_display', 'dimensions', 'uploaded_by', 'uploaded_at']
+    list_filter = ['folder', 'uploaded_at', 'uploaded_by']
+    search_fields = ['filename', 'alt_text', 'folder']
+    readonly_fields = ['file_size', 'width', 'height', 'uploaded_at', 'uploaded_by']
+    
+    fieldsets = [
+        ('File Information', {
+            'fields': ['file', 'filename', 'folder', 'alt_text']
+        }),
+        ('Metadata', {
+            'fields': ['file_size', 'width', 'height']
+        }),
+        ('Upload Information', {
+            'fields': ['uploaded_by', 'uploaded_at']
+        }),
+    ]
+    
+    def file_size_display(self, obj):
+        """Display file size in human-readable format"""
+        size = obj.file_size
+        if size < 1024:
+            return f"{size} B"
+        elif size < 1024 * 1024:
+            return f"{size / 1024:.1f} KB"
+        else:
+            return f"{size / (1024 * 1024):.1f} MB"
+    file_size_display.short_description = 'Size'
+    
+    def dimensions(self, obj):
+        """Display image dimensions"""
+        if obj.width and obj.height:
+            return f"{obj.width} × {obj.height}"
+        return '-'
+    dimensions.short_description = 'Dimensions'
+    
+    def save_model(self, request, obj, form, change):
+        """Track uploader"""
+        if not change:
+            obj.uploaded_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(BrandSettings)
+class BrandSettingsAdmin(ModelAdmin):
+    """Admin interface for brand settings"""
+    
+    list_display = ['__str__', 'company_name', 'primary_color', 'heading_font', 'body_font']
+    
+    fieldsets = [
+        ('Colors', {
+            'fields': ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'background_color']
+        }),
+        ('Typography', {
+            'fields': ['heading_font', 'body_font', 'base_font_size']
+        }),
+        ('Logo & Branding', {
+            'fields': ['logo', 'logo_dark', 'favicon']
+        }),
+        ('Social Media', {
+            'fields': ['facebook_url', 'instagram_url', 'linkedin_url', 'twitter_url', 'youtube_url'],
+            'classes': ['collapse'],
+        }),
+        ('Contact Information', {
+            'fields': ['company_name', 'email', 'phone', 'address'],
+            'classes': ['collapse'],
+        }),
+        ('Legal Links', {
+            'fields': ['privacy_url', 'imprint_url', 'terms_url'],
+            'classes': ['collapse'],
+        }),
+    ]
+    
+    def has_add_permission(self, request):
+        """Only allow one brand settings instance"""
+        return not BrandSettings.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of brand settings"""
+        return False
+
+
+@admin.register(PageTemplate)
+class PageTemplateAdmin(ModelAdmin):
+    """Admin interface for page templates"""
+    
+    list_display = ['name', 'category', 'usage_count', 'is_active', 'created_at', 'preview_thumbnail']
+    list_filter = ['category', 'is_active', 'created_at']
+    search_fields = ['name']
+    readonly_fields = ['usage_count', 'created_at']
+    
+    fieldsets = [
+        ('Template Information', {
+            'fields': ['name', 'category', 'is_active', 'thumbnail']
+        }),
+        ('Content', {
+            'fields': ['html_content', 'css_content', 'gjs_data']
+        }),
+        ('Statistics', {
+            'fields': ['usage_count', 'created_at']
+        }),
+    ]
+    
+    def preview_thumbnail(self, obj):
+        """Display thumbnail preview"""
+        if obj.thumbnail:
+            return format_html(
+                '<img src="{}" style="max-width: 100px; max-height: 60px;" />',
+                obj.thumbnail.url
+            )
+        return '-'
+    preview_thumbnail.short_description = 'Preview'

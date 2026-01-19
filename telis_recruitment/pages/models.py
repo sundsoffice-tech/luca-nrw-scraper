@@ -249,3 +249,117 @@ class DomainConfiguration(models.Model):
     def __str__(self):
         return f"Domain Config for {self.landing_page.slug}"
 
+
+class PageAsset(models.Model):
+    """Image/media upload with metadata for Asset Manager"""
+    
+    file = models.FileField(upload_to='page_assets/')
+    filename = models.CharField(max_length=255)
+    file_size = models.PositiveIntegerField(help_text="File size in bytes")
+    width = models.PositiveIntegerField(null=True, blank=True, help_text="Image width in pixels")
+    height = models.PositiveIntegerField(null=True, blank=True, help_text="Image height in pixels")
+    alt_text = models.CharField(max_length=255, blank=True, help_text="Alt text for SEO")
+    folder = models.CharField(max_length=100, blank=True, default='', help_text="Folder organization")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        verbose_name = 'Page Asset'
+        verbose_name_plural = 'Page Assets'
+    
+    def __str__(self):
+        return f"{self.filename} ({self.folder or 'root'})"
+
+
+class BrandSettings(models.Model):
+    """Global brand settings for consistent styling across pages"""
+    
+    # Colors
+    primary_color = models.CharField(max_length=7, default='#007bff', help_text="Primary brand color")
+    secondary_color = models.CharField(max_length=7, default='#6c757d', help_text="Secondary brand color")
+    accent_color = models.CharField(max_length=7, default='#28a745', help_text="Accent color")
+    text_color = models.CharField(max_length=7, default='#212529', help_text="Default text color")
+    background_color = models.CharField(max_length=7, default='#ffffff', help_text="Default background color")
+    
+    # Typography
+    heading_font = models.CharField(max_length=100, default='Inter', help_text="Font family for headings")
+    body_font = models.CharField(max_length=100, default='Open Sans', help_text="Font family for body text")
+    base_font_size = models.PositiveIntegerField(default=16, help_text="Base font size in pixels")
+    
+    # Logo
+    logo = models.ImageField(upload_to='brand/', null=True, blank=True, help_text="Primary logo")
+    logo_dark = models.ImageField(upload_to='brand/', null=True, blank=True, help_text="Dark version of logo")
+    favicon = models.ImageField(upload_to='brand/', null=True, blank=True, help_text="Favicon")
+    
+    # Social Media Links
+    facebook_url = models.URLField(blank=True)
+    instagram_url = models.URLField(blank=True)
+    linkedin_url = models.URLField(blank=True)
+    twitter_url = models.URLField(blank=True)
+    youtube_url = models.URLField(blank=True)
+    
+    # Contact
+    company_name = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    address = models.TextField(blank=True)
+    
+    # Legal URLs
+    privacy_url = models.URLField(blank=True, help_text="Privacy policy URL")
+    imprint_url = models.URLField(blank=True, help_text="Imprint/Impressum URL")
+    terms_url = models.URLField(blank=True, help_text="Terms of service URL")
+    
+    class Meta:
+        verbose_name = 'Brand Settings'
+        verbose_name_plural = 'Brand Settings'
+    
+    def __str__(self):
+        return f"Brand Settings (ID: {self.id})"
+    
+    def generate_css_variables(self):
+        """Generate CSS custom properties from settings"""
+        return f"""
+:root {{
+    --brand-primary: {self.primary_color};
+    --brand-secondary: {self.secondary_color};
+    --brand-accent: {self.accent_color};
+    --brand-text: {self.text_color};
+    --brand-background: {self.background_color};
+    --font-heading: '{self.heading_font}', sans-serif;
+    --font-body: '{self.body_font}', sans-serif;
+    --font-size-base: {self.base_font_size}px;
+}}
+        """.strip()
+
+
+class PageTemplate(models.Model):
+    """Pre-built page templates for quick start"""
+    
+    CATEGORY_CHOICES = [
+        ('lead_gen', 'Lead Generation'),
+        ('product', 'Product'),
+        ('service', 'Service'),
+        ('event', 'Event'),
+        ('coming_soon', 'Coming Soon'),
+        ('thank_you', 'Thank You'),
+    ]
+    
+    name = models.CharField(max_length=100, help_text="Template name")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    thumbnail = models.ImageField(upload_to='templates/thumbnails/', help_text="Preview thumbnail")
+    html_content = models.TextField(help_text="HTML content of template")
+    css_content = models.TextField(blank=True, help_text="CSS content of template")
+    gjs_data = models.JSONField(default=dict, help_text="GrapesJS components/styles data")
+    usage_count = models.PositiveIntegerField(default=0, help_text="Number of times used")
+    is_active = models.BooleanField(default=True, help_text="Whether template is available")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-usage_count', 'name']
+        verbose_name = 'Page Template'
+        verbose_name_plural = 'Page Templates'
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_category_display()})"
+

@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.db import transaction
 
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission
+from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
 
@@ -230,3 +230,265 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+
+
+# ============================================================================
+# Asset Manager Views
+# ============================================================================
+
+@staff_member_required
+@require_POST
+def upload_asset(request):
+    """Upload an asset to the asset manager"""
+    try:
+        from PIL import Image
+        
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
+        
+        # Get additional params
+        folder = request.POST.get('folder', '')
+        alt_text = request.POST.get('alt_text', '')
+        
+        # Get file size
+        file_size = uploaded_file.size
+        
+        # Try to get image dimensions
+        width, height = None, None
+        try:
+            img = Image.open(uploaded_file)
+            width, height = img.size
+            uploaded_file.seek(0)  # Reset file pointer
+        except Exception:
+            pass  # Not an image or couldn't read dimensions
+        
+        # Create asset
+        asset = PageAsset.objects.create(
+            file=uploaded_file,
+            filename=uploaded_file.name,
+            file_size=file_size,
+            width=width,
+            height=height,
+            alt_text=alt_text,
+            folder=folder,
+            uploaded_by=request.user
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'asset': {
+                'id': asset.id,
+                'url': asset.file.url,
+                'filename': asset.filename,
+                'file_size': asset.file_size,
+                'width': asset.width,
+                'height': asset.height,
+                'alt_text': asset.alt_text,
+                'folder': asset.folder,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error uploading asset: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def list_assets(request):
+    """List all assets for GrapesJS Asset Manager"""
+    folder = request.GET.get('folder', '')
+    
+    assets = PageAsset.objects.all()
+    if folder:
+        assets = assets.filter(folder=folder)
+    
+    # Format for GrapesJS Asset Manager
+    asset_list = []
+    for asset in assets:
+        asset_list.append({
+            'id': asset.id,
+            'src': asset.file.url,
+            'name': asset.filename,
+            'type': 'image',  # Can be extended for other types
+            'height': asset.height,
+            'width': asset.width,
+            'folder': asset.folder,
+            'alt': asset.alt_text,
+        })
+    
+    return JsonResponse({'data': asset_list})
+
+
+@staff_member_required
+@require_POST
+def delete_asset(request, asset_id):
+    """Delete an asset"""
+    try:
+        asset = PageAsset.objects.get(id=asset_id)
+        
+        # Delete the file
+        if asset.file:
+            asset.file.delete()
+        
+        asset.delete()
+        
+        return JsonResponse({'success': True, 'message': 'Asset deleted successfully'})
+    except PageAsset.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Asset not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error deleting asset {asset_id}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+# ============================================================================
+# Brand Settings Views
+# ============================================================================
+
+@staff_member_required
+def brand_settings(request):
+    """View and edit brand settings"""
+    from .models import BrandSettings
+    
+    # Get or create brand settings
+    settings_obj, created = BrandSettings.objects.get_or_create(pk=1)
+    
+    if request.method == 'POST':
+        try:
+            # Update color settings
+            settings_obj.primary_color = request.POST.get('primary_color', settings_obj.primary_color)
+            settings_obj.secondary_color = request.POST.get('secondary_color', settings_obj.secondary_color)
+            settings_obj.accent_color = request.POST.get('accent_color', settings_obj.accent_color)
+            settings_obj.text_color = request.POST.get('text_color', settings_obj.text_color)
+            settings_obj.background_color = request.POST.get('background_color', settings_obj.background_color)
+            
+            # Update typography
+            settings_obj.heading_font = request.POST.get('heading_font', settings_obj.heading_font)
+            settings_obj.body_font = request.POST.get('body_font', settings_obj.body_font)
+            settings_obj.base_font_size = request.POST.get('base_font_size', settings_obj.base_font_size)
+            
+            # Update social media
+            settings_obj.facebook_url = request.POST.get('facebook_url', '')
+            settings_obj.instagram_url = request.POST.get('instagram_url', '')
+            settings_obj.linkedin_url = request.POST.get('linkedin_url', '')
+            settings_obj.twitter_url = request.POST.get('twitter_url', '')
+            settings_obj.youtube_url = request.POST.get('youtube_url', '')
+            
+            # Update contact
+            settings_obj.company_name = request.POST.get('company_name', '')
+            settings_obj.email = request.POST.get('email', '')
+            settings_obj.phone = request.POST.get('phone', '')
+            settings_obj.address = request.POST.get('address', '')
+            
+            # Update legal URLs
+            settings_obj.privacy_url = request.POST.get('privacy_url', '')
+            settings_obj.imprint_url = request.POST.get('imprint_url', '')
+            settings_obj.terms_url = request.POST.get('terms_url', '')
+            
+            # Handle file uploads
+            if 'logo' in request.FILES:
+                settings_obj.logo = request.FILES['logo']
+            if 'logo_dark' in request.FILES:
+                settings_obj.logo_dark = request.FILES['logo_dark']
+            if 'favicon' in request.FILES:
+                settings_obj.favicon = request.FILES['favicon']
+            
+            settings_obj.save()
+            
+            return JsonResponse({'success': True, 'message': 'Brand settings saved successfully'})
+        except Exception as e:
+            logger.error(f"Error saving brand settings: {e}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    
+    return render(request, 'pages/brand_settings.html', {
+        'settings': settings_obj
+    })
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def get_brand_css(request):
+    """Get brand settings as CSS variables"""
+    from .models import BrandSettings
+    
+    settings_obj = BrandSettings.objects.first()
+    if settings_obj:
+        css = settings_obj.generate_css_variables()
+        return HttpResponse(css, content_type='text/css')
+    
+    return HttpResponse('', content_type='text/css')
+
+
+# ============================================================================
+# Template Views
+# ============================================================================
+
+@staff_member_required
+def select_template(request):
+    """Template selection page"""
+    from .models import PageTemplate
+    
+    templates = PageTemplate.objects.filter(is_active=True)
+    
+    # Group by category
+    templates_by_category = {}
+    for template in templates:
+        category = template.get_category_display()
+        if category not in templates_by_category:
+            templates_by_category[category] = []
+        templates_by_category[category].append(template)
+    
+    return render(request, 'pages/select_template.html', {
+        'templates_by_category': templates_by_category
+    })
+
+
+@staff_member_required
+@require_POST
+def apply_template(request, template_id):
+    """Apply a template to a new or existing page"""
+    from .models import PageTemplate
+    
+    try:
+        template = PageTemplate.objects.get(id=template_id)
+        
+        # Get target page slug
+        slug = request.POST.get('slug')
+        if not slug:
+            return JsonResponse({'success': False, 'error': 'Slug is required'}, status=400)
+        
+        # Check if page exists
+        try:
+            page = LandingPage.objects.get(slug=slug)
+        except LandingPage.DoesNotExist:
+            # Create new page
+            title = request.POST.get('title', template.name)
+            page = LandingPage.objects.create(
+                slug=slug,
+                title=title,
+                status='draft',
+                created_by=request.user
+            )
+        
+        # Apply template content
+        page.html = template.html_content
+        page.css = template.css_content
+        page.html_json = template.gjs_data
+        page.updated_by = request.user
+        page.save()
+        
+        # Increment usage count
+        template.usage_count += 1
+        template.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Template applied successfully',
+            'page_url': page.get_builder_url()
+        })
+    except PageTemplate.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Template not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error applying template {template_id}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
