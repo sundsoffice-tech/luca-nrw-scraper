@@ -119,7 +119,13 @@ python scriptname.py --ui
 
 ## 📚 Documentation
 
-- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual, troubleshooting)
+### 🎯 Onboarding (Neu!)
+- **[⚡ QUICKSTART (20 Min)](docs/QUICKSTART.md)** - Von 0 zu deinen ersten Leads
+- **[⚙️ Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** - Safe/Balanced/Aggressive Modi
+- **[🆘 Troubleshooting](docs/TROUBLESHOOTING.md)** - Problemlösung nach Symptomen
+
+### 📖 Setup & Deployment
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual)
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment to Railway, Render, Fly.io, Hetzner
 - **[Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** - Environment configuration for different scenarios
 - **[Security Checklist](docs/SECURITY_CHECKLIST.md)** - Production security requirements and best practices
