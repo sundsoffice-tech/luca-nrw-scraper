@@ -76,8 +76,21 @@ def compute_score_v2(
     url: str,
     lead: Lead,
     config: Optional[ScoreConfig] = None,
+    use_dynamic_scoring: bool = True,
 ) -> int:
-    """Berechnet einen Score 0–100 für einen einzelnen Lead (v2-Scoring)."""
+    """
+    Berechnet einen Score 0–100 für einen einzelnen Lead (v2-Scoring).
+    
+    Args:
+        text: Lead-Text
+        url: Lead-URL
+        lead: Lead-Dictionary
+        config: Optionale Score-Konfiguration
+        use_dynamic_scoring: Ob dynamisches Scoring mit Feedback-Loop verwendet werden soll
+        
+    Returns:
+        Score (0-100)
+    """
     config = dict(DEFAULT_SCORE_CONFIG if config is None else config)
 
     email = (lead.get("email") or "").strip().lower()
@@ -189,6 +202,17 @@ def compute_score_v2(
     if host_is_portal:
         score -= 25
 
+    # Apply dynamic scoring adjustments from feedback loop
+    if use_dynamic_scoring:
+        try:
+            from .feedback_loop import get_feedback_system
+            feedback_system = get_feedback_system()
+            dynamic_adjustment = feedback_system.get_dynamic_score_adjustment(lead)
+            # Scale adjustment to 0-100 range (adjustment is typically -1.0 to +1.0)
+            score += dynamic_adjustment * 20  # Scale to ±20 points max
+        except Exception:
+            pass  # Fallback gracefully if feedback system not available
+    
     score_int = int(round(score))
     score_int = max(0, min(100, score_int))
     return score_int
