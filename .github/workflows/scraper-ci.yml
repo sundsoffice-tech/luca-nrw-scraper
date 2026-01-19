@@ -1,0 +1,187 @@
+name: Scraper Tests CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'luca_scraper/**'
+      - 'stream2_extraction_layer/**'
+      - 'stream3_scoring_layer/**'
+      - 'tests/**'
+      - '*.py'
+      - 'requirements.txt'
+      - '.github/workflows/scraper-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'luca_scraper/**'
+      - 'stream2_extraction_layer/**'
+      - 'stream3_scoring_layer/**'
+      - 'tests/**'
+      - '*.py'
+      - 'requirements.txt'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Run Scraper Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run pytest with coverage
+        run: |
+          pytest tests/ \
+            --verbose \
+            --cov=luca_scraper \
+            --cov=stream2_extraction_layer \
+            --cov=stream3_scoring_layer \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            -m "not slow"
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: ./coverage.xml
+          flags: scraper
+          name: scraper-coverage
+      
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
+
+  lint:
+    name: Code Quality - Scraper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install linters
+        run: |
+          pip install flake8 black isort pylint mypy
+      
+      - name: Run flake8
+        run: |
+          # Critical errors should fail the build
+          flake8 luca_scraper stream2_extraction_layer stream3_scoring_layer \
+            --count --select=E9,F63,F7,F82 --show-source --statistics
+          
+          # Warnings only (doesn't fail build)
+          flake8 luca_scraper stream2_extraction_layer stream3_scoring_layer \
+            --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+      
+      - name: Check Black formatting
+        run: |
+          black --check --diff luca_scraper stream2_extraction_layer stream3_scoring_layer || \
+            echo "⚠️ Black formatting issues found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Check isort
+        run: |
+          isort --check-only --diff luca_scraper stream2_extraction_layer stream3_scoring_layer || \
+            echo "⚠️ Import sorting issues found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Run pylint
+        run: |
+          pylint luca_scraper stream2_extraction_layer stream3_scoring_layer \
+            --exit-zero --max-line-length=120
+        continue-on-error: true
+
+  type-check:
+    name: Type Checking
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install mypy
+          pip install -r requirements.txt
+      
+      - name: Run mypy
+        run: |
+          mypy luca_scraper stream2_extraction_layer stream3_scoring_layer --ignore-missing-imports || \
+            echo "⚠️ Type checking issues found (non-blocking)"
+        continue-on-error: true
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/ \
+            --verbose \
+            -m "integration" \
+            --maxfail=3
+        continue-on-error: true
+      
+      - name: Run slow tests
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          pytest tests/ \
+            --verbose \
+            -m "slow" \
+            --maxfail=1
+        continue-on-error: true

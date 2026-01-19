@@ -52,7 +52,27 @@ jobs:
           ALLOWED_HOSTS: 'localhost,127.0.0.1'
         run: |
           cd telis_recruitment
-          python manage.py test --verbosity=2
+          python manage.py test --verbosity=2 --parallel
+      
+      - name: Run pytest tests
+        env:
+          SECRET_KEY: 'test-secret-key-for-ci'
+          DEBUG: 'True'
+          ALLOWED_HOSTS: 'localhost,127.0.0.1'
+          DJANGO_SETTINGS_MODULE: 'telis.settings'
+        run: |
+          cd telis_recruitment
+          pytest --verbose --cov=. --cov-report=term-missing --cov-report=xml -m django
+        continue-on-error: true
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          file: ./telis_recruitment/coverage.xml
+          flags: django
+          name: django-coverage
+
       
       - name: Check for migration issues
         env:
@@ -94,4 +114,47 @@ jobs:
         run: |
           # Check formatting but don't fail build (informational only)
           black --check --diff telis_recruitment || echo "⚠️ Black formatting issues found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Check isort
+        run: |
+          isort --check-only --diff telis_recruitment || echo "⚠️ Import sorting issues found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Run pylint
+        run: |
+          pylint telis_recruitment --load-plugins=pylint_django --django-settings-module=telis.settings \
+            --exit-zero --max-line-length=120
+        continue-on-error: true
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install bandit safety
+      
+      - name: Run bandit security check
+        run: |
+          bandit -r telis_recruitment -ll -i -x '*/tests/*,*/migrations/*' || \
+            echo "⚠️ Security issues found (non-blocking)"
+        continue-on-error: true
+      
+      - name: Check dependencies for vulnerabilities
+        run: |
+          safety check --file telis_recruitment/requirements.txt || \
+            echo "⚠️ Dependency vulnerabilities found (non-blocking)"
         continue-on-error: true

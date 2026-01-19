@@ -1,0 +1,33 @@
+[flake8]
+max-line-length = 120
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    migrations,
+    node_modules
+
+# Ignore specific errors
+ignore =
+    # Line too long (handled by black)
+    E501,
+    # Line break before binary operator (black compatibility)
+    W503,
+    # Whitespace before ':'
+    E203
+
+per-file-ignores =
+    # Ignore unused imports in __init__.py files
+    __init__.py:F401
+    # Ignore complexity in settings files
+    */settings*.py:E501,C901
+    # Ignore complexity in tests
+    test_*.py:C901
+    tests/*.py:C901
+
+max-complexity = 15

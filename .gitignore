@@ -24,6 +24,15 @@ diagnose_run.log
 *.db-shm
 data/
 
+# Testing and Coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
 # Specific database files - NEVER commit these!
 scraper.db
 leads.db
