@@ -29,6 +29,10 @@ __version__ = "4.0.0"
 # =========================
 
 from .config import (
+    # Configuration loaders
+    get_scraper_config,
+    get_config,
+    
     # API Keys
     OPENAI_API_KEY,
     PERPLEXITY_API_KEY,
