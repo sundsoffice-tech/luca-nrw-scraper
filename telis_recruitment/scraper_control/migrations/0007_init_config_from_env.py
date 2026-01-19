@@ -43,8 +43,8 @@ def init_config_from_env(apps, schema_editor):
         
         # Content
         config.allow_pdf = os.getenv("ALLOW_PDF", "0") == "1"
-        max_fetch_size = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))
-        config.max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", str(max_fetch_size)))
+        config.max_content_length = int(os.getenv("MAX_CONTENT_LENGTH", 
+                                                   os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024))))
         
         # Security
         config.allow_insecure_ssl = os.getenv("ALLOW_INSECURE_SSL", "0") == "1"

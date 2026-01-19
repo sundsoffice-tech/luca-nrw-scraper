@@ -12,7 +12,17 @@ import os
 import sys
 
 def validate_config_structure():
-    """Validate that config structure is correct."""
+    """
+    Validate that config structure is correct.
+    
+    Checks:
+    - _CONFIG_DEFAULTS exists
+    - get_scraper_config is callable
+    - Essential parameters are present
+    
+    Returns:
+        bool: True if validation passes, False otherwise
+    """
     print("🔍 Validating configuration structure...")
     
     try:
@@ -52,7 +62,16 @@ def validate_config_structure():
 
 
 def validate_global_variables():
-    """Validate that global variables are set correctly."""
+    """
+    Validate that global variables are set correctly.
+    
+    Checks:
+    - Variables have correct types
+    - Values are within reasonable ranges
+    
+    Returns:
+        bool: True if validation passes, False otherwise
+    """
     print("\n🔍 Validating global variables...")
     
     try:
@@ -90,7 +109,17 @@ def validate_global_variables():
 
 
 def validate_priority_system():
-    """Validate that priority system works."""
+    """
+    Validate that priority system works correctly.
+    
+    Checks:
+    - DB availability detection
+    - Specific parameter retrieval
+    - Non-existent parameter handling
+    
+    Returns:
+        bool: True if validation passes, False otherwise
+    """
     print("\n🔍 Validating priority system...")
     
     try:
@@ -125,7 +154,16 @@ def validate_priority_system():
 
 
 def print_current_config():
-    """Print current configuration values."""
+    """
+    Print current configuration values in a formatted table.
+    
+    Displays configuration values organized by category:
+    - HTTP & Networking
+    - Rate Limiting
+    - Scoring
+    - Feature Flags
+    - Content & Security
+    """
     print("\n📋 Current Configuration Values:")
     print("=" * 60)
     

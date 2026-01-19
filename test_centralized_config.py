@@ -171,7 +171,16 @@ class TestScriptnameFallback(unittest.TestCase):
 
 
 def run_tests():
-    """Run all tests."""
+    """
+    Run all configuration centralization tests.
+    
+    Creates and executes test suites for:
+    - TestCentralizedConfiguration
+    - TestScriptnameFallback
+    
+    Returns:
+        int: 0 if all tests pass, 1 if any tests fail
+    """
     # Create test suite
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
