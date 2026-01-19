@@ -46,6 +46,7 @@ class ProcessManager:
         self.max_logs: int = 1000
         self.output_thread: Optional[threading.Thread] = None
         self.current_run_id: Optional[int] = None
+        self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
         self._initialized = True
     
     def _read_output(self):
@@ -54,6 +55,18 @@ class ProcessManager:
             while True:
                 line = self.process.stdout.readline()
                 if not line:  # EOF
+                    # Log that process ended
+                    exit_code = self.process.poll()
+                    logger.warning(f"Scraper process ended with exit code: {exit_code}")
+                    
+                    # Check if it ended too quickly (configurable threshold)
+                    if self.start_time:
+                        runtime = (timezone.now() - self.start_time).total_seconds()
+                        if runtime < self.early_exit_threshold:
+                            error_msg = f"⚠️ Scraper exited after only {runtime:.1f}s - likely a startup error!"
+                            logger.error(error_msg)
+                            self._log_error(error_msg)
+                            self._log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
                     break
                 if line.strip():
                     timestamp = timezone.now()
@@ -132,19 +145,25 @@ class ProcessManager:
         # Get project root (parent of telis_recruitment)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         
-        # Priority 1: luca_scraper/cli.py (preferred)
-        cli_path = os.path.join(project_root, 'luca_scraper', 'cli.py')
-        if os.path.exists(cli_path):
-            # Check if we can run it as a module
-            luca_scraper_init = os.path.join(project_root, 'luca_scraper', '__init__.py')
-            if os.path.exists(luca_scraper_init):
-                return ('module', 'luca_scraper.cli')
-        
-        # Priority 2: scriptname.py (fallback)
+        # Priority 1: scriptname.py (the actual scraper with proper entry point)
         script_path = os.path.join(project_root, 'scriptname.py')
         if os.path.exists(script_path):
+            logger.info(f"Found scraper script: {script_path}")
             return ('script', script_path)
         
+        # Priority 2: luca_scraper module (if __main__.py exists)
+        main_path = os.path.join(project_root, 'luca_scraper', '__main__.py')
+        if os.path.exists(main_path):
+            logger.info(f"Found luca_scraper module with __main__.py")
+            return ('module', 'luca_scraper')
+        
+        # Priority 3: scriptname_backup.py (backup)
+        backup_path = os.path.join(project_root, 'scriptname_backup.py')
+        if os.path.exists(backup_path):
+            logger.info(f"Found backup script: {backup_path}")
+            return ('script', backup_path)
+        
+        logger.error("No scraper script found (tried scriptname.py, luca_scraper/__main__.py, scriptname_backup.py)")
         return (None, None)
     
     def _build_command(self, params: Dict[str, Any], script_type: str, script_path: str) -> list:
@@ -161,7 +180,8 @@ class ProcessManager:
         """
         # Build base command
         if script_type == 'module':
-            cmd = ['python', '-m', 'luca_scraper.cli']
+            # script_path contains the module name (e.g., 'luca_scraper'), not a file path
+            cmd = ['python', '-m', script_path]
         else:
             cmd = ['python', script_path]
         
