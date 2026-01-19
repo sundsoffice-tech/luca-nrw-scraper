@@ -829,10 +829,13 @@ def _build_dashboard_stats(user):
     total_leads = leads_qs.count()
     today = timezone.localdate()
     week_start_date = today - timedelta(days=6)
+    month_start_date = today - timedelta(days=29)
     prev_week_start = today - timedelta(days=13)
     prev_week_end = today - timedelta(days=7)
 
     leads_today = leads_qs.filter(created_at__date=today).count()
+    leads_week = leads_qs.filter(created_at__date__gte=week_start_date).count()
+    leads_month = leads_qs.filter(created_at__date__gte=month_start_date).count()
     hot_leads = leads_qs.filter(quality_score__gte=80, interest_level__gte=3).count()
 
     calls_today = CallLog.objects.filter(
@@ -894,10 +897,53 @@ def _build_dashboard_stats(user):
             'count': count,
             'percentage': percentage
         }
+    
+    # Top sources by conversion rate (quality)
+    top_sources = []
+    for key, label in Lead.Source.choices:
+        source_leads = leads_qs.filter(source=key)
+        source_count = source_leads.count()
+        if source_count > 0:
+            converted = source_leads.filter(status__in=_CONVERTED_STATUSES).count()
+            conversion_rate_src = round((converted / source_count) * 100, 1)
+            avg_quality = source_leads.aggregate(Avg('quality_score'))['quality_score__avg'] or 0
+            top_sources.append({
+                'source': label,
+                'count': source_count,
+                'conversion_rate': conversion_rate_src,
+                'avg_quality': round(avg_quality, 1)
+            })
+    top_sources.sort(key=lambda x: x['conversion_rate'], reverse=True)
+    
+    # Top error reasons (invalid leads with telefon missing or status INVALID)
+    error_reasons = []
+    no_mobile = leads_qs.filter(Q(telefon__isnull=True) | Q(telefon='')).count()
+    invalid_status = leads_qs.filter(status=Lead.Status.INVALID).count()
+    no_email = leads_qs.filter(Q(email__isnull=True) | Q(email='')).count()
+    
+    if no_mobile > 0:
+        error_reasons.append({'reason': 'Kein Telefon gefunden', 'count': no_mobile})
+    if invalid_status > 0:
+        error_reasons.append({'reason': 'Ungültiger Lead', 'count': invalid_status})
+    if no_email > 0:
+        error_reasons.append({'reason': 'Keine E-Mail gefunden', 'count': no_email})
+    
+    # Data quality trends (last 7 days)
+    quality_trend = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        day_leads = leads_qs.filter(created_at__date=day)
+        avg_quality = day_leads.aggregate(Avg('quality_score'))['quality_score__avg'] or 0
+        quality_trend.append({
+            'label': day.strftime('%d.%m'),
+            'avg_quality': round(avg_quality, 1)
+        })
 
     return {
         'leads_total': total_leads,
         'leads_today': leads_today,
+        'leads_week': leads_week,
+        'leads_month': leads_month,
         'calls_today': calls_today,
         'avg_calls_per_day': avg_calls_per_day,
         'conversion_rate': conversion_rate,
@@ -906,6 +952,9 @@ def _build_dashboard_stats(user):
         'trend_7_days': trend_7_days,
         'status_distribution': status_distribution,
         'source_distribution': source_distribution,
+        'top_sources': top_sources,
+        'error_reasons': error_reasons,
+        'quality_trend': quality_trend,
     }
 
 
@@ -1006,8 +1055,14 @@ def crm_dashboard(request):
         'stats': {
             'total': stats['leads_total'],
             'today': stats['leads_today'],
+            'week': stats['leads_week'],
+            'month': stats['leads_month'],
             'calls_today': stats['calls_today'],
             'hot_leads': stats['hot_leads'],
+            'conversion_rate': stats['conversion_rate'],
+            'top_sources': stats['top_sources'][:5],
+            'error_reasons': stats['error_reasons'][:5],
+            'quality_trend': stats['quality_trend'],
         }
     })
 

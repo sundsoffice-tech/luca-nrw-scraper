@@ -1,80 +1,424 @@
 {% extends 'crm/base.html' %}
+{% load static %}
 {% block title %}{{ lead.name }} - TELIS CRM{% endblock %}
+
+{% block extra_head %}
+<style>
+    .action-btn {
+        transition: all 0.2s;
+    }
+    .action-btn:hover {
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <!-- Lead Detail Page -->
-<div class="max-w-4xl mx-auto">
-    <div class="mb-6">
-        <a href="{% url 'crm-leads' %}" class="text-primary hover:text-primary/80">← Zurück zur Lead-Liste</a>
+<div class="max-w-6xl mx-auto">
+    <div class="mb-6 flex items-center justify-between">
+        <a href="{% url 'crm-leads' %}" class="text-primary hover:text-primary/80 flex items-center">
+            <span class="mr-2">←</span> Zurück zur Lead-Liste
+        </a>
+        <div class="text-sm text-gray-400">
+            Lead ID: #{{ lead.id }}
+        </div>
     </div>
     
-    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
-        <h1 class="text-3xl font-bold text-gray-100 mb-6">{{ lead.name }}</h1>
-        
-        <!-- Score -->
-        <div class="mb-6">
-            <div class="flex items-center justify-between text-sm text-gray-400 mb-2">
-                <span>📊 Score</span>
-                <span class="font-bold text-primary">{{ lead.quality_score }}</span>
-            </div>
-            <div class="w-full bg-dark-700 rounded-full h-3">
-                <div class="bg-primary h-3 rounded-full transition-all" style="width: {{ lead.quality_score }}%"></div>
-            </div>
-        </div>
-        
-        <!-- Status -->
-        <div class="mb-6">
-            <span class="text-sm text-gray-400">📌 Status:</span>
-            <span class="inline-block ml-2 px-3 py-1 rounded bg-green-500/20 text-green-400">
-                {{ lead.get_status_display }}
-            </span>
-        </div>
-        
-        <!-- Contact Info -->
-        <div class="space-y-3 mb-6 pb-6 border-b border-dark-700">
-            {% if lead.telefon %}
-            <div class="text-gray-300">📞 {{ lead.telefon }}</div>
-            {% endif %}
-            
-            {% if lead.email %}
-            <div class="text-gray-300">📧 {{ lead.email }}</div>
-            {% endif %}
-            
-            {% if lead.company %}
-            <div class="text-gray-300">🏢 {{ lead.company }}</div>
-            {% endif %}
-            
-            {% if lead.location %}
-            <div class="text-gray-300">📍 {{ lead.location }}</div>
-            {% endif %}
-        </div>
-        
-        <!-- Timeline -->
-        <div class="mb-6">
-            <h3 class="text-lg font-bold text-gray-100 mb-3">📋 Timeline</h3>
-            <div class="space-y-3 text-sm">
-                <div class="p-3 bg-dark-900 rounded">
-                    <div class="text-gray-300">🆕 Lead erstellt</div>
-                    <div class="text-xs text-gray-500 mt-1">{{ lead.created_at }}</div>
+    <!-- Lead Header -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 mb-6">
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-100 mb-2">{{ lead.name }}</h1>
+                <div class="flex items-center gap-3">
+                    {% if lead.status == 'NEW' %}
+                    <span class="px-3 py-1 rounded bg-green-500/20 text-green-400 text-sm">🟢 {{ lead.get_status_display }}</span>
+                    {% elif lead.status == 'CONTACTED' %}
+                    <span class="px-3 py-1 rounded bg-blue-500/20 text-blue-400 text-sm">🔵 {{ lead.get_status_display }}</span>
+                    {% elif lead.status == 'VOICEMAIL' or lead.status == 'INTERESTED' %}
+                    <span class="px-3 py-1 rounded bg-yellow-500/20 text-yellow-400 text-sm">🟡 {{ lead.get_status_display }}</span>
+                    {% elif lead.status == 'INTERVIEW' %}
+                    <span class="px-3 py-1 rounded bg-purple-500/20 text-purple-400 text-sm">🟣 {{ lead.get_status_display }}</span>
+                    {% elif lead.status == 'HIRED' %}
+                    <span class="px-3 py-1 rounded bg-green-500/20 text-green-400 text-sm">🟢 {{ lead.get_status_display }}</span>
+                    {% elif lead.status == 'NOT_INTERESTED' %}
+                    <span class="px-3 py-1 rounded bg-red-500/20 text-red-400 text-sm">🔴 {{ lead.get_status_display }}</span>
+                    {% else %}
+                    <span class="px-3 py-1 rounded bg-gray-500/20 text-gray-400 text-sm">⚫ {{ lead.get_status_display }}</span>
+                    {% endif %}
+                    
+                    <span class="px-3 py-1 rounded bg-primary/20 text-primary text-sm">{{ lead.get_source_display }}</span>
+                    <span class="px-3 py-1 rounded bg-indigo-500/20 text-indigo-400 text-sm">{{ lead.get_lead_type_display }}</span>
                 </div>
-                {% if lead.last_called_at %}
-                <div class="p-3 bg-dark-900 rounded">
-                    <div class="text-gray-300">📞 Letzter Anruf</div>
-                    <div class="text-xs text-gray-500 mt-1">{{ lead.last_called_at }}</div>
-                </div>
-                {% endif %}
+            </div>
+            <div class="text-right">
+                <div class="text-3xl font-bold text-primary mb-1">{{ lead.quality_score }}</div>
+                <div class="text-sm text-gray-400">Quality Score</div>
             </div>
         </div>
         
-        <!-- Notes -->
-        {% if lead.notes %}
-        <div>
-            <h3 class="text-lg font-bold text-gray-100 mb-3">📝 Notizen</h3>
-            <div class="p-3 bg-dark-900 rounded text-gray-300 text-sm">
-                {{ lead.notes }}
+        <!-- Quality Score Bar -->
+        <div class="w-full bg-dark-700 rounded-full h-3 mb-2">
+            <div class="bg-primary h-3 rounded-full transition-all" style="width: {{ lead.quality_score }}%"></div>
+        </div>
+        <div class="text-xs text-gray-500 text-center">
+            {% if lead.quality_score >= 80 %}
+                🔥 Exzellente Qualität - Priorität hoch
+            {% elif lead.quality_score >= 50 %}
+                ⭐ Gute Qualität - Standard Follow-up
+            {% else %}
+                ❄️ Niedrige Qualität - Nachqualifizierung nötig
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Main Info -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Was wurde gefunden? -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🔍</span>
+                    Was wurde gefunden?
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Phone -->
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">Telefon</div>
+                        {% if lead.telefon %}
+                            <div class="text-gray-100 font-medium flex items-center">
+                                📞 {{ lead.telefon }}
+                                {% if lead.phone_type %}
+                                <span class="ml-2 text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">{{ lead.phone_type }}</span>
+                                {% endif %}
+                            </div>
+                            {% if lead.whatsapp_link %}
+                            <a href="{{ lead.whatsapp_link }}" target="_blank" class="text-xs text-primary hover:underline mt-1 inline-block">
+                                💬 WhatsApp öffnen
+                            </a>
+                            {% endif %}
+                        {% else %}
+                            <div class="text-red-400">❌ Nicht gefunden</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Email -->
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">E-Mail</div>
+                        {% if lead.email %}
+                            <div class="text-gray-100 font-medium">📧 {{ lead.email }}</div>
+                            <a href="mailto:{{ lead.email }}" class="text-xs text-primary hover:underline mt-1 inline-block">
+                                ✉️ E-Mail schreiben
+                            </a>
+                        {% else %}
+                            <div class="text-red-400">❌ Nicht gefunden</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Company -->
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">Firma</div>
+                        {% if lead.company %}
+                            <div class="text-gray-100">🏢 {{ lead.company }}</div>
+                        {% else %}
+                            <div class="text-gray-500">Nicht angegeben</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Location -->
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">Standort</div>
+                        {% if lead.location %}
+                            <div class="text-gray-100">📍 {{ lead.location }}</div>
+                        {% else %}
+                            <div class="text-gray-500">Nicht angegeben</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Role -->
+                    {% if lead.role %}
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">Position</div>
+                        <div class="text-gray-100">💼 {{ lead.role }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Source URL -->
+                    {% if lead.source_url %}
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">Quell-URL</div>
+                        <a href="{{ lead.source_url }}" target="_blank" class="text-primary hover:underline text-sm truncate block">
+                            🔗 Link öffnen
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Wie sicher ist das? -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">🎯</span>
+                    Wie sicher ist das?
+                </h2>
+                <div class="space-y-4">
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-300">Quality Score</span>
+                            <span class="text-2xl font-bold text-primary">{{ lead.quality_score }}/100</span>
+                        </div>
+                        <div class="w-full bg-dark-700 rounded-full h-2">
+                            <div class="bg-primary h-2 rounded-full" style="width: {{ lead.quality_score }}%"></div>
+                        </div>
+                    </div>
+                    
+                    {% if lead.confidence_score %}
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-300">AI Confidence</span>
+                            <span class="text-xl font-bold text-purple-400">{{ lead.confidence_score }}%</span>
+                        </div>
+                        <div class="w-full bg-dark-700 rounded-full h-2">
+                            <div class="bg-purple-500 h-2 rounded-full" style="width: {{ lead.confidence_score }}%"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if lead.data_quality %}
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-300">Datenqualität</span>
+                            <span class="text-xl font-bold text-green-400">{{ lead.data_quality }}%</span>
+                        </div>
+                        <div class="w-full bg-dark-700 rounded-full h-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: {{ lead.data_quality }}%"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if lead.ai_summary %}
+                    <div class="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-2">🤖 AI-Zusammenfassung</div>
+                        <div class="text-gray-300">{{ lead.ai_summary }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Data Completeness -->
+                    <div class="p-4 bg-dark-900 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-3">Datenvollständigkeit</div>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-gray-300">Name</span>
+                                <span class="text-green-400">✓</span>
+                            </div>
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-gray-300">Telefon</span>
+                                {% if lead.telefon %}
+                                <span class="text-green-400">✓</span>
+                                {% else %}
+                                <span class="text-red-400">✗</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-gray-300">E-Mail</span>
+                                {% if lead.email %}
+                                <span class="text-green-400">✓</span>
+                                {% else %}
+                                <span class="text-red-400">✗</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-gray-300">Firma</span>
+                                {% if lead.company %}
+                                <span class="text-green-400">✓</span>
+                                {% else %}
+                                <span class="text-yellow-400">○</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notizen & Tags -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">📝</span>
+                    Notizen & Tags
+                </h2>
+                
+                <!-- Tags -->
+                <div class="mb-4">
+                    <div class="text-sm text-gray-400 mb-2">Tags</div>
+                    <div class="flex flex-wrap gap-2" id="tags-container">
+                        {% if lead.tags %}
+                            {% for tag in lead.tags %}
+                            <span class="px-3 py-1 bg-primary/20 text-primary rounded-full text-sm">
+                                {{ tag }}
+                            </span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-gray-500 text-sm">Keine Tags vorhanden</span>
+                        {% endif %}
+                    </div>
+                    <button class="mt-2 text-sm text-primary hover:underline" onclick="addTag()">+ Tag hinzufügen</button>
+                </div>
+                
+                <!-- Notes -->
+                <div>
+                    <div class="text-sm text-gray-400 mb-2">Notizen</div>
+                    {% if lead.notes %}
+                        <div class="p-4 bg-dark-900 rounded text-gray-300 text-sm whitespace-pre-wrap">{{ lead.notes }}</div>
+                    {% else %}
+                        <div class="p-4 bg-dark-900 rounded text-gray-500 text-sm italic">Keine Notizen vorhanden</div>
+                    {% endif %}
+                    <button class="mt-2 text-sm text-primary hover:underline" onclick="editNotes()">✏️ Notizen bearbeiten</button>
+                </div>
+            </div>
+
+            <!-- Call Logs -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">📞</span>
+                    Anruf-Historie
+                    <span class="ml-auto text-sm font-normal text-gray-400">{{ lead.call_count }} Anrufe</span>
+                </h2>
+                <div class="space-y-3" id="call-logs">
+                    {% for call in lead.call_logs.all|slice:":5" %}
+                    <div class="p-3 bg-dark-900 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-300 font-medium">{{ call.get_outcome_display }}</span>
+                            <span class="text-xs text-gray-500">{{ call.called_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                        {% if call.called_by %}
+                        <div class="text-xs text-gray-400">von {{ call.called_by.get_full_name|default:call.called_by.username }}</div>
+                        {% endif %}
+                        {% if call.duration_seconds %}
+                        <div class="text-xs text-gray-400">Dauer: {{ call.duration_seconds }}s</div>
+                        {% endif %}
+                        {% if call.notes %}
+                        <div class="text-sm text-gray-300 mt-2">{{ call.notes }}</div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4 text-gray-500 text-sm">Noch keine Anrufe</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Email Logs -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">✉️</span>
+                    E-Mail-Historie
+                    <span class="ml-auto text-sm font-normal text-gray-400">{{ lead.email_sent_count }} E-Mails</span>
+                </h2>
+                <div class="space-y-3" id="email-logs">
+                    {% for email in lead.email_logs.all|slice:":5" %}
+                    <div class="p-3 bg-dark-900 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-300 font-medium">{{ email.subject }}</span>
+                            <span class="text-xs text-gray-500">{{ email.sent_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs text-gray-400">
+                            <span>Typ: {{ email.get_email_type_display }}</span>
+                            {% if email.opened_at %}
+                            <span class="text-green-400">✓ Geöffnet</span>
+                            {% endif %}
+                            {% if email.clicked_at %}
+                            <span class="text-blue-400">🔗 Geklickt</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4 text-gray-500 text-sm">Noch keine E-Mails gesendet</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
-        {% endif %}
+
+        <!-- Right Column: Actions & Info -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- Was soll ich tun? Actions -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6 sticky top-6">
+                <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                    <span class="text-2xl mr-2">⚡</span>
+                    Was soll ich tun?
+                </h2>
+                <div class="space-y-3">
+                    <button class="action-btn w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        <span class="mr-2">✓</span>
+                        Freigeben
+                    </button>
+                    <button class="action-btn w-full px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        <span class="mr-2">✗</span>
+                        Ablehnen
+                    </button>
+                    <button class="action-btn w-full px-4 py-3 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center justify-center">
+                        <span class="mr-2">🔍</span>
+                        Nachrecherchieren
+                    </button>
+                    <button class="action-btn w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        <span class="mr-2">📞</span>
+                        Anrufen
+                    </button>
+                    <button class="action-btn w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium flex items-center justify-center">
+                        <span class="mr-2">✉️</span>
+                        E-Mail senden
+                    </button>
+                </div>
+            </div>
+
+            <!-- Meta Info -->
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+                <h3 class="text-lg font-bold text-gray-100 mb-4">📊 Meta-Informationen</h3>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Erstellt</span>
+                        <span class="text-gray-300">{{ lead.created_at|date:"d.m.Y H:i" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Aktualisiert</span>
+                        <span class="text-gray-300">{{ lead.updated_at|date:"d.m.Y H:i" }}</span>
+                    </div>
+                    {% if lead.assigned_to %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Zugewiesen an</span>
+                        <span class="text-gray-300">{{ lead.assigned_to.get_full_name|default:lead.assigned_to.username }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Interesse-Level</span>
+                        <span class="text-yellow-400">{{ lead.interest_level }}/5 ⭐</span>
+                    </div>
+                    {% if lead.next_followup_at %}
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Nächstes Follow-Up</span>
+                        <span class="text-primary">{{ lead.next_followup_at|date:"d.m.Y" }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+function addTag() {
+    const tag = prompt('Tag hinzufügen:');
+    if (tag) {
+        // TODO: API call to add tag
+        alert('Tag-Funktion wird bald implementiert');
+    }
+}
+
+function editNotes() {
+    const notes = prompt('Notizen bearbeiten:', '{{ lead.notes|escapejs }}');
+    if (notes !== null) {
+        // TODO: API call to update notes
+        alert('Notizen-Funktion wird bald implementiert');
+    }
+}
+</script>
 {% endblock %}
