@@ -60,13 +60,16 @@ def test_views_uses_dynamic_validation():
     # Should import from scraper_control
     assert "from scraper_control.models import ScraperConfig" in content, "views_scraper should import ScraperConfig"
     
-    # Should use dynamic validation
-    assert "valid_industries = [c[0] for c in" in content, "views_scraper should use dynamic validation"
+    # Should use cached validation function
+    assert "get_valid_industries()" in content, "views_scraper should use get_valid_industries()"
+    
+    # Should have the caching function
+    assert "def get_valid_industries():" in content, "views_scraper should define get_valid_industries()"
     
     # Should NOT have hardcoded list
     assert "['recruiter', 'candidates', 'talent_hunt', 'all']" not in content, "views_scraper has hardcoded validation"
     
-    print("✓ views_scraper.py uses dynamic validation from ScraperConfig")
+    print("✓ views_scraper.py uses cached dynamic validation from ScraperConfig")
 
 
 def test_no_duplicate_scraperconfig():

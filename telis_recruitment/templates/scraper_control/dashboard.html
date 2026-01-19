@@ -258,7 +258,14 @@ function updateHints() {
     }
     
     if (hints.length > 0) {
-        hintsDiv.innerHTML = hints.map(h => `<p class="text-yellow-400">${h}</p>`).join('');
+        // Use textContent to prevent XSS, then parse each hint separately
+        hintsDiv.innerHTML = ''; // Clear first
+        hints.forEach(hint => {
+            const p = document.createElement('p');
+            p.className = 'text-yellow-400';
+            p.textContent = hint;
+            hintsDiv.appendChild(p);
+        });
         hintsDiv.classList.remove('hidden');
     } else {
         hintsDiv.classList.add('hidden');

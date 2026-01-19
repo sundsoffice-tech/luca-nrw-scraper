@@ -20,6 +20,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Cache valid industries at module level to avoid repeated computation
+_VALID_INDUSTRIES = None
+
+def get_valid_industries():
+    """Get valid industries from ScraperConfig, with caching."""
+    global _VALID_INDUSTRIES
+    if _VALID_INDUSTRIES is None:
+        from scraper_control.models import ScraperConfig as ControlScraperConfig
+        _VALID_INDUSTRIES = [c[0] for c in ControlScraperConfig.INDUSTRY_CHOICES]
+    return _VALID_INDUSTRIES
+
 
 @login_required
 def scraper_page(request):
@@ -74,9 +85,7 @@ def scraper_start(request):
     }
     """
     try:
-        # Import choices from the correct model
-        from scraper_control.models import ScraperConfig as ControlScraperConfig
-        valid_industries = [c[0] for c in ControlScraperConfig.INDUSTRY_CHOICES]
+        valid_industries = get_valid_industries()
         
         params = request.data
         

@@ -6,7 +6,10 @@ Extracted from scriptname.py in Phase 3 refactoring.
 """
 
 import random
+import logging
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # =========================
@@ -667,7 +670,11 @@ def build_queries(
     if selected_industry and selected_industry.lower() in SUPPORTED_INDUSTRIES:
         base = INDUSTRY_QUERIES.get(selected_industry.lower(), [])
         if not base:
-            # Fallback to default if no queries found
+            # Log warning if industry is supported but has no queries
+            logger.warning(
+                f"Industry '{selected_industry}' is in SUPPORTED_INDUSTRIES but has no queries in INDUSTRY_QUERIES. "
+                f"Falling back to DEFAULT_QUERIES."
+            )
             queries = list(dict.fromkeys(_COMPLETE_DEFAULT_QUERIES))
         else:
             queries = list(dict.fromkeys(base))
