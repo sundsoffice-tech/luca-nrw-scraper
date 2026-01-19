@@ -15,7 +15,7 @@ def check_config_file(filepath, expected_default="0"):
     
     # Look for ALLOW_INSECURE_SSL definition
     import re
-    pattern = r'ALLOW_INSECURE_SSL\s*=\s*\(os\.getenv\("ALLOW_INSECURE_SSL",\s*"(\d+)"\)'
+    pattern = r'ALLOW_INSECURE_SSL\s*=\s*\(os\.getenv\(\"ALLOW_INSECURE_SSL\",\s*\"(\d+)\"\)\s*==\s*\"1\"\)'
     matches = re.findall(pattern, content)
     
     if not matches:

@@ -333,9 +333,16 @@ def scraper_config_update(request):
             if settings.DEBUG:
                 config.allow_insecure_ssl = bool(request.data['allow_insecure_ssl'])
             else:
+                # Get client IP for security logging
+                x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+                if x_forwarded_for:
+                    ip_address = x_forwarded_for.split(',')[0]
+                else:
+                    ip_address = request.META.get('REMOTE_ADDR')
+                
                 logger.warning(
-                    f"⚠️  User {request.user} attempted to modify allow_insecure_ssl in production mode. "
-                    "This field can only be modified in DEBUG mode."
+                    f"⚠️  SECURITY: User '{request.user}' from IP {ip_address} attempted to modify "
+                    f"allow_insecure_ssl in production mode. This field can only be modified in DEBUG mode."
                 )
                 return Response({
                     'success': False,
