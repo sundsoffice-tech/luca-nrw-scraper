@@ -1,0 +1,324 @@
+/**
+ * Custom CSS for GrapesJS Landing Page Builder
+ * Enhances the builder UI with modern styling
+ */
+
+/* Scrollbar Styling */
+.left-panel::-webkit-scrollbar,
+.right-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.left-panel::-webkit-scrollbar-track,
+.right-panel::-webkit-scrollbar-track {
+    background: #1a1a2e;
+}
+
+.left-panel::-webkit-scrollbar-thumb,
+.right-panel::-webkit-scrollbar-thumb {
+    background: #0f3460;
+    border-radius: 4px;
+}
+
+.left-panel::-webkit-scrollbar-thumb:hover,
+.right-panel::-webkit-scrollbar-thumb:hover {
+    background: #16213e;
+}
+
+/* GrapesJS Block Categories */
+.gjs-block-category .gjs-title {
+    background: #0f3460;
+    color: white;
+    padding: 10px 15px;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: none;
+}
+
+.gjs-blocks-c {
+    background: transparent;
+}
+
+.gjs-block {
+    min-height: 80px;
+    background: #0f3460;
+    border: 1px solid #16213e;
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: white;
+}
+
+.gjs-block:hover {
+    background: #16213e;
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+}
+
+.gjs-block-label {
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* GrapesJS Layer Manager */
+.gjs-layer {
+    background: #0f3460;
+    color: white;
+    border-bottom: 1px solid #16213e;
+    padding: 8px 12px;
+}
+
+.gjs-layer:hover {
+    background: #16213e;
+}
+
+.gjs-layer.gjs-selected {
+    background: #007bff;
+}
+
+.gjs-layer-title {
+    color: white;
+}
+
+.gjs-layer-count {
+    color: #adb5bd;
+}
+
+/* GrapesJS Style Manager */
+.gjs-sm-sector {
+    background: transparent;
+    border: none;
+    margin-bottom: 10px;
+}
+
+.gjs-sm-sector .gjs-sm-title {
+    background: #0f3460;
+    color: white;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    border: none;
+    border-radius: 4px;
+}
+
+.gjs-sm-properties {
+    background: transparent;
+    padding: 10px;
+}
+
+.gjs-sm-property {
+    background: transparent;
+    color: white;
+    margin-bottom: 12px;
+}
+
+.gjs-sm-label {
+    color: #adb5bd;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.gjs-field,
+.gjs-field input,
+.gjs-field select {
+    background: #0f3460;
+    border: 1px solid #16213e;
+    color: white;
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+
+.gjs-field:focus,
+.gjs-field input:focus,
+.gjs-field select:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+/* GrapesJS Canvas */
+.gjs-cv-canvas {
+    background: #ffffff;
+}
+
+.gjs-frame {
+    border: none;
+}
+
+/* GrapesJS Toolbar in Canvas */
+.gjs-toolbar {
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    border-radius: 6px;
+    padding: 4px;
+}
+
+.gjs-toolbar-item {
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gjs-toolbar-item:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Asset Manager Styling */
+.gjs-am-assets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    padding: 10px;
+}
+
+.gjs-am-asset {
+    border: 2px solid #0f3460;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gjs-am-asset:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.gjs-am-preview {
+    background: #0f3460;
+}
+
+/* Context Menu */
+.gjs-menu {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 6px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.gjs-menu-item {
+    color: white;
+    padding: 10px 15px;
+    border-bottom: 1px solid #0f3460;
+}
+
+.gjs-menu-item:hover {
+    background: #0f3460;
+}
+
+/* Responsive Design Helpers */
+@media (max-width: 1400px) {
+    .left-panel {
+        width: 240px;
+    }
+    
+    .right-panel {
+        width: 260px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .left-panel,
+    .right-panel {
+        width: 220px;
+    }
+    
+    .toolbar-btn {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+}
+
+/* Animation Classes */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Success/Error Notifications */
+.notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 15px 20px;
+    border-radius: 8px;
+    background: #28a745;
+    color: white;
+    font-weight: 500;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+}
+
+.notification.error {
+    background: #dc3545;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Custom Component Badges */
+.luca-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #007bff;
+    color: white;
+    margin-left: 8px;
+}
+
+.luca-badge.new {
+    background: #28a745;
+}
+
+.luca-badge.pro {
+    background: #ffc107;
+    color: #000;
+}

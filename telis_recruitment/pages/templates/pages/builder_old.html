@@ -1,0 +1,238 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Edit {{ page.title }} - TELIS CRM{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/grapesjs/dist/css/grapes.min.css">
+<script src="https://unpkg.com/grapesjs"></script>
+<script src="https://unpkg.com/grapesjs-blocks-basic"></script>
+<style>
+    .gjs-cv-canvas {
+        background-color: #fff;
+    }
+    .panel__top {
+        padding: 0;
+        width: 100%;
+        display: flex;
+        position: initial;
+        justify-content: center;
+        justify-content: space-between;
+    }
+    .panel__basic-actions {
+        position: initial;
+    }
+    .editor-row {
+        display: flex;
+        justify-content: flex-start;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        height: calc(100vh - 200px);
+    }
+    .editor-canvas {
+        flex-grow: 1;
+    }
+    #gjs {
+        border: 3px solid #444;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-full mx-auto">
+    <!-- Header -->
+    <div class="mb-4 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Edit: {{ page.title }}</h1>
+            <p class="text-gray-400 text-sm">/p/{{ page.slug }}/</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'pages:builder-list' %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+                Back to List
+            </a>
+            {% if page.status == 'published' %}
+            <a href="{% url 'pages_public:page-public' page.slug %}" 
+               target="_blank"
+               class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition">
+                View Live
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- GrapesJS Editor -->
+    <div id="gjs" style="height:0px; overflow:hidden"></div>
+
+    <script>
+        const editor = grapesjs.init({
+            container: '#gjs',
+            height: '700px',
+            width: 'auto',
+            storageManager: false,
+            plugins: ['gjs-blocks-basic'],
+            canvas: {
+                styles: [
+                    'https://cdn.tailwindcss.com',
+                ]
+            },
+            blockManager: {
+                appendTo: '.panel__right',
+            },
+            layerManager: {
+                appendTo: '.panel__right'
+            },
+            panels: {
+                defaults: [
+                    {
+                        id: 'panel-top',
+                        el: '.panel__top',
+                    },
+                    {
+                        id: 'basic-actions',
+                        el: '.panel__basic-actions',
+                        buttons: [
+                            {
+                                id: 'visibility',
+                                active: true,
+                                className: 'btn-toggle-borders',
+                                label: '<i class="fa fa-clone"></i>',
+                                command: 'sw-visibility',
+                            },
+                        ],
+                    },
+                    {
+                        id: 'panel-devices',
+                        el: '.panel__devices',
+                        buttons: [
+                            {
+                                id: 'device-desktop',
+                                label: '💻',
+                                command: 'set-device-desktop',
+                                active: true,
+                                togglable: false,
+                            },
+                            {
+                                id: 'device-tablet',
+                                label: '📱',
+                                command: 'set-device-tablet',
+                                togglable: false,
+                            },
+                            {
+                                id: 'device-mobile',
+                                label: '📱',
+                                command: 'set-device-mobile',
+                                togglable: false,
+                            },
+                        ],
+                    },
+                ]
+            },
+            deviceManager: {
+                devices: [
+                    {
+                        name: 'Desktop',
+                        width: '',
+                    },
+                    {
+                        name: 'Tablet',
+                        width: '768px',
+                        widthMedia: '992px',
+                    },
+                    {
+                        name: 'Mobile',
+                        width: '320px',
+                        widthMedia: '480px',
+                    },
+                ]
+            },
+        });
+
+        // Add custom commands
+        editor.Commands.add('set-device-desktop', {
+            run: editor => editor.setDevice('Desktop')
+        });
+        editor.Commands.add('set-device-tablet', {
+            run: editor => editor.setDevice('Tablet')
+        });
+        editor.Commands.add('set-device-mobile', {
+            run: editor => editor.setDevice('Mobile')
+        });
+
+        // Load existing content
+        fetch('{% url "pages:builder-load" page.slug %}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.html_json && Object.keys(data.html_json).length > 0) {
+                    editor.setComponents(data.html_json);
+                    editor.setStyle(data.css);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading page:', error);
+            });
+
+        // Auto-save every 30 seconds
+        let autoSaveInterval = setInterval(() => {
+            saveContent('Auto-save');
+        }, 30000);
+
+        // Manual save button
+        editor.Panels.addButton('options', {
+            id: 'save-db',
+            className: 'fa fa-floppy-o',
+            command: 'save-db',
+            attributes: { title: 'Save to Database' }
+        });
+
+        editor.Commands.add('save-db', {
+            run: (editor, sender) => {
+                sender && sender.set('active', 0);
+                saveContent('Manual save');
+            }
+        });
+
+        function saveContent(note) {
+            const html = editor.getHtml();
+            const css = editor.getCss();
+            const components = editor.getComponents();
+
+            const data = {
+                html: html,
+                css: css,
+                html_json: components,
+                note: note
+            };
+
+            fetch('{% url "pages:builder-save" page.slug %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Saved successfully', data);
+                    // Show success notification
+                    editor.runCommand('notifications:add', {
+                        type: 'success',
+                        message: 'Page saved successfully!'
+                    });
+                } else {
+                    console.error('Save failed', data);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving:', error);
+            });
+        }
+
+        // Save before leaving
+        window.addEventListener('beforeunload', (e) => {
+            saveContent('Auto-save on exit');
+        });
+    </script>
+</div>
+{% endblock %}
