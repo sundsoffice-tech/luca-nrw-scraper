@@ -11,6 +11,12 @@ urlpatterns = [
     path('templates/<slug:slug>/edit/', views.template_editor, name='template-editor'),
     path('templates/<slug:slug>/preview/', views.template_preview, name='template-preview'),
     
+    # Send Logs
+    path('logs/', views.send_logs, name='send-logs'),
+    
+    # Brevo Settings
+    path('settings/brevo/', views.brevo_settings, name='brevo-settings'),
+    
     # Flows
     path('flows/', views.flow_list, name='flow-list'),
     path('flows/new/', views.flow_builder, name='flow-builder-new'),

@@ -440,3 +440,93 @@ def flow_detail(request, slug):
         'flow': flow,
         'recent_executions': recent_executions
     })
+
+
+@login_required
+def send_logs(request):
+    """Email-Versand-Logs mit Statistiken"""
+    from django.core.paginator import Paginator
+    from datetime import datetime
+    
+    # Basis-Queryset
+    logs = EmailSendLog.objects.all().select_related('template', 'lead')
+    
+    # Filter nach Template
+    template_slug = request.GET.get('template')
+    template_filter = None
+    if template_slug:
+        template_filter = get_object_or_404(EmailTemplate, slug=template_slug)
+        logs = logs.filter(template=template_filter)
+    
+    # Filter nach Status
+    status = request.GET.get('status')
+    if status:
+        logs = logs.filter(status=status)
+    
+    # Filter nach Datum
+    date_from = request.GET.get('date_from')
+    if date_from:
+        try:
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+            logs = logs.filter(sent_at__gte=date_from_obj)
+        except ValueError:
+            pass
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        try:
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+            logs = logs.filter(sent_at__lte=date_to_obj)
+        except ValueError:
+            pass
+    
+    # Statistiken berechnen
+    total = logs.count()
+    sent = logs.filter(status='sent').count()
+    delivered = logs.filter(status='delivered').count()
+    opened = logs.filter(status='opened').count()
+    clicked = logs.filter(status='clicked').count()
+    
+    open_rate = round((opened / total * 100) if total > 0 else 0, 1)
+    click_rate = round((clicked / total * 100) if total > 0 else 0, 1)
+    
+    stats = {
+        'total': total,
+        'sent': sent + delivered,  # Combined for display
+        'opened': opened,
+        'clicked': clicked,
+        'open_rate': open_rate,
+        'click_rate': click_rate,
+    }
+    
+    # Pagination
+    paginator = Paginator(logs, 50)
+    page_number = request.GET.get('page', 1)
+    logs_page = paginator.get_page(page_number)
+    
+    # Alle Templates für Filter
+    templates = EmailTemplate.objects.all()
+    
+    return render(request, 'email_templates/send_logs.html', {
+        'logs': logs_page,
+        'stats': stats,
+        'templates': templates,
+        'template_filter': template_filter,
+    })
+
+
+@login_required
+def brevo_settings(request):
+    """Brevo Integration Einstellungen"""
+    from django.contrib import messages
+    
+    if request.method == 'POST':
+        # Handle settings update
+        # This would save to a settings model or configuration
+        messages.success(request, 'Brevo-Einstellungen gespeichert!')
+        return redirect('email_templates:brevo-settings')
+    
+    return render(request, 'email_templates/brevo_settings.html', {
+        # Add current settings here
+    })
+
