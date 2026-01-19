@@ -362,7 +362,10 @@ class ScraperRun(models.Model):
 class ScraperLog(models.Model):
     """
     Individual log entries for a scraper run.
-    Used for real-time SSE streaming.
+    Used for real-time SSE streaming and structured monitoring.
+    
+    Supports structured event codes for Grafana/Kibana visualization.
+    See log_codes.py for available event codes.
     """
     
     LEVEL_CHOICES = [
@@ -371,6 +374,19 @@ class ScraperLog(models.Model):
         ('WARN', 'Warning'),
         ('ERROR', 'Error'),
         ('CRITICAL', 'Critical'),
+    ]
+    
+    # Event categories for structured logging (Grafana/Kibana compatible)
+    CATEGORY_CHOICES = [
+        ('LIFECYCLE', 'Lifecycle'),
+        ('CRAWL', 'Crawl'),
+        ('EXTRACTION', 'Extraction'),
+        ('NETWORK', 'Network'),
+        ('DATABASE', 'Database'),
+        ('CIRCUIT_BREAKER', 'Circuit Breaker'),
+        ('VALIDATION', 'Validation'),
+        ('SECURITY', 'Security'),
+        ('PERFORMANCE', 'Performance'),
     ]
     
     run = models.ForeignKey(
@@ -389,6 +405,25 @@ class ScraperLog(models.Model):
     
     message = models.TextField(verbose_name="Nachricht")
     
+    # Structured logging fields for monitoring (Grafana/Kibana)
+    event_code = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        verbose_name="Event Code",
+        help_text="Structured event code (e.g., CRAWL_START, EXTRACTION_FAIL)",
+        db_index=True
+    )
+    
+    event_category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        blank=True,
+        default='',
+        verbose_name="Event Category",
+        help_text="Category for filtering in monitoring dashboards"
+    )
+    
     # Enhanced filtering
     portal = models.CharField(
         max_length=100,
@@ -396,6 +431,23 @@ class ScraperLog(models.Model):
         default='',
         verbose_name="Portal/Quelle",
         help_text="Portal oder Datenquelle"
+    )
+    
+    # URL associated with this log entry (useful for debugging)
+    url = models.URLField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name="URL",
+        help_text="Related URL for this log entry"
+    )
+    
+    # Additional structured data as JSON (for flexible logging)
+    extra_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Extra Data",
+        help_text="Additional structured data for monitoring"
     )
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
@@ -408,10 +460,51 @@ class ScraperLog(models.Model):
             models.Index(fields=['run', 'created_at']),
             models.Index(fields=['level', 'created_at']),
             models.Index(fields=['portal', 'created_at']),
+            models.Index(fields=['event_code', 'created_at']),
+            models.Index(fields=['event_category', 'created_at']),
         ]
     
     def __str__(self):
+        if self.event_code:
+            return f"[{self.event_code}] {self.message[:50]}"
         return f"[{self.level}] {self.message[:50]}"
+    
+    @classmethod
+    def create_structured(cls, run, event, message, portal='', url='', extra_data=None):
+        """
+        Create a structured log entry using a LogEvent.
+        
+        Args:
+            run: ScraperRun instance
+            event: LogEvent enum value from log_codes.py
+            message: Log message
+            portal: Optional portal/source name
+            url: Optional related URL
+            extra_data: Optional dict with additional data
+            
+        Returns:
+            ScraperLog instance
+            
+        Example:
+            from .log_codes import LogEvent
+            ScraperLog.create_structured(
+                run=run,
+                event=LogEvent.EXTRACTION_FAIL,
+                message="Could not parse contact info",
+                portal="stepstone",
+                url="https://example.com/job/123"
+            )
+        """
+        return cls.objects.create(
+            run=run,
+            level=event.level.value,
+            event_code=event.code,
+            event_category=event.category.value,
+            message=message,
+            portal=portal,
+            url=url,
+            extra_data=extra_data or {}
+        )
 
 
 class ErrorLog(models.Model):

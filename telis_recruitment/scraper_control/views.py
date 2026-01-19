@@ -388,11 +388,14 @@ def api_logs_filtered(request):
     GET /crm/scraper/api/logs/
     
     Get filtered logs with enhanced filtering options.
+    Supports structured event codes for Grafana/Kibana monitoring.
     
     Query params:
     - run_id: Filter by run ID
     - portal: Filter by portal/source
     - level: Filter by log level (DEBUG, INFO, WARN, ERROR, CRITICAL)
+    - event_code: Filter by structured event code (e.g., CRAWL_START, EXTRACTION_FAIL)
+    - event_category: Filter by event category (LIFECYCLE, CRAWL, EXTRACTION, NETWORK, etc.)
     - start_date: Filter from date (ISO format)
     - end_date: Filter to date (ISO format)
     - limit: Max results (default 100)
@@ -417,6 +420,15 @@ def api_logs_filtered(request):
         if level:
             logs = logs.filter(level=level.upper())
         
+        # Structured logging filters for Grafana/Kibana
+        event_code = request.query_params.get('event_code')
+        if event_code:
+            logs = logs.filter(event_code=event_code.upper())
+        
+        event_category = request.query_params.get('event_category')
+        if event_category:
+            logs = logs.filter(event_category=event_category.upper())
+        
         start_date = request.query_params.get('start_date')
         if start_date:
             try:
@@ -439,14 +451,24 @@ def api_logs_filtered(request):
         
         data = []
         for log in logs:
-            data.append({
+            entry = {
                 'id': log.id,
                 'run_id': log.run_id,
                 'level': log.level,
                 'portal': log.portal,
                 'message': log.message,
                 'created_at': log.created_at.isoformat(),
-            })
+            }
+            # Add structured logging fields if present
+            if hasattr(log, 'event_code') and log.event_code:
+                entry['event_code'] = log.event_code
+            if hasattr(log, 'event_category') and log.event_category:
+                entry['event_category'] = log.event_category
+            if hasattr(log, 'url') and log.url:
+                entry['url'] = log.url
+            if hasattr(log, 'extra_data') and log.extra_data:
+                entry['extra_data'] = log.extra_data
+            data.append(entry)
         
         return Response(data, status=http_status.HTTP_200_OK)
             

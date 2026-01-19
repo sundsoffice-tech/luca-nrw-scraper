@@ -1,6 +1,9 @@
 """
 Scraper Process Manager - Manages scraper subprocess lifecycle.
 Singleton class to start, stop, and monitor the scraper subprocess.
+
+Uses structured log event codes for Grafana/Kibana monitoring.
+See log_codes.py for available event codes.
 """
 
 import os
@@ -12,6 +15,16 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 import logging
+
+from .log_codes import (
+    LogEvent,
+    format_structured_log,
+    SCRAPER_START,
+    SCRAPER_STOP,
+    SCRAPER_CRASH,
+    SCRAPER_EARLY_EXIT,
+    HTTP_RATE_LIMIT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +62,52 @@ class ProcessManager:
         self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
         self._initialized = True
     
+    def _classify_log_message(self, message: str) -> tuple:
+        """
+        Classify a log message to determine level and event code.
+        
+        Returns:
+            Tuple of (level, event_code, event_category)
+        """
+        message_lower = message.lower()
+        
+        # Check for specific event patterns (structured logging for Grafana/Kibana)
+        if 'crawl start' in message_lower or 'starting crawl' in message_lower:
+            return ('INFO', 'CRAWL_START', 'CRAWL')
+        elif 'crawl complete' in message_lower or 'crawl finished' in message_lower:
+            return ('INFO', 'CRAWL_COMPLETE', 'CRAWL')
+        elif 'extraction fail' in message_lower or 'failed to extract' in message_lower:
+            return ('ERROR', 'EXTRACTION_FAIL', 'EXTRACTION')
+        elif 'extraction success' in message_lower or 'extracted' in message_lower:
+            return ('INFO', 'EXTRACTION_SUCCESS', 'EXTRACTION')
+        elif 'rate limit' in message_lower or '429' in message_lower:
+            return ('WARN', 'HTTP_RATE_LIMIT', 'NETWORK')
+        elif '403' in message_lower or 'forbidden' in message_lower or 'blocked' in message_lower:
+            return ('WARN', 'HTTP_BLOCK_403', 'NETWORK')
+        elif 'timeout' in message_lower:
+            return ('WARN', 'HTTP_TIMEOUT', 'NETWORK')
+        elif 'captcha' in message_lower:
+            return ('WARN', 'HTTP_CAPTCHA', 'NETWORK')
+        elif 'circuit breaker' in message_lower:
+            if 'triggered' in message_lower or 'tripped' in message_lower:
+                return ('WARN', 'CB_TRIGGERED', 'CIRCUIT_BREAKER')
+            elif 'reset' in message_lower:
+                return ('INFO', 'CB_RESET', 'CIRCUIT_BREAKER')
+        elif 'lead saved' in message_lower or 'saved lead' in message_lower:
+            return ('INFO', 'LEAD_SAVED', 'DATABASE')
+        elif 'duplicate' in message_lower:
+            return ('DEBUG', 'LEAD_DUPLICATE', 'DATABASE')
+        elif 'validation fail' in message_lower or 'invalid' in message_lower:
+            return ('WARN', 'VALIDATION_FAIL', 'VALIDATION')
+        elif 'score below' in message_lower or 'below threshold' in message_lower:
+            return ('DEBUG', 'SCORE_BELOW_THRESHOLD', 'VALIDATION')
+        elif 'error' in message_lower or 'exception' in message_lower:
+            return ('ERROR', '', '')
+        elif 'warn' in message_lower or 'warning' in message_lower:
+            return ('WARN', '', '')
+        
+        return ('INFO', '', '')
+    
     def _read_output(self):
         """Background thread to read and store process output."""
         try:
@@ -65,8 +124,16 @@ class ProcessManager:
                         if runtime < self.early_exit_threshold:
                             error_msg = f"⚠️ Scraper exited after only {runtime:.1f}s - likely a startup error!"
                             logger.error(error_msg)
-                            self._log_error(error_msg)
-                            self._log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
+                            self._log_structured(
+                                SCRAPER_EARLY_EXIT,
+                                error_msg,
+                                extra_data={'runtime_seconds': runtime, 'exit_code': exit_code}
+                            )
+                            self._log_structured(
+                                SCRAPER_CRASH,
+                                "This usually means the scraper script has no executable entry point or crashed immediately.",
+                                extra_data={'exit_code': exit_code}
+                            )
                     break
                 if line.strip():
                     timestamp = timezone.now()
@@ -98,33 +165,62 @@ class ProcessManager:
                                 run.logs = run.logs[-50000:]
                             run.save(update_fields=['logs'])
                             
-                            # Create ScraperLog entry for SSE streaming
-                            # Determine log level from message
-                            level = 'INFO'
-                            message_lower = line.lower()
-                            if 'error' in message_lower or 'exception' in message_lower:
-                                level = 'ERROR'
-                            elif 'warn' in message_lower or 'warning' in message_lower:
-                                level = 'WARN'
+                            # Create ScraperLog entry with structured event codes
+                            # Classify the message for Grafana/Kibana monitoring
+                            level, event_code, event_category = self._classify_log_message(line)
                             
                             ScraperLog.objects.create(
                                 run=run,
                                 level=level,
-                                message=line.strip()
+                                message=line.strip(),
+                                event_code=event_code,
+                                event_category=event_category
                             )
                             
-                            # Detect common errors
+                            # Detect common errors and log with structured codes
+                            message_lower = line.lower()
                             if 'ModuleNotFoundError' in line:
                                 self._log_error("Missing module - check dependencies")
                             if 'KeyError' in line or 'AttributeError' in line:
                                 self._log_error(f"Configuration error: {line.strip()}")
                             if 'rate limit' in message_lower:
-                                self._log_error("Rate limit hit - consider reducing QPI")
+                                self._log_structured(
+                                    HTTP_RATE_LIMIT,
+                                    "Rate limit hit - consider reducing QPI"
+                                )
                             
                         except Exception as e:
                             logger.error(f"Failed to update ScraperRun logs: {e}")
         except Exception as e:
             logger.error(f"Error reading scraper output: {e}")
+    
+    def _log_structured(self, event: LogEvent, message: str, portal: str = '', url: str = '', extra_data: dict = None):
+        """
+        Log a structured event to the current run.
+        
+        Args:
+            event: LogEvent enum value
+            message: Log message
+            portal: Optional portal/source name
+            url: Optional related URL
+            extra_data: Optional dict with additional data
+        """
+        if self.current_run_id:
+            try:
+                from .models import ScraperLog, ScraperRun
+                run = ScraperRun.objects.get(id=self.current_run_id)
+                ScraperLog.objects.create(
+                    run=run,
+                    level=event.level.value,
+                    event_code=event.code,
+                    event_category=event.category.value,
+                    message=message,
+                    portal=portal,
+                    url=url,
+                    extra_data=extra_data or {}
+                )
+            except Exception as e:
+                logger.error(f"Failed to log structured event: {e}")
     
     def _log_error(self, message: str):
         """Log an error message to the current run."""
@@ -318,6 +414,18 @@ class ProcessManager:
             
             logger.info(f"Scraper started with PID {self.pid}")
             
+            # Log structured start event
+            self._log_structured(
+                SCRAPER_START,
+                f"Scraper started with PID {self.pid}",
+                extra_data={
+                    'pid': self.pid,
+                    'params': params,
+                    'script_type': script_type,
+                    'command': ' '.join(cmd)
+                }
+            )
+            
             return {
                 'success': True,
                 'status': self.status,
@@ -337,6 +445,13 @@ class ProcessManager:
                     run.logs = f"Failed to start: {str(e)}"
                     run.finished_at = timezone.now()
                     run.save()
+                    
+                    # Log structured crash event
+                    self._log_structured(
+                        SCRAPER_CRASH,
+                        f"Failed to start scraper: {str(e)}",
+                        extra_data={'error': str(e)}
+                    )
                 except Exception:
                     pass
             return {
@@ -359,6 +474,10 @@ class ProcessManager:
                 'status': self.status
             }
         
+        force_killed = False
+        old_pid = self.pid
+        old_run_id = self.current_run_id
+        
         try:
             if self.process:
                 # Try graceful termination first
@@ -370,6 +489,7 @@ class ProcessManager:
                     # Force kill if still running
                     self.process.kill()
                     self.process.wait()
+                    force_killed = True
                 
                 self.process = None
             
@@ -382,7 +502,7 @@ class ProcessManager:
                 except (psutil.NoSuchProcess, psutil.TimeoutExpired):
                     pass
             
-            # Update ScraperRun record
+            # Update ScraperRun record and log structured stop event
             if self.current_run_id:
                 try:
                     from .models import ScraperRun
@@ -390,6 +510,17 @@ class ProcessManager:
                     run.status = 'stopped'
                     run.finished_at = timezone.now()
                     run.save()
+                    
+                    # Log structured stop event
+                    stop_event = LogEvent.SCRAPER_KILL if force_killed else SCRAPER_STOP
+                    self._log_structured(
+                        stop_event,
+                        f"Scraper {'force killed' if force_killed else 'stopped gracefully'}",
+                        extra_data={
+                            'pid': old_pid,
+                            'force_killed': force_killed
+                        }
+                    )
                 except Exception as e:
                     logger.error(f"Failed to update ScraperRun: {e}")
             
