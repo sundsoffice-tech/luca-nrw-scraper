@@ -189,10 +189,14 @@ async def extract_kleinanzeigen_detail_async(
         # Combine text for extraction
         full_text = f"{title} {description}"
         
-        # Extract mobile phone numbers using advanced patterns
+        # ========================================
+        # PARALLEL PHONE EXTRACTION
+        # Run both regex and advanced extraction simultaneously, merge results
+        # ========================================
         phones = []
+        phone_sources = {}  # Track where each phone was found for scoring
         
-        # Standard extraction with existing regex
+        # 1. Standard regex extraction (runs in parallel with advanced)
         if MOBILE_RE:
             phone_matches = MOBILE_RE.findall(full_text)
             for phone_match in phone_matches:
@@ -200,30 +204,42 @@ async def extract_kleinanzeigen_detail_async(
                 if normalized:
                     is_valid, phone_type = validate_phone_func(normalized)
                     if is_valid and is_mobile_number_func(normalized):
-                        phones.append(normalized)
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "regex_standard"
         
-        # Enhanced extraction using phone_patterns module
-        if not phones and extract_all_phone_patterns_func and get_best_phone_number_func:
-            if log_func:
-                log_func("debug", "Standard extraction failed, trying advanced patterns", url=url)
+        # 2. Advanced pattern extraction (runs in parallel, not as fallback)
+        if extract_all_phone_patterns_func and get_best_phone_number_func:
             try:
                 extraction_results = extract_all_phone_patterns_func(html, full_text)
+                # Process all results from advanced extraction, not just best
+                for category, numbers in extraction_results.items():
+                    if isinstance(numbers, list):
+                        for num in numbers:
+                            normalized = normalize_phone_func(num) if num else None
+                            if normalized and is_mobile_number_func(normalized):
+                                if normalized not in phones:
+                                    phones.append(normalized)
+                                    phone_sources[normalized] = f"advanced_{category}"
+                                    if log_func:
+                                        log_func("info", f"Kleinanzeigen: Advanced extraction ({category}) found phone", 
+                                            url=url, phone=normalized[:8]+"...")
+                
+                # Also get best phone if not already included
                 best_phone = get_best_phone_number_func(extraction_results)
                 if best_phone:
                     normalized = normalize_phone_func(best_phone)
                     if normalized and is_mobile_number_func(normalized):
-                        phones.append(normalized)
-                        if log_func:
-                            log_func("info", "Advanced pattern extraction found phone", 
-                                url=url, phone=normalized[:8]+"...")
-                        # Record this pattern success
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "advanced_best"
                         if learning_engine:
                             learning_engine.record_phone_pattern(
                                 pattern="advanced_extraction",
                                 pattern_type="enhanced",
                                 example=normalized[:8]+"..."
                             )
-                        # NEW: Learn phone pattern for AI Learning Engine
+                        # Learn phone pattern for AI Learning Engine
                         try:
                             from ai_learning_engine import ActiveLearningEngine
                             learning = ActiveLearningEngine()
@@ -241,7 +257,7 @@ async def extract_kleinanzeigen_detail_async(
             if email_matches:
                 email = email_matches[0]
         
-        # Extract WhatsApp link using enhanced extraction
+        # 3. WhatsApp extraction (parallel with other methods)
         whatsapp = ""
         if extract_whatsapp_number_func:
             try:
@@ -252,18 +268,18 @@ async def extract_kleinanzeigen_detail_async(
                         whatsapp = normalized_wa
                         if normalized_wa not in phones:
                             phones.append(normalized_wa)
+                            phone_sources[normalized_wa] = "whatsapp_enhanced"
                             if log_func:
                                 log_func("info", "WhatsApp link extraction found phone", 
                                     url=url, phone=normalized_wa[:8]+"...")
             except Exception:
                 pass
         
-        # Fallback: Try old WhatsApp link extraction
+        # 4. Fallback WhatsApp link extraction
         if not whatsapp:
             wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
             if wa_link:
                 wa_href = wa_link.get("href", "")
-                # Extract phone from WhatsApp link
                 wa_phone = re.sub(r'\D', '', wa_href)
                 if wa_phone:
                     wa_normalized = "+" + wa_phone
@@ -272,27 +288,27 @@ async def extract_kleinanzeigen_detail_async(
                         whatsapp = wa_normalized
                         if wa_normalized not in phones:
                             phones.append(wa_normalized)
+                            phone_sources[wa_normalized] = "whatsapp_link"
         
         # Extract location/region
         location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
         location = location_elem.get_text(" ", strip=True) if location_elem else ""
         
         # Extract name (from title or text)
-        # Use the enhanced name extractor which handles various patterns
         name = ""
         if extract_name_enhanced_func:
             name = extract_name_enhanced_func(full_text)
         
-        # Only create lead if we found at least one mobile number
+        # 5. Browser extraction as last resort (only if no phones found)
         if not phones:
             if log_func:
                 log_func("debug", "No mobile numbers found in ad, trying browser extraction", url=url)
-            # Fallback: Browser-based extraction for JS-hidden numbers
             if extract_phone_with_browser_func:
                 try:
                     browser_phone = extract_phone_with_browser_func(url, portal='kleinanzeigen')
                     if browser_phone:
                         phones.append(browser_phone)
+                        phone_sources[browser_phone] = "browser_extraction"
                         if log_func:
                             log_func("info", "Browser extraction successful", url=url)
                 except Exception as e:
@@ -301,7 +317,6 @@ async def extract_kleinanzeigen_detail_async(
             
             # If still no phones found, return None
             if not phones:
-                # Record failure for learning
                 if learning_engine:
                     learning_engine.learn_from_failure(
                         url=url,
@@ -314,14 +329,92 @@ async def extract_kleinanzeigen_detail_async(
         # Use first mobile number found
         main_phone = phones[0]
         
-        # Build lead data
+        # ========================================
+        # DYNAMIC SCORING: Calculate score based on data quality, completeness, and source
+        # ========================================
+        
+        # Base score starts at 50 (Kleinanzeigen has higher base due to portal reputation)
+        dynamic_score = 55
+        data_quality_score = 0.0
+        
+        # Data completeness bonuses
+        if main_phone:
+            dynamic_score += 20
+            data_quality_score += 0.30
+        if email:
+            dynamic_score += 15
+            data_quality_score += 0.20
+        if name:
+            dynamic_score += 10
+            data_quality_score += 0.15
+        if title:
+            dynamic_score += 5
+            data_quality_score += 0.10
+        if location:
+            dynamic_score += 3
+            data_quality_score += 0.05
+        
+        # Multiple phone numbers found = higher confidence
+        if len(phones) > 1:
+            dynamic_score += 5
+            data_quality_score += 0.05
+        
+        # WhatsApp presence is a strong signal for candidates
+        if whatsapp:
+            dynamic_score += 8
+            data_quality_score += 0.10
+        
+        # Phone source quality bonus
+        phone_source = phone_sources.get(main_phone, "unknown")
+        source_quality_map = {
+            "regex_standard": 0.10,        # Standard regex is reliable
+            "whatsapp_enhanced": 0.15,     # WhatsApp links are very reliable
+            "whatsapp_link": 0.15,         # WhatsApp links are very reliable
+            "advanced_whatsapp": 0.15,     # WhatsApp links are very reliable
+            "advanced_standard": 0.08,     # Advanced patterns are good
+            "advanced_spaced": 0.05,       # Spaced numbers are medium confidence
+            "advanced_obfuscated": 0.03,   # Obfuscated are lower confidence
+            "advanced_words": 0.02,        # Word-based are lowest
+            "advanced_best": 0.08,
+            "browser_extraction": 0.06,    # Browser extraction is reliable
+        }
+        source_bonus = source_quality_map.get(phone_source, 0.05)
+        data_quality_score += source_bonus
+        dynamic_score += int(source_bonus * 50)  # Scale to score points
+        
+        # Kleinanzeigen has high portal reputation for job seekers
+        portal_reputation_bonus = 10
+        dynamic_score += portal_reputation_bonus
+        data_quality_score += 0.10
+        
+        # Cap scores to valid ranges
+        dynamic_score = max(0, min(100, dynamic_score))
+        data_quality_score = max(0.0, min(1.0, data_quality_score))
+        
+        # Calculate confidence based on extraction method and data completeness
+        confidence_score = 0.55  # Higher base confidence for Kleinanzeigen
+        if main_phone:
+            confidence_score += 0.20
+        if email:
+            confidence_score += 0.10
+        if name:
+            confidence_score += 0.08
+        if whatsapp:
+            confidence_score += 0.07
+        if phone_source.startswith("whatsapp"):
+            confidence_score += 0.05
+        elif phone_source == "regex_standard":
+            confidence_score += 0.05
+        confidence_score = max(0.0, min(1.0, confidence_score))
+        
+        # Build lead data with dynamic scores
         lead = {
             "name": name or "",
-            "rolle": "Vertrieb",  # Default role
+            "rolle": "Vertrieb",
             "email": email,
             "telefon": main_phone,
             "quelle": url,
-            "score": 85,  # High score for direct Kleinanzeigen finds
+            "score": dynamic_score,
             "tags": "kleinanzeigen,candidate,mobile,direct_crawl",
             "lead_type": "candidate",
             "phone_type": "mobile",
@@ -331,12 +424,17 @@ async def extract_kleinanzeigen_detail_async(
             "branche": "",
             "region": location if location else "",
             "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
+            "confidence": confidence_score,
+            "data_quality": data_quality_score,
+            "phone_source": phone_source,
+            "phones_found": len(phones),
+            "has_whatsapp": bool(whatsapp),
         }
         
         if log_func:
-            log_func("info", "Extracted lead from Kleinanzeigen ad", url=url, has_phone=bool(main_phone), has_email=bool(email))
+            log_func("info", "Extracted lead from Kleinanzeigen ad", 
+                     url=url, has_phone=bool(main_phone), has_email=bool(email), 
+                     score=dynamic_score, confidence=confidence_score)
         return lead
         
     except Exception as e:

@@ -80,10 +80,14 @@ async def extract_generic_detail_async(
         # Combine text for extraction
         full_text = f"{title} {description}"
         
-        # Extract mobile phone numbers using standard and advanced patterns
+        # ========================================
+        # PARALLEL PHONE EXTRACTION
+        # Run both regex and advanced extraction simultaneously, merge results
+        # ========================================
         phones = []
+        phone_sources = {}  # Track where each phone was found for scoring
         
-        # Standard extraction
+        # 1. Standard regex extraction (runs in parallel with advanced)
         if MOBILE_RE:
             phone_matches = MOBILE_RE.findall(full_text)
             for phone_match in phone_matches:
@@ -91,27 +95,42 @@ async def extract_generic_detail_async(
                 if normalized:
                     is_valid, phone_type = validate_phone_func(normalized)
                     if is_valid and is_mobile_number_func(normalized):
-                        phones.append(normalized)
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "regex_standard"
         
-        # Enhanced extraction if standard failed
-        if not phones and extract_all_phone_patterns_func and get_best_phone_number_func:
+        # 2. Advanced pattern extraction (runs in parallel, not as fallback)
+        if extract_all_phone_patterns_func and get_best_phone_number_func:
             try:
                 extraction_results = extract_all_phone_patterns_func(html, full_text)
+                # Process all results from advanced extraction, not just best
+                for category, numbers in extraction_results.items():
+                    if isinstance(numbers, list):
+                        for num in numbers:
+                            normalized = normalize_phone_func(num) if num else None
+                            if normalized and is_mobile_number_func(normalized):
+                                if normalized not in phones:
+                                    phones.append(normalized)
+                                    phone_sources[normalized] = f"advanced_{category}"
+                                    if log_func:
+                                        log_func("info", f"{source_tag}: Advanced extraction ({category}) found phone", 
+                                            url=url, phone=normalized[:8]+"...")
+                
+                # Also get best phone if not already included
                 best_phone = get_best_phone_number_func(extraction_results)
                 if best_phone:
                     normalized = normalize_phone_func(best_phone)
                     if normalized and is_mobile_number_func(normalized):
-                        phones.append(normalized)
-                        if log_func:
-                            log_func("info", f"{source_tag}: Advanced extraction found phone", 
-                                url=url, phone=normalized[:8]+"...")
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "advanced_best"
                         if learning_engine:
                             learning_engine.record_phone_pattern(
                                 pattern="advanced_extraction",
                                 pattern_type=f"{source_tag}_enhanced",
                                 example=normalized[:8]+"..."
                             )
-                        # NEW: Learn phone pattern for AI Learning Engine
+                        # Learn phone pattern for AI Learning Engine
                         try:
                             from ai_learning_engine import ActiveLearningEngine
                             learning = ActiveLearningEngine()
@@ -129,7 +148,7 @@ async def extract_generic_detail_async(
             if email_matches:
                 email = email_matches[0]
         
-        # Extract WhatsApp link using enhanced extraction
+        # 3. WhatsApp extraction (parallel with other methods)
         if extract_whatsapp_number_func:
             try:
                 wa_number = extract_whatsapp_number_func(html)
@@ -138,12 +157,13 @@ async def extract_generic_detail_async(
                     if normalized_wa and is_mobile_number_func(normalized_wa):
                         if normalized_wa not in phones:
                             phones.append(normalized_wa)
+                            phone_sources[normalized_wa] = "whatsapp_enhanced"
                             if log_func:
                                 log_func("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
             except Exception:
                 pass
         
-        # Fallback: Try old WhatsApp link extraction
+        # 4. Fallback WhatsApp link extraction
         wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
         if wa_link:
             wa_href = wa_link.get("href", "")
@@ -154,20 +174,19 @@ async def extract_generic_detail_async(
                 if is_valid and is_mobile_number_func(wa_normalized):
                     if wa_normalized not in phones:
                         phones.append(wa_normalized)
+                        phone_sources[wa_normalized] = "whatsapp_link"
         
         # Extract name
         name = ""
         if extract_name_enhanced_func:
             name = extract_name_enhanced_func(full_text)
         
-        # Only create lead if we found at least one mobile number
+        # 5. Browser extraction as last resort (only if no phones found)
         if not phones:
             if log_func:
                 log_func("debug", f"{source_tag}: No mobile numbers found, trying browser extraction", url=url)
-            # Fallback: Browser-based extraction for JS-hidden numbers
             if extract_phone_with_browser_func:
                 try:
-                    # Detect portal from source_tag or URL
                     portal_map = {
                         'markt_de': 'markt_de',
                         'quoka': 'quoka',
@@ -179,6 +198,7 @@ async def extract_generic_detail_async(
                     browser_phone = extract_phone_with_browser_func(url, portal=portal)
                     if browser_phone:
                         phones.append(browser_phone)
+                        phone_sources[browser_phone] = "browser_extraction"
                         if log_func:
                             log_func("info", f"{source_tag}: Browser extraction successful", url=url)
                 except Exception as e:
@@ -199,14 +219,88 @@ async def extract_generic_detail_async(
         # Use first mobile number found
         main_phone = phones[0]
         
-        # Build lead data
+        # ========================================
+        # DYNAMIC SCORING: Calculate score based on data quality, completeness, and source
+        # ========================================
+        
+        # Base score starts at 50
+        dynamic_score = 50
+        data_quality_score = 0.0
+        
+        # Data completeness bonuses
+        if main_phone:
+            dynamic_score += 20
+            data_quality_score += 0.30
+        if email:
+            dynamic_score += 15
+            data_quality_score += 0.20
+        if name:
+            dynamic_score += 10
+            data_quality_score += 0.15
+        if title:
+            dynamic_score += 5
+            data_quality_score += 0.10
+        
+        # Multiple phone numbers found = higher confidence
+        if len(phones) > 1:
+            dynamic_score += 5
+            data_quality_score += 0.05
+        
+        # Phone source quality bonus
+        phone_source = phone_sources.get(main_phone, "unknown")
+        source_quality_map = {
+            "regex_standard": 0.10,        # Standard regex is reliable
+            "advanced_whatsapp": 0.15,     # WhatsApp links are very reliable
+            "advanced_standard": 0.08,     # Advanced patterns are good
+            "advanced_spaced": 0.05,       # Spaced numbers are medium confidence
+            "advanced_obfuscated": 0.03,   # Obfuscated are lower confidence
+            "advanced_words": 0.02,        # Word-based are lowest
+            "advanced_best": 0.08,
+        }
+        source_bonus = source_quality_map.get(phone_source, 0.05)
+        data_quality_score += source_bonus
+        dynamic_score += int(source_bonus * 50)  # Scale to score points
+        
+        # Portal reputation bonus
+        portal_reputation_map = {
+            "kleinanzeigen": 10,    # High reputation for job seekers
+            "direct_crawl": 5,      # Generic crawl
+            "markt_de": 8,          # Medium-high reputation
+            "quoka": 6,             # Medium reputation
+            "meinestadt": 7,        # Medium reputation
+            "kalaydo": 6,           # Medium reputation
+            "dhd24": 4,             # Lower reputation
+        }
+        portal_bonus = portal_reputation_map.get(source_tag, 5)
+        dynamic_score += portal_bonus
+        data_quality_score += portal_bonus / 100.0
+        
+        # Cap scores to valid ranges
+        dynamic_score = max(0, min(100, dynamic_score))
+        data_quality_score = max(0.0, min(1.0, data_quality_score))
+        
+        # Calculate confidence based on extraction method and data completeness
+        confidence_score = 0.50  # Base confidence
+        if main_phone:
+            confidence_score += 0.20
+        if email:
+            confidence_score += 0.10
+        if name:
+            confidence_score += 0.10
+        if phone_source.startswith("advanced_whatsapp"):
+            confidence_score += 0.10
+        elif phone_source == "regex_standard":
+            confidence_score += 0.08
+        confidence_score = max(0.0, min(1.0, confidence_score))
+        
+        # Build lead data with dynamic scores
         lead = {
             "name": name or "",
             "rolle": "Vertrieb",
             "email": email,
             "telefon": main_phone,
             "quelle": url,
-            "score": 85,
+            "score": dynamic_score,
             "tags": f"{source_tag},candidate,mobile,direct_crawl",
             "lead_type": "candidate",
             "phone_type": "mobile",
@@ -216,8 +310,10 @@ async def extract_generic_detail_async(
             "branche": "",
             "region": "",
             "frische": "neu",
-            "confidence": 0.85,
-            "data_quality": 0.80,
+            "confidence": confidence_score,
+            "data_quality": data_quality_score,
+            "phone_source": phone_source,
+            "phones_found": len(phones),
         }
         
         return lead
