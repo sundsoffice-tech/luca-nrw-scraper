@@ -5,7 +5,8 @@ from django.http import HttpResponse
 import csv
 from unfold.admin import ModelAdmin
 from unfold.contrib.filters.admin import RangeDateFilter
-from .models import Lead, CallLog, EmailLog, SyncStatus, ScraperRun
+from .models import Lead, CallLog, EmailLog, SyncStatus
+# Note: ScraperRun is registered in scraper_control.admin, not here
 
 
 class CallLogInline(admin.TabularInline):
@@ -333,113 +334,6 @@ class SyncStatusAdmin(ModelAdmin):
         )
 
 
-@admin.register(ScraperRun)
-class ScraperRunAdmin(ModelAdmin):
-    """Admin for ScraperRun - shows scraper execution history"""
-    
-    list_display = [
-        'id',
-        'status_badge',
-        'started_at',
-        'duration_display',
-        'leads_stats',
-        'started_by',
-        'pid'
-    ]
-    
-    list_filter = [
-        'status',
-        'started_at',
-        'started_by',
-    ]
-    
-    search_fields = ['id', 'logs']
-    
-    readonly_fields = [
-        'started_at',
-        'finished_at',
-        'status',
-        'leads_found',
-        'leads_saved',
-        'leads_rejected',
-        'config_snapshot',
-        'logs',
-        'pid',
-        'started_by',
-        'duration_display'
-    ]
-    
-    fieldsets = (
-        ('Status', {
-            'fields': ('status', 'pid', 'started_by')
-        }),
-        ('Zeitraum', {
-            'fields': ('started_at', 'finished_at', 'duration_display')
-        }),
-        ('Ergebnisse', {
-            'fields': ('leads_found', 'leads_saved', 'leads_rejected')
-        }),
-        ('Konfiguration', {
-            'fields': ('config_snapshot',),
-            'classes': ('collapse',)
-        }),
-        ('Logs', {
-            'fields': ('logs',),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    def has_add_permission(self, request):
-        """Prevent manual creation"""
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        """Allow deletion of old runs"""
-        return True
-    
-    @admin.display(description='Status')
-    def status_badge(self, obj):
-        colors = {
-            'running': '#3b82f6',
-            'completed': '#22c55e',
-            'failed': '#ef4444',
-            'stopped': '#6b7280',
-        }
-        icons = {
-            'running': '▶️',
-            'completed': '✅',
-            'failed': '❌',
-            'stopped': '⏹️',
-        }
-        color = colors.get(obj.status, '#6b7280')
-        icon = icons.get(obj.status, '❓')
-        return format_html(
-            '{} <span style="background-color: {}; color: white; padding: 3px 10px; '
-            'border-radius: 12px; font-size: 11px; font-weight: 500;">{}</span>',
-            icon, color, obj.get_status_display()
-        )
-    
-    @admin.display(description='Dauer')
-    def duration_display(self, obj):
-        seconds = obj.duration_seconds
-        if seconds == 0:
-            return '-'
-        
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        
-        if minutes > 0:
-            return f'{minutes}m {secs}s'
-        return f'{secs}s'
-    
-    @admin.display(description='Leads')
-    def leads_stats(self, obj):
-        return format_html(
-            '<span style="color: #22c55e;">✓ {}</span> / '
-            '<span style="color: #ef4444;">✗ {}</span>',
-            obj.leads_saved,
-            obj.leads_rejected
-        )
 # Admin Site Customization
 admin.site.site_header = '🎯 TELIS Recruitment'
 admin.site.site_title = 'TELIS Admin'
