@@ -1161,27 +1161,53 @@ SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 def get_performance_params():
     """
-    Get performance parameters from centralized configuration.
-    Uses luca_scraper's centralized config system with DB→Env→Default priority.
+    Get performance parameters with priority:
+    1. Django DB configuration (when available)
+    2. Environment variables
+    3. Hardcoded defaults
     """
+    # Default values
+    defaults = {
+        'threads': 4,
+        'async_limit': 35,
+        'pool_size': 12,
+        'batch_size': 20,
+        'request_delay': 2.7
+    }
+    
+    # Start with environment variables (override defaults)
+    params = {
+        'threads': int(os.getenv("THREADS", str(defaults['threads']))),
+        'async_limit': int(os.getenv("ASYNC_LIMIT", str(defaults['async_limit']))),
+        'pool_size': int(os.getenv("POOL_SIZE", str(defaults['pool_size']))),
+        'batch_size': int(os.getenv("BATCH_SIZE", str(defaults['batch_size']))),
+        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", str(defaults['request_delay'])))
+    }
+    
+    # Try to load from Django DB (highest priority)
     if _LUCA_SCRAPER_AVAILABLE:
-        # Use centralized config system
-        from luca_scraper.config import get_scraper_config
-        config = get_scraper_config()
-        return {
-            'threads': int(os.getenv("THREADS", "4")),  # Not in centralized config yet
-            'async_limit': config.get('async_limit', 35),
-            'batch_size': int(os.getenv("BATCH_SIZE", "20")),  # Not in centralized config yet
-            'request_delay': config.get('sleep_between_queries', 2.7)
-        }
-    else:
-        # Fallback to environment variables/defaults if luca_scraper not available
-        return {
-            'threads': int(os.getenv("THREADS", "4")),
-            'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
-            'batch_size': int(os.getenv("BATCH_SIZE", "20")),
-            'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
-        }
+        try:
+            from luca_scraper.config import SCRAPER_CONFIG_AVAILABLE
+            if SCRAPER_CONFIG_AVAILABLE:
+                from telis_recruitment.scraper_control.config_loader import get_scraper_config
+                db_config = get_scraper_config()
+                if db_config:
+                    # Override with DB values if present
+                    if 'async_limit' in db_config:
+                        params['async_limit'] = db_config['async_limit']
+                    if 'pool_size' in db_config:
+                        params['pool_size'] = db_config['pool_size']
+                    if 'sleep_between_queries' in db_config:
+                        params['request_delay'] = db_config['sleep_between_queries']
+        except (ImportError, AttributeError, KeyError) as e:
+            # If Django DB is not available or misconfigured, continue with env vars/defaults
+            # This is expected when running standalone without Django
+            pass
+        except Exception as e:
+            # Unexpected error - log it but continue with fallback
+            log("warn", "Failed to load performance params from Django DB", error=str(e))
+    
+    return params
 
 # -------------- Logging --------------
 def log(level:str, msg:str, **ctx):
