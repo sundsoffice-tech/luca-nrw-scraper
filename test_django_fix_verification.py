@@ -8,7 +8,7 @@ This reproduces the exact call chain that was failing:
   scriptname.py, line 1518: _LEARNING_ENGINE = LearningEngine(DB_PATH)
   learning_engine.py, line 82: self.ai_config = get_ai_config()
   telis_recruitment/ai_config/loader.py, line 27: from .models import AIConfig
-  → Django nicht konfiguriert!
+  → Django not configured!
 
 Before fix: django.core.exceptions.ImproperlyConfigured
 After fix: Should work with fallback defaults
