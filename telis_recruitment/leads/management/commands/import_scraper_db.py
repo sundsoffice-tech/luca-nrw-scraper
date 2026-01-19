@@ -23,6 +23,7 @@ from leads.field_mapping import (
     JSON_ARRAY_FIELDS,
     is_json_field,
     is_integer_field,
+    is_boolean_field,
     is_url_field
 )
 
@@ -288,6 +289,22 @@ class Command(BaseCommand):
         except (ValueError, TypeError):
             return None
     
+    def _parse_boolean_field(self, value):
+        """Parse boolean field from scraper.db (handles SQLite INTEGER 0/1)"""
+        if value is None or value == '':
+            return None
+        # SQLite stores booleans as INTEGER (0 or 1)
+        if isinstance(value, int):
+            return bool(value)
+        # Handle string representations
+        if isinstance(value, str):
+            value_lower = value.lower().strip()
+            if value_lower in ('1', 'true', 'yes', 'y'):
+                return True
+            elif value_lower in ('0', 'false', 'no', 'n'):
+                return False
+        return None
+    
     def _process_lead(self, row, dry_run):
         """Process a single lead from scraper.db"""
         
@@ -324,6 +341,8 @@ class Command(BaseCommand):
                 parsed_value = self._parse_json_field(value)
             elif is_integer_field(django_field):
                 parsed_value = self._parse_integer_field(value)
+            elif is_boolean_field(django_field):
+                parsed_value = self._parse_boolean_field(value)
             else:
                 parsed_value = self._clean_field(value)
             

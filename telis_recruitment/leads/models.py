@@ -111,6 +111,14 @@ class Lead(models.Model):
     recency_indicator = models.CharField(max_length=100, null=True, blank=True, verbose_name="Aktualitäts-Indikator")
     last_updated = models.CharField(max_length=100, null=True, blank=True, verbose_name="Letzte Aktualisierung (Scraper)")
     
+    # === ZUSÄTZLICHE SCRAPER-FELDER ===
+    profile_text = models.TextField(null=True, blank=True, verbose_name="Profil-Text")
+    industries_experience = models.TextField(null=True, blank=True, verbose_name="Branchen-Erfahrung")
+    source_type = models.CharField(max_length=50, null=True, blank=True, verbose_name="Quell-Typ")
+    last_activity = models.CharField(max_length=100, null=True, blank=True, verbose_name="Letzte Aktivität")
+    name_validated = models.BooleanField(null=True, blank=True, verbose_name="Name validiert")
+    ssl_insecure = models.CharField(max_length=20, null=True, blank=True, verbose_name="SSL unsicher")
+    
     # === SOCIAL PROFILES ===
     linkedin_url = models.URLField(null=True, blank=True, verbose_name="LinkedIn URL")
     xing_url = models.URLField(null=True, blank=True, verbose_name="XING URL")
