@@ -3,6 +3,22 @@
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
+from django.utils.text import slugify
+
+
+def populate_template_slugs(apps, schema_editor):
+    """Populate slug field for existing PageTemplate records"""
+    PageTemplate = apps.get_model('pages', 'PageTemplate')
+    for template in PageTemplate.objects.all():
+        base_slug = slugify(template.name)
+        slug = base_slug
+        counter = 1
+        # Ensure unique slug
+        while PageTemplate.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        template.slug = slug
+        template.save()
 
 
 class Migration(migrations.Migration):
@@ -160,8 +176,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='pagetemplate',
             name='slug',
-            field=models.SlugField(default='', unique=True),
-            preserve_default=False,
+            field=models.SlugField(default='temp', unique=False),  # Non-unique temporarily
+            preserve_default=True,
+        ),
+        # Populate slugs for existing records
+        migrations.RunPython(populate_template_slugs, migrations.RunPython.noop),
+        # Now make slug unique
+        migrations.AlterField(
+            model_name='pagetemplate',
+            name='slug',
+            field=models.SlugField(unique=True),
         ),
         migrations.AddField(
             model_name='pagetemplate',

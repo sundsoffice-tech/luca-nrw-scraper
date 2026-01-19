@@ -247,20 +247,34 @@ def upload_asset(request):
     mime = file.content_type
     width, height = None, None
     
+    # Validate file size (max 10MB)
+    if file.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'Datei zu groß. Maximum 10MB.'}, status=400)
+    
+    # Get landing_page if provided
+    landing_page = None
+    page_id = request.POST.get('landing_page_id')
+    if page_id:
+        try:
+            landing_page = LandingPage.objects.get(id=page_id)
+        except LandingPage.DoesNotExist:
+            return JsonResponse({'error': 'Landing Page nicht gefunden'}, status=400)
+    
     if mime.startswith('image/'):
         try:
             from PIL import Image
             img = Image.open(file)
             width, height = img.size
             file.seek(0)
-        except Exception:
-            pass
+        except (IOError, Image.UnidentifiedImageError) as e:
+            logger.warning(f"Failed to process image: {e}")
+            # Continue without dimensions
         asset_type = 'image'
     else:
         asset_type = 'document'
     
     asset = PageAsset.objects.create(
-        landing_page_id=request.POST.get('landing_page_id') or None,
+        landing_page=landing_page,
         file=file, name=file.name, asset_type=asset_type,
         width=width, height=height, file_size=file.size,
         mime_type=mime, folder=request.POST.get('folder', ''),
