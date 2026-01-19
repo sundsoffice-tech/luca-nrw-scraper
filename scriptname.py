@@ -251,6 +251,10 @@ try:
         # Helper Functions
         _normalize_cx as __normalize_cx,
         _jitter as __jitter,
+        # Portal URL loading from database
+        get_portal_urls as _get_portal_urls,
+        get_portal_config as _get_portal_config,
+        get_all_portal_configs as _get_all_portal_configs,
     )
     from luca_scraper.database import (
         db as _db,
@@ -767,117 +771,149 @@ PORTAL_DELAYS = {
 
 # ==================== NEW PORTAL CONFIGURATIONS ====================
 # Extended portal configuration with priorities and detailed settings
-PORTAL_CONFIGS = {
-    "kleinanzeigen": {
-        "enabled": True,
-        "base_urls": DIRECT_CRAWL_URLS,
-        "delay": 3.0,
-        "priority": 1,
-        "type": "classifieds"
-    },
-    "markt_de": {
-        "enabled": True,
-        "base_urls": MARKT_DE_URLS,
-        "delay": 4.0,
-        "priority": 2,
-        "type": "classifieds"
-    },
-    "quoka": {
-        "enabled": True,
-        "base_urls": QUOKA_DE_URLS,
-        "delay": 6.0,
-        "priority": 3,
-        "type": "classifieds"
-    },
-    "indeed": {
-        "enabled": True,
-        "base_urls": [
-            "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
-            "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
-            "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
-            "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
-        ],
-        "delay": 3.0,
-        "priority": 4,
-        "type": "job_board"
-    },
-    "stepstone": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
-            "https://www.stepstone.de/jobs/sales/in-nrw",
-            "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
-        ],
-        "delay": 3.0,
-        "priority": 5,
-        "type": "job_board"
-    },
-    "arbeitsagentur": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
-        ],
-        "delay": 2.0,
-        "priority": 6,
-        "type": "job_board"
-    },
-    "monster": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
-            "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
-        ],
-        "delay": 3.0,
-        "priority": 7,
-        "type": "job_board"
-    },
-    "stellenanzeigen": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
-            "https://www.stellenanzeigen.de/jobs-sales-nrw/",
-        ],
-        "delay": 2.5,
-        "priority": 8,
-        "type": "job_board"
-    },
-    "meinestadt": {
-        "enabled": True,  # Reaktiviert mit besserer Handhabung
-        "base_urls": MEINESTADT_DE_URLS,
-        "delay": 3.0,
-        "priority": 9,
-        "type": "classifieds"
-    },
-    "dhd24": {
-        "enabled": False,  # Bleibt deaktiviert (oft blockiert)
-        "base_urls": DHD24_URLS,
-        "delay": 5.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "kalaydo": {
-        "enabled": False,  # Deaktiviert - blockiert Requests
-        "base_urls": KALAYDO_DE_URLS,
-        "delay": 4.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "freelancermap": {
-        "enabled": True,
-        "base_urls": FREELANCERMAP_URLS,
-        "delay": 3.0,
-        "priority": 10,
-        "type": "freelancer"
-    },
-    "freelance_de": {
-        "enabled": True,
-        "base_urls": FREELANCE_DE_URLS,
-        "delay": 3.0,
-        "priority": 11,
-        "type": "freelancer"
-    },
-}
+# Now supports database-backed URL loading via get_portal_urls()
+
+def _build_portal_configs():
+    """
+    Build portal configurations dynamically.
+    
+    URLs are loaded from database (PortalSource model) when available,
+    with fallback to hardcoded lists for backward compatibility.
+    
+    This allows adding/removing/modifying portal URLs via Django Admin
+    without code changes.
+    """
+    # Try to use database-backed function if available
+    try:
+        _get_urls = _get_portal_urls
+    except NameError:
+        # Fallback to hardcoded URLs if import failed
+        _get_urls = lambda name: {
+            'kleinanzeigen': DIRECT_CRAWL_URLS,
+            'markt_de': MARKT_DE_URLS,
+            'quoka': QUOKA_DE_URLS,
+            'kalaydo': KALAYDO_DE_URLS,
+            'meinestadt': MEINESTADT_DE_URLS,
+            'dhd24': DHD24_URLS,
+            'freelancermap': FREELANCERMAP_URLS,
+            'freelance_de': FREELANCE_DE_URLS,
+        }.get(name, [])
+    
+    return {
+        "kleinanzeigen": {
+            "enabled": True,
+            "base_urls": _get_urls('kleinanzeigen') or DIRECT_CRAWL_URLS,
+            "delay": 3.0,
+            "priority": 1,
+            "type": "classifieds"
+        },
+        "markt_de": {
+            "enabled": True,
+            "base_urls": _get_urls('markt_de') or MARKT_DE_URLS,
+            "delay": 4.0,
+            "priority": 2,
+            "type": "classifieds"
+        },
+        "quoka": {
+            "enabled": True,
+            "base_urls": _get_urls('quoka') or QUOKA_DE_URLS,
+            "delay": 6.0,
+            "priority": 3,
+            "type": "classifieds"
+        },
+        "indeed": {
+            "enabled": True,
+            "base_urls": _get_urls('indeed') or [
+                "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
+                "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
+                "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
+                "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
+            ],
+            "delay": 3.0,
+            "priority": 4,
+            "type": "job_board"
+        },
+        "stepstone": {
+            "enabled": True,
+            "base_urls": _get_urls('stepstone') or [
+                "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
+                "https://www.stepstone.de/jobs/sales/in-nrw",
+                "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
+            ],
+            "delay": 3.0,
+            "priority": 5,
+            "type": "job_board"
+        },
+        "arbeitsagentur": {
+            "enabled": True,
+            "base_urls": _get_urls('arbeitsagentur') or [
+                "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
+                "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
+            ],
+            "delay": 2.0,
+            "priority": 6,
+            "type": "job_board"
+        },
+        "monster": {
+            "enabled": True,
+            "base_urls": _get_urls('monster') or [
+                "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
+                "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
+            ],
+            "delay": 3.0,
+            "priority": 7,
+            "type": "job_board"
+        },
+        "stellenanzeigen": {
+            "enabled": True,
+            "base_urls": _get_urls('stellenanzeigen') or [
+                "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
+                "https://www.stellenanzeigen.de/jobs-sales-nrw/",
+            ],
+            "delay": 2.5,
+            "priority": 8,
+            "type": "job_board"
+        },
+        "meinestadt": {
+            "enabled": True,  # Reaktiviert mit besserer Handhabung
+            "base_urls": _get_urls('meinestadt') or MEINESTADT_DE_URLS,
+            "delay": 3.0,
+            "priority": 9,
+            "type": "classifieds"
+        },
+        "dhd24": {
+            "enabled": False,  # Bleibt deaktiviert (oft blockiert)
+            "base_urls": _get_urls('dhd24') or DHD24_URLS,
+            "delay": 5.0,
+            "priority": 99,
+            "type": "classifieds"
+        },
+        "kalaydo": {
+            "enabled": False,  # Deaktiviert - blockiert Requests
+            "base_urls": _get_urls('kalaydo') or KALAYDO_DE_URLS,
+            "delay": 4.0,
+            "priority": 99,
+            "type": "classifieds"
+        },
+        "freelancermap": {
+            "enabled": True,
+            "base_urls": _get_urls('freelancermap') or FREELANCERMAP_URLS,
+            "delay": 3.0,
+            "priority": 10,
+            "type": "freelancer"
+        },
+        "freelance_de": {
+            "enabled": True,
+            "base_urls": _get_urls('freelance_de') or FREELANCE_DE_URLS,
+            "delay": 3.0,
+            "priority": 11,
+            "type": "freelancer"
+        },
+    }
+
+
+# Build portal configs - will load from database when available
+PORTAL_CONFIGS = _build_portal_configs()
 
 # Parallel crawling configuration
 PARALLEL_PORTAL_CRAWL = os.getenv("PARALLEL_PORTAL_CRAWL", "1") == "1"
