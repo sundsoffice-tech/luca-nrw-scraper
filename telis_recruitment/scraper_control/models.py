@@ -131,12 +131,45 @@ class ScraperConfig(models.Model):
     circuit_breaker_penalty = models.IntegerField(
         default=30,
         validators=[MinValueValidator(0)],
-        verbose_name="Circuit Breaker Penalty (Sek)"
+        verbose_name="Circuit Breaker Penalty (Sek)",
+        help_text="Pausenzeit wenn Circuit Breaker öffnet"
     )
     retry_max_per_url = models.IntegerField(
         default=2,
         validators=[MinValueValidator(0), MaxValueValidator(10)],
         verbose_name="Max. Retries pro URL"
+    )
+    
+    # === NEUE FELDER: Process Manager Retry & Circuit Breaker ===
+    process_max_retry_attempts = models.IntegerField(
+        default=3,
+        validators=[MinValueValidator(0), MaxValueValidator(10)],
+        verbose_name="Max. Process-Restarts",
+        help_text="Maximale automatische Neustarts bei Fehlern"
+    )
+    process_qpi_reduction_factor = models.FloatField(
+        default=0.7,
+        validators=[MinValueValidator(0.1), MaxValueValidator(1.0)],
+        verbose_name="QPI-Reduktionsfaktor",
+        help_text="QPI-Anpassung bei Rate-Limits (0.7 = 70%)"
+    )
+    process_error_rate_threshold = models.FloatField(
+        default=0.5,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name="Fehlerquoten-Schwelle",
+        help_text="Fehlerrate für Circuit Breaker (0.5 = 50%)"
+    )
+    process_circuit_breaker_failures = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(20)],
+        verbose_name="Circuit Breaker Fehler-Schwelle",
+        help_text="Anzahl Fehler bis Circuit Breaker öffnet"
+    )
+    process_retry_backoff_base = models.FloatField(
+        default=30.0,
+        validators=[MinValueValidator(5.0), MaxValueValidator(300.0)],
+        verbose_name="Retry Backoff Basis (Sek)",
+        help_text="Basis-Wartezeit für exponentiellen Backoff"
     )
     
     # === NEUE FELDER: Scoring ===

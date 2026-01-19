@@ -31,6 +31,11 @@ class ScraperConfigAdmin(ModelAdmin):
             'fields': ('sleep_between_queries', 'max_google_pages', 'circuit_breaker_penalty', 'retry_max_per_url'),
             'classes': ('collapse',)
         }),
+        ('Process Manager - Retry & Circuit Breaker', {
+            'fields': ('process_max_retry_attempts', 'process_qpi_reduction_factor', 'process_error_rate_threshold', 
+                      'process_circuit_breaker_failures', 'process_retry_backoff_base'),
+            'classes': ('collapse',)
+        }),
         ('Scoring', {
             'fields': ('min_score', 'max_per_domain', 'default_quality_score', 'confidence_threshold'),
             'classes': ('collapse',)
