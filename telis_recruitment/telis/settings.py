@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'scraper_control',
     'ai_config',
     'pages.apps.PagesConfig',
+    'email_templates.apps.EmailTemplatesConfig',
 ]
 
 MIDDLEWARE = [
@@ -355,6 +356,28 @@ UNFOLD = {
                         "title": "Versionen",
                         "icon": "history",
                         "link": "/admin/pages/pageversion/",
+                    },
+                ],
+            },
+            {
+                "title": "Email Templates",
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": "Templates",
+                        "icon": "email",
+                        "link": "/admin/email_templates/emailtemplate/",
+                    },
+                    {
+                        "title": "Versionen",
+                        "icon": "history",
+                        "link": "/admin/email_templates/emailtemplateversion/",
+                    },
+                    {
+                        "title": "Versand-Logs",
+                        "icon": "send",
+                        "link": "/admin/email_templates/emailsendlog/",
                     },
                 ],
             },
