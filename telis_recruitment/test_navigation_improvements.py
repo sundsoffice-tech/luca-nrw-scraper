@@ -2,7 +2,6 @@
 Test navigation improvements between CRM and Admin interfaces.
 Tests the changes made to templates/crm/base.html and templates/admin/base_site.html
 """
-import os
 from pathlib import Path
 
 
@@ -88,8 +87,11 @@ def test_admin_link_opens_in_new_tab():
     template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
     content = template_path.read_text()
     
-    # Find the admin center link section
-    admin_link_start = content.find('<!-- Admin Center Link')
+    # Find the admin center link section - search for the if statement
+    admin_link_start = content.find('{% if user.is_staff %}', content.find('Support'))
+    if admin_link_start == -1:
+        raise AssertionError("Could not find admin center section")
+    
     admin_link_end = content.find('{% endif %}', admin_link_start) + 11
     admin_link_section = content[admin_link_start:admin_link_end]
     
