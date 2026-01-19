@@ -1,0 +1,480 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Upload Manager - {{ page.title }} - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:builder-list' %}" class="text-gray-400 hover:text-white">Landing Pages</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:page-builder' slug=page.slug %}" class="text-gray-400 hover:text-white">{{ page.title }}</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Upload Manager</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .drop-zone {
+        border: 2px dashed #4B5563;
+        transition: all 0.3s ease;
+    }
+    .drop-zone.dragover {
+        border-color: #60A5FA;
+        background-color: rgba(96, 165, 250, 0.1);
+    }
+    .file-tree {
+        font-family: 'Courier New', monospace;
+    }
+    .file-item {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .file-item:hover {
+        background-color: rgba(96, 165, 250, 0.1);
+    }
+    .progress-bar {
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Upload Manager</h1>
+            <p class="text-gray-400">{{ page.title }}</p>
+        </div>
+        <div class="flex space-x-2">
+            <a href="{% url 'pages:page-builder' slug=page.slug %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
+                ← Back to Builder
+            </a>
+            <a href="{% url 'pages:domain-settings' slug=page.slug %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
+                🌐 Domain Settings
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="text-gray-400 text-sm mb-1">Total Files</div>
+            <div class="text-2xl font-bold text-white" id="stats-files">{{ total_files }}</div>
+        </div>
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="text-gray-400 text-sm mb-1">Total Size</div>
+            <div class="text-2xl font-bold text-white" id="stats-size">{{ total_size|filesizeformat }}</div>
+        </div>
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="text-gray-400 text-sm mb-1">Entry Point</div>
+            <div class="text-lg font-bold text-blue-400" id="stats-entry">{{ entry_point|default:"Not set" }}</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Upload Zones -->
+        <div class="space-y-6">
+            <!-- ZIP Upload -->
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">📦 ZIP Upload</h2>
+                
+                <div id="zip-drop-zone" class="drop-zone rounded-lg p-8 text-center">
+                    <div class="text-gray-400 mb-2">
+                        <svg class="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Drag & Drop ZIP-Datei hier
+                    </div>
+                    <div class="text-gray-500 text-sm mb-4">oder</div>
+                    <input type="file" id="zip-file-input" accept=".zip" class="hidden">
+                    <button onclick="document.getElementById('zip-file-input').click()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        Datei auswählen
+                    </button>
+                </div>
+                
+                <div id="zip-progress" class="mt-4 hidden">
+                    <div class="bg-dark-700 rounded-full h-2 overflow-hidden">
+                        <div class="progress-bar bg-blue-600 h-full"></div>
+                    </div>
+                    <div class="text-sm text-gray-400 mt-2" id="zip-progress-text">Uploading...</div>
+                </div>
+                
+                <div class="mt-4 text-xs text-gray-500">
+                    Max. 100MB, bis zu 500 Dateien
+                </div>
+            </div>
+
+            <!-- Single File Upload -->
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">📄 Einzelne Datei</h2>
+                
+                <div id="file-drop-zone" class="drop-zone rounded-lg p-8 text-center">
+                    <div class="text-gray-400 mb-2">
+                        <svg class="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Drag & Drop Datei hier
+                    </div>
+                    <div class="text-gray-500 text-sm mb-4">oder</div>
+                    <input type="file" id="single-file-input" class="hidden">
+                    <button onclick="document.getElementById('single-file-input').click()" 
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                        Datei auswählen
+                    </button>
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block text-sm text-gray-400 mb-2">Relativer Pfad (z.B. css/style.css)</label>
+                    <input type="text" id="file-path-input" 
+                           class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                           placeholder="Automatisch aus Dateinamen">
+                </div>
+                
+                <div id="file-progress" class="mt-4 hidden">
+                    <div class="bg-dark-700 rounded-full h-2 overflow-hidden">
+                        <div class="progress-bar bg-green-600 h-full"></div>
+                    </div>
+                    <div class="text-sm text-gray-400 mt-2" id="file-progress-text">Uploading...</div>
+                </div>
+                
+                <div class="mt-4 text-xs text-gray-500">
+                    Max. 10MB pro Datei
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: File Browser -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-white">📁 Dateien</h2>
+                <button onclick="refreshFileTree()" 
+                        class="px-3 py-1 bg-dark-700 text-gray-300 rounded hover:bg-dark-600 transition text-sm">
+                    🔄 Aktualisieren
+                </button>
+            </div>
+            
+            <div id="file-tree" class="file-tree text-sm text-gray-300 overflow-auto max-h-[600px]">
+                <!-- File tree will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Toast -->
+    <div id="message-toast" class="fixed bottom-4 right-4 hidden">
+        <div class="bg-dark-800 border border-dark-700 rounded-lg shadow-xl p-4 max-w-sm">
+            <div class="flex items-start">
+                <div id="message-icon" class="flex-shrink-0 mr-3"></div>
+                <div>
+                    <p id="message-text" class="text-white text-sm"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+const pageSlug = '{{ page.slug }}';
+
+// Message functions
+function showMessage(message, type = 'success') {
+    const toast = document.getElementById('message-toast');
+    const text = document.getElementById('message-text');
+    const icon = document.getElementById('message-icon');
+    
+    text.textContent = message;
+    
+    if (type === 'success') {
+        icon.innerHTML = '<span class="text-green-500 text-2xl">✓</span>';
+    } else if (type === 'error') {
+        icon.innerHTML = '<span class="text-red-500 text-2xl">✕</span>';
+    } else {
+        icon.innerHTML = '<span class="text-blue-500 text-2xl">ℹ</span>';
+    }
+    
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 5000);
+}
+
+// Drag and drop handlers
+function setupDropZone(dropZoneId, inputId, uploadHandler) {
+    const dropZone = document.getElementById(dropZoneId);
+    const input = document.getElementById(inputId);
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            uploadHandler(files[0]);
+        }
+    });
+    
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            uploadHandler(e.target.files[0]);
+        }
+    });
+}
+
+// ZIP upload
+function uploadZip(file) {
+    if (!file.name.endsWith('.zip')) {
+        showMessage('Bitte nur ZIP-Dateien hochladen', 'error');
+        return;
+    }
+    
+    const progressDiv = document.getElementById('zip-progress');
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressText = document.getElementById('zip-progress-text');
+    
+    progressDiv.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Uploading...';
+    
+    const formData = new FormData();
+    formData.append('zip_file', file);
+    formData.append('csrfmiddlewaretoken', csrfToken);
+    
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressBar.style.width = percent + '%';
+            progressText.textContent = `Uploading: ${Math.round(percent)}%`;
+        }
+    });
+    
+    xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            showMessage(response.message, 'success');
+            refreshFileTree();
+            refreshStats();
+            
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Complete!';
+            
+            setTimeout(() => {
+                progressDiv.classList.add('hidden');
+            }, 2000);
+        } else {
+            const response = JSON.parse(xhr.responseText);
+            showMessage(response.error || 'Upload fehlgeschlagen', 'error');
+            progressDiv.classList.add('hidden');
+        }
+    });
+    
+    xhr.addEventListener('error', () => {
+        showMessage('Netzwerkfehler beim Upload', 'error');
+        progressDiv.classList.add('hidden');
+    });
+    
+    xhr.open('POST', `/pages/api/${pageSlug}/upload/zip/`);
+    xhr.send(formData);
+}
+
+// Single file upload
+function uploadSingleFile(file) {
+    const pathInput = document.getElementById('file-path-input');
+    const relativePath = pathInput.value || file.name;
+    
+    const progressDiv = document.getElementById('file-progress');
+    const progressBar = progressDiv.querySelector('.progress-bar');
+    const progressText = document.getElementById('file-progress-text');
+    
+    progressDiv.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Uploading...';
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', relativePath);
+    formData.append('csrfmiddlewaretoken', csrfToken);
+    
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressBar.style.width = percent + '%';
+            progressText.textContent = `Uploading: ${Math.round(percent)}%`;
+        }
+    });
+    
+    xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            showMessage(response.message, 'success');
+            refreshFileTree();
+            refreshStats();
+            pathInput.value = '';
+            
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Complete!';
+            
+            setTimeout(() => {
+                progressDiv.classList.add('hidden');
+            }, 2000);
+        } else {
+            const response = JSON.parse(xhr.responseText);
+            showMessage(response.error || 'Upload fehlgeschlagen', 'error');
+            progressDiv.classList.add('hidden');
+        }
+    });
+    
+    xhr.addEventListener('error', () => {
+        showMessage('Netzwerkfehler beim Upload', 'error');
+        progressDiv.classList.add('hidden');
+    });
+    
+    xhr.open('POST', `/pages/api/${pageSlug}/upload/file/`);
+    xhr.send(formData);
+}
+
+// File tree
+function renderFileTree(node, level = 0) {
+    let html = '';
+    const indent = '  '.repeat(level);
+    
+    if (node.type === 'directory') {
+        html += `<div class="text-blue-400">${indent}📁 ${node.name}/</div>`;
+        if (node.children) {
+            node.children.forEach(child => {
+                html += renderFileTree(child, level + 1);
+            });
+        }
+    } else {
+        const sizeStr = formatFileSize(node.size);
+        html += `<div class="file-item py-1 px-2 rounded" data-path="${node.path}">
+            ${indent}📄 ${node.name} <span class="text-gray-500 text-xs">(${sizeStr})</span>
+            <button onclick="deleteFile('${node.path}')" class="text-red-500 hover:text-red-400 ml-2 text-xs">🗑️</button>
+            <button onclick="setEntryPoint('${node.path}')" class="text-green-500 hover:text-green-400 ml-2 text-xs">⭐</button>
+        </div>`;
+    }
+    
+    return html;
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function refreshFileTree() {
+    fetch(`/pages/api/${pageSlug}/upload/list/`, {
+        headers: {
+            'X-CSRFToken': csrfToken,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const treeDiv = document.getElementById('file-tree');
+            treeDiv.innerHTML = renderFileTree(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error refreshing file tree:', error);
+    });
+}
+
+function deleteFile(path) {
+    if (!confirm(`Datei "${path}" wirklich löschen?`)) {
+        return;
+    }
+    
+    fetch(`/pages/api/${pageSlug}/upload/delete/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ path: path })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(data.message, 'success');
+            refreshFileTree();
+            refreshStats();
+        } else {
+            showMessage(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showMessage('Fehler beim Löschen', 'error');
+    });
+}
+
+function setEntryPoint(path) {
+    fetch(`/pages/api/${pageSlug}/upload/entry-point/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ entry_point: path })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(data.message, 'success');
+            document.getElementById('stats-entry').textContent = path;
+        } else {
+            showMessage(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showMessage('Fehler beim Setzen des Entry Points', 'error');
+    });
+}
+
+function refreshStats() {
+    fetch(`/pages/api/${pageSlug}/upload/stats/`, {
+        headers: {
+            'X-CSRFToken': csrfToken,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('stats-files').textContent = data.data.total_files;
+            document.getElementById('stats-size').textContent = formatFileSize(data.data.total_size);
+            document.getElementById('stats-entry').textContent = data.data.entry_point || 'Not set';
+        }
+    })
+    .catch(error => {
+        console.error('Error refreshing stats:', error);
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    setupDropZone('zip-drop-zone', 'zip-file-input', uploadZip);
+    setupDropZone('file-drop-zone', 'single-file-input', uploadSingleFile);
+    refreshFileTree();
+});
+</script>
+{% endblock %}
+
