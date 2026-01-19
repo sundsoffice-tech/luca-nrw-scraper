@@ -31,8 +31,18 @@ def db() -> sqlite3.Connection:
     
     Returns a connection with row factory set.
     Ensures schema is initialized on first access.
+    Validates that cached connection is still open before returning it.
     """
     global _DB_READY
+    
+    # Check if connection exists AND is still open/valid
+    if hasattr(_db_local, "conn") and _db_local.conn is not None:
+        try:
+            # Test if connection still works
+            _db_local.conn.execute("SELECT 1")
+        except (sqlite3.ProgrammingError, sqlite3.OperationalError):
+            # Connection is closed or broken - reset it
+            _db_local.conn = None
     
     if not hasattr(_db_local, "conn") or _db_local.conn is None:
         _db_local.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
