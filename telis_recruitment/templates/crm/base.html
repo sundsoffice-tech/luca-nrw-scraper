@@ -54,13 +54,13 @@
         <aside id="sidebar" class="w-64 bg-dark-800 border-r border-dark-700 flex flex-col fixed h-full z-30 lg:relative sidebar-mobile lg:translate-x-0">
             <!-- Logo -->
             <div class="p-4 border-b border-dark-700">
-                <div class="flex items-center space-x-3">
+                <a href="{% url 'crm-dashboard' %}" class="flex items-center space-x-3">
                     <span class="text-3xl">🎯</span>
                     <div>
                         <h1 class="text-xl font-bold text-primary">TELIS</h1>
                         <p class="text-xs text-gray-400">CRM System</p>
                     </div>
-                </div>
+                </a>
             </div>
 
             <!-- Navigation -->
@@ -187,6 +187,16 @@
                     <span>Dokumentation</span>
                     <span class="ml-auto text-xs">↗</span>
                 </a>
+                
+                <!-- Admin Center Link (only for staff) -->
+                {% if user.is_staff %}
+                <div class="my-4 mx-4 border-t border-dark-700"></div>
+                <a href="{% url 'admin:index' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300" target="_blank">
+                    <span class="text-xl mr-3">⚙️</span>
+                    <span>Admin Center</span>
+                    <span class="ml-auto text-xs">↗</span>
+                </a>
+                {% endif %}
             </nav>
 
             <!-- User Info & Logout -->
