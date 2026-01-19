@@ -3,6 +3,11 @@ from unfold.admin import ModelAdmin
 from .models import ScraperConfig, ScraperRun, ScraperLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
 
 
+# Unregister ScraperConfig if it's already registered (prevents AlreadyRegistered error)
+if admin.site.is_registered(ScraperConfig):
+    admin.site.unregister(ScraperConfig)
+
+
 @admin.register(ScraperConfig)
 class ScraperConfigAdmin(ModelAdmin):
     """Admin interface for ScraperConfig"""
