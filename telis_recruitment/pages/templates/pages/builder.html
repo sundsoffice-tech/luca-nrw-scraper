@@ -143,6 +143,31 @@
     .gjs-cv-canvas { background-color: #fff; }
     .gjs-block-category { background: #0f3460; }
     .gjs-title { color: white; }
+    
+    /* Toast Notification Styles */
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 25px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        font-size: 14px;
+        z-index: 10000;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        animation: slideIn 0.3s ease;
+        transition: opacity 0.3s ease;
+    }
+    .notification.success { background: #28a745; }
+    .notification.error { background: #dc3545; }
+    .notification.info { background: #17a2b8; }
+    .notification.warning { background: #ffc107; color: #212529; }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
 </style>
 {% endblock %}
 
@@ -254,10 +279,8 @@
 </div>
 
 <script src="https://unpkg.com/grapesjs"></script>
-<script type="module">
-    // Import custom blocks
-    import loadAllBlocks from '{% static "pages/js/blocks/index.js" %}';
-    
+<script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
+<script>
     // Initialize GrapesJS Editor
     window.editor = grapesjs.init({
         container: '#gjs',
@@ -347,8 +370,12 @@
         },
     });
 
-    // Load custom blocks
-    loadAllBlocks(window.editor);
+    // Load custom blocks (now from global function)
+    if (typeof loadAllBlocks === 'function') {
+        loadAllBlocks(window.editor);
+    } else {
+        console.error('❌ loadAllBlocks function not found!');
+    }
 
     // Load existing page content
     fetch('{% url "pages:builder-load" page.slug %}')
@@ -500,6 +527,33 @@
                 }
             })
             .catch(error => console.error('Error loading assets:', error));
+    }
+    
+    // Drag & Drop for Asset Upload
+    const uploadZone = document.querySelector('.asset-upload-zone');
+    
+    if (uploadZone) {
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.style.borderColor = '#007bff';
+            uploadZone.style.background = 'rgba(0, 123, 255, 0.15)';
+        });
+
+        uploadZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadZone.style.borderColor = '#0f3460';
+            uploadZone.style.background = 'rgba(15, 52, 96, 0.2)';
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.style.borderColor = '#0f3460';
+            uploadZone.style.background = 'rgba(15, 52, 96, 0.2)';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadAssets(files);
+            }
+        });
     }
     
     // Toast notification system
