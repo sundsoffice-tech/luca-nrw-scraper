@@ -51,6 +51,10 @@
                class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
                 ← Back to Builder
             </a>
+            <a href="{% url 'pages:website-editor' slug=page.slug %}" 
+               class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                💻 Code Editor
+            </a>
             <a href="{% url 'pages:domain-settings' slug=page.slug %}" 
                class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
                 🌐 Domain Settings

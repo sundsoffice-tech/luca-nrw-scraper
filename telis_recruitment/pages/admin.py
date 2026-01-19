@@ -6,7 +6,8 @@ from django.utils import timezone
 from unfold.admin import ModelAdmin, TabularInline
 from .models import (
     LandingPage, PageVersion, PageComponent, PageSubmission, 
-    UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate
+    UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate,
+    FileVersion, ProjectTemplate
 )
 
 
@@ -411,6 +412,80 @@ class PageTemplateAdmin(ModelAdmin):
         }),
         ('Statistics', {
             'fields': ['usage_count', 'created_at']
+        }),
+    ]
+    
+    def preview_thumbnail(self, obj):
+        """Display thumbnail preview"""
+        if obj.thumbnail:
+            return format_html(
+                '<img src="{}" style="max-width: 100px; max-height: 60px;" />',
+                obj.thumbnail.url
+            )
+        return '-'
+    preview_thumbnail.short_description = 'Preview'
+
+
+class FileVersionInlineForUploadedFile(TabularInline):
+    """Inline display of file versions"""
+    model = FileVersion
+    extra = 0
+    can_delete = False
+    readonly_fields = ['version', 'created_by', 'created_at', 'note']
+    fields = ['version', 'note', 'created_by', 'created_at']
+    ordering = ['-version']
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FileVersion)
+class FileVersionAdmin(ModelAdmin):
+    """Admin interface for file versions"""
+    
+    list_display = ['uploaded_file', 'version', 'created_by', 'created_at', 'note']
+    list_filter = ['created_at', 'created_by']
+    search_fields = ['uploaded_file__relative_path', 'note']
+    readonly_fields = ['uploaded_file', 'version', 'content', 'created_at', 'created_by']
+    
+    fieldsets = [
+        ('Version Information', {
+            'fields': ['uploaded_file', 'version', 'note']
+        }),
+        ('Content', {
+            'fields': ['content'],
+            'classes': ['collapse'],
+        }),
+        ('Metadata', {
+            'fields': ['created_by', 'created_at']
+        }),
+    ]
+    
+    def has_add_permission(self, request):
+        """Versions are created automatically"""
+        return False
+
+
+@admin.register(ProjectTemplate)
+class ProjectTemplateAdmin(ModelAdmin):
+    """Admin interface for project templates"""
+    
+    list_display = ['name', 'category', 'usage_count', 'is_active', 'created_at', 'preview_thumbnail']
+    list_filter = ['category', 'is_active', 'created_at']
+    search_fields = ['name', 'slug', 'description']
+    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ['usage_count', 'created_at', 'updated_at']
+    
+    fieldsets = [
+        ('Template Information', {
+            'fields': ['name', 'slug', 'category', 'description', 'is_active', 'thumbnail']
+        }),
+        ('Files Data', {
+            'fields': ['files_data'],
+            'description': 'JSON structure containing all template files and their contents'
+        }),
+        ('Statistics', {
+            'fields': ['usage_count', 'created_at', 'updated_at']
         }),
     ]
     
