@@ -165,17 +165,13 @@ class Command(BaseCommand):
             available_columns = [row[1] for row in cursor.fetchall()]
             
             # Build dynamic column list based on available columns
+            # Get all scraper fields from mapping
+            potential_columns = set(SCRAPER_TO_DJANGO_MAPPING.keys())
+            # Add core fields that are always needed
+            potential_columns.update(['id', 'last_updated'])
+            
             columns_to_select = []
-            for col in ['id', 'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 
-                       'tags', 'region', 'role_guess', 'lead_type', 'company_name', 
-                       'location_specific', 'confidence_score', 'social_profile_url', 
-                       'last_updated', 'phone_type', 'whatsapp_link', 'ai_category',
-                       'ai_summary', 'opening_line', 'skills', 'availability',
-                       'candidate_status', 'current_status', 'mobility', 'salary_hint',
-                       'commission_hint', 'company_size', 'hiring_volume', 'industry',
-                       'data_quality', 'private_address', 'profile_url', 'cv_url',
-                       'contact_preference', 'recency_indicator', 'experience_years',
-                       'linkedin_url', 'xing_url', 'location']:
+            for col in potential_columns:
                 if col in available_columns:
                     columns_to_select.append(col)
             
@@ -432,12 +428,13 @@ class Command(BaseCommand):
                     continue
                 
                 # Truncate string fields to max length
-                if isinstance(value, str):
+                if isinstance(value, str) and django_field != 'notes':
                     try:
                         field = Lead._meta.get_field(django_field)
                         if hasattr(field, 'max_length') and field.max_length:
                             value = value[:field.max_length]
-                    except:
+                    except Exception:
+                        # Field doesn't exist or doesn't have max_length - skip truncation
                         pass
                 
                 lead_data[django_field] = value

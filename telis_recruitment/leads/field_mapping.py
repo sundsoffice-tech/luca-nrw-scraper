@@ -100,10 +100,14 @@ SCRAPER_TO_DJANGO_MAPPING = {
 }
 
 # Django Model → Scraper DB reverse mapping
-DJANGO_TO_SCRAPER_MAPPING = {
-    django_field: scraper_field
-    for scraper_field, django_field in SCRAPER_TO_DJANGO_MAPPING.items()
-}
+# Note: When multiple scraper fields map to the same Django field,
+# only the first occurrence is preserved in the reverse mapping.
+# This is by design as the mapping is primarily used for scraper → Django direction.
+DJANGO_TO_SCRAPER_MAPPING = {}
+for scraper_field, django_field in SCRAPER_TO_DJANGO_MAPPING.items():
+    # Only set if not already set (preserves first mapping)
+    if django_field not in DJANGO_TO_SCRAPER_MAPPING:
+        DJANGO_TO_SCRAPER_MAPPING[django_field] = scraper_field
 
 # Fields that should be treated as JSON arrays
 JSON_ARRAY_FIELDS = ['tags', 'skills']
