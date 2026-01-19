@@ -82,6 +82,12 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
     """
     Extrahiert Telefonnummern mit Konfidenz-Score
     
+    Führt alle Extraktionsmethoden parallel aus und kombiniert die Ergebnisse:
+    - Standard-Regex-Patterns
+    - Verschleierte Nummern (Wörter, Sterne, Leerzeichen)
+    - WhatsApp-Links
+    - ML-basierte Konfidenz-Anpassung
+    
     Args:
         text: Sichtbarer Text-Inhalt
         html: HTML-Inhalt (optional, für zusätzlichen Kontext)
@@ -92,6 +98,10 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
     results = []
     combined_text = text + " " + html if html else text
     text_lower = combined_text.lower()
+    
+    # ========================================
+    # PARALLEL EXTRACTION: Run all methods simultaneously
+    # ========================================
     
     # 1. Standard-Patterns anwenden
     for pattern in PHONE_PATTERNS:
@@ -106,7 +116,7 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
             # Ungültiges Pattern überspringen
             continue
     
-    # 2. Verschleierte Nummern
+    # 2. Verschleierte Nummern (parallel, nicht als Fallback)
     deobfuscated_phones = deobfuscate_phone(text_lower)
     for phone in deobfuscated_phones:
         normalized = normalize_phone(phone)
@@ -114,13 +124,94 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
             confidence = 0.6  # Niedrigere Konfidenz für verschleierte Nummern
             results.append((normalized, phone, confidence))
     
-    # 3. Deduplizieren nach normalisierter Nummer
-    seen = set()
-    unique_results = []
+    # 3. WhatsApp-Link-Extraktion (parallel)
+    whatsapp_phone = extract_phone_from_link(html or text)
+    if whatsapp_phone:
+        # WhatsApp-Nummern haben hohe Konfidenz
+        results.append((whatsapp_phone, f"whatsapp:{whatsapp_phone}", 0.95))
+    
+    # 4. Advanced patterns from phone_patterns module (parallel)
+    try:
+        from phone_patterns import (
+            extract_whatsapp_number,
+            extract_obfuscated_number,
+            extract_phone_with_spacing,
+            normalize_phone_from_words,
+            LEARNED_PHONE_PATTERNS,
+        )
+        
+        # 4a. WhatsApp extraction from phone_patterns
+        wa_number = extract_whatsapp_number(html or "")
+        if wa_number:
+            normalized_wa = normalize_phone(wa_number)
+            if normalized_wa and is_valid_phone(normalized_wa):
+                results.append((normalized_wa, f"whatsapp_pattern:{wa_number}", 0.95))
+        
+        # 4b. Obfuscated number extraction
+        obf_number = extract_obfuscated_number(text_lower)
+        if obf_number:
+            normalized_obf = normalize_phone(obf_number)
+            if normalized_obf and is_valid_phone(normalized_obf):
+                results.append((normalized_obf, f"obfuscated:{obf_number}", 0.55))
+        
+        # 4c. Spaced number extraction (anti-bot patterns)
+        spaced_numbers = extract_phone_with_spacing(text_lower)
+        for spaced_num in spaced_numbers:
+            normalized_spaced = normalize_phone(spaced_num)
+            if normalized_spaced and is_valid_phone(normalized_spaced):
+                results.append((normalized_spaced, f"spaced:{spaced_num}", 0.65))
+        
+        # 4d. Word-based number extraction
+        word_number = normalize_phone_from_words(text_lower)
+        if word_number:
+            normalized_word = normalize_phone(word_number)
+            if normalized_word and is_valid_phone(normalized_word):
+                results.append((normalized_word, f"words:{word_number}", 0.50))
+        
+        # 4e. Learned patterns
+        for pattern in LEARNED_PHONE_PATTERNS:
+            try:
+                matches = re.finditer(pattern, combined_text, re.IGNORECASE)
+                for match in matches:
+                    number = match.group(0)
+                    cleaned = re.sub(r'[^\d+]', '', number)
+                    if len(cleaned) >= 10:
+                        normalized_learned = normalize_phone(cleaned)
+                        if normalized_learned and is_valid_phone(normalized_learned):
+                            confidence = calculate_confidence(number, combined_text)
+                            results.append((normalized_learned, f"learned:{number}", confidence))
+            except re.error:
+                continue
+    except ImportError:
+        pass  # phone_patterns module not available
+    
+    # ========================================
+    # ML-based confidence boosting
+    # ========================================
+    try:
+        from stream2_extraction_layer.ml_extractors import get_phone_extractor
+        
+        ml_extractor = get_phone_extractor()
+        boosted_results = []
+        for norm, raw, conf in results:
+            # Use ML to refine confidence score
+            ml_conf = ml_extractor.score_phone(norm, raw, combined_text)
+            # Weighted average: 60% original, 40% ML
+            final_conf = 0.6 * conf + 0.4 * ml_conf
+            boosted_results.append((norm, raw, final_conf))
+        results = boosted_results
+    except (ImportError, Exception):
+        pass  # Fallback to original confidence if ML not available
+    
+    # ========================================
+    # Deduplizieren und beste Konfidenz behalten
+    # ========================================
+    phone_best: Dict[str, Tuple[str, float]] = {}
     for norm, raw, conf in results:
-        if norm not in seen:
-            seen.add(norm)
-            unique_results.append((norm, raw, conf))
+        if norm not in phone_best or conf > phone_best[norm][1]:
+            phone_best[norm] = (raw, conf)
+    
+    unique_results = [(norm, raw, conf) for norm, (raw, conf) in phone_best.items()]
     
     # Sortieren nach Konfidenz (höchste zuerst)
     unique_results.sort(key=lambda x: x[2], reverse=True)

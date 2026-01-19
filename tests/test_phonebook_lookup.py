@@ -262,9 +262,8 @@ def test_rate_limiting(lookup):
     # Second call should have been delayed
     delay = second_time - first_time
     
-    # Should be at least close to min_delay (3 seconds)
-    # Allow some tolerance for test execution time
-    assert delay >= 2.5  # At least 2.5 seconds (some tolerance)
+    # min_delay is 2.0 seconds, but allow 0.5s tolerance for test execution time
+    assert delay >= 1.5  # At least 1.5 seconds (tolerance for 2.0s min_delay)
 
 
 def test_lookup_with_cache(lookup, temp_db):
@@ -354,3 +353,114 @@ def test_integration_with_lead_dict_structure():
     assert result["quelle"] == "https://kleinanzeigen.de/example"
     assert result["score"] == 75
     assert result["lead_type"] == "candidate"
+
+
+def test_company_enrichment():
+    """Test that company/organization information is enriched."""
+    lead = {
+        "name": "Unknown Candidate",
+        "telefon": "+491721234567",
+        "email": "",
+        "quelle": "https://kleinanzeigen.de/example",
+        "score": 75,
+        "tags": "",
+        "region": "Düsseldorf",
+    }
+    
+    # Create mock lookup that returns company info
+    class MockLookupWithCompany:
+        def lookup(self, phone):
+            return {
+                "name": "Max Mustermann",
+                "address": "Musterstr. 1, 51145 Köln",
+                "company": "Muster GmbH",
+                "source": "dastelefonbuch",
+                "confidence": 0.9
+            }
+    
+    result = enrich_lead_with_phonebook(lead, lookup=MockLookupWithCompany())
+    
+    # Name should be replaced
+    assert result["name"] == "Max Mustermann"
+    assert result["private_address"] == "Musterstr. 1, 51145 Köln"
+    assert result["company_name"] == "Muster GmbH"
+    assert result["name_source"] == "dastelefonbuch"
+
+
+def test_company_enrichment_empty():
+    """Test that empty company info doesn't add company_name field."""
+    lead = {
+        "name": "_probe_",
+        "telefon": "+491721234567",
+        "email": "",
+        "quelle": "https://kleinanzeigen.de/example",
+        "score": 75,
+        "tags": "",
+        "region": "Köln",
+    }
+    
+    # Create mock lookup without company info
+    class MockLookupNoCompany:
+        def lookup(self, phone):
+            return {
+                "name": "Anna Schmidt",
+                "address": "Hauptstr. 5, 50667 Köln",
+                "company": "",  # Empty company
+                "source": "dasoertliche",
+                "confidence": 0.85
+            }
+    
+    result = enrich_lead_with_phonebook(lead, lookup=MockLookupNoCompany())
+    
+    # Name should be replaced
+    assert result["name"] == "Anna Schmidt"
+    assert result["private_address"] == "Hauptstr. 5, 50667 Köln"
+    # company_name should not be set when company is empty
+    assert result.get("company_name", "") == ""
+
+
+def test_source_selectors_include_company():
+    """Test that all source configurations include company selectors."""
+    from phonebook_lookup import PhonebookLookup
+    
+    lookup = PhonebookLookup()
+    
+    for source in lookup.SOURCES:
+        assert "company" in source["selectors"], f"Source {source['name']} missing company selectors"
+        assert len(source["selectors"]["company"]) > 0, f"Source {source['name']} has empty company selectors"
+
+
+def test_cache_includes_company():
+    """Test that the cache stores and retrieves company information."""
+    import tempfile
+    import os
+    from phonebook_lookup import PhonebookLookup
+    
+    # Create a temporary database
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        temp_db = f.name
+    
+    try:
+        lookup = PhonebookLookup(temp_db)
+        
+        # Manually save to cache with company info
+        test_result = {
+            "name": "Test Person",
+            "address": "Test Address",
+            "company": "Test Company",
+            "source": "test_source",
+            "confidence": 0.9
+        }
+        lookup._save_cache("+491721234567", test_result)
+        
+        # Check that it's cached correctly
+        cached = lookup._check_cache("+491721234567")
+        
+        assert cached is not None
+        assert cached["name"] == "Test Person"
+        assert cached["address"] == "Test Address"
+        assert cached["company"] == "Test Company"
+        assert cached["source"] == "test_source"
+        assert cached["confidence"] == 0.9
+    finally:
+        os.unlink(temp_db)

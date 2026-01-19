@@ -1,6 +1,6 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import ScraperConfig, ScraperRun, ScraperLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
+from .models import ScraperConfig, ScraperRun, ScraperLog, ErrorLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
 
 
 # Unregister ScraperConfig if it's already registered (prevents AlreadyRegistered error)
@@ -72,10 +72,10 @@ class ScraperConfigAdmin(ModelAdmin):
 class ScraperRunAdmin(ModelAdmin):
     """Admin interface for ScraperRun"""
     
-    list_display = ['id', 'status', 'started_at', 'finished_at', 'duration_display', 'leads_found', 'api_cost', 'pid', 'started_by']
-    list_filter = ['status', 'started_at', 'started_by']
+    list_display = ['id', 'status', 'started_at', 'finished_at', 'duration_display', 'leads_found', 'leads_accepted', 'block_rate', 'api_cost', 'pid', 'started_by']
+    list_filter = ['status', 'started_at', 'started_by', 'circuit_breaker_triggered']
     search_fields = ['id', 'pid', 'logs']
-    readonly_fields = ['started_at', 'finished_at', 'duration_display', 'params_snapshot', 'logs']
+    readonly_fields = ['started_at', 'finished_at', 'duration_display', 'params_snapshot', 'logs', 'success_rate', 'lead_acceptance_rate']
     date_hierarchy = 'started_at'
     
     fieldsets = (
@@ -86,7 +86,23 @@ class ScraperRunAdmin(ModelAdmin):
             'fields': ('pid', 'started_by')
         }),
         ('Ergebnisse', {
-            'fields': ('leads_found', 'api_cost')
+            'fields': ('leads_found', 'leads_accepted', 'leads_rejected', 'api_cost')
+        }),
+        ('Links/URLs', {
+            'fields': ('links_checked', 'links_successful', 'links_failed', 'success_rate'),
+            'classes': ('collapse',)
+        }),
+        ('Performance-Metriken', {
+            'fields': ('avg_request_time_ms', 'block_rate', 'timeout_rate', 'error_rate'),
+            'classes': ('collapse',)
+        }),
+        ('Circuit Breaker', {
+            'fields': ('circuit_breaker_triggered', 'circuit_breaker_count'),
+            'classes': ('collapse',)
+        }),
+        ('Portal-Statistiken', {
+            'fields': ('portal_stats',),
+            'classes': ('collapse',)
         }),
         ('Parameter', {
             'fields': ('params_snapshot',),
@@ -123,10 +139,10 @@ class ScraperRunAdmin(ModelAdmin):
 class ScraperLogAdmin(ModelAdmin):
     """Admin interface for ScraperLog"""
     
-    list_display = ['id', 'run', 'level', 'message_preview', 'created_at']
-    list_filter = ['level', 'created_at', 'run']
-    search_fields = ['message']
-    readonly_fields = ['run', 'level', 'message', 'created_at']
+    list_display = ['id', 'run', 'level', 'portal', 'message_preview', 'created_at']
+    list_filter = ['level', 'portal', 'created_at', 'run']
+    search_fields = ['message', 'portal']
+    readonly_fields = ['run', 'level', 'portal', 'message', 'created_at']
     date_hierarchy = 'created_at'
     
     def message_preview(self, obj):
@@ -136,6 +152,43 @@ class ScraperLogAdmin(ModelAdmin):
     
     def has_add_permission(self, request):
         """Logs are created automatically"""
+        return False
+
+
+@admin.register(ErrorLog)
+class ErrorLogAdmin(ModelAdmin):
+    """Admin interface for ErrorLog"""
+    
+    list_display = ['id', 'run', 'error_type', 'severity', 'portal', 'count', 'message_preview', 'last_occurrence']
+    list_filter = ['error_type', 'severity', 'portal', 'created_at']
+    search_fields = ['message', 'portal', 'url']
+    readonly_fields = ['run', 'created_at', 'last_occurrence', 'details']
+    date_hierarchy = 'last_occurrence'
+    
+    fieldsets = (
+        ('Klassifizierung', {
+            'fields': ('error_type', 'severity', 'portal')
+        }),
+        ('Details', {
+            'fields': ('message', 'url', 'count')
+        }),
+        ('Metadaten', {
+            'fields': ('run', 'created_at', 'last_occurrence'),
+            'classes': ('collapse',)
+        }),
+        ('Technische Details', {
+            'fields': ('details',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def message_preview(self, obj):
+        """Show first 80 chars of message"""
+        return obj.message[:80] + ('...' if len(obj.message) > 80 else '')
+    message_preview.short_description = "Fehlermeldung"
+    
+    def has_add_permission(self, request):
+        """Errors are created automatically"""
         return False
 
 
@@ -154,10 +207,47 @@ class SearchRegionAdmin(ModelAdmin):
 class SearchDorkAdmin(ModelAdmin):
     """Admin interface for SearchDork"""
     
-    list_display = ['query_short', 'category', 'is_active', 'priority', 'times_used', 'leads_found', 'success_rate']
+    list_display = ['query_short', 'category', 'is_active', 'priority', 'times_used', 'leads_found', 'leads_with_phone', 'success_rate', 'last_synced_at']
     list_filter = ['category', 'is_active', 'ai_generated']
     list_editable = ['is_active', 'priority']
     search_fields = ['query', 'description']
+    
+    fieldsets = (
+        ('Such-Query', {
+            'fields': ('query', 'category', 'description', 'is_active', 'priority')
+        }),
+        ('Performance-Tracking', {
+            'fields': ('times_used', 'leads_found', 'leads_with_phone', 'total_search_results', 'success_rate', 'last_used'),
+            'classes': ('collapse',)
+        }),
+        ('KI-Lern-Daten', {
+            'fields': ('extraction_patterns', 'top_domains', 'phone_patterns', 'last_synced_at'),
+            'classes': ('collapse',),
+            'description': 'Automatisch gelernte Muster aus dem AI-System'
+        }),
+        ('KI-Generierung', {
+            'fields': ('ai_generated', 'ai_prompt'),
+            'classes': ('collapse',)
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = [
+        'times_used', 
+        'leads_found', 
+        'leads_with_phone', 
+        'total_search_results', 
+        'success_rate', 
+        'last_used', 
+        'extraction_patterns', 
+        'top_domains', 
+        'phone_patterns', 
+        'last_synced_at',
+        'created_at', 
+        'updated_at',
+    ]
     
     def query_short(self, obj):
         return obj.query[:60] + '...' if len(obj.query) > 60 else obj.query
@@ -168,10 +258,32 @@ class SearchDorkAdmin(ModelAdmin):
 class PortalSourceAdmin(ModelAdmin):
     """Admin interface for PortalSource"""
     
-    list_display = ['display_name', 'name', 'is_active', 'rate_limit_seconds', 'difficulty']
-    list_filter = ['is_active', 'difficulty', 'requires_login']
+    list_display = ['display_name', 'name', 'is_active', 'rate_limit_seconds', 'difficulty', 'circuit_breaker_tripped', 'consecutive_errors']
+    list_filter = ['is_active', 'difficulty', 'requires_login', 'circuit_breaker_enabled', 'circuit_breaker_tripped']
     list_editable = ['is_active', 'rate_limit_seconds']
     search_fields = ['name', 'display_name']
+    
+    fieldsets = (
+        ('Basis', {
+            'fields': ('name', 'display_name', 'base_url', 'is_active')
+        }),
+        ('Rate Limiting', {
+            'fields': ('rate_limit_seconds', 'max_results')
+        }),
+        ('Technisch', {
+            'fields': ('requires_login', 'difficulty', 'urls')
+        }),
+        ('Circuit Breaker', {
+            'fields': ('circuit_breaker_enabled', 'circuit_breaker_threshold', 'circuit_breaker_cooldown', 
+                      'circuit_breaker_tripped', 'circuit_breaker_reset_at', 'consecutive_errors'),
+            'classes': ('collapse',)
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(BlacklistEntry)

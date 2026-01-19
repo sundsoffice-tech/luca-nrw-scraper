@@ -249,8 +249,22 @@ class ActiveLearningEngine:
     # ==================== DORK LEARNING ====================
     
     def record_dork_result(self, dork: str, results: int, 
-                          leads_found: int, leads_with_phone: int):
-        """Speichert Dork-Ergebnis für Lernen"""
+                          leads_found: int, leads_with_phone: int,
+                          sync_to_crm: bool = True,
+                          extraction_patterns: Optional[List[str]] = None,
+                          top_domains: Optional[List[str]] = None):
+        """
+        Speichert Dork-Ergebnis für Lernen und synchronisiert mit CRM.
+        
+        Args:
+            dork: Die Such-Query
+            results: Anzahl Suchergebnisse
+            leads_found: Anzahl gefundene Leads
+            leads_with_phone: Anzahl Leads mit Telefonnummer
+            sync_to_crm: Wenn True, synchronisiert erfolgreiche Dorks zum Django CRM
+            extraction_patterns: Erfolgreiche Extraktions-Patterns (optional)
+            top_domains: Top-Domains für diesen Dork (optional)
+        """
         score = leads_with_phone / max(1, results) if results > 0 else 0
         pool = 'core' if leads_with_phone > 0 else 'explore'
         
@@ -272,6 +286,62 @@ class ActiveLearningEngine:
                     last_used = datetime('now')
             ''', (dork, results, leads_found, leads_with_phone, score, pool))
             conn.commit()
+            
+            # Get updated metrics for CRM sync
+            if sync_to_crm and leads_with_phone > 0:
+                cursor = conn.execute('''
+                    SELECT times_used, total_results, leads_found, leads_with_phone, score, pool
+                    FROM learning_dork_performance WHERE dork = ?
+                ''', (dork,))
+                row = cursor.fetchone()
+                if row:
+                    self._sync_dork_to_crm(
+                        dork=dork,
+                        metrics={
+                            'times_used': row[0],
+                            'total_results': row[1],
+                            'leads_found': row[2],
+                            'leads_with_phone': row[3],
+                            'score': row[4],
+                            'pool': row[5],
+                        },
+                        extraction_patterns=extraction_patterns,
+                        top_domains=top_domains,
+                    )
+    
+    def _sync_dork_to_crm(self, dork: str, metrics: Dict, 
+                          extraction_patterns: Optional[List[str]] = None,
+                          top_domains: Optional[List[str]] = None):
+        """
+        Synchronisiert Dork-Metriken zum Django CRM.
+        
+        Wird automatisch aufgerufen wenn ein erfolgreicher Dork (mit Telefon-Leads)
+        aufgezeichnet wird. Erstellt neue SearchDork-Einträge für erfolgreiche
+        AI-generierte Dorks, sodass das System kontinuierlich lernt.
+        """
+        try:
+            from telis_recruitment.scraper_control.services.dork_sync import DorkSyncService
+            
+            sync_service = DorkSyncService(sqlite_db_path=self.db_path)
+            success, message = sync_service.sync_dork_to_django(
+                dork_query=dork,
+                metrics=metrics,
+                create_if_missing=True,  # Erstelle neue SearchDork für erfolgreiche Dorks
+                extraction_patterns=extraction_patterns,
+                top_domains=top_domains,
+            )
+            
+            if success:
+                logger.info(f"Dork synced to CRM: {dork[:50]}...")
+            else:
+                logger.debug(f"Could not sync dork to CRM: {message}")
+                
+        except ImportError:
+            # Django/CRM not available - this is fine, just skip sync
+            pass
+        except Exception as e:
+            # Don't let CRM sync failures break the learning process
+            logger.debug(f"CRM sync skipped: {e}")
     
     def get_best_dorks(self, n: int = 10, include_explore: bool = True) -> List[str]:
         """Gibt die besten Dorks zurück"""

@@ -251,6 +251,10 @@ try:
         # Helper Functions
         _normalize_cx as __normalize_cx,
         _jitter as __jitter,
+        # Portal URL loading from database
+        get_portal_urls as _get_portal_urls,
+        get_portal_config as _get_portal_config,
+        get_all_portal_configs as _get_all_portal_configs,
     )
     from luca_scraper.database import (
         db as _db,
@@ -507,6 +511,13 @@ if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
 load_dotenv(override=True)
 
 USER_AGENT = "Mozilla/5.0 (compatible; VertriebFinder/2.3; +https://example.com)"
+# =========================
+# CONFIGURATION FALLBACKS
+# =========================
+# These are fallback definitions when luca_scraper is not available.
+# When luca_scraper is available, values from luca_scraper.config are used instead (see line ~1200).
+# luca_scraper.config uses centralized configuration with priority: DB → Env → Defaults
+
 DEFAULT_CSV = "vertrieb_kontakte.csv"
 DEFAULT_XLSX = "vertrieb_kontakte.xlsx"
 DB_PATH = os.getenv("SCRAPER_DB", "scraper.db")
@@ -516,17 +527,17 @@ GCS_API_KEY    = os.getenv("GCS_API_KEY", "")
 GCS_CX_RAW     = os.getenv("GCS_CX", "")
 BING_API_KEY   = os.getenv("BING_API_KEY", "")
 
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))  # Reduced to 10s for cost control
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))
 MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB default
 
-POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
+POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))
 
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 
-# Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
-ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
+# Async settings
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))
+ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
@@ -760,117 +771,149 @@ PORTAL_DELAYS = {
 
 # ==================== NEW PORTAL CONFIGURATIONS ====================
 # Extended portal configuration with priorities and detailed settings
-PORTAL_CONFIGS = {
-    "kleinanzeigen": {
-        "enabled": True,
-        "base_urls": DIRECT_CRAWL_URLS,
-        "delay": 3.0,
-        "priority": 1,
-        "type": "classifieds"
-    },
-    "markt_de": {
-        "enabled": True,
-        "base_urls": MARKT_DE_URLS,
-        "delay": 4.0,
-        "priority": 2,
-        "type": "classifieds"
-    },
-    "quoka": {
-        "enabled": True,
-        "base_urls": QUOKA_DE_URLS,
-        "delay": 6.0,
-        "priority": 3,
-        "type": "classifieds"
-    },
-    "indeed": {
-        "enabled": True,
-        "base_urls": [
-            "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
-            "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
-            "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
-            "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
-        ],
-        "delay": 3.0,
-        "priority": 4,
-        "type": "job_board"
-    },
-    "stepstone": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
-            "https://www.stepstone.de/jobs/sales/in-nrw",
-            "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
-        ],
-        "delay": 3.0,
-        "priority": 5,
-        "type": "job_board"
-    },
-    "arbeitsagentur": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
-            "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
-        ],
-        "delay": 2.0,
-        "priority": 6,
-        "type": "job_board"
-    },
-    "monster": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
-            "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
-        ],
-        "delay": 3.0,
-        "priority": 7,
-        "type": "job_board"
-    },
-    "stellenanzeigen": {
-        "enabled": True,
-        "base_urls": [
-            "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
-            "https://www.stellenanzeigen.de/jobs-sales-nrw/",
-        ],
-        "delay": 2.5,
-        "priority": 8,
-        "type": "job_board"
-    },
-    "meinestadt": {
-        "enabled": True,  # Reaktiviert mit besserer Handhabung
-        "base_urls": MEINESTADT_DE_URLS,
-        "delay": 3.0,
-        "priority": 9,
-        "type": "classifieds"
-    },
-    "dhd24": {
-        "enabled": False,  # Bleibt deaktiviert (oft blockiert)
-        "base_urls": DHD24_URLS,
-        "delay": 5.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "kalaydo": {
-        "enabled": False,  # Deaktiviert - blockiert Requests
-        "base_urls": KALAYDO_DE_URLS,
-        "delay": 4.0,
-        "priority": 99,
-        "type": "classifieds"
-    },
-    "freelancermap": {
-        "enabled": True,
-        "base_urls": FREELANCERMAP_URLS,
-        "delay": 3.0,
-        "priority": 10,
-        "type": "freelancer"
-    },
-    "freelance_de": {
-        "enabled": True,
-        "base_urls": FREELANCE_DE_URLS,
-        "delay": 3.0,
-        "priority": 11,
-        "type": "freelancer"
-    },
-}
+# Now supports database-backed URL loading via get_portal_urls()
+
+def _build_portal_configs():
+    """
+    Build portal configurations dynamically.
+    
+    URLs are loaded from database (PortalSource model) when available,
+    with fallback to hardcoded lists for backward compatibility.
+    
+    This allows adding/removing/modifying portal URLs via Django Admin
+    without code changes.
+    """
+    # Try to use database-backed function if available
+    try:
+        _get_urls = _get_portal_urls
+    except NameError:
+        # Fallback to hardcoded URLs if import failed
+        _get_urls = lambda name: {
+            'kleinanzeigen': DIRECT_CRAWL_URLS,
+            'markt_de': MARKT_DE_URLS,
+            'quoka': QUOKA_DE_URLS,
+            'kalaydo': KALAYDO_DE_URLS,
+            'meinestadt': MEINESTADT_DE_URLS,
+            'dhd24': DHD24_URLS,
+            'freelancermap': FREELANCERMAP_URLS,
+            'freelance_de': FREELANCE_DE_URLS,
+        }.get(name, [])
+    
+    return {
+        "kleinanzeigen": {
+            "enabled": True,
+            "base_urls": _get_urls('kleinanzeigen') or DIRECT_CRAWL_URLS,
+            "delay": 3.0,
+            "priority": 1,
+            "type": "classifieds"
+        },
+        "markt_de": {
+            "enabled": True,
+            "base_urls": _get_urls('markt_de') or MARKT_DE_URLS,
+            "delay": 4.0,
+            "priority": 2,
+            "type": "classifieds"
+        },
+        "quoka": {
+            "enabled": True,
+            "base_urls": _get_urls('quoka') or QUOKA_DE_URLS,
+            "delay": 6.0,
+            "priority": 3,
+            "type": "classifieds"
+        },
+        "indeed": {
+            "enabled": True,
+            "base_urls": _get_urls('indeed') or [
+                "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
+                "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
+                "https://de.indeed.com/Jobs?q=vertrieb+verf%C3%BCgbar&l=D%C3%BCsseldorf",
+                "https://de.indeed.com/Jobs?q=sales+offen&l=K%C3%B6ln",
+            ],
+            "delay": 3.0,
+            "priority": 4,
+            "type": "job_board"
+        },
+        "stepstone": {
+            "enabled": True,
+            "base_urls": _get_urls('stepstone') or [
+                "https://www.stepstone.de/jobs/vertrieb/in-nordrhein-westfalen",
+                "https://www.stepstone.de/jobs/sales/in-nrw",
+                "https://www.stepstone.de/jobs/au%C3%9Fendienst/in-nordrhein-westfalen",
+            ],
+            "delay": 3.0,
+            "priority": 5,
+            "type": "job_board"
+        },
+        "arbeitsagentur": {
+            "enabled": True,
+            "base_urls": _get_urls('arbeitsagentur') or [
+                "https://www.arbeitsagentur.de/jobsuche/suche?was=Vertrieb&wo=Nordrhein-Westfalen",
+                "https://www.arbeitsagentur.de/jobsuche/suche?was=Sales&wo=NRW",
+            ],
+            "delay": 2.0,
+            "priority": 6,
+            "type": "job_board"
+        },
+        "monster": {
+            "enabled": True,
+            "base_urls": _get_urls('monster') or [
+                "https://www.monster.de/jobs/suche/?q=vertrieb&where=nordrhein-westfalen",
+                "https://www.monster.de/jobs/suche/?q=sales&where=nrw",
+            ],
+            "delay": 3.0,
+            "priority": 7,
+            "type": "job_board"
+        },
+        "stellenanzeigen": {
+            "enabled": True,
+            "base_urls": _get_urls('stellenanzeigen') or [
+                "https://www.stellenanzeigen.de/jobs-vertrieb-nordrhein-westfalen/",
+                "https://www.stellenanzeigen.de/jobs-sales-nrw/",
+            ],
+            "delay": 2.5,
+            "priority": 8,
+            "type": "job_board"
+        },
+        "meinestadt": {
+            "enabled": True,  # Reaktiviert mit besserer Handhabung
+            "base_urls": _get_urls('meinestadt') or MEINESTADT_DE_URLS,
+            "delay": 3.0,
+            "priority": 9,
+            "type": "classifieds"
+        },
+        "dhd24": {
+            "enabled": False,  # Bleibt deaktiviert (oft blockiert)
+            "base_urls": _get_urls('dhd24') or DHD24_URLS,
+            "delay": 5.0,
+            "priority": 99,
+            "type": "classifieds"
+        },
+        "kalaydo": {
+            "enabled": False,  # Deaktiviert - blockiert Requests
+            "base_urls": _get_urls('kalaydo') or KALAYDO_DE_URLS,
+            "delay": 4.0,
+            "priority": 99,
+            "type": "classifieds"
+        },
+        "freelancermap": {
+            "enabled": True,
+            "base_urls": _get_urls('freelancermap') or FREELANCERMAP_URLS,
+            "delay": 3.0,
+            "priority": 10,
+            "type": "freelancer"
+        },
+        "freelance_de": {
+            "enabled": True,
+            "base_urls": _get_urls('freelance_de') or FREELANCE_DE_URLS,
+            "delay": 3.0,
+            "priority": 11,
+            "type": "freelancer"
+        },
+    }
+
+
+# Build portal configs - will load from database when available
+PORTAL_CONFIGS = _build_portal_configs()
 
 # Parallel crawling configuration
 PARALLEL_PORTAL_CRAWL = os.getenv("PARALLEL_PORTAL_CRAWL", "1") == "1"
@@ -1154,17 +1197,53 @@ SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 def get_performance_params():
     """
-    Get performance parameters from environment variables or defaults.
-    Legacy dashboard API integration removed - now uses env vars/defaults only.
+    Get performance parameters with priority:
+    1. Django DB configuration (when available)
+    2. Environment variables
+    3. Hardcoded defaults
     """
-    # Legacy dashboard API removed - skip API call
-    # Fallback to environment variables/defaults
-    return {
-        'threads': int(os.getenv("THREADS", "4")),
-        'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
-        'batch_size': int(os.getenv("BATCH_SIZE", "20")),
-        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
+    # Default values
+    defaults = {
+        'threads': 4,
+        'async_limit': 35,
+        'pool_size': 12,
+        'batch_size': 20,
+        'request_delay': 2.7
     }
+    
+    # Start with environment variables (override defaults)
+    params = {
+        'threads': int(os.getenv("THREADS", str(defaults['threads']))),
+        'async_limit': int(os.getenv("ASYNC_LIMIT", str(defaults['async_limit']))),
+        'pool_size': int(os.getenv("POOL_SIZE", str(defaults['pool_size']))),
+        'batch_size': int(os.getenv("BATCH_SIZE", str(defaults['batch_size']))),
+        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", str(defaults['request_delay'])))
+    }
+    
+    # Try to load from Django DB (highest priority)
+    if _LUCA_SCRAPER_AVAILABLE:
+        try:
+            from luca_scraper.config import SCRAPER_CONFIG_AVAILABLE
+            if SCRAPER_CONFIG_AVAILABLE:
+                from telis_recruitment.scraper_control.config_loader import get_scraper_config
+                db_config = get_scraper_config()
+                if db_config:
+                    # Override with DB values if present
+                    if 'async_limit' in db_config:
+                        params['async_limit'] = db_config['async_limit']
+                    if 'pool_size' in db_config:
+                        params['pool_size'] = db_config['pool_size']
+                    if 'sleep_between_queries' in db_config:
+                        params['request_delay'] = db_config['sleep_between_queries']
+        except (ImportError, AttributeError, KeyError) as e:
+            # If Django DB is not available or misconfigured, continue with env vars/defaults
+            # This is expected when running standalone without Django
+            pass
+        except Exception as e:
+            # Unexpected error - log it but continue with fallback
+            log("warn", "Failed to load performance params from Django DB", error=str(e))
+    
+    return params
 
 # -------------- Logging --------------
 def log(level:str, msg:str, **ctx):

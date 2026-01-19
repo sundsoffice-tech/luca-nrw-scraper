@@ -29,6 +29,10 @@ __version__ = "4.0.0"
 # =========================
 
 from .config import (
+    # Configuration loaders
+    get_scraper_config,
+    get_config,
+    
     # API Keys
     OPENAI_API_KEY,
     PERPLEXITY_API_KEY,
@@ -142,6 +146,11 @@ from .config import (
     _normalize_cx,
     _jitter,
     _env_list,
+    
+    # Portal URL Loading (database-backed)
+    get_portal_urls,
+    get_portal_config,
+    get_all_portal_configs,
     
     # Base Dorks
     BASE_DORKS,
@@ -402,6 +411,11 @@ __all__ = [
     "_jitter",
     "_env_list",
     "BASE_DORKS",
+    
+    # Portal URL Loading (database-backed)
+    "get_portal_urls",
+    "get_portal_config",
+    "get_all_portal_configs",
     
     # Database
     "db",

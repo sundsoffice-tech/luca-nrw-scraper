@@ -374,5 +374,73 @@ def test_dork_score_calculation(learning_engine, temp_db):
     conn.close()
 
 
+def test_record_dork_result_with_crm_sync_disabled(learning_engine, temp_db):
+    """Test recording dork with CRM sync disabled doesn't fail."""
+    # Should work without Django/CRM available
+    learning_engine.record_dork_result(
+        dork="no sync test dork",
+        results=10,
+        leads_found=5,
+        leads_with_phone=3,
+        sync_to_crm=False,  # Explicitly disable sync
+    )
+    
+    # Verify still stored in SQLite
+    conn = sqlite3.connect(temp_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT times_used FROM learning_dork_performance WHERE dork = ?", ("no sync test dork",))
+    row = cursor.fetchone()
+    conn.close()
+    
+    assert row is not None
+    assert row[0] == 1
+
+
+def test_record_dork_result_with_extraction_patterns(learning_engine, temp_db):
+    """Test recording dork with extraction patterns parameter."""
+    learning_engine.record_dork_result(
+        dork="patterns test dork",
+        results=10,
+        leads_found=5,
+        leads_with_phone=3,
+        sync_to_crm=False,
+        extraction_patterns=["div.phone", "span.contact"],
+        top_domains=["example.com"],
+    )
+    
+    # Verify basic storage works
+    conn = sqlite3.connect(temp_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT pool FROM learning_dork_performance WHERE dork = ?", ("patterns test dork",))
+    row = cursor.fetchone()
+    conn.close()
+    
+    assert row is not None
+    assert row[0] == "core"  # Has phone leads
+
+
+def test_record_dork_result_crm_sync_graceful_fail(learning_engine, temp_db):
+    """Test CRM sync fails gracefully when Django not available."""
+    # Even with sync_to_crm=True, should not raise if Django unavailable
+    # The _sync_dork_to_crm method should catch ImportError
+    learning_engine.record_dork_result(
+        dork="graceful fail test",
+        results=10,
+        leads_found=5,
+        leads_with_phone=3,
+        sync_to_crm=True,  # Try to sync but Django may not be available
+    )
+    
+    # Should still record to SQLite successfully
+    conn = sqlite3.connect(temp_db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT leads_with_phone FROM learning_dork_performance WHERE dork = ?", ("graceful fail test",))
+    row = cursor.fetchone()
+    conn.close()
+    
+    assert row is not None
+    assert row[0] == 3
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

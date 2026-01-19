@@ -789,13 +789,25 @@ class ProcessManager:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
         
-        # Get run statistics if available
+        # Get run statistics if available (enhanced with new metrics)
         if self.current_run_id:
             try:
                 from .models import ScraperRun
                 run = ScraperRun.objects.get(id=self.current_run_id)
                 status_info['leads_found'] = run.leads_found
+                status_info['leads_accepted'] = run.leads_accepted
+                status_info['leads_rejected'] = run.leads_rejected
                 status_info['api_cost'] = float(run.api_cost)
+                status_info['links_checked'] = run.links_checked
+                status_info['links_successful'] = run.links_successful
+                status_info['links_failed'] = run.links_failed
+                status_info['block_rate'] = run.block_rate
+                status_info['timeout_rate'] = run.timeout_rate
+                status_info['error_rate'] = run.error_rate
+                status_info['avg_request_time_ms'] = run.avg_request_time_ms
+                status_info['lead_acceptance_rate'] = run.lead_acceptance_rate
+                status_info['success_rate'] = run.success_rate
+                status_info['circuit_breaker_triggered'] = run.circuit_breaker_triggered
             except Exception:
                 pass
         
