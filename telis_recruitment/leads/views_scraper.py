@@ -5,6 +5,7 @@ Handles scraper start/stop/status and live logs.
 
 import json
 import time
+from django.conf import settings
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
@@ -264,19 +265,25 @@ def scraper_logs(request):
 def scraper_config(request):
     """
     Get current scraper configuration.
+    The allow_insecure_ssl field is only included in DEBUG mode (development).
     """
     try:
         config = ScraperConfig.get_config()
         
-        return Response({
+        response_data = {
             'min_score': config.min_score,
             'max_results_per_domain': config.max_results_per_domain,
             'request_timeout': config.request_timeout,
             'pool_size': config.pool_size,
             'internal_depth_per_domain': config.internal_depth_per_domain,
             'allow_pdf': config.allow_pdf,
-            'allow_insecure_ssl': config.allow_insecure_ssl,
-        }, status=status.HTTP_200_OK)
+        }
+        
+        # Only include allow_insecure_ssl in DEBUG mode (development)
+        if settings.DEBUG:
+            response_data['allow_insecure_ssl'] = config.allow_insecure_ssl
+        
+        return Response(response_data, status=status.HTTP_200_OK)
             
     except Exception as e:
         logger.error(f"Error getting scraper config: {e}", exc_info=True)
@@ -291,6 +298,7 @@ def scraper_config(request):
 def scraper_config_update(request):
     """
     Update scraper configuration.
+    The allow_insecure_ssl field can only be updated in DEBUG mode (development).
     
     PUT data:
     {
@@ -300,7 +308,7 @@ def scraper_config_update(request):
         "pool_size": 10,
         "internal_depth_per_domain": 2,
         "allow_pdf": true,
-        "allow_insecure_ssl": false
+        "allow_insecure_ssl": false  // Only in DEBUG mode
     }
     """
     try:
@@ -319,8 +327,20 @@ def scraper_config_update(request):
             config.internal_depth_per_domain = int(request.data['internal_depth_per_domain'])
         if 'allow_pdf' in request.data:
             config.allow_pdf = bool(request.data['allow_pdf'])
+        
+        # Only allow updating allow_insecure_ssl in DEBUG mode (development)
         if 'allow_insecure_ssl' in request.data:
-            config.allow_insecure_ssl = bool(request.data['allow_insecure_ssl'])
+            if settings.DEBUG:
+                config.allow_insecure_ssl = bool(request.data['allow_insecure_ssl'])
+            else:
+                logger.warning(
+                    f"⚠️  User {request.user} attempted to modify allow_insecure_ssl in production mode. "
+                    "This field can only be modified in DEBUG mode."
+                )
+                return Response({
+                    'success': False,
+                    'error': 'allow_insecure_ssl kann nur im Entwicklungsmodus (DEBUG=True) geändert werden'
+                }, status=status.HTTP_403_FORBIDDEN)
         
         config.updated_by = request.user
         config.save()
