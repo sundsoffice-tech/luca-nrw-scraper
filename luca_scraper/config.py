@@ -129,6 +129,9 @@ _CONFIG_DEFAULTS = {
     'enable_telefonbuch': True,
     'parallel_portal_crawl': True,
     'max_concurrent_portals': 5,
+    
+    # Content
+    'max_content_length': 2 * 1024 * 1024,  # 2MB
 }
 
 def get_scraper_config(param: Optional[str] = None) -> Any:
