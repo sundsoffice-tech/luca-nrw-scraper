@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.core.paginator import Paginator
 
-from .models import EmailAccount, EmailConversation, Email, EmailSignature, QuickReply
+from .models import EmailAccount, EmailConversation, Email, EmailSignature, QuickReply, EmailLabel
 from email_templates.models import EmailTemplate
 
 
@@ -76,7 +76,6 @@ def inbox(request):
     ).exclude(status=EmailConversation.Status.TRASH).count()
     
     # Get user's labels
-    from .models import EmailLabel
     labels = EmailLabel.objects.filter(
         Q(owner=request.user) | Q(is_system=True)
     )
