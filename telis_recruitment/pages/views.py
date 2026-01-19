@@ -239,99 +239,48 @@ def get_client_ip(request):
 @staff_member_required
 @require_POST
 def upload_asset(request):
-    """Upload an asset to the asset manager"""
-    try:
-        from PIL import Image
-        import os
-        
-        uploaded_file = request.FILES.get('file')
-        if not uploaded_file:
-            return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
-        
-        # Validate file type
-        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
-        if uploaded_file.content_type not in allowed_types:
-            return JsonResponse({'success': False, 'error': 'Invalid file type. Only images are allowed.'}, status=400)
-        
-        # Validate file size (max 10MB)
-        if uploaded_file.size > 10 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'File too large. Maximum size is 10MB.'}, status=400)
-        
-        # Get additional params
-        folder = request.POST.get('folder', '')
-        alt_text = request.POST.get('alt_text', '')
-        
-        # Sanitize filename
-        original_filename = uploaded_file.name
-        safe_filename = os.path.basename(original_filename)  # Remove path components
-        
-        # Get file size
-        file_size = uploaded_file.size
-        
-        # Try to get image dimensions
-        width, height = None, None
+    """Upload asset für GrapesJS"""
+    if 'file' not in request.FILES:
+        return JsonResponse({'error': 'Keine Datei'}, status=400)
+    
+    file = request.FILES['file']
+    mime = file.content_type
+    width, height = None, None
+    
+    if mime.startswith('image/'):
         try:
-            img = Image.open(uploaded_file)
+            from PIL import Image
+            img = Image.open(file)
             width, height = img.size
-            uploaded_file.seek(0)  # Reset file pointer
+            file.seek(0)
         except Exception:
-            pass  # Not an image or couldn't read dimensions
-        
-        # Create asset
-        asset = PageAsset.objects.create(
-            file=uploaded_file,
-            filename=safe_filename,
-            file_size=file_size,
-            width=width,
-            height=height,
-            alt_text=alt_text,
-            folder=folder,
-            uploaded_by=request.user
-        )
-        
-        return JsonResponse({
-            'success': True,
-            'asset': {
-                'id': asset.id,
-                'url': asset.file.url,
-                'filename': asset.filename,
-                'file_size': asset.file_size,
-                'width': asset.width,
-                'height': asset.height,
-                'alt_text': asset.alt_text,
-                'folder': asset.folder,
-            }
-        })
-    except Exception as e:
-        logger.error(f"Error uploading asset: {e}")
-        return JsonResponse({'success': False, 'error': 'Failed to upload asset. Please try again.'}, status=400)
+            pass
+        asset_type = 'image'
+    else:
+        asset_type = 'document'
+    
+    asset = PageAsset.objects.create(
+        landing_page_id=request.POST.get('landing_page_id') or None,
+        file=file, name=file.name, asset_type=asset_type,
+        width=width, height=height, file_size=file.size,
+        mime_type=mime, folder=request.POST.get('folder', ''),
+        uploaded_by=request.user
+    )
+    
+    return JsonResponse({'src': asset.url, 'name': asset.name, 'width': width, 'height': height})
 
 
 @staff_member_required
-@require_http_methods(["GET"])
 def list_assets(request):
-    """List all assets for GrapesJS Asset Manager"""
-    folder = request.GET.get('folder', '')
+    """Liste Assets für GrapesJS Asset Manager"""
+    from django.db import models as db_models
     
-    assets = PageAsset.objects.all()
-    if folder:
-        assets = assets.filter(folder=folder)
+    assets = PageAsset.objects.filter(asset_type='image')
+    page_id = request.GET.get('landing_page_id')
+    if page_id:
+        assets = assets.filter(db_models.Q(landing_page_id=page_id) | db_models.Q(landing_page__isnull=True))
     
-    # Format for GrapesJS Asset Manager
-    asset_list = []
-    for asset in assets:
-        asset_list.append({
-            'id': asset.id,
-            'src': asset.file.url,
-            'name': asset.filename,
-            'type': 'image',  # Can be extended for other types
-            'height': asset.height,
-            'width': asset.width,
-            'folder': asset.folder,
-            'alt': asset.alt_text,
-        })
-    
-    return JsonResponse({'data': asset_list})
+    return JsonResponse([{'src': a.url, 'name': a.name} for a in assets], safe=False)
 
 
 @staff_member_required
@@ -360,63 +309,31 @@ def delete_asset(request, asset_id):
 # ============================================================================
 
 @staff_member_required
-def brand_settings(request):
-    """View and edit brand settings"""
-    from .models import BrandSettings
+def brand_settings_view(request):
+    """Brand Settings Seite"""
+    from django.contrib import messages
     
-    # Get or create brand settings
-    settings_obj, created = BrandSettings.objects.get_or_create(pk=1)
-    
+    settings = BrandSettings.get_settings()
     if request.method == 'POST':
-        try:
-            # Update color settings
-            settings_obj.primary_color = request.POST.get('primary_color', settings_obj.primary_color)
-            settings_obj.secondary_color = request.POST.get('secondary_color', settings_obj.secondary_color)
-            settings_obj.accent_color = request.POST.get('accent_color', settings_obj.accent_color)
-            settings_obj.text_color = request.POST.get('text_color', settings_obj.text_color)
-            settings_obj.background_color = request.POST.get('background_color', settings_obj.background_color)
-            
-            # Update typography
-            settings_obj.heading_font = request.POST.get('heading_font', settings_obj.heading_font)
-            settings_obj.body_font = request.POST.get('body_font', settings_obj.body_font)
-            settings_obj.base_font_size = request.POST.get('base_font_size', settings_obj.base_font_size)
-            
-            # Update social media
-            settings_obj.facebook_url = request.POST.get('facebook_url', '')
-            settings_obj.instagram_url = request.POST.get('instagram_url', '')
-            settings_obj.linkedin_url = request.POST.get('linkedin_url', '')
-            settings_obj.twitter_url = request.POST.get('twitter_url', '')
-            settings_obj.youtube_url = request.POST.get('youtube_url', '')
-            
-            # Update contact
-            settings_obj.company_name = request.POST.get('company_name', '')
-            settings_obj.email = request.POST.get('email', '')
-            settings_obj.phone = request.POST.get('phone', '')
-            settings_obj.address = request.POST.get('address', '')
-            
-            # Update legal URLs
-            settings_obj.privacy_url = request.POST.get('privacy_url', '')
-            settings_obj.imprint_url = request.POST.get('imprint_url', '')
-            settings_obj.terms_url = request.POST.get('terms_url', '')
-            
-            # Handle file uploads
-            if 'logo' in request.FILES:
-                settings_obj.logo = request.FILES['logo']
-            if 'logo_dark' in request.FILES:
-                settings_obj.logo_dark = request.FILES['logo_dark']
-            if 'favicon' in request.FILES:
-                settings_obj.favicon = request.FILES['favicon']
-            
-            settings_obj.save()
-            
-            return JsonResponse({'success': True, 'message': 'Brand settings saved successfully'})
-        except Exception as e:
-            logger.error(f"Error saving brand settings: {e}")
-            return JsonResponse({'success': False, 'error': 'Failed to apply template. Please try again.'}, status=400)
-    
-    return render(request, 'pages/brand_settings.html', {
-        'settings': settings_obj
-    })
+        # Update all fields from POST
+        for f in ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'background_color',
+                  'heading_font', 'body_font', 'company_name', 'contact_email', 'contact_phone',
+                  'facebook_url', 'instagram_url', 'linkedin_url', 'privacy_url', 'imprint_url']:
+            if f in request.POST:
+                setattr(settings, f, request.POST[f])
+        
+        # Handle file uploads
+        if 'logo' in request.FILES:
+            settings.logo = request.FILES['logo']
+        if 'logo_dark' in request.FILES:
+            settings.logo_dark = request.FILES['logo_dark']
+        if 'favicon' in request.FILES:
+            settings.favicon = request.FILES['favicon']
+        
+        settings.save()
+        messages.success(request, 'Gespeichert!')
+        return redirect('pages:brand-settings')
+    return render(request, 'pages/brand_settings.html', {'settings': settings})
 
 
 @staff_member_required
@@ -427,7 +344,7 @@ def get_brand_css(request):
     
     settings_obj = BrandSettings.objects.first()
     if settings_obj:
-        css = settings_obj.generate_css_variables()
+        css = settings_obj.get_css_variables()
         return HttpResponse(css, content_type='text/css')
     
     return HttpResponse('', content_type='text/css')
@@ -485,9 +402,9 @@ def apply_template(request, template_id):
             )
         
         # Apply template content
-        page.html = template.html_content
-        page.css = template.css_content
-        page.html_json = template.gjs_data
+        page.html = template.html
+        page.css = template.css
+        page.html_json = template.html_json
         page.updated_by = request.user
         page.save()
         
