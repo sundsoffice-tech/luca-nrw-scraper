@@ -91,12 +91,32 @@ class ScraperControl {
             this.statUptime.textContent = '-';
         }
         
-        this.statLeads.textContent = status.leads_saved || 0;
+        // Use leads_found from API (not leads_saved)
+        this.statLeads.textContent = status.leads_found || 0;
         
         if (status.cpu_percent !== undefined && status.memory_mb !== undefined) {
             this.statResources.textContent = `${status.cpu_percent.toFixed(1)}% / ${status.memory_mb.toFixed(0)}MB`;
         } else {
             this.statResources.textContent = '-';
+        }
+        
+        // Update performance metrics if elements exist
+        const metricLinksChecked = document.getElementById('metric-links-checked');
+        const metricAcceptanceRate = document.getElementById('metric-acceptance-rate');
+        const metricBlockRate = document.getElementById('metric-block-rate');
+        const metricAvgTime = document.getElementById('metric-avg-time');
+        
+        if (metricLinksChecked) {
+            metricLinksChecked.textContent = status.links_checked || 0;
+        }
+        if (metricAcceptanceRate) {
+            metricAcceptanceRate.textContent = (status.lead_acceptance_rate || 0).toFixed(1) + '%';
+        }
+        if (metricBlockRate) {
+            metricBlockRate.textContent = (status.block_rate || 0).toFixed(1) + '%';
+        }
+        if (metricAvgTime) {
+            metricAvgTime.textContent = Math.round(status.avg_request_time_ms || 0) + 'ms';
         }
         
         // Start/stop log streaming based on status
