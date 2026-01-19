@@ -3169,7 +3169,7 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
 
 
 # Fallback für "alle" Branchen – Reihenfolge
-INDUSTRY_ORDER = ["nrw","social","solar","telekom","versicherung","bau","ecom","household"]
+INDUSTRY_ORDER = ["handelsvertreter","nrw","social","solar","telekom","versicherung","bau","ecom","household","d2d","callcenter"]
 
 def build_queries(
     selected_industry: Optional[str] = None,
