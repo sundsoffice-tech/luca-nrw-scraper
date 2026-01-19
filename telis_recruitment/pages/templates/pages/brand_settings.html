@@ -1,0 +1,239 @@
+{% extends 'crm/base.html' %}
+{% load static %}
+
+{% block title %}Brand Settings - TELIS CRM{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Brand Settings</h1>
+        <p class="text-gray-400">Configure your global brand settings for consistent styling across all pages</p>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Colors Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🎨 Colors
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Primary Color</label>
+                    <div class="flex gap-3">
+                        <input type="color" name="primary_color" value="{{ settings.primary_color }}" class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.primary_color }}" readonly class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Secondary Color</label>
+                    <div class="flex gap-3">
+                        <input type="color" name="secondary_color" value="{{ settings.secondary_color }}" class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.secondary_color }}" readonly class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Accent Color</label>
+                    <div class="flex gap-3">
+                        <input type="color" name="accent_color" value="{{ settings.accent_color }}" class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.accent_color }}" readonly class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Text Color</label>
+                    <div class="flex gap-3">
+                        <input type="color" name="text_color" value="{{ settings.text_color }}" class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.text_color }}" readonly class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Background Color</label>
+                    <div class="flex gap-3">
+                        <input type="color" name="background_color" value="{{ settings.background_color }}" class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.background_color }}" readonly class="flex-1 px-3 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Typography Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                ✏️ Typography
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Heading Font</label>
+                    <select name="heading_font" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                        <option value="Inter" {% if settings.heading_font == 'Inter' %}selected{% endif %}>Inter</option>
+                        <option value="Poppins" {% if settings.heading_font == 'Poppins' %}selected{% endif %}>Poppins</option>
+                        <option value="Roboto" {% if settings.heading_font == 'Roboto' %}selected{% endif %}>Roboto</option>
+                        <option value="Montserrat" {% if settings.heading_font == 'Montserrat' %}selected{% endif %}>Montserrat</option>
+                        <option value="Lato" {% if settings.heading_font == 'Lato' %}selected{% endif %}>Lato</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Body Font</label>
+                    <select name="body_font" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                        <option value="Open Sans" {% if settings.body_font == 'Open Sans' %}selected{% endif %}>Open Sans</option>
+                        <option value="Roboto" {% if settings.body_font == 'Roboto' %}selected{% endif %}>Roboto</option>
+                        <option value="Lato" {% if settings.body_font == 'Lato' %}selected{% endif %}>Lato</option>
+                        <option value="Source Sans Pro" {% if settings.body_font == 'Source Sans Pro' %}selected{% endif %}>Source Sans Pro</option>
+                        <option value="Inter" {% if settings.body_font == 'Inter' %}selected{% endif %}>Inter</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Base Font Size (px)</label>
+                    <input type="number" name="base_font_size" value="{{ settings.base_font_size }}" min="12" max="24" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- Logo & Branding Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🖼️ Logo & Branding
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Logo (Light)</label>
+                    {% if settings.logo %}
+                    <img src="{{ settings.logo.url }}" alt="Logo" class="w-full h-20 object-contain bg-white rounded mb-2">
+                    {% endif %}
+                    <input type="file" name="logo" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Logo (Dark)</label>
+                    {% if settings.logo_dark %}
+                    <img src="{{ settings.logo_dark.url }}" alt="Logo Dark" class="w-full h-20 object-contain bg-gray-900 rounded mb-2">
+                    {% endif %}
+                    <input type="file" name="logo_dark" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Favicon</label>
+                    {% if settings.favicon %}
+                    <img src="{{ settings.favicon.url }}" alt="Favicon" class="w-16 h-16 object-contain bg-white rounded mb-2">
+                    {% endif %}
+                    <input type="file" name="favicon" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700">
+                </div>
+            </div>
+        </div>
+
+        <!-- Social Media Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                👥 Social Media
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Facebook URL</label>
+                    <input type="url" name="facebook_url" value="{{ settings.facebook_url }}" placeholder="https://facebook.com/yourpage" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Instagram URL</label>
+                    <input type="url" name="instagram_url" value="{{ settings.instagram_url }}" placeholder="https://instagram.com/yourhandle" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">LinkedIn URL</label>
+                    <input type="url" name="linkedin_url" value="{{ settings.linkedin_url }}" placeholder="https://linkedin.com/company/yourcompany" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Twitter URL</label>
+                    <input type="url" name="twitter_url" value="{{ settings.twitter_url }}" placeholder="https://twitter.com/yourhandle" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">YouTube URL</label>
+                    <input type="url" name="youtube_url" value="{{ settings.youtube_url }}" placeholder="https://youtube.com/yourchannel" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                📞 Contact Information
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Company Name</label>
+                    <input type="text" name="company_name" value="{{ settings.company_name }}" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                    <input type="email" name="email" value="{{ settings.email }}" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Phone</label>
+                    <input type="tel" name="phone" value="{{ settings.phone }}" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Address</label>
+                    <textarea name="address" rows="3" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">{{ settings.address }}</textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legal Links Section -->
+        <div class="bg-dark-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                ⚖️ Legal Links
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Privacy Policy URL</label>
+                    <input type="url" name="privacy_url" value="{{ settings.privacy_url }}" placeholder="https://yoursite.com/privacy" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Imprint URL</label>
+                    <input type="url" name="imprint_url" value="{{ settings.imprint_url }}" placeholder="https://yoursite.com/impressum" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Terms of Service URL</label>
+                    <input type="url" name="terms_url" value="{{ settings.terms_url }}" placeholder="https://yoursite.com/terms" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4 justify-end">
+            <a href="{% url 'pages:builder-list' %}" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-white font-semibold rounded-lg transition">
+                Cancel
+            </a>
+            <button type="submit" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition">
+                💾 Save Settings
+            </button>
+        </div>
+    </form>
+    
+    <!-- CSS Preview -->
+    <div class="mt-8 bg-dark-800 rounded-lg p-6 shadow-lg">
+        <h2 class="text-xl font-semibold text-white mb-4">CSS Variables Preview</h2>
+        <pre class="bg-dark-700 p-4 rounded text-sm text-gray-300 overflow-x-auto"><code>{{ settings.generate_css_variables }}</code></pre>
+    </div>
+</div>
+{% endblock %}
