@@ -5,6 +5,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+# Custom exception for Brevo API when SDK is not available
+class BrevoApiException(Exception):
+    """Custom exception for Brevo API errors"""
+    pass
+
+
 # Check if Brevo SDK is available
 BREVO_AVAILABLE = False
 try:
@@ -12,9 +19,9 @@ try:
     from sib_api_v3_sdk.rest import ApiException
     BREVO_AVAILABLE = True
 except ImportError:
-    # Create dummy classes for when SDK is not installed
+    # Use custom exception when SDK is not installed
     sib_api_v3_sdk = None
-    ApiException = Exception
+    ApiException = BrevoApiException
     logger.warning("Brevo SDK not available. Install with: pip install sib-api-v3-sdk")
 
 
