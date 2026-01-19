@@ -97,6 +97,14 @@ SCRAPER_TO_DJANGO_MAPPING = {
     # Metadata
     'recency_indicator': 'recency_indicator',
     'last_updated': 'last_updated',
+    
+    # Additional scraper fields
+    'profile_text': 'profile_text',
+    'industries_experience': 'industries_experience',
+    'source_type': 'source_type',
+    'last_activity': 'last_activity',
+    'name_validated': 'name_validated',
+    'ssl_insecure': 'ssl_insecure',
 }
 
 # Django Model → Scraper DB reverse mapping
@@ -122,7 +130,7 @@ INTEGER_FIELDS = [
 ]
 
 # Fields that are booleans
-BOOLEAN_FIELDS = []
+BOOLEAN_FIELDS = ['name_validated']
 
 # Fields that should be URLs
 URL_FIELDS = [
