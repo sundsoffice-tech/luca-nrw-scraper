@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.conf import settings
 from unfold.admin import ModelAdmin
 from .models import ScraperConfig, ScraperRun, ScraperLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
 
@@ -16,38 +17,50 @@ class ScraperConfigAdmin(ModelAdmin):
     list_filter = ['industry', 'mode', 'smart', 'force', 'once', 'dry_run']
     readonly_fields = ['updated_at', 'updated_by']
     
-    fieldsets = (
-        ('Basis-Einstellungen', {
-            'fields': ('industry', 'mode', 'qpi', 'daterestrict'),
-        }),
-        ('Flags', {
-            'fields': ('smart', 'force', 'once', 'dry_run'),
-        }),
-        ('HTTP & Performance', {
-            'fields': ('http_timeout', 'async_limit', 'pool_size', 'http2_enabled'),
-            'classes': ('collapse',)
-        }),
-        ('Rate Limiting', {
-            'fields': ('sleep_between_queries', 'max_google_pages', 'circuit_breaker_penalty', 'retry_max_per_url'),
-            'classes': ('collapse',)
-        }),
-        ('Scoring', {
-            'fields': ('min_score', 'max_per_domain', 'default_quality_score', 'confidence_threshold'),
-            'classes': ('collapse',)
-        }),
-        ('Feature Flags', {
-            'fields': ('enable_kleinanzeigen', 'enable_telefonbuch', 'enable_perplexity', 'enable_bing', 'parallel_portal_crawl', 'max_concurrent_portals'),
-            'classes': ('collapse',)
-        }),
-        ('Content', {
-            'fields': ('allow_pdf', 'max_content_length'),
-            'classes': ('collapse',)
-        }),
-        ('Metadaten', {
-            'fields': ('updated_at', 'updated_by'),
-            'classes': ('collapse',),
-        }),
-    )
+    def get_fieldsets(self, request, obj=None):
+        """
+        Dynamically build fieldsets based on DEBUG mode.
+        The allow_insecure_ssl field is only shown in development (DEBUG=True).
+        """
+        # Content fields - add allow_insecure_ssl only in DEBUG mode
+        content_fields = ['allow_pdf', 'max_content_length']
+        if settings.DEBUG:
+            content_fields.append('allow_insecure_ssl')
+        
+        fieldsets = (
+            ('Basis-Einstellungen', {
+                'fields': ('industry', 'mode', 'qpi', 'daterestrict'),
+            }),
+            ('Flags', {
+                'fields': ('smart', 'force', 'once', 'dry_run'),
+            }),
+            ('HTTP & Performance', {
+                'fields': ('http_timeout', 'async_limit', 'pool_size', 'http2_enabled'),
+                'classes': ('collapse',)
+            }),
+            ('Rate Limiting', {
+                'fields': ('sleep_between_queries', 'max_google_pages', 'circuit_breaker_penalty', 'retry_max_per_url'),
+                'classes': ('collapse',)
+            }),
+            ('Scoring', {
+                'fields': ('min_score', 'max_per_domain', 'default_quality_score', 'confidence_threshold'),
+                'classes': ('collapse',)
+            }),
+            ('Feature Flags', {
+                'fields': ('enable_kleinanzeigen', 'enable_telefonbuch', 'enable_perplexity', 'enable_bing', 'parallel_portal_crawl', 'max_concurrent_portals'),
+                'classes': ('collapse',)
+            }),
+            ('Content', {
+                'fields': tuple(content_fields),
+                'classes': ('collapse',),
+                'description': '⚠️ ENTWICKLUNGSMODUS: allow_insecure_ssl ist nur für Entwicklung sichtbar' if settings.DEBUG else None
+            }),
+            ('Metadaten', {
+                'fields': ('updated_at', 'updated_by'),
+                'classes': ('collapse',),
+            }),
+        )
+        return fieldsets
     
     def save_model(self, request, obj, form, change):
         """Set updated_by to current user"""

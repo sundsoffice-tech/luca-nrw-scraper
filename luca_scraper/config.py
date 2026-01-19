@@ -80,7 +80,7 @@ USE_TOR = False
 
 # SSL & PDF
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
-ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
+ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 ALLOW_PDF_NON_CV = (os.getenv("ALLOW_PDF_NON_CV", "0") == "1")
 
 # User Agent
