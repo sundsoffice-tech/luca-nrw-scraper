@@ -293,7 +293,15 @@ let trendChart, statusChart, sourceChart;
 // KPIs laden
 async function loadKPIs() {
     const filters = getFiltersFromUI();
-    const days = filters.days !== 'custom' ? filters.days : 30;
+    let days = filters.days !== 'custom' ? filters.days : 30;
+    
+    // Calculate actual days for custom date range
+    if (filters.days === 'custom' && filters.start_date && filters.end_date) {
+        const startDate = new Date(filters.start_date);
+        const endDate = new Date(filters.end_date);
+        const diffTime = Math.abs(endDate - startDate);
+        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
     
     try {
         const response = await fetch(`/crm/reports/api/kpis/?days=${days}`);
