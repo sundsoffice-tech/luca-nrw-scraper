@@ -1,6 +1,9 @@
 """
 Comprehensive tests for phone_extractor.py
 Testing phone number extraction, deobfuscation, and validation.
+
+Note: This test file requires the project root to be in PYTHONPATH.
+Run from project root: pytest tests/test_phone_extraction.py
 """
 
 import pytest

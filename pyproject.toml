@@ -25,7 +25,6 @@ ensure_newline_before_comments = true
 skip_glob = ["*/migrations/*", "*/node_modules/*", "*/.venv/*", "*/venv/*"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "telis.settings"
 python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*", "*Test", "*TestCase"]
 python_functions = ["test_*"]

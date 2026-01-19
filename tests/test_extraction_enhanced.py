@@ -1,6 +1,9 @@
 """
 Comprehensive tests for extraction_enhanced.py
 Testing email extraction, name extraction, and role detection.
+
+Note: This test file requires the project root to be in PYTHONPATH.
+Run from project root: pytest tests/test_extraction_enhanced.py
 """
 
 import pytest

@@ -1,6 +1,9 @@
 """
 Comprehensive tests for luca_scraper database module
 Testing database connections, schema, and operations.
+
+Note: This test file requires the project root to be in PYTHONPATH.
+Run from project root: pytest tests/test_database_operations.py
 """
 
 import pytest
