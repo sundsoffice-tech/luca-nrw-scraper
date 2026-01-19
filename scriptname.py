@@ -507,6 +507,13 @@ if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
 load_dotenv(override=True)
 
 USER_AGENT = "Mozilla/5.0 (compatible; VertriebFinder/2.3; +https://example.com)"
+# =========================
+# CONFIGURATION FALLBACKS
+# =========================
+# These are fallback definitions when luca_scraper is not available.
+# When luca_scraper is available, values from luca_scraper.config are used instead (see line ~1200).
+# luca_scraper.config uses centralized configuration with priority: DB → Env → Defaults
+
 DEFAULT_CSV = "vertrieb_kontakte.csv"
 DEFAULT_XLSX = "vertrieb_kontakte.xlsx"
 DB_PATH = os.getenv("SCRAPER_DB", "scraper.db")
@@ -516,17 +523,17 @@ GCS_API_KEY    = os.getenv("GCS_API_KEY", "")
 GCS_CX_RAW     = os.getenv("GCS_CX", "")
 BING_API_KEY   = os.getenv("BING_API_KEY", "")
 
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))  # Reduced to 10s for cost control
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))
 MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB default
 
-POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
+POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))
 
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 
-# Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
-ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
+# Async settings
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))
+ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 

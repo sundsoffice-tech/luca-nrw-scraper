@@ -4,9 +4,37 @@ LUCA NRW Scraper - Zentrale Konfiguration
 Alle Konstanten und Environment Variables aus scriptname.py extrahiert.
 Phase 1 der Modularisierung.
 
+Configuration Priority System:
+------------------------------
+The configuration system uses a three-tier priority system to eliminate inconsistencies:
+
+1. **Django Database (Highest Priority)**: ScraperConfig model in the database
+   - Managed through Django Admin UI
+   - Persistent across runs
+   - Single source of truth for production deployments
+   
+2. **Environment Variables (Medium Priority)**: .env file or system environment
+   - Used as fallback when DB is not available
+   - Useful for local development and testing
+   
+3. **Hardcoded Defaults (Lowest Priority)**: Defined in _CONFIG_DEFAULTS
+   - Last resort fallback
+   - Ensures the scraper always has valid configuration
+
+Usage:
+------
+All configuration parameters are automatically loaded using get_scraper_config() at module import.
+The global variables (HTTP_TIMEOUT, ASYNC_LIMIT, etc.) are available for backward compatibility
+but internally use the centralized configuration system.
+
+To reload configuration dynamically:
+    >>> from luca_scraper.config import get_scraper_config
+    >>> config = get_scraper_config()  # Get all config
+    >>> timeout = get_scraper_config('http_timeout')  # Get specific param
+
 AI Configuration Priority:
 --------------------------
-Configuration is loaded in the following priority order:
+AI configuration (separate from scraper config) is loaded in the following priority order:
 1. Django DB via ai_config app (when available)
 2. Environment variables
 3. Hardcoded defaults
@@ -65,23 +93,137 @@ BING_API_KEY = os.getenv("BING_API_KEY", "")
 DB_PATH = os.getenv("SCRAPER_DB", "scraper.db")
 
 # =========================
-# HTTP & NETWORKING
+# CENTRALIZED CONFIGURATION LOADER
 # =========================
 
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))
-MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB default
-POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))
+# Configuration defaults (Priority 3: Hardcoded)
+_CONFIG_DEFAULTS = {
+    # HTTP & Networking
+    'http_timeout': 10,
+    'max_fetch_size': 2 * 1024 * 1024,  # 2MB
+    'pool_size': 12,
+    'async_limit': 35,
+    'async_per_host': 3,
+    'http2_enabled': True,
+    
+    # SSL & PDF
+    'allow_pdf': False,
+    'allow_insecure_ssl': False,
+    'allow_pdf_non_cv': False,
+    
+    # Rate Limiting
+    'sleep_between_queries': 2.7,
+    'max_google_pages': 2,
+    'circuit_breaker_penalty': 30,
+    'circuit_breaker_api_penalty': 15,
+    'retry_max_per_url': 2,
+    
+    # Scoring
+    'min_score': 40,
+    'max_per_domain': 5,
+    'default_quality_score': 50,
+    'confidence_threshold': 0.35,
+    
+    # Feature Flags
+    'enable_kleinanzeigen': True,
+    'enable_telefonbuch': True,
+    'parallel_portal_crawl': True,
+    'max_concurrent_portals': 5,
+    
+    # Content
+    'max_content_length': 2 * 1024 * 1024,  # 2MB
+}
+
+def get_scraper_config(param: Optional[str] = None) -> Any:
+    """
+    Get scraper configuration with automatic fallback priority.
+    
+    Priority order:
+    1. Django DB via scraper_control app (when available)
+    2. Environment variables
+    3. Hardcoded defaults
+    
+    Args:
+        param: Optional specific parameter to retrieve. If None, returns full config dict.
+    
+    Returns:
+        Full config dict or specific parameter value
+    
+    Examples:
+        >>> config = get_scraper_config()  # Get full config
+        >>> timeout = get_scraper_config('http_timeout')  # Get specific param
+    """
+    # Start with defaults (Priority 3)
+    config = _CONFIG_DEFAULTS.copy()
+    
+    # Priority 2: Override with environment variables if set
+    env_mappings = {
+        'http_timeout': ('HTTP_TIMEOUT', int),
+        'max_fetch_size': ('MAX_FETCH_SIZE', int),
+        'pool_size': ('POOL_SIZE', int),
+        'async_limit': ('ASYNC_LIMIT', int),
+        'async_per_host': ('ASYNC_PER_HOST', int),
+        'http2_enabled': ('HTTP2', lambda x: x == "1"),
+        'allow_pdf': ('ALLOW_PDF', lambda x: x == "1"),
+        'allow_insecure_ssl': ('ALLOW_INSECURE_SSL', lambda x: x == "1"),
+        'allow_pdf_non_cv': ('ALLOW_PDF_NON_CV', lambda x: x == "1"),
+        'sleep_between_queries': ('SLEEP_BETWEEN_QUERIES', float),
+        'max_google_pages': ('MAX_GOOGLE_PAGES', int),
+        'circuit_breaker_penalty': ('CB_BASE_PENALTY', int),
+        'circuit_breaker_api_penalty': ('CB_API_PENALTY', int),
+        'retry_max_per_url': ('RETRY_MAX_PER_URL', int),
+        'min_score': ('MIN_SCORE', int),
+        'max_per_domain': ('MAX_PER_DOMAIN', int),
+        'enable_kleinanzeigen': ('ENABLE_KLEINANZEIGEN', lambda x: x == "1"),
+        'parallel_portal_crawl': ('PARALLEL_PORTAL_CRAWL', lambda x: x == "1"),
+        'max_concurrent_portals': ('MAX_CONCURRENT_PORTALS', int),
+    }
+    
+    for config_key, (env_var, converter) in env_mappings.items():
+        env_value = os.getenv(env_var)
+        if env_value is not None:
+            try:
+                config[config_key] = converter(env_value)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid value for {env_var}: {env_value}, using default")
+    
+    # Priority 1: Django DB (when available)
+    if SCRAPER_CONFIG_AVAILABLE:
+        try:
+            django_config = _get_scraper_config_django()
+            if django_config:
+                # Only update with non-None values from DB
+                config.update({k: v for k, v in django_config.items() if v is not None})
+                logger.debug("Scraper config loaded from Django DB")
+        except Exception as e:
+            logger.debug(f"Could not load scraper config from Django DB: {e}")
+    
+    # Return specific param or full config
+    if param:
+        return config.get(param)
+    return config
+
+
+# =========================
+# HTTP & NETWORKING
+# =========================
+# Load configuration dynamically using centralized loader
+_loaded_config = get_scraper_config()
+
+HTTP_TIMEOUT = _loaded_config['http_timeout']
+MAX_FETCH_SIZE = _loaded_config['max_fetch_size']
+POOL_SIZE = _loaded_config['pool_size']
 
 # Async settings
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))
-ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))
-HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
+ASYNC_LIMIT = _loaded_config['async_limit']
+ASYNC_PER_HOST = _loaded_config['async_per_host']
+HTTP2_ENABLED = _loaded_config['http2_enabled']
 USE_TOR = False
 
 # SSL & PDF
-ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
-ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
-ALLOW_PDF_NON_CV = (os.getenv("ALLOW_PDF_NON_CV", "0") == "1")
+ALLOW_PDF = _loaded_config['allow_pdf']
+ALLOW_INSECURE_SSL = _loaded_config['allow_insecure_ssl']
+ALLOW_PDF_NON_CV = _loaded_config['allow_pdf_non_cv']
 
 # User Agent
 USER_AGENT = "Mozilla/5.0 (compatible; VertriebFinder/2.3; +https://example.com)"
@@ -97,16 +239,16 @@ PROXY_ENV_VARS = [
 # RATE LIMITING & DELAYS
 # =========================
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES", "2"))
+SLEEP_BETWEEN_QUERIES = _loaded_config['sleep_between_queries']
+MAX_GOOGLE_PAGES = _loaded_config['max_google_pages']
 
 # Circuit Breaker
-CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))
-CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))
+CB_BASE_PENALTY = _loaded_config['circuit_breaker_penalty']
+CB_API_PENALTY = _loaded_config.get('circuit_breaker_api_penalty', 15)
 
 # Retry settings
 RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
-RETRY_MAX_PER_URL = int(os.getenv("RETRY_MAX_PER_URL", "2"))
+RETRY_MAX_PER_URL = _loaded_config['retry_max_per_url']
 RETRY_BACKOFF_BASE = float(os.getenv("RETRY_BACKOFF_BASE", "6.0"))
 
 # Robots cache
@@ -116,13 +258,13 @@ _ROBOTS_CACHE_TTL = int(os.getenv("ROBOTS_CACHE_TTL", "21600"))  # 6h
 # SCORING & FILTERING
 # =========================
 
-MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
-MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
+MIN_SCORE_ENV = _loaded_config['min_score']
+MAX_PER_DOMAIN = _loaded_config['max_per_domain']
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
-DEFAULT_QUALITY_SCORE = 50
+DEFAULT_QUALITY_SCORE = _loaded_config['default_quality_score']
 
 # Content limits
-MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(MAX_FETCH_SIZE)))
+MAX_CONTENT_LENGTH = _loaded_config.get('max_content_length', MAX_FETCH_SIZE)
 BINARY_CT_PREFIXES = ("image/", "video/", "audio/")
 DENY_CT_EXACT = {
     "application/zip", "application/x-tar", "application/x-gzip"
@@ -136,19 +278,19 @@ SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 # FEATURE FLAGS
 # =========================
 
-ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
+ENABLE_KLEINANZEIGEN = _loaded_config['enable_kleinanzeigen']
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
 
 # Telefonbuch Enrichment
-TELEFONBUCH_ENRICHMENT_ENABLED = (os.getenv("TELEFONBUCH_ENRICHMENT_ENABLED", "1") == "1")
+TELEFONBUCH_ENRICHMENT_ENABLED = _loaded_config['enable_telefonbuch']
 TELEFONBUCH_STRICT_MODE = (os.getenv("TELEFONBUCH_STRICT_MODE", "1") == "1")
 TELEFONBUCH_RATE_LIMIT = float(os.getenv("TELEFONBUCH_RATE_LIMIT", "3.0"))
 TELEFONBUCH_CACHE_DAYS = int(os.getenv("TELEFONBUCH_CACHE_DAYS", "7"))
 TELEFONBUCH_MOBILE_ONLY = (os.getenv("TELEFONBUCH_MOBILE_ONLY", "1") == "1")
 
 # Portal crawling
-PARALLEL_PORTAL_CRAWL = os.getenv("PARALLEL_PORTAL_CRAWL", "1") == "1"
-MAX_CONCURRENT_PORTALS = int(os.getenv("MAX_CONCURRENT_PORTALS", "5"))
+PARALLEL_PORTAL_CRAWL = _loaded_config['parallel_portal_crawl']
+MAX_CONCURRENT_PORTALS = _loaded_config['max_concurrent_portals']
 PORTAL_CONCURRENCY_PER_SITE = int(os.getenv("PORTAL_CONCURRENCY_PER_SITE", "2"))
 
 # =========================

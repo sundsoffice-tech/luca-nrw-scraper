@@ -127,13 +127,80 @@
         </form>
     </div>
 
+    <!-- Control Center -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-100 mb-4">⚙️ Control Center</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Rate Limit Control -->
+            <div class="bg-dark-900 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-200 mb-3">Rate Limit anpassen</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Globale Rate (Sek)</label>
+                        <input type="number" id="global-rate-limit" min="0.5" max="60" step="0.1" value="{{ config.sleep_between_queries }}" 
+                               class="w-full bg-dark-800 border border-dark-700 rounded px-3 py-2 text-gray-300 text-sm">
+                    </div>
+                    <button id="btn-update-rate-limit" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition">
+                        Rate Limit aktualisieren
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Portal Status -->
+            <div class="bg-dark-900 rounded-lg p-4">
+                <h3 class="font-semibold text-gray-200 mb-3">Portal-Status</h3>
+                <div id="portal-status-list" class="space-y-2 max-h-48 overflow-y-auto">
+                    <div class="text-sm text-gray-500">Lade Portal-Status...</div>
+                </div>
+                <button id="btn-refresh-portals" class="mt-3 w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition">
+                    Aktualisieren
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics (Current Run) -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-100 mb-4">📊 Performance-Metriken</h2>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Links geprüft</div>
+                <div class="text-2xl font-bold text-gray-100 mt-1" id="metric-links-checked">0</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Akzeptanzrate</div>
+                <div class="text-2xl font-bold text-green-400 mt-1" id="metric-acceptance-rate">0%</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Block-Rate</div>
+                <div class="text-2xl font-bold text-red-400 mt-1" id="metric-block-rate">0%</div>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4">
+                <div class="text-gray-400 text-sm">Ø Request-Zeit</div>
+                <div class="text-2xl font-bold text-blue-400 mt-1" id="metric-avg-time">0ms</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Live Logs -->
     <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-semibold text-gray-100">Live-Logs</h2>
-            <button id="btn-clear-logs" class="text-gray-400 hover:text-primary text-sm transition duration-150">
-                Logs löschen
-            </button>
+            <div class="flex items-center space-x-2">
+                <select id="log-level-filter" class="bg-dark-900 border border-dark-700 rounded px-3 py-1 text-gray-300 text-sm">
+                    <option value="">Alle Levels</option>
+                    <option value="DEBUG">Debug</option>
+                    <option value="INFO">Info</option>
+                    <option value="WARN">Warning</option>
+                    <option value="ERROR">Error</option>
+                    <option value="CRITICAL">Critical</option>
+                </select>
+                <button id="btn-clear-logs" class="text-gray-400 hover:text-primary text-sm transition duration-150">
+                    Logs löschen
+                </button>
+            </div>
         </div>
         
         <div id="log-container" class="bg-dark-900 rounded-lg p-4 h-96 overflow-y-auto font-mono text-sm text-gray-300">
@@ -154,25 +221,31 @@
                         <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Gestartet</th>
                         <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Dauer</th>
                         <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Leads</th>
-                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">API-Kosten</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Links</th>
+                        <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Block-Rate</th>
                         <th class="text-left py-3 px-4 text-gray-400 font-medium text-sm">Gestartet von</th>
                     </tr>
                 </thead>
                 <tbody id="runs-tbody">
                     {% for run in recent_runs %}
-                    <tr class="border-b border-dark-700 hover:bg-dark-700/50">
+                    <tr class="border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer" onclick="showRunDetails({{ run.id }})">
                         <td class="py-3 px-4 text-gray-300">#{{ run.id }}</td>
                         <td class="py-3 px-4">
                             {% if run.status == 'running' %}
                             <span class="px-2 py-1 bg-primary/20 text-primary rounded text-sm">{{ run.get_status_display }}</span>
                             {% elif run.status == 'completed' %}
                             <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm">{{ run.get_status_display }}</span>
+                            {% elif run.status == 'partial' %}
+                            <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% elif run.status == 'failed' or run.status == 'error' %}
                             <span class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% elif run.status == 'stopped' %}
                             <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">{{ run.get_status_display }}</span>
                             {% else %}
                             <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-sm">{{ run.get_status_display }}</span>
+                            {% endif %}
+                            {% if run.circuit_breaker_triggered %}
+                            <span class="ml-1 text-xs text-red-400" title="Circuit Breaker ausgelöst">⚠️</span>
                             {% endif %}
                         </td>
                         <td class="py-3 px-4 text-gray-400 text-sm">{{ run.started_at|date:"d.m.Y H:i" }}</td>
@@ -191,8 +264,23 @@
                                 -
                             {% endif %}
                         </td>
-                        <td class="py-3 px-4 text-gray-300">{{ run.leads_found }}</td>
-                        <td class="py-3 px-4 text-gray-400 text-sm">${{ run.api_cost }}</td>
+                        <td class="py-3 px-4">
+                            <div class="text-gray-300">{{ run.leads_accepted }}</div>
+                            <div class="text-xs text-gray-500">{{ run.lead_acceptance_rate }}%</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            <div class="text-gray-300">{{ run.links_checked }}</div>
+                            <div class="text-xs text-green-500">✓{{ run.links_successful }}</div>
+                        </td>
+                        <td class="py-3 px-4">
+                            {% if run.block_rate > 20 %}
+                            <span class="text-red-400">{{ run.block_rate }}%</span>
+                            {% elif run.block_rate > 10 %}
+                            <span class="text-yellow-400">{{ run.block_rate }}%</span>
+                            {% else %}
+                            <span class="text-gray-400">{{ run.block_rate }}%</span>
+                            {% endif %}
+                        </td>
                         <td class="py-3 px-4 text-gray-400 text-sm">
                             {% if run.started_by %}
                                 {{ run.started_by.username }}
@@ -203,7 +291,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-8 text-center text-gray-500">Keine Läufe vorhanden</td>
+                        <td colspan="8" class="py-8 text-center text-gray-500">Keine Läufe vorhanden</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -281,5 +369,184 @@ dryRunCheckbox.addEventListener('change', updateHints);
 
 // Initial update
 updateHints();
+
+// === CONTROL CENTER FUNCTIONS ===
+
+// Update rate limit
+document.getElementById('btn-update-rate-limit').addEventListener('click', async function() {
+    const rateLimit = document.getElementById('global-rate-limit').value;
+    const btn = this;
+    const originalText = btn.textContent;
+    
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Aktualisiere...';
+        
+        const response = await fetch('{% url "scraper_control:api-update-rate-limit" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                rate_limit_seconds: parseFloat(rateLimit)
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✓ ' + result.message);
+        } else {
+            alert('✗ Fehler: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error updating rate limit:', error);
+        alert('✗ Fehler beim Aktualisieren: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+});
+
+// Load portal status
+async function loadPortalStatus() {
+    const container = document.getElementById('portal-status-list');
+    
+    try {
+        const response = await fetch('{% url "scraper_control:api-portals-status" %}', {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load portals');
+        
+        const portals = await response.json();
+        
+        container.innerHTML = '';
+        
+        if (portals.length === 0) {
+            container.innerHTML = '<div class="text-sm text-gray-500">Keine Portale konfiguriert</div>';
+            return;
+        }
+        
+        portals.forEach(portal => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center justify-between p-2 bg-dark-800 rounded';
+            
+            let statusColor = portal.is_active ? 'text-green-400' : 'text-gray-500';
+            let statusIcon = portal.is_active ? '✓' : '✗';
+            
+            if (portal.circuit_breaker_tripped) {
+                statusColor = 'text-red-400';
+                statusIcon = '⚠️';
+            }
+            
+            item.innerHTML = `
+                <div class="flex-1">
+                    <div class="text-sm text-gray-200">${portal.display_name}</div>
+                    <div class="text-xs text-gray-500">Rate: ${portal.rate_limit_seconds}s | Errors: ${portal.consecutive_errors}</div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="${statusColor}">${statusIcon}</span>
+                    <button class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded" 
+                            onclick="togglePortal('${portal.name}', ${!portal.is_active})">
+                        ${portal.is_active ? 'Deaktivieren' : 'Aktivieren'}
+                    </button>
+                    ${portal.circuit_breaker_tripped ? `<button class="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded" 
+                            onclick="resetCircuitBreaker('${portal.name}')">Reset</button>` : ''}
+                </div>
+            `;
+            
+            container.appendChild(item);
+        });
+        
+    } catch (error) {
+        console.error('Error loading portal status:', error);
+        container.innerHTML = '<div class="text-sm text-red-400">Fehler beim Laden</div>';
+    }
+}
+
+// Toggle portal active state
+window.togglePortal = async function(portalName, active) {
+    try {
+        const response = await fetch('{% url "scraper_control:api-toggle-portal" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                portal: portalName,
+                active: active
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            await loadPortalStatus();
+        } else {
+            alert('✗ Fehler: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error toggling portal:', error);
+        alert('✗ Fehler: ' + error.message);
+    }
+};
+
+// Reset circuit breaker
+window.resetCircuitBreaker = async function(portalName) {
+    try {
+        const response = await fetch('{% url "scraper_control:api-reset-circuit-breaker" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                portal: portalName
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            await loadPortalStatus();
+            alert('✓ Circuit Breaker zurückgesetzt');
+        } else {
+            alert('✗ Fehler: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error resetting circuit breaker:', error);
+        alert('✗ Fehler: ' + error.message);
+    }
+};
+
+// Refresh portal status
+document.getElementById('btn-refresh-portals').addEventListener('click', loadPortalStatus);
+
+// Load portal status on page load
+loadPortalStatus();
+setInterval(loadPortalStatus, 10000); // Refresh every 10 seconds
+
+// Performance metrics update (enhance status update)
+const originalUpdateUI = scraperControl.updateUI;
+scraperControl.updateUI = function(status) {
+    originalUpdateUI.call(this, status);
+    
+    // Update performance metrics
+    document.getElementById('metric-links-checked').textContent = status.links_checked || 0;
+    document.getElementById('metric-acceptance-rate').textContent = (status.lead_acceptance_rate || 0) + '%';
+    document.getElementById('metric-block-rate').textContent = (status.block_rate || 0) + '%';
+    document.getElementById('metric-avg-time').textContent = Math.round(status.avg_request_time_ms || 0) + 'ms';
+};
+
+// Placeholder for run details modal
+window.showRunDetails = function(runId) {
+    // TODO: Implement modal with detailed run information
+    console.log('Show details for run', runId);
+};
 </script>
 {% endblock %}

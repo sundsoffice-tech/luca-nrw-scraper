@@ -83,7 +83,7 @@ class ScraperConfigPersistenceTest(APITestCase):
         config.dry_run = False
         config.save()
     
-    @patch('telis_recruitment.leads.views_scraper.get_manager')
+    @patch('scraper_control.views.get_manager')
     def test_config_persists_after_successful_start(self, mock_get_manager):
         """Test that config values are saved after successful scraper start."""
         # Mock the manager to return success
@@ -115,7 +115,7 @@ class ScraperConfigPersistenceTest(APITestCase):
         self.assertEqual(config.force, True)
         self.assertEqual(config.dry_run, True)
     
-    @patch('telis_recruitment.leads.views_scraper.get_manager')
+    @patch('scraper_control.views.get_manager')
     def test_config_not_persisted_on_failed_start(self, mock_get_manager):
         """Test that config values are NOT saved if scraper fails to start."""
         # Mock the manager to return failure
@@ -143,7 +143,7 @@ class ScraperConfigPersistenceTest(APITestCase):
         self.assertEqual(config.industry, initial_industry)
         self.assertEqual(config.qpi, initial_qpi)
     
-    @patch('telis_recruitment.leads.views_scraper.get_manager')
+    @patch('scraper_control.views.get_manager')
     def test_config_updated_by_field_set(self, mock_get_manager):
         """Test that updated_by field is set when config is saved."""
         # Mock the manager to return success

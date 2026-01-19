@@ -165,10 +165,41 @@
                         {% endif %}
                     {% endwith %}
                 {% endif %}
+                
+                <!-- Support Tools Section -->
+                <div class="px-4 py-2 mt-4">
+                    <div class="text-xs text-gray-500 uppercase font-semibold">Support</div>
+                </div>
+                
+                <a href="{% url 'support-bundle' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                    <span class="text-xl mr-3">📦</span>
+                    <span>Support Bundle</span>
+                </a>
+                
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper/blob/main/docs/SECURITY_CHECKLIST.md" target="_blank" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                    <span class="text-xl mr-3">🔒</span>
+                    <span>Sicherheit</span>
+                    <span class="ml-auto text-xs">↗</span>
+                </a>
+                
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper" target="_blank" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                    <span class="text-xl mr-3">📚</span>
+                    <span>Dokumentation</span>
+                    <span class="ml-auto text-xs">↗</span>
+                </a>
             </nav>
 
             <!-- User Info & Logout -->
             <div class="border-t border-dark-700 p-4">
+                <!-- Version Info -->
+                <div class="mb-3 px-2 py-2 bg-dark-900/50 rounded text-xs text-gray-500 text-center">
+                    <div class="flex items-center justify-center space-x-2">
+                        <span>v{{ APP_VERSION }}</span>
+                        <span>•</span>
+                        <span>LUCA NRW</span>
+                    </div>
+                </div>
+                
                 <div class="flex items-center space-x-3 mb-3">
                     <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
                         {{ user.username|slice:":1"|upper }}

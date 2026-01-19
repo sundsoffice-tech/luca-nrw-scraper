@@ -600,3 +600,471 @@ function getSourceLabel(source) {
     };
     return labels[source] || source;
 }
+
+// ==========================================
+// BATCH OPERATIONS
+// ==========================================
+
+/**
+ * Batch update status for selected leads
+ */
+async function batchUpdateStatus(newStatus) {
+    const leadIds = Array.from(selectedLeads);
+    if (leadIds.length === 0) {
+        alert('Bitte wählen Sie mindestens einen Lead aus');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie den Status von ${leadIds.length} Lead(s) ändern?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/leads/batch_update_status/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                lead_ids: leadIds,
+                status: newStatus
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(`${data.updated_count} Lead(s) erfolgreich aktualisiert`);
+            selectedLeads.clear();
+            loadLeads();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error updating status:', error);
+        alert('Fehler beim Aktualisieren des Status');
+    }
+    
+    // Hide dropdown
+    document.getElementById('status-dropdown').classList.add('hidden');
+}
+
+/**
+ * Show add tags modal
+ */
+function showAddTagsModal() {
+    if (selectedLeads.size === 0) {
+        alert('Bitte wählen Sie mindestens einen Lead aus');
+        return;
+    }
+    document.getElementById('add-tags-modal').classList.remove('hidden');
+}
+
+function closeAddTagsModal() {
+    document.getElementById('add-tags-modal').classList.add('hidden');
+    document.getElementById('tags-input').value = '';
+}
+
+/**
+ * Confirm add tags
+ */
+async function confirmAddTags() {
+    const tagsInput = document.getElementById('tags-input').value.trim();
+    if (!tagsInput) {
+        alert('Bitte geben Sie mindestens ein Tag ein');
+        return;
+    }
+    
+    const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t);
+    const leadIds = Array.from(selectedLeads);
+    
+    try {
+        const response = await fetch('/api/leads/batch_add_tags/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                lead_ids: leadIds,
+                tags: tags
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(`Tags erfolgreich zu ${data.updated_count} Lead(s) hinzugefügt`);
+            closeAddTagsModal();
+            selectedLeads.clear();
+            loadLeads();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error adding tags:', error);
+        alert('Fehler beim Hinzufügen der Tags');
+    }
+}
+
+/**
+ * Show assign modal
+ */
+async function showAssignModal() {
+    if (selectedLeads.size === 0) {
+        alert('Bitte wählen Sie mindestens einen Lead aus');
+        return;
+    }
+    
+    // Load users for assignment
+    try {
+        const response = await fetch('/api/users/');
+        if (response.ok) {
+            const users = await response.json();
+            const select = document.getElementById('assign-user-select');
+            select.innerHTML = '<option value="">Bitte wählen...</option>';
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = user.full_name || user.username;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+    
+    document.getElementById('assign-modal').classList.remove('hidden');
+}
+
+function closeAssignModal() {
+    document.getElementById('assign-modal').classList.add('hidden');
+}
+
+/**
+ * Confirm assignment
+ */
+async function confirmAssign() {
+    const userId = document.getElementById('assign-user-select').value;
+    if (!userId) {
+        alert('Bitte wählen Sie einen Benutzer aus');
+        return;
+    }
+    
+    const leadIds = Array.from(selectedLeads);
+    
+    try {
+        const response = await fetch('/api/leads/batch_assign/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                lead_ids: leadIds,
+                user_id: parseInt(userId)
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(`${data.updated_count} Lead(s) erfolgreich zugewiesen an ${data.assigned_to}`);
+            closeAssignModal();
+            selectedLeads.clear();
+            loadLeads();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error assigning leads:', error);
+        alert('Fehler beim Zuweisen der Leads');
+    }
+}
+
+/**
+ * Batch delete selected leads
+ */
+async function batchDelete() {
+    const leadIds = Array.from(selectedLeads);
+    if (leadIds.length === 0) {
+        alert('Bitte wählen Sie mindestens einen Lead aus');
+        return;
+    }
+    
+    if (!confirm(`Möchten Sie wirklich ${leadIds.length} Lead(s) löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/leads/batch_delete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                lead_ids: leadIds
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(`${data.deleted_count} Lead(s) erfolgreich gelöscht`);
+            selectedLeads.clear();
+            loadLeads();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error deleting leads:', error);
+        alert('Fehler beim Löschen der Leads');
+    }
+}
+
+// ==========================================
+// SAVED FILTERS
+// ==========================================
+
+/**
+ * Load saved filters
+ */
+async function loadSavedFilters() {
+    try {
+        const response = await fetch('/crm/api/saved-filters/');
+        if (response.ok) {
+            const filters = await response.json();
+            renderSavedFilters(filters);
+        }
+    } catch (error) {
+        console.error('Error loading saved filters:', error);
+    }
+}
+
+/**
+ * Render saved filters in dropdown
+ */
+function renderSavedFilters(filters) {
+    const container = document.getElementById('filters-list');
+    if (!container) return;
+    
+    if (filters.length === 0) {
+        container.innerHTML = '<div class="px-4 py-2 text-sm text-gray-500">Keine Filter gespeichert</div>';
+        return;
+    }
+    
+    container.innerHTML = '';
+    filters.forEach(filter => {
+        const item = document.createElement('button');
+        item.className = 'block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-dark-600';
+        
+        // Safely escape HTML content
+        const escapedName = escapeHtml(filter.name);
+        const escapedDescription = filter.description ? escapeHtml(filter.description) : '';
+        
+        item.innerHTML = `
+            <div class="flex items-center justify-between">
+                <span>${escapedName}</span>
+                ${filter.is_owner ? '<button onclick="deleteFilter(event, ' + parseInt(filter.id) + ')" class="text-red-400 hover:text-red-300 ml-2">🗑️</button>' : ''}
+            </div>
+            ${escapedDescription ? '<div class="text-xs text-gray-500 mt-1">' + escapedDescription + '</div>' : ''}
+        `;
+        item.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                applyFilter(filter);
+            }
+        };
+        container.appendChild(item);
+    });
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Apply a saved filter
+ */
+function applyFilter(filter) {
+    const params = filter.filter_params;
+    
+    // Apply filter parameters to the UI
+    if (params.search) {
+        document.getElementById('search-input').value = params.search;
+    }
+    if (params.status) {
+        document.getElementById('status-filter').value = params.status;
+    }
+    if (params.source) {
+        document.getElementById('source-filter').value = params.source;
+    }
+    if (params.score) {
+        document.getElementById('score-filter').value = params.score;
+    }
+    
+    // Apply filters
+    applyFilters();
+    
+    // Hide dropdown
+    document.getElementById('filters-dropdown').classList.add('hidden');
+}
+
+/**
+ * Show save filter modal
+ */
+function saveCurrentFilter() {
+    // Get current filter state
+    const filterParams = {
+        search: document.getElementById('search-input').value,
+        status: document.getElementById('status-filter').value,
+        source: document.getElementById('source-filter').value,
+        score: document.getElementById('score-filter').value
+    };
+    
+    // Check if any filters are active
+    if (!filterParams.search && !filterParams.status && !filterParams.source && !filterParams.score) {
+        alert('Bitte wenden Sie zuerst Filter an, bevor Sie sie speichern');
+        return;
+    }
+    
+    document.getElementById('save-filter-modal').classList.remove('hidden');
+}
+
+function closeSaveFilterModal() {
+    document.getElementById('save-filter-modal').classList.add('hidden');
+    document.getElementById('filter-name-input').value = '';
+    document.getElementById('filter-description-input').value = '';
+    document.getElementById('filter-shared-checkbox').checked = false;
+}
+
+/**
+ * Confirm save filter
+ */
+async function confirmSaveFilter() {
+    const name = document.getElementById('filter-name-input').value.trim();
+    if (!name) {
+        alert('Bitte geben Sie einen Filter-Namen ein');
+        return;
+    }
+    
+    const description = document.getElementById('filter-description-input').value.trim();
+    const isShared = document.getElementById('filter-shared-checkbox').checked;
+    
+    const filterParams = {
+        search: document.getElementById('search-input').value,
+        status: document.getElementById('status-filter').value,
+        source: document.getElementById('source-filter').value,
+        score: document.getElementById('score-filter').value
+    };
+    
+    try {
+        const response = await fetch('/crm/api/saved-filters/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description,
+                filter_params: filterParams,
+                is_shared: isShared
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert('Filter erfolgreich gespeichert');
+            closeSaveFilterModal();
+            loadSavedFilters();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error saving filter:', error);
+        alert('Fehler beim Speichern des Filters');
+    }
+}
+
+/**
+ * Delete a saved filter
+ */
+async function deleteFilter(event, filterId) {
+    event.stopPropagation();
+    
+    if (!confirm('Möchten Sie diesen Filter wirklich löschen?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/crm/api/saved-filters/${filterId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            loadSavedFilters();
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error deleting filter:', error);
+        alert('Fehler beim Löschen des Filters');
+    }
+}
+
+// Toggle dropdowns
+document.addEventListener('DOMContentLoaded', function() {
+    // Status dropdown toggle
+    const statusBtn = document.getElementById('status-change-btn');
+    const statusDropdown = document.getElementById('status-dropdown');
+    if (statusBtn) {
+        statusBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            statusDropdown.classList.toggle('hidden');
+        });
+    }
+    
+    // Filters dropdown toggle
+    const filtersBtn = document.getElementById('filters-btn');
+    const filtersDropdown = document.getElementById('filters-dropdown');
+    if (filtersBtn) {
+        filtersBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            filtersDropdown.classList.toggle('hidden');
+            if (!filtersDropdown.classList.contains('hidden')) {
+                loadSavedFilters();
+            }
+        });
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+        if (statusDropdown) statusDropdown.classList.add('hidden');
+        if (filtersDropdown) filtersDropdown.classList.add('hidden');
+    });
+});
+
+/**
+ * Get CSRF token from cookie
+ */
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}

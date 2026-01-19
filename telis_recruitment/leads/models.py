@@ -332,6 +332,52 @@ class SyncStatus(models.Model):
         return f"{self.source} (letzter Sync: {self.last_sync_at})"
 
 
+class SavedFilter(models.Model):
+    """Saved filters for quick access to filtered lead lists."""
+    
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='saved_filters',
+        verbose_name="Benutzer"
+    )
+    name = models.CharField(
+        max_length=100,
+        verbose_name="Filter-Name",
+        help_text="z.B. 'Callcenter NRW, mobile only, Score > 70'"
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Beschreibung"
+    )
+    
+    # Filter criteria stored as JSON
+    filter_params = models.JSONField(
+        verbose_name="Filter-Parameter",
+        help_text="JSON object with filter parameters"
+    )
+    
+    # Sharing options
+    is_shared = models.BooleanField(
+        default=False,
+        verbose_name="Geteilt",
+        help_text="Für alle Benutzer sichtbar"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Gespeicherter Filter"
+        verbose_name_plural = "Gespeicherte Filter"
+        unique_together = [['user', 'name']]
+    
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
+
 # Import ScraperConfig and ScraperRun from the main scraper_control module
 # This avoids duplication and ensures consistency
 from scraper_control.models import ScraperConfig, ScraperRun

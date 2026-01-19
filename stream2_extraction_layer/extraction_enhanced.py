@@ -255,6 +255,7 @@ def extract_email_robust(text: Text, html: Html = "", *, allow_generic: bool = T
 async def extract_with_multi_tier_fallback(html: Html, text: Text, url: str, company: str = "") -> Dict[str, Any]:
     """
     Orchestrate extraction of name, role, and email with fallbacks across tiers.
+    Now enhanced with ML-based extractors as fallback/boost.
     """
     result: Dict[str, Any] = {
         "name": None,
@@ -273,6 +274,18 @@ async def extract_with_multi_tier_fallback(html: Html, text: Text, url: str, com
             result["confidence"] = max(result["confidence"], 0.4)
     except Exception:
         pass
+    
+    # Tier 1.5: ML-based name extraction as fallback
+    if not result["name"]:
+        try:
+            from .ml_extractors import get_name_extractor
+            ml_name = get_name_extractor().extract(text, html)
+            if ml_name.value and ml_name.confidence >= 0.5:
+                result["name"] = ml_name.value
+                result["extraction_method"] = ml_name.method
+                result["confidence"] = max(result["confidence"], ml_name.confidence)
+        except Exception:
+            pass
 
     # Tier 2: Role via contextual keywords
     try:
@@ -282,6 +295,17 @@ async def extract_with_multi_tier_fallback(html: Html, text: Text, url: str, com
             result["confidence"] = max(result["confidence"], conf)
     except Exception:
         pass
+    
+    # Tier 2.5: ML-based industry classification
+    if not result["rolle"]:
+        try:
+            from .ml_extractors import get_industry_classifier
+            industry, ind_conf = get_industry_classifier().classify(text, url, company)
+            if industry and ind_conf >= 0.5:
+                result["rolle"] = industry
+                result["confidence"] = max(result["confidence"], ind_conf)
+        except Exception:
+            pass
 
     # Tier 3: Email via robust extraction
     try:
@@ -291,6 +315,20 @@ async def extract_with_multi_tier_fallback(html: Html, text: Text, url: str, com
             if result["extraction_method"] is None:
                 result["extraction_method"] = "regex_email"
             result["confidence"] = max(result["confidence"], 0.5)
+            
+            # Tier 3.5: ML-based email classification for quality boost
+            try:
+                from .ml_extractors import get_email_classifier
+                email_class = get_email_classifier().classify(email)
+                result["email_quality"] = email_class.get("quality", "medium")
+                result["email_category"] = email_class.get("category", "unknown")
+                # Adjust confidence based on email quality
+                if email_class.get("quality") == "high":
+                    result["confidence"] += 0.1
+                elif email_class.get("quality") == "very_low":
+                    result["confidence"] -= 0.15
+            except Exception:
+                pass
     except Exception:
         pass
 

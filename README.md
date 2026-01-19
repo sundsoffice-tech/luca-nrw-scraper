@@ -1,4 +1,22 @@
+# LUCA NRW Scraper
+
+[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Django](https://img.shields.io/badge/django-4.2-success.svg)](https://www.djangoproject.com/)
+
+**Professional Lead Generation & CRM System for NRW Sales Teams**
+
 Zweck: NRW-Vertriebsleads automatisch finden, bewerten, exportieren.
+
+## 📋 Latest Release
+
+**Current Version**: v2.4.0 ([Release Notes](RELEASE_NOTES.md) | [Changelog](CHANGELOG.md))
+
+### Key Highlights
+- 🔒 Enhanced security with SSL/TLS validation by default
+- 📋 Configuration profiles for production, high-volume, and debug modes
+- 📦 Support bundle system for diagnostics
+- 🛡️ Comprehensive security checklist for production deployments
 
 ## 🚀 Quick Start
 
@@ -68,6 +86,24 @@ Professional Django-based CRM system for managing leads, controlling the scraper
 
 See [telis_recruitment/README.md](telis_recruitment/README.md) for detailed documentation.
 
+### ⚙️ Configuration Profiles
+
+LUCA includes pre-configured environment profiles for different deployment scenarios:
+
+```bash
+# Production Safe (recommended for live deployments)
+cp configs/production.env .env
+
+# High Volume (for bulk lead generation)
+cp configs/high-volume.env .env
+
+# Debug Mode (for development and troubleshooting)
+cp configs/debug.env .env
+```
+
+Each profile is optimized for specific use cases with appropriate security and performance settings.
+See [configs/README.md](configs/README.md) for detailed profile documentation.
+
 ### Command-Line Scraper
 For standalone scraper operations without the CRM interface:
 ```bash
@@ -83,9 +119,56 @@ python scriptname.py --ui
 
 ## 📚 Documentation
 
-- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual, troubleshooting)
+### 🎯 Onboarding (Neu!)
+- **[⚡ QUICKSTART (20 Min)](docs/QUICKSTART.md)** - Von 0 zu deinen ersten Leads
+- **[⚙️ Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** - Safe/Balanced/Aggressive Modi
+- **[🆘 Troubleshooting](docs/TROUBLESHOOTING.md)** - Problemlösung nach Symptomen
+
+### 📖 Setup & Deployment
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions (Docker, manual)
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment to Railway, Render, Fly.io, Hetzner
+- **[Configuration Profiles](docs/CONFIGURATION_PROFILES.md)** - Environment configuration for different scenarios
+- **[Security Checklist](docs/SECURITY_CHECKLIST.md)** - Production security requirements and best practices
+- **[Release Process](docs/RELEASE_PROCESS.md)** - How we version and release LUCA
 - **[Django CRM Details](telis_recruitment/README.md)** - Detailed Django CRM documentation
+
+## 🔐 Security & Production
+
+LUCA is built with security and production-readiness in mind:
+
+- ✅ **Secure by Default**: SSL/TLS validation enabled, secure cookie settings
+- ✅ **Configuration Profiles**: Pre-configured profiles for production, high-volume, and debug
+- ✅ **Role-Based Access Control**: Admin, Manager, Operator, and Viewer roles
+- ✅ **Security Checklist**: Comprehensive checklist for production deployments
+- ✅ **Support Bundle**: One-click diagnostics export for troubleshooting
+- ✅ **No Secrets in Logs**: Automatic sanitization of sensitive data
+
+See [docs/SECURITY_CHECKLIST.md](docs/SECURITY_CHECKLIST.md) for the complete security guide.
+
+## 📦 Support & Diagnostics
+
+LUCA includes built-in support tools:
+
+1. **Support Bundle**: Generate a comprehensive diagnostics package
+   ```bash
+   python manage.py create_support_bundle
+   ```
+   Or use the UI: CRM → Support → Support Bundle
+
+2. **System Health**: Monitor system resources and configuration
+   - Access via CRM → Support → System Health
+
+3. **Comprehensive Logging**: Structured logging for troubleshooting
+   - Logs are sanitized to remove sensitive data
+
+## 🚀 Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history and [RELEASE_NOTES.md](RELEASE_NOTES.md) for user-facing release information.
+
+### Recent Releases
+
+- **v2.4.0** (2026-01-19): Enhanced security, configuration profiles, support system
+- **v2.3.0**: Django CRM dashboard, landing page builder, Brevo integration
 
 ## 📸 Screenshots
 

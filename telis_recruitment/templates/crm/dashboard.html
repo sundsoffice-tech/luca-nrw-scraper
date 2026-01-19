@@ -94,6 +94,78 @@
     </div>
 </div>
 
+<!-- Time Period Stats -->
+<div class="bg-dark-800 border border-dark-700 rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+        <span class="text-2xl mr-2">📅</span>
+        Leads nach Zeitraum
+    </h2>
+    <div class="grid grid-cols-3 gap-6">
+        <div class="text-center">
+            <div class="text-3xl font-bold text-primary mb-1">{{ stats.today|default:0 }}</div>
+            <div class="text-sm text-gray-400">Heute</div>
+        </div>
+        <div class="text-center">
+            <div class="text-3xl font-bold text-primary mb-1">{{ stats.week|default:0 }}</div>
+            <div class="text-sm text-gray-400">Diese Woche</div>
+        </div>
+        <div class="text-center">
+            <div class="text-3xl font-bold text-primary mb-1">{{ stats.month|default:0 }}</div>
+            <div class="text-sm text-gray-400">Dieser Monat</div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Sources & Error Reasons -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Top Sources by Quality -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+            <span class="text-2xl mr-2">🎯</span>
+            Top-Quellen nach Qualität
+        </h2>
+        <div class="space-y-3">
+            {% for source in stats.top_sources %}
+            <div class="p-3 bg-dark-900 rounded-lg">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-300 font-medium">{{ source.source }}</span>
+                    <span class="text-xs px-2 py-1 bg-primary/20 text-primary rounded">{{ source.count }} Leads</span>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-400">Conversion: {{ source.conversion_rate }}%</span>
+                    <span class="text-gray-400">Ø Score: {{ source.avg_quality }}</span>
+                </div>
+                <div class="mt-2 w-full bg-dark-700 rounded-full h-2">
+                    <div class="bg-green-500 h-2 rounded-full" style="width: {{ source.conversion_rate }}%"></div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-4 text-gray-500">Keine Daten verfügbar</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Top Error Reasons -->
+    <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+            <span class="text-2xl mr-2">⚠️</span>
+            Top-Fehlergründe
+        </h2>
+        <div class="space-y-3">
+            {% for error in stats.error_reasons %}
+            <div class="p-3 bg-dark-900 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-300">{{ error.reason }}</span>
+                    <span class="text-red-400 font-bold">{{ error.count }}</span>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-4 text-gray-500">Keine Fehler gefunden 🎉</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
 <!-- Charts & Activity Feed -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
     <!-- Left Column: Charts (2/3 width) -->
@@ -106,6 +178,17 @@
             </h2>
             <div style="height: 250px;">
                 <canvas id="leadTrendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Data Quality Trend Chart -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-bold text-gray-100 mb-4 flex items-center">
+                <span class="text-2xl mr-2">📈</span>
+                Datenqualität-Trend (7 Tage)
+            </h2>
+            <div style="height: 200px;">
+                <canvas id="qualityTrendChart"></canvas>
             </div>
         </div>
 

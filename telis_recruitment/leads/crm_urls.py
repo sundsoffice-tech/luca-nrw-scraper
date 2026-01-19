@@ -5,14 +5,18 @@ All CRM URLs are protected and require authentication.
 
 from django.urls import path
 from . import views
-from . import views_scraper
 from . import views_export
+from . import views_support
 
 urlpatterns = [
     # Main views
     path('', views.crm_dashboard, name='crm-dashboard'),
     path('leads/', views.crm_leads, name='crm-leads'),
     path('leads/<int:pk>/', views.crm_lead_detail, name='crm-lead-detail'),
+    
+    # Support tools
+    path('support/bundle/', views_support.support_bundle_view, name='support-bundle'),
+    path('support/health/', views_support.system_health_view, name='system-health'),
     
     # Scraper control (Admin only) - DISABLED - now handled by scraper_control app
     # path('scraper/', views_scraper.scraper_page, name='crm-scraper'),
@@ -34,6 +38,10 @@ urlpatterns = [
     # Export API
     path('api/export/csv/', views_export.export_leads_csv, name='export-csv'),
     path('api/export/excel/', views_export.export_leads_excel, name='export-excel'),
+    
+    # Saved Filters API
+    path('api/saved-filters/', views.saved_filters, name='saved-filters'),
+    path('api/saved-filters/<int:filter_id>/', views.saved_filter_detail, name='saved-filter-detail'),
     
     # Future: Add more CRM routes here
     # path('phone/', views.crm_phone, name='crm-phone'),

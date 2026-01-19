@@ -1,0 +1,65 @@
+[MASTER]
+# Use multiple processes to speed up Pylint
+jobs=4
+
+# Pickle collected data for later comparisons
+persistent=yes
+
+# Allow loading of arbitrary C extensions
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+# Disable specific warnings
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name
+    C0301,  # line-too-long (handled by black)
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    W0212,  # protected-access
+    W0511,  # fixme
+    E1101,  # no-member (false positives with Django)
+    R0801,  # duplicate-code
+
+[REPORTS]
+# Set the output format
+output-format=colorized
+
+# Reports should be enabled
+reports=yes
+
+[BASIC]
+# Good variable names
+good-names=i,j,k,ex,Run,_,id,pk,db
+
+# Regular expression matching correct variable names
+variable-rgx=[a-z_][a-z0-9_]{0,30}$
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=120
+
+# Maximum number of lines in a module
+max-module-lines=1500
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=7
+
+# Maximum number of attributes for a class
+max-attributes=10
+
+# Maximum number of public methods for a class
+max-public-methods=25
+
+[IMPORTS]
+# Deprecated modules which should not be used
+deprecated-modules=optparse,imp
+
+[CLASSES]
+# List of method names used to declare instance attributes
+defining-attr-methods=__init__,__new__,setUp
+
+[EXCEPTIONS]
+# Exceptions that will emit a warning when being caught
+overgeneral-exceptions=Exception
