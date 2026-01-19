@@ -25,6 +25,17 @@ Dieser Guide zeigt dir drei vorkonfigurierte Profile für unterschiedliche Anwen
 ### Konfiguration
 
 #### .env Datei
+
+**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
+```bash
+# Kopiere die Safe Mode Vorlage
+cp .env.example.safe .env
+
+# Bearbeite nur SECRET_KEY (erforderlich)
+nano .env
+```
+
+**Option 2: Manuell konfigurieren**
 ```bash
 # Minimal Configuration (Safe Mode)
 SECRET_KEY=your-secret-key-here
@@ -99,6 +110,20 @@ python scriptname.py --once --industry recruiter --qpi 6 --daterestrict d30
 ### Konfiguration
 
 #### .env Datei
+
+**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
+```bash
+# Kopiere die Balanced Mode Vorlage
+cp .env.example.balanced .env
+
+# Bearbeite die Werte:
+# - SECRET_KEY (erforderlich)
+# - OPENAI_API_KEY (empfohlen)
+# - ALLOWED_HOSTS (für Produktion)
+nano .env
+```
+
+**Option 2: Manuell konfigurieren**
 ```bash
 # Balanced Configuration
 SECRET_KEY=your-secret-key-here
@@ -201,6 +226,21 @@ Bevor du Aggressive Mode nutzt:
 ### Konfiguration
 
 #### .env Datei
+
+**Option 1: Vorkonfigurierte Vorlage nutzen (Empfohlen)**
+```bash
+# Kopiere die Aggressive Mode Vorlage
+cp .env.example.aggressive .env
+
+# Bearbeite die Werte (alle erforderlich!):
+# - SECRET_KEY
+# - OPENAI_API_KEY (erforderlich für Aggressive)
+# - HTTP_PROXY / HTTPS_PROXY (dringend empfohlen)
+# - ALLOWED_HOSTS (für Produktion)
+nano .env
+```
+
+**Option 2: Manuell konfigurieren**
 ```bash
 # Aggressive Configuration
 SECRET_KEY=your-secret-key-here

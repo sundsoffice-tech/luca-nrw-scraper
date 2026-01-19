@@ -16,7 +16,8 @@ git clone https://github.com/sundsoffice-tech/luca-nrw-scraper.git
 cd luca-nrw-scraper
 
 # Umgebung konfigurieren
-cp .env.example .env
+cp .env.example.safe .env  # oder .env.example für Standard
+# Bearbeite .env und setze SECRET_KEY (siehe unten)
 
 # Docker starten
 docker-compose up -d
