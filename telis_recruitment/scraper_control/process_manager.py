@@ -1,13 +1,17 @@
 """
 Scraper Process Manager - Manages scraper subprocess lifecycle.
 Singleton class to start, stop, and monitor the scraper subprocess.
+
+Features:
+- Command preview before execution for admin verification
+- CRM context environment loading (prioritizes DB config over .env files)
 """
 
 import os
 import subprocess
 import psutil
 import threading
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
@@ -224,6 +228,191 @@ class ProcessManager:
         logger.info(f"Built scraper command: {' '.join(cmd)}")
         return cmd
     
+    def _load_crm_environment(self) -> Dict[str, str]:
+        """
+        Load environment variables from CRM context.
+        
+        Priority (highest to lowest):
+        1. Django settings (SECRET_KEY, DATABASE_URL, etc.)
+        2. ScraperConfig values from database (API keys, feature flags)
+        3. Environment variables stored in CRM (CRMEnvironmentVariable model)
+        4. Local .env file (fallback only)
+        
+        Returns:
+            Dictionary of environment variables for subprocess
+        """
+        env = os.environ.copy()
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # Step 1: Load from local .env as base fallback
+        env_file = os.path.join(project_root, '.env')
+        if os.path.exists(env_file):
+            try:
+                from dotenv import dotenv_values
+                env_vars = dotenv_values(env_file)
+                env.update(env_vars)
+                logger.debug(f"Loaded {len(env_vars)} variables from .env file (fallback)")
+            except ImportError:
+                logger.warning("python-dotenv not installed, skipping .env file")
+        
+        # Step 2: Load CRM-stored environment variables (override .env)
+        try:
+            from .models import CRMEnvironmentVariable
+            crm_vars = CRMEnvironmentVariable.objects.filter(is_active=True)
+            crm_count = 0
+            for var in crm_vars:
+                env[var.key] = var.value
+                crm_count += 1
+            if crm_count > 0:
+                logger.info(f"Loaded {crm_count} environment variables from CRM context")
+        except Exception as e:
+            logger.debug(f"CRMEnvironmentVariable not available: {e}")
+        
+        # Step 3: Load ScraperConfig values as environment variables
+        try:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            
+            # Export relevant config as env vars for scraper subprocess
+            config_env = {
+                'SCRAPER_HTTP_TIMEOUT': str(config.http_timeout),
+                'SCRAPER_ASYNC_LIMIT': str(config.async_limit),
+                'SCRAPER_POOL_SIZE': str(config.pool_size),
+                'SCRAPER_HTTP2_ENABLED': str(config.http2_enabled).lower(),
+                'SCRAPER_SLEEP_BETWEEN_QUERIES': str(config.sleep_between_queries),
+                'SCRAPER_MAX_GOOGLE_PAGES': str(config.max_google_pages),
+                'SCRAPER_CIRCUIT_BREAKER_PENALTY': str(config.circuit_breaker_penalty),
+                'SCRAPER_MIN_SCORE': str(config.min_score),
+                'SCRAPER_MAX_PER_DOMAIN': str(config.max_per_domain),
+                'SCRAPER_CONFIDENCE_THRESHOLD': str(config.confidence_threshold),
+                'SCRAPER_ENABLE_KLEINANZEIGEN': str(config.enable_kleinanzeigen).lower(),
+                'SCRAPER_ENABLE_TELEFONBUCH': str(config.enable_telefonbuch).lower(),
+                'SCRAPER_ENABLE_PERPLEXITY': str(config.enable_perplexity).lower(),
+                'SCRAPER_ENABLE_BING': str(config.enable_bing).lower(),
+                'SCRAPER_PARALLEL_PORTAL_CRAWL': str(config.parallel_portal_crawl).lower(),
+                'SCRAPER_MAX_CONCURRENT_PORTALS': str(config.max_concurrent_portals),
+                'SCRAPER_ALLOW_PDF': str(config.allow_pdf).lower(),
+                'SCRAPER_MAX_CONTENT_LENGTH': str(config.max_content_length),
+            }
+            env.update(config_env)
+            logger.info(f"Loaded {len(config_env)} config values from ScraperConfig as environment")
+        except Exception as e:
+            logger.warning(f"Could not load ScraperConfig as environment: {e}")
+        
+        # Step 4: Ensure critical Django settings are available
+        django_settings = {
+            'DJANGO_SETTINGS_MODULE': 'telis.settings',
+        }
+        
+        # Add DATABASE_URL if configured
+        if hasattr(settings, 'DATABASES') and 'default' in settings.DATABASES:
+            db_config = settings.DATABASES['default']
+            if db_config.get('ENGINE', '').endswith('postgresql'):
+                db_url = f"postgres://{db_config.get('USER', '')}:{db_config.get('PASSWORD', '')}@{db_config.get('HOST', 'localhost')}:{db_config.get('PORT', '5432')}/{db_config.get('NAME', '')}"
+                django_settings['DATABASE_URL'] = db_url
+        
+        env.update(django_settings)
+        
+        return env
+    
+    def preview_command(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a preview of the command that would be executed.
+        
+        This allows administrators to review the command before execution
+        to detect potential misconfigurations.
+        
+        Args:
+            params: Dictionary of scraper parameters
+            
+        Returns:
+            Dictionary with command preview information:
+            {
+                "success": True,
+                "command": "python scriptname.py --industry recruiter --qpi 15 --once",
+                "command_parts": ["python", "scriptname.py", "--industry", "recruiter", ...],
+                "script_type": "script",
+                "script_path": "/path/to/scriptname.py",
+                "working_directory": "/path/to/project",
+                "params": {...},
+                "environment_source": "CRM context + .env fallback",
+                "env_vars_count": 25,
+                "warnings": ["Warning messages about potential issues"]
+            }
+        """
+        warnings: List[str] = []
+        
+        # Find scraper script
+        script_type, script_path = self._find_scraper_script()
+        
+        if script_type is None:
+            return {
+                'success': False,
+                'error': 'Scraper script nicht gefunden (scriptname.py, luca_scraper/__main__.py)',
+                'warnings': ['No executable scraper script found in project']
+            }
+        
+        # Build command
+        cmd = self._build_command(params, script_type, script_path)
+        
+        # Get project root for working directory
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # Load environment (for preview, don't actually set)
+        env = self._load_crm_environment()
+        
+        # Count CRM vs .env sources
+        env_source = "CRM context"
+        try:
+            from .models import CRMEnvironmentVariable
+            crm_count = CRMEnvironmentVariable.objects.filter(is_active=True).count()
+            if crm_count > 0:
+                env_source = f"CRM context ({crm_count} vars)"
+            else:
+                env_source = "ScraperConfig + .env fallback"
+        except Exception:
+            env_source = ".env file (CRM not available)"
+        
+        # Generate warnings for potential issues
+        industry = params.get('industry', 'recruiter')
+        mode = params.get('mode', 'standard')
+        qpi = params.get('qpi', 15)
+        
+        if mode == 'aggressive' and not params.get('dry_run', False):
+            warnings.append("⚠️ Aggressiver Modus ohne Dry-Run - erhöhtes Rate-Limit-Risiko")
+        
+        if qpi > 50:
+            warnings.append(f"⚠️ Hohe QPI ({qpi}) - kann zu langer Laufzeit führen")
+        
+        if industry == 'all':
+            warnings.append("⚠️ Industry 'all' - alle Branchen werden gescraped (lange Laufzeit)")
+        
+        if params.get('force', False):
+            warnings.append("⚠️ Force-Flag gesetzt - Historie wird ignoriert (Duplikate möglich)")
+        
+        if not params.get('once', True):
+            warnings.append("⚠️ Continuous-Modus - Scraper läuft bis zum manuellen Stop")
+        
+        # Check for missing API keys
+        if not env.get('GOOGLE_CSE_API_KEY') and not env.get('GOOGLE_API_KEY'):
+            warnings.append("⚠️ Kein Google CSE API Key gefunden - Suche wird fehlschlagen")
+        
+        if not env.get('GOOGLE_CSE_CX') and not env.get('GOOGLE_CX'):
+            warnings.append("⚠️ Keine Google CSE CX ID gefunden - Suche wird fehlschlagen")
+        
+        return {
+            'success': True,
+            'command': ' '.join(cmd),
+            'command_parts': cmd,
+            'script_type': script_type,
+            'script_path': script_path,
+            'working_directory': project_root,
+            'params': params,
+            'environment_source': env_source,
+            'env_vars_count': len(env),
+            'warnings': warnings
+        }
+    
     def start(self, params: Dict[str, Any], user=None) -> Dict[str, Any]:
         """
         Start the scraper with given parameters.
@@ -278,17 +467,14 @@ class ProcessManager:
             # Build command with robust validation
             cmd = self._build_command(params, script_type, script_path)
             
-            # Prepare environment
+            # Prepare environment from CRM context (prioritizes DB config over .env)
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            env = os.environ.copy()
-            env_file = os.path.join(project_root, '.env')
-            if os.path.exists(env_file):
-                try:
-                    from dotenv import dotenv_values
-                    env_vars = dotenv_values(env_file)
-                    env.update(env_vars)
-                except ImportError:
-                    pass
+            env = self._load_crm_environment()
+            
+            # Log command preview for debugging
+            logger.info(f"Starting scraper with command: {' '.join(cmd)}")
+            logger.info(f"Working directory: {project_root}")
+            logger.info(f"Environment variables loaded from CRM context: {len(env)} total")
             
             # Start process
             self.process = subprocess.Popen(

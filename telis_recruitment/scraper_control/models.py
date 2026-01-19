@@ -691,3 +691,89 @@ class BlacklistEntry(models.Model):
     
     def __str__(self):
         return f"[{self.entry_type}] {self.value}"
+
+
+class CRMEnvironmentVariable(models.Model):
+    """
+    CRM-managed environment variables for scraper subprocess.
+    
+    These override local .env file values, allowing administrators
+    to configure API keys and other sensitive values through the CRM
+    interface without requiring direct server access.
+    """
+    
+    CATEGORY_CHOICES = [
+        ('api_keys', 'API Keys'),
+        ('database', 'Datenbank'),
+        ('scraper', 'Scraper-Konfiguration'),
+        ('ai', 'KI/AI-Dienste'),
+        ('proxy', 'Proxy-Einstellungen'),
+        ('other', 'Sonstige'),
+    ]
+    
+    key = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Variable Name",
+        help_text="Environment variable name (e.g., GOOGLE_API_KEY)"
+    )
+    
+    value = models.TextField(
+        verbose_name="Wert",
+        help_text="Environment variable value"
+    )
+    
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default='other',
+        verbose_name="Kategorie"
+    )
+    
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Beschreibung",
+        help_text="Brief description of what this variable is used for"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Aktiv",
+        help_text="Only active variables are loaded into scraper environment"
+    )
+    
+    is_secret = models.BooleanField(
+        default=False,
+        verbose_name="Geheim",
+        help_text="Mark as secret to mask value in logs and previews"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
+    
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='crm_environment_updates',
+        verbose_name="Aktualisiert von"
+    )
+    
+    class Meta:
+        ordering = ['category', 'key']
+        verbose_name = "CRM Environment Variable"
+        verbose_name_plural = "CRM Environment Variables"
+    
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.key}"
+    
+    def get_masked_value(self) -> str:
+        """Return masked value for display if marked as secret."""
+        if self.is_secret and self.value:
+            # Show first 4 and last 4 characters
+            if len(self.value) > 10:
+                return f"{self.value[:4]}{'*' * (len(self.value) - 8)}{self.value[-4:]}"
+            return '*' * len(self.value)
+        return self.value
