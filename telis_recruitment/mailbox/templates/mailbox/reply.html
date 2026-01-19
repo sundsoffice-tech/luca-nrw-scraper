@@ -1,0 +1,198 @@
+{% extends "crm/base.html" %}
+{% load static %}
+
+{% block title %}↩️ Antworten - {{ conversation.subject }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .reply-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .original-email {
+        background: #1a1a2e;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 24px;
+        border: 1px solid #2d2d44;
+    }
+    .original-email .header {
+        color: #888;
+        font-size: 14px;
+        margin-bottom: 12px;
+    }
+    .reply-card {
+        background: #1a1a2e;
+        border-radius: 12px;
+        border: 1px solid #2d2d44;
+        padding: 24px;
+    }
+    .form-label {
+        color: #a0a0b0;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    .form-control, .form-select {
+        background: #16162a;
+        border: 1px solid #2d2d44;
+        color: #fff;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .form-control:focus, .form-select:focus {
+        background: #16162a;
+        border-color: #6366f1;
+        color: #fff;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    .form-control[readonly] {
+        background: #0f0f1a;
+        color: #666;
+    }
+    .btn-send {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 12px 32px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+    }
+    .btn-send:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reply-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">↩️ Antworten</h4>
+        <a href="{% url 'mailbox:conversation' conversation.id %}" class="btn btn-outline-secondary">
+            ← Zurück zur Konversation
+        </a>
+    </div>
+    
+    <!-- Original Email Preview -->
+    <div class="original-email">
+        <div class="header">
+            <strong>Von:</strong> {{ original_email.from_name|default:original_email.from_email }}<br>
+            <strong>Datum:</strong> {{ original_email.sent_at|default:original_email.received_at|date:"d.m.Y H:i" }}<br>
+            <strong>Betreff:</strong> {{ original_email.subject }}
+        </div>
+    </div>
+    
+    <!-- Reply Form -->
+    <div class="reply-card">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label class="form-label">An</label>
+                <input type="text" class="form-control" 
+                       value="{{ original_email.from_email }}" readonly>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Betreff</label>
+                <input type="text" name="subject" class="form-control" 
+                       value="{% if original_email.subject|slice:':3' == 'Re:' %}{{ original_email.subject }}{% else %}Re: {{ original_email.subject }}{% endif %}">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Nachricht</label>
+                <textarea id="body" name="body" class="form-control">{{ quoted_content|safe }}</textarea>
+            </div>
+            
+            {% if signatures %}
+            <div class="mb-3">
+                <label for="signature" class="form-label">Signatur</label>
+                <select id="signature" name="signature" class="form-select">
+                    <option value="">Keine Signatur</option>
+                    {% for sig in signatures %}
+                    <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>
+                        {{ sig.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
+            <div class="mb-3">
+                <label class="form-label">Anhänge</label>
+                <input type="file" name="attachments" class="form-control" multiple>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" name="action" value="send" class="btn btn-send">
+                    📤 Senden
+                </button>
+                <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+                    💾 Als Entwurf speichern
+                </button>
+                <a href="{% url 'mailbox:conversation' conversation.id %}" class="btn btn-outline-secondary">
+                    ✕ Abbrechen
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- TinyMCE -->
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+tinymce.init({
+    selector: '#body',
+    height: 400,
+    menubar: false,
+    plugins: 'link image lists',
+    toolbar: 'undo redo | bold italic underline | bullist numlist | link',
+    skin: 'oxide-dark',
+    content_css: 'dark'
+});
+
+// Signature management
+const signatures = {
+    {% for sig in signatures %}
+    '{{ sig.id }}': `{{ sig.content_html|escapejs }}`,
+    {% endfor %}
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const signatureSelect = document.getElementById('signature');
+    
+    // Insert default signature on load
+    const defaultSig = signatureSelect.value;
+    if (defaultSig && signatures[defaultSig]) {
+        setTimeout(() => appendSignature(signatures[defaultSig]), 500);
+    }
+    
+    // Change signature
+    signatureSelect.addEventListener('change', function() {
+        removeSignature();
+        if (this.value && signatures[this.value]) {
+            appendSignature(signatures[this.value]);
+        }
+    });
+    
+    function appendSignature(sigHtml) {
+        if (typeof tinymce !== 'undefined' && tinymce.get('body')) {
+            const editor = tinymce.get('body');
+            const content = editor.getContent();
+            editor.setContent(content + '<br><br>--<br>' + sigHtml);
+        }
+    }
+    
+    function removeSignature() {
+        if (typeof tinymce !== 'undefined' && tinymce.get('body')) {
+            const editor = tinymce.get('body');
+            let content = editor.getContent();
+            // Remove existing signature (everything after --)
+            content = content.replace(/<br><br>--<br>[\s\S]*$/, '');
+            editor.setContent(content);
+        }
+    }
+});
+</script>
+{% endblock %}
