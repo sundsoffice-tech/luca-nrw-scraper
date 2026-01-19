@@ -35,10 +35,15 @@ def render_template(template_str: str, variables: Dict[str, Any]) -> str:
                 f"Template rendering: Missing variables {missing_vars}. "
                 f"Template will contain unreplaced placeholders."
             )
-            # Use partial formatting - replace only available variables
+            # Filter variables to only those that exist in the template
+            # This prevents KeyError while keeping unmatched placeholders
+            filtered_vars = {k: v for k, v in variables.items() if k in required_vars}
+            # Use a custom format that preserves missing placeholders
             result = template_str
-            for var_name, var_value in variables.items():
-                result = result.replace('{' + var_name + '}', str(var_value))
+            for var_name in required_vars:
+                placeholder = '{' + var_name + '}'
+                if var_name in filtered_vars:
+                    result = result.replace(placeholder, str(filtered_vars[var_name]))
             return result
         
         return template_str.format(**variables)
