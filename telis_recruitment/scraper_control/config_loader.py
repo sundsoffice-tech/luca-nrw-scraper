@@ -61,6 +61,9 @@ def get_scraper_config() -> Dict[str, Any]:
             # Content
             'allow_pdf': config.allow_pdf,
             'max_content_length': config.max_content_length,
+            
+            # Security
+            'allow_insecure_ssl': config.allow_insecure_ssl,
         }
     except Exception as e:
         logger.warning(f"Could not load scraper config from DB: {e}")
