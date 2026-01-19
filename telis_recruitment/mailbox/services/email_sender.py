@@ -1,6 +1,7 @@
 """
 Email sender service for sending emails via Brevo or SMTP.
 """
+import base64
 import smtplib
 import uuid
 from email.mime.text import MIMEText
@@ -157,7 +158,6 @@ class EmailSenderService:
                     try:
                         with open(att.file.path, 'rb') as f:
                             content = f.read()
-                            import base64
                             attachment_list.append({
                                 'name': att.filename,
                                 'content': base64.b64encode(content).decode(),
@@ -239,34 +239,41 @@ class EmailSenderService:
                             encoders.encode_base64(part)
                             part.add_header(
                                 'Content-Disposition',
-                                f'attachment; filename= {att.filename}',
+                                f'attachment; filename="{att.filename}"',
                             )
                             msg.attach(part)
                     except Exception as e:
                         logger.warning(f"Could not attach file {att.filename}: {e}")
             
             # Connect to SMTP server and send
-            if self.account.smtp_use_tls:
-                server = smtplib.SMTP(self.account.smtp_host, self.account.smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP_SSL(self.account.smtp_host, self.account.smtp_port)
-            
-            if username and password:
-                server.login(username, password)
-            
-            # Collect all recipients
-            all_recipients = [e['email'] for e in email.to_emails]
-            if email.cc_emails:
-                all_recipients.extend([e['email'] for e in email.cc_emails])
-            if email.bcc_emails:
-                all_recipients.extend([e['email'] for e in email.bcc_emails])
-            
-            server.sendmail(email.from_email, all_recipients, msg.as_string())
-            server.quit()
-            
-            logger.info(f"SMTP: Email sent successfully")
-            return True
+            server = None
+            try:
+                if self.account.smtp_use_tls:
+                    server = smtplib.SMTP(self.account.smtp_host, self.account.smtp_port)
+                    server.starttls()
+                else:
+                    server = smtplib.SMTP_SSL(self.account.smtp_host, self.account.smtp_port)
+                
+                if username and password:
+                    server.login(username, password)
+                
+                # Collect all recipients
+                all_recipients = [e['email'] for e in email.to_emails]
+                if email.cc_emails:
+                    all_recipients.extend([e['email'] for e in email.cc_emails])
+                if email.bcc_emails:
+                    all_recipients.extend([e['email'] for e in email.bcc_emails])
+                
+                server.sendmail(email.from_email, all_recipients, msg.as_string())
+                
+                logger.info(f"SMTP: Email sent successfully")
+                return True
+            finally:
+                if server:
+                    try:
+                        server.quit()
+                    except Exception:
+                        pass
             
         except Exception as e:
             logger.error(f"Error sending via SMTP: {e}")
