@@ -54,7 +54,7 @@ def test_validate_config_accepts_log_func():
     try:
         validate_config()
         success_no_log = True
-    except Exception as e:
+    except (ImportError, AttributeError, TypeError) as e:
         success_no_log = False
         print(f"Error without log_func: {e}")
     
@@ -68,7 +68,7 @@ def test_validate_config_accepts_log_func():
     try:
         validate_config(log_func=mock_log)
         success_with_log = True
-    except Exception as e:
+    except (ImportError, AttributeError, TypeError) as e:
         success_with_log = False
         print(f"Error with log_func: {e}")
     
@@ -120,7 +120,9 @@ def test_no_placeholder_implementation():
 
 def test_script_py_deprecation_notice():
     """Test that script.py has deprecation notice."""
-    script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'script.py')
+    import pathlib
+    script_path = pathlib.Path(__file__).parent.parent / 'script.py'
+    
     with open(script_path, 'r', encoding='utf-8') as f:
         content = f.read()
     

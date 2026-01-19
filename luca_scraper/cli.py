@@ -43,7 +43,10 @@ def validate_config(log_func: Optional[Callable] = None) -> None:
         errs.append("GCS_KEYS/GCS_CXS unvollständig (beide listenbasiert setzen oder deaktivieren).")
     
     # Validate legacy single Google Custom Search configuration
-    if not (GCS_KEYS and GCS_CXS) and (GCS_API_KEY and not GCS_CX):
+    # Only check legacy config if list-based config is not set
+    has_list_config = bool(GCS_KEYS and GCS_CXS)
+    has_legacy_api_key = bool(GCS_API_KEY and not GCS_CX)
+    if not has_list_config and has_legacy_api_key:
         errs.append("GCS_CX fehlt trotz GCS_API_KEY (Legacy-Single-Config).")
     
     # Report errors
