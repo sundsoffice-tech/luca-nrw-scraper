@@ -176,10 +176,10 @@ def run_all_tests():
         print("✅ ALL TESTS PASSED!")
         print("="*70)
         print("\nSummary:")
-        print(f"  • Handelsvertreter: {len(INDUSTRY_QUERIES['handelsvertreter'])} queries (was 20, now 50+)")
-        print(f"  • D2D: {len(INDUSTRY_QUERIES['d2d'])} queries (was 15, now 30+)")
-        print(f"  • Callcenter: {len(INDUSTRY_QUERIES['callcenter'])} queries (was 15, now 30+)")
-        print(f"  • Recruiter: {len(INDUSTRY_QUERIES['recruiter'])} queries (was 10, now 30+)")
+        print(f"  • Handelsvertreter: {len(INDUSTRY_QUERIES.get('handelsvertreter', []))} queries (was 20, now 50+)")
+        print(f"  • D2D: {len(INDUSTRY_QUERIES.get('d2d', []))} queries (was 15, now 30+)")
+        print(f"  • Callcenter: {len(INDUSTRY_QUERIES.get('callcenter', []))} queries (was 15, now 30+)")
+        print(f"  • Recruiter: {len(INDUSTRY_QUERIES.get('recruiter', []))} queries (was 10, now 30+)")
         print("\n")
         
         return True
