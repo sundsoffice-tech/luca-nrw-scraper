@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
 from django.db import transaction
 
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset
+from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
 
@@ -340,8 +340,6 @@ def brand_settings_view(request):
 @require_http_methods(["GET"])
 def get_brand_css(request):
     """Get brand settings as CSS variables"""
-    from .models import BrandSettings
-    
     settings_obj = BrandSettings.objects.first()
     if settings_obj:
         css = settings_obj.get_css_variables()
@@ -357,8 +355,6 @@ def get_brand_css(request):
 @staff_member_required
 def select_template(request):
     """Template selection page"""
-    from .models import PageTemplate
-    
     templates = PageTemplate.objects.filter(is_active=True)
     
     # Group by category
@@ -378,8 +374,6 @@ def select_template(request):
 @require_POST
 def apply_template(request, template_id):
     """Apply a template to a new or existing page"""
-    from .models import PageTemplate
-    
     try:
         template = PageTemplate.objects.get(id=template_id)
         
