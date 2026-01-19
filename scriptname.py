@@ -1192,9 +1192,13 @@ def get_performance_params():
                         params['pool_size'] = db_config['pool_size']
                     if 'sleep_between_queries' in db_config:
                         params['request_delay'] = db_config['sleep_between_queries']
-        except Exception as e:
-            # If Django DB is not available, silently continue with env vars/defaults
+        except (ImportError, AttributeError, KeyError) as e:
+            # If Django DB is not available or misconfigured, continue with env vars/defaults
+            # This is expected when running standalone without Django
             pass
+        except Exception as e:
+            # Unexpected error - log it but continue with fallback
+            log("warn", "Failed to load performance params from Django DB", error=str(e))
     
     return params
 

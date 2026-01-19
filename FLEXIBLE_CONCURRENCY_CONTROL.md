@@ -124,7 +124,9 @@ If neither Django DB nor environment variables are set, the scraper uses:
 ### Implementation
 
 **File**: `scriptname.py`
-**Function**: `get_performance_params()` (lines 1155-1196)
+**Function**: `get_performance_params()`
+
+The function implements a three-tier configuration priority system:
 
 ```python
 def get_performance_params():
