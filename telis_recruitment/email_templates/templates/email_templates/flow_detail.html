@@ -1,0 +1,157 @@
+{% extends "crm/base.html" %}
+
+{% block title %}{{ flow.name }} - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500 mx-2">/</span>
+<a href="{% url 'email_templates:flow-list' %}" class="text-gray-400 hover:text-primary transition duration-150">Automationen</a>
+<span class="text-gray-500 mx-2">/</span>
+<span class="text-primary">{{ flow.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="bg-dark-800 rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-100 mb-2">{{ flow.name }}</h1>
+                {% if flow.description %}
+                <p class="text-gray-400">{{ flow.description }}</p>
+                {% endif %}
+            </div>
+            <div class="flex items-center space-x-3">
+                {% if flow.is_active %}
+                <span class="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg">✓ Aktiv</span>
+                {% else %}
+                <span class="px-4 py-2 bg-gray-500/20 text-gray-400 rounded-lg">○ Inaktiv</span>
+                {% endif %}
+                <a href="{% url 'email_templates:flow-builder-edit' flow.slug %}" 
+                   class="bg-primary hover:bg-cyan-600 text-white px-6 py-2 rounded-lg transition duration-150">
+                    Bearbeiten
+                </a>
+            </div>
+        </div>
+        
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div class="bg-dark-900/50 rounded-lg p-4">
+                <div class="text-sm text-gray-500 mb-1">Trigger</div>
+                <div class="text-lg font-semibold text-gray-200">{{ flow.get_trigger_type_display }}</div>
+            </div>
+            <div class="bg-dark-900/50 rounded-lg p-4">
+                <div class="text-sm text-gray-500 mb-1">Schritte</div>
+                <div class="text-lg font-semibold text-gray-200">{{ flow.steps.count }}</div>
+            </div>
+            <div class="bg-dark-900/50 rounded-lg p-4">
+                <div class="text-sm text-gray-500 mb-1">Ausführungen</div>
+                <div class="text-lg font-semibold text-gray-200">{{ flow.execution_count }}</div>
+            </div>
+            <div class="bg-dark-900/50 rounded-lg p-4">
+                <div class="text-sm text-gray-500 mb-1">Zuletzt ausgeführt</div>
+                <div class="text-lg font-semibold text-gray-200">
+                    {% if flow.last_executed_at %}
+                    {{ flow.last_executed_at|date:"d.m.Y H:i" }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-6">
+        <!-- Flow Steps -->
+        <div class="col-span-12 lg:col-span-6">
+            <div class="bg-dark-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-100 mb-4">📋 Flow-Schritte</h3>
+                
+                <div class="space-y-3">
+                    {% for step in flow.steps.all %}
+                    <div class="bg-dark-700 rounded-lg p-4 border border-dark-600">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-semibold shrink-0">
+                                {{ step.order|add:1 }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-semibold text-gray-200">{{ step.get_action_type_display }}</h4>
+                                {% if step.name %}
+                                <p class="text-sm text-gray-400 mt-1">{{ step.name }}</p>
+                                {% endif %}
+                                
+                                {% if step.action_type == 'send_email' and step.email_template %}
+                                <div class="mt-2 text-sm text-gray-500">
+                                    Template: <span class="text-primary">{{ step.email_template.name }}</span>
+                                </div>
+                                {% elif step.action_type == 'wait' %}
+                                <div class="mt-2 text-sm text-gray-500">
+                                    Wartezeit: {{ step.action_config.duration|default:"Nicht konfiguriert" }}
+                                </div>
+                                {% endif %}
+                                
+                                {% if not step.is_active %}
+                                <span class="inline-block mt-2 px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded">Deaktiviert</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-500">
+                        Keine Schritte konfiguriert
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions -->
+        <div class="col-span-12 lg:col-span-6">
+            <div class="bg-dark-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-100 mb-4">📊 Letzte Ausführungen</h3>
+                
+                <div class="space-y-3">
+                    {% for execution in recent_executions %}
+                    <div class="bg-dark-700 rounded-lg p-4 border border-dark-600">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-200">{{ execution.lead.name }}</h4>
+                                <p class="text-sm text-gray-500">{{ execution.started_at|date:"d.m.Y H:i" }}</p>
+                            </div>
+                            <div>
+                                {% if execution.status == 'completed' %}
+                                <span class="px-3 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">✓ Abgeschlossen</span>
+                                {% elif execution.status == 'running' %}
+                                <span class="px-3 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">▶ Läuft</span>
+                                {% elif execution.status == 'failed' %}
+                                <span class="px-3 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">✗ Fehlgeschlagen</span>
+                                {% elif execution.status == 'waiting' %}
+                                <span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">⏱ Wartet</span>
+                                {% else %}
+                                <span class="px-3 py-1 bg-gray-500/20 text-gray-400 text-xs rounded-full">{{ execution.get_status_display }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        {% if execution.current_step %}
+                        <div class="text-sm text-gray-500">
+                            Schritt: {{ execution.current_step.order|add:1 }} - {{ execution.current_step.get_action_type_display }}
+                        </div>
+                        {% endif %}
+                        
+                        {% if execution.error_message %}
+                        <div class="mt-2 text-sm text-red-400">
+                            {{ execution.error_message|truncatewords:20 }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-500">
+                        Noch keine Ausführungen
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

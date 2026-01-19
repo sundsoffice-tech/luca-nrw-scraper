@@ -1,20 +1,27 @@
 """Views for Email Templates"""
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 import json
 
-from .models import EmailTemplate, EmailTemplateVersion, EmailSendLog
+from .models import (
+    EmailTemplate, EmailTemplateVersion, EmailSendLog,
+    EmailFlow, FlowStep, FlowExecution
+)
 from .serializers import (
     EmailTemplateSerializer, 
     EmailTemplateVersionSerializer, 
-    EmailSendLogSerializer
+    EmailSendLogSerializer,
+    EmailFlowSerializer,
+    EmailFlowCreateSerializer,
+    FlowExecutionSerializer
 )
 from .services.renderer import render_email_template, get_sample_variables, get_template_variables
 from .services.ai_generator import generate_email_template, improve_email_text, generate_subject_lines
@@ -217,6 +224,118 @@ class EmailSendLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
 
+class EmailFlowViewSet(viewsets.ModelViewSet):
+    """ViewSet für EmailFlow API"""
+    queryset = EmailFlow.objects.all()
+    serializer_class = EmailFlowSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'slug'
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return EmailFlowCreateSerializer
+        return EmailFlowSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def activate(self, request, slug=None):
+        """Flow aktivieren"""
+        flow = self.get_object()
+        flow.is_active = True
+        flow.save()
+        return Response({
+            'status': 'activated',
+            'message': f'Flow "{flow.name}" wurde aktiviert.'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, slug=None):
+        """Flow deaktivieren"""
+        flow = self.get_object()
+        flow.is_active = False
+        flow.save()
+        return Response({
+            'status': 'deactivated',
+            'message': f'Flow "{flow.name}" wurde deaktiviert.'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, slug=None):
+        """Flow duplizieren"""
+        flow = self.get_object()
+        
+        # Speichere Steps
+        steps = list(flow.steps.all().values(
+            'order', 'name', 'action_type', 'action_config', 
+            'email_template_id', 'is_active'
+        ))
+        
+        # Dupliziere Flow
+        flow.pk = None
+        
+        # Generate unique slug
+        base_slug = f"{slug}-copy"
+        new_slug = base_slug
+        counter = 1
+        while EmailFlow.objects.filter(slug=new_slug).exists():
+            new_slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        flow.slug = new_slug
+        flow.name = f"{flow.name} (Kopie)"
+        flow.execution_count = 0
+        flow.last_executed_at = None
+        flow.is_active = False
+        flow.created_by = request.user
+        flow.save()
+        
+        # Dupliziere Steps
+        for step_data in steps:
+            FlowStep.objects.create(flow=flow, **step_data)
+        
+        serializer = self.get_serializer(flow)
+        return Response({
+            'status': 'duplicated',
+            'message': f'Flow "{flow.name}" wurde dupliziert.',
+            'flow': serializer.data
+        })
+    
+    @action(detail=True, methods=['get'])
+    def statistics(self, request, slug=None):
+        """Flow-Statistiken abrufen"""
+        flow = self.get_object()
+        
+        # Zähle Executions nach Status
+        executions = flow.executions.all()
+        stats = {
+            'total_executions': flow.execution_count,
+            'last_executed_at': flow.last_executed_at,
+            'status_counts': {
+                'pending': executions.filter(status='pending').count(),
+                'running': executions.filter(status='running').count(),
+                'waiting': executions.filter(status='waiting').count(),
+                'completed': executions.filter(status='completed').count(),
+                'paused': executions.filter(status='paused').count(),
+                'failed': executions.filter(status='failed').count(),
+                'cancelled': executions.filter(status='cancelled').count(),
+            },
+            'steps_count': flow.steps.count(),
+            'active_steps_count': flow.steps.filter(is_active=True).count(),
+        }
+        
+        return Response(stats)
+    
+    @action(detail=True, methods=['get'])
+    def executions(self, request, slug=None):
+        """Flow-Ausführungen abrufen"""
+        flow = self.get_object()
+        executions = flow.executions.all()[:20]  # Letzte 20
+        serializer = FlowExecutionSerializer(executions, many=True)
+        return Response(serializer.data)
+
+
 # Web Interface Views
 @login_required
 def template_list(request):
@@ -257,3 +376,67 @@ def template_preview(request, slug):
             'template': template,
             'error': str(e)
         })
+
+
+@login_required
+def flow_list(request):
+    """Liste aller Flows"""
+    flows = EmailFlow.objects.all()
+    
+    # Filter nach Status
+    status_filter = request.GET.get('status', '')
+    if status_filter == 'active':
+        flows = flows.filter(is_active=True)
+    elif status_filter == 'inactive':
+        flows = flows.filter(is_active=False)
+    
+    # Filter nach Trigger-Typ
+    trigger_filter = request.GET.get('trigger', '')
+    if trigger_filter:
+        flows = flows.filter(trigger_type=trigger_filter)
+    
+    # Für Template-Context
+    trigger_types = EmailFlow.TRIGGER_TYPES
+    
+    return render(request, 'email_templates/flow_list.html', {
+        'flows': flows,
+        'trigger_types': trigger_types,
+        'status_filter': status_filter,
+        'trigger_filter': trigger_filter
+    })
+
+
+@login_required
+def flow_builder(request, slug=None):
+    """Flow-Builder (Neu oder Bearbeiten)"""
+    flow = None
+    if slug:
+        flow = get_object_or_404(EmailFlow, slug=slug)
+    
+    # Hole verfügbare Templates
+    email_templates = EmailTemplate.objects.filter(is_active=True)
+    
+    # Trigger-Typen
+    trigger_types = EmailFlow.TRIGGER_TYPES
+    action_types = FlowStep.ACTION_TYPES
+    
+    return render(request, 'email_templates/flow_builder.html', {
+        'flow': flow,
+        'email_templates': email_templates,
+        'trigger_types': trigger_types,
+        'action_types': action_types,
+    })
+
+
+@login_required
+def flow_detail(request, slug):
+    """Flow-Details"""
+    flow = get_object_or_404(EmailFlow, slug=slug)
+    
+    # Hole letzte Executions
+    recent_executions = flow.executions.all()[:10]
+    
+    return render(request, 'email_templates/flow_detail.html', {
+        'flow': flow,
+        'recent_executions': recent_executions
+    })
