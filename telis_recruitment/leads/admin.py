@@ -5,7 +5,7 @@ from django.http import HttpResponse
 import csv
 from unfold.admin import ModelAdmin
 from unfold.contrib.filters.admin import RangeDateFilter
-from .models import Lead, CallLog, EmailLog, SyncStatus, ScraperRun, ScraperConfig
+from .models import Lead, CallLog, EmailLog, SyncStatus, ScraperRun
 
 
 class CallLogInline(admin.TabularInline):
@@ -440,61 +440,6 @@ class ScraperRunAdmin(ModelAdmin):
             obj.leads_saved,
             obj.leads_rejected
         )
-
-
-@admin.register(ScraperConfig)
-class ScraperConfigAdmin(ModelAdmin):
-    """Admin for ScraperConfig - singleton configuration"""
-    
-    list_display = [
-        'id',
-        'min_score',
-        'max_results_per_domain',
-        'pool_size',
-        'updated_at',
-        'updated_by'
-    ]
-    
-    fieldsets = (
-        ('Qualität', {
-            'fields': ('min_score',),
-            'description': 'Mindest-Score für Lead-Qualität',
-        }),
-        ('Scraper-Verhalten', {
-            'fields': (
-                'max_results_per_domain',
-                'request_timeout',
-                'pool_size',
-                'internal_depth_per_domain',
-            ),
-            'description': 'Konfiguration des Scraper-Verhaltens',
-        }),
-        ('Flags', {
-            'fields': ('allow_pdf', 'allow_insecure_ssl'),
-            'description': 'Erweiterte Optionen',
-        }),
-        ('Meta', {
-            'fields': ('updated_at', 'updated_by'),
-            'classes': ('collapse',),
-        }),
-    )
-    
-    readonly_fields = ['updated_at', 'updated_by']
-    
-    def has_add_permission(self, request):
-        """Only one config should exist"""
-        return not ScraperConfig.objects.exists()
-    
-    def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of config"""
-        return False
-    
-    def save_model(self, request, obj, form, change):
-        """Track who updated the config"""
-        obj.updated_by = request.user
-        super().save_model(request, obj, form, change)
-
-
 # Admin Site Customization
 admin.site.site_header = '🎯 TELIS Recruitment'
 admin.site.site_title = 'TELIS Admin'
