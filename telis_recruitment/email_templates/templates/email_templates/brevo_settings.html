@@ -227,9 +227,32 @@ async function syncTemplate() {
 
 function copyWebhookUrl() {
     const webhookUrl = document.getElementById('webhookUrl');
+    const text = webhookUrl.value;
+    
+    // Use modern Clipboard API with fallback
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('✅ Webhook-URL kopiert!', 'success');
+        }).catch(err => {
+            // Fallback to older method
+            copyToClipboardFallback(text);
+        });
+    } else {
+        copyToClipboardFallback(text);
+    }
+}
+
+function copyToClipboardFallback(text) {
+    const webhookUrl = document.getElementById('webhookUrl');
     webhookUrl.select();
-    document.execCommand('copy');
-    showToast('✅ Webhook-URL kopiert!', 'success');
+    webhookUrl.setSelectionRange(0, 99999); // For mobile devices
+    
+    try {
+        document.execCommand('copy');
+        showToast('✅ Webhook-URL kopiert!', 'success');
+    } catch (err) {
+        showToast('❌ Kopieren fehlgeschlagen', 'error');
+    }
 }
 
 // Load templates for sync dropdown

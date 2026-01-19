@@ -492,7 +492,7 @@ def send_logs(request):
     
     stats = {
         'total': total,
-        'sent': sent + delivered,
+        'sent': sent + delivered,  # Combined for display
         'opened': opened,
         'clicked': clicked,
         'open_rate': open_rate,

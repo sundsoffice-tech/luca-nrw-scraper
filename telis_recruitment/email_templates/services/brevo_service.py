@@ -5,12 +5,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Check if Brevo SDK is available
+BREVO_AVAILABLE = False
 try:
     import sib_api_v3_sdk
     from sib_api_v3_sdk.rest import ApiException
     BREVO_AVAILABLE = True
 except ImportError:
-    BREVO_AVAILABLE = False
+    # Create dummy classes for when SDK is not installed
+    sib_api_v3_sdk = None
+    ApiException = Exception
     logger.warning("Brevo SDK not available. Install with: pip install sib-api-v3-sdk")
 
 
