@@ -83,7 +83,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
                 'mode': 'standard',
                 'once': True,
                 'dry_run': True  # Use dry run to avoid actual scraping
-            })
+            }, format='json')
             
             # Should not return 400 for invalid industry
             # It might return 400 for other reasons (scraper already running), but not for invalid industry
@@ -96,7 +96,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
             'industry': 'invalid_industry',
             'qpi': 15,
             'mode': 'standard',
-        })
+        }, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('Ungültige Industry', response.data['error'])
@@ -110,7 +110,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
             'mode': 'headhunter',  # Invalid mode
             'once': True,
             'dry_run': True
-        })
+        }, format='json')
         
         # Should succeed with fallback, not return 400 for invalid mode
         # (might still fail for other reasons like scraper already running)
@@ -127,7 +127,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
             'mode': 'standard',
             'once': True,
             'dry_run': True
-        })
+        }, format='json')
         
         # Should clamp to 100, not reject
         # Response should succeed (or fail for reasons other than QPI validation)
@@ -141,7 +141,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
             'mode': 'standard',
             'once': True,
             'dry_run': True
-        })
+        }, format='json')
         
         # Should clamp to 1, not reject
         if response.status_code == 400:
@@ -156,7 +156,7 @@ class ScraperAPIParameterValidationTest(APITestCase):
             'mode': 'aggressive',
             'once': True,
             'dry_run': True
-        })
+        }, format='json')
         
         # Should not reject the combination
         # (might still fail for other reasons)
