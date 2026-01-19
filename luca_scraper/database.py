@@ -245,6 +245,12 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     if "name_validated" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN name_validated INTEGER")
     
+    # CRM sync columns - for bidirectional data flow
+    if "crm_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN crm_status TEXT")  # Status from CRM (NEW, CONTACTED, etc.)
+    if "crm_synced_at" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN crm_synced_at TEXT")  # Last sync timestamp
+    
     con.commit()
 
     # Create unique indexes (partial - only when values present)

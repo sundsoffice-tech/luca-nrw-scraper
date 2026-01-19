@@ -105,6 +105,10 @@ SCRAPER_TO_DJANGO_MAPPING = {
     'last_activity': 'last_activity',
     'name_validated': 'name_validated',
     'ssl_insecure': 'ssl_insecure',
+    
+    # CRM bidirectional sync fields
+    'crm_status': 'status',  # Maps scraper crm_status to Django status field
+    'crm_synced_at': 'updated_at',  # Maps to Django updated_at for tracking
 }
 
 # Django Model → Scraper DB reverse mapping
@@ -205,3 +209,36 @@ def is_boolean_field(field_name):
 def is_url_field(field_name):
     """Check if a field should be treated as a URL."""
     return field_name in URL_FIELDS
+
+
+# CRM Status → Scraper status mapping
+# Maps Django Lead.Status to scraper.db crm_status values
+CRM_STATUS_TO_SCRAPER_MAPPING = {
+    'NEW': 'new',
+    'CONTACTED': 'contacted',
+    'VOICEMAIL': 'voicemail',
+    'INTERESTED': 'interested',
+    'INTERVIEW': 'interview',
+    'HIRED': 'hired',
+    'NOT_INTERESTED': 'not_interested',
+    'INVALID': 'invalid',
+}
+
+# Fields that should be synced from CRM back to scraper
+# These are fields that may be updated in CRM and should be reflected in scraper.db
+CRM_TO_SCRAPER_SYNC_FIELDS = {
+    'status': 'crm_status',  # CRM status → scraper crm_status
+}
+
+
+def get_scraper_status(crm_status):
+    """
+    Convert CRM status to scraper-compatible status string.
+    
+    Args:
+        crm_status: Django Lead.Status value (e.g., 'NEW', 'CONTACTED')
+        
+    Returns:
+        Scraper-compatible status string
+    """
+    return CRM_STATUS_TO_SCRAPER_MAPPING.get(crm_status, crm_status.lower() if crm_status else None)
