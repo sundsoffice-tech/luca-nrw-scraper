@@ -118,10 +118,12 @@ def scraper_start(request):
             config.industry = params.get('industry', config.industry)
             config.qpi = qpi  # Use validated qpi value
             config.mode = params.get('mode', config.mode)
-            config.smart = params.get('smart', config.smart)
-            config.once = params.get('once', config.once)
-            config.force = params.get('force', config.force)
-            config.dry_run = params.get('dry_run', config.dry_run)
+            # Boolean fields: explicitly check for presence in params
+            # If checkbox is unchecked, it won't be in params, so we set to False
+            config.smart = params.get('smart', False)
+            config.once = params.get('once', False)
+            config.force = params.get('force', False)
+            config.dry_run = params.get('dry_run', False)
             config.updated_by = request.user
             config.save()
             
