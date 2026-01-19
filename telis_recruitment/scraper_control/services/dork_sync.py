@@ -31,6 +31,11 @@ class DorkSyncService:
     - Integration with CRM workflows
     """
     
+    # Limits for JSON field list sizes to prevent unbounded growth
+    MAX_EXTRACTION_PATTERNS = 50
+    MAX_TOP_DOMAINS = 20
+    MAX_PHONE_PATTERNS = 30
+    
     def __init__(self, sqlite_db_path: str = "scraper.db"):
         """
         Initialize the DorkSyncService.
@@ -133,17 +138,17 @@ class DorkSyncService:
             if extraction_patterns:
                 # Merge with existing patterns, keeping unique ones
                 existing = search_dork.extraction_patterns or []
-                merged = list(set(existing + extraction_patterns))[:50]  # Limit to 50
+                merged = list(set(existing + extraction_patterns))[:self.MAX_EXTRACTION_PATTERNS]
                 search_dork.extraction_patterns = merged
             
             if top_domains:
                 existing = search_dork.top_domains or []
-                merged = list(set(existing + top_domains))[:20]  # Limit to 20
+                merged = list(set(existing + top_domains))[:self.MAX_TOP_DOMAINS]
                 search_dork.top_domains = merged
             
             if phone_patterns:
                 existing = search_dork.phone_patterns or []
-                merged = list(set(existing + phone_patterns))[:30]  # Limit to 30
+                merged = list(set(existing + phone_patterns))[:self.MAX_PHONE_PATTERNS]
                 search_dork.phone_patterns = merged
             
             search_dork.save()
@@ -223,15 +228,19 @@ class DorkSyncService:
         This analyzes which domains yield the best results for a given search query,
         enabling domain-specific optimization.
         
+        Note: Currently returns empty list. Implementation would require cross-referencing
+        with domain_performance table in the learning database. This is a placeholder
+        for future enhancement.
+        
         Args:
             dork: The search query
             limit: Maximum number of domains to return
         
         Returns:
-            List of domain performance dictionaries
+            List of domain performance dictionaries (currently empty)
         """
-        # This would require cross-referencing with domain_performance table
-        # For now, return empty list - can be enhanced with more sophisticated tracking
+        # Future enhancement: Implement domain-dork correlation tracking
+        # This would require joining learning_dork_performance with learning_domains
         return []
     
     def record_dork_result_with_sync(self, dork: str, results: int, 

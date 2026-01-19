@@ -229,9 +229,20 @@ class SearchDorkAdmin(ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    readonly_fields = ['times_used', 'leads_found', 'leads_with_phone', 'total_search_results', 'success_rate', 
-                       'last_used', 'extraction_patterns', 'top_domains', 'phone_patterns', 'last_synced_at',
-                       'created_at', 'updated_at']
+    readonly_fields = [
+        'times_used', 
+        'leads_found', 
+        'leads_with_phone', 
+        'total_search_results', 
+        'success_rate', 
+        'last_used', 
+        'extraction_patterns', 
+        'top_domains', 
+        'phone_patterns', 
+        'last_synced_at',
+        'created_at', 
+        'updated_at',
+    ]
     
     def query_short(self, obj):
         return obj.query[:60] + '...' if len(obj.query) > 60 else obj.query

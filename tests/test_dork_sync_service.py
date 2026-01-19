@@ -12,6 +12,13 @@ import os
 import tempfile
 from unittest.mock import patch, MagicMock
 
+# Check if Django is available
+try:
+    import django
+    DJANGO_AVAILABLE = True
+except ImportError:
+    DJANGO_AVAILABLE = False
+
 # Import the sync service
 from telis_recruitment.scraper_control.services.dork_sync import DorkSyncService, get_dork_sync_service
 
@@ -271,10 +278,7 @@ class TestDorkSyncServiceIntegration:
     """Integration tests for DorkSyncService (require Django)."""
     
     @pytest.mark.django_db
-    @pytest.mark.skipif(
-        not __import__('importlib.util', fromlist=['find_spec']).find_spec('django'),
-        reason="Django not available"
-    )
+    @pytest.mark.skipif(not DJANGO_AVAILABLE, reason="Django not available")
     def test_sync_to_existing_searchdork(self, populated_sqlite_db):
         """Test syncing to an existing SearchDork model."""
         from telis_recruitment.scraper_control.models import SearchDork
@@ -313,10 +317,7 @@ class TestDorkSyncServiceIntegration:
         assert dork.last_synced_at is not None
     
     @pytest.mark.django_db
-    @pytest.mark.skipif(
-        not __import__('importlib.util', fromlist=['find_spec']).find_spec('django'),
-        reason="Django not available"
-    )
+    @pytest.mark.skipif(not DJANGO_AVAILABLE, reason="Django not available")
     def test_sync_creates_new_searchdork(self, populated_sqlite_db):
         """Test syncing creates new SearchDork when create_if_missing=True."""
         from telis_recruitment.scraper_control.models import SearchDork
@@ -347,10 +348,7 @@ class TestDorkSyncServiceIntegration:
         assert dork.leads_with_phone == 3
     
     @pytest.mark.django_db
-    @pytest.mark.skipif(
-        not __import__('importlib.util', fromlist=['find_spec']).find_spec('django'),
-        reason="Django not available"
-    )
+    @pytest.mark.skipif(not DJANGO_AVAILABLE, reason="Django not available")
     def test_sync_adds_extraction_patterns(self, populated_sqlite_db):
         """Test syncing adds extraction patterns to SearchDork."""
         from telis_recruitment.scraper_control.models import SearchDork
