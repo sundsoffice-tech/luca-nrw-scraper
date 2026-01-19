@@ -97,7 +97,6 @@ SCRAPER_TO_DJANGO_MAPPING = {
     # Metadata
     'recency_indicator': 'recency_indicator',
     'last_updated': 'last_updated',
-    'last_activity': 'last_activity',
 }
 
 # Django Model → Scraper DB reverse mapping
