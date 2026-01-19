@@ -100,10 +100,32 @@ class ProcessManager:
                                 message=line.strip()
                             )
                             
+                            # Detect common errors
+                            if 'ModuleNotFoundError' in line:
+                                self._log_error("Missing module - check dependencies")
+                            if 'KeyError' in line or 'AttributeError' in line:
+                                self._log_error(f"Configuration error: {line.strip()}")
+                            if 'rate limit' in message_lower:
+                                self._log_error("Rate limit hit - consider reducing QPI")
+                            
                         except Exception as e:
                             logger.error(f"Failed to update ScraperRun logs: {e}")
         except Exception as e:
             logger.error(f"Error reading scraper output: {e}")
+    
+    def _log_error(self, message: str):
+        """Log an error message to the current run."""
+        if self.current_run_id:
+            try:
+                from .models import ScraperLog, ScraperRun
+                run = ScraperRun.objects.get(id=self.current_run_id)
+                ScraperLog.objects.create(
+                    run=run,
+                    level='ERROR',
+                    message=message
+                )
+            except Exception as e:
+                logger.error(f"Failed to log error: {e}")
     
     def _find_scraper_script(self):
         """Find the scraper script to execute."""
@@ -124,6 +146,63 @@ class ProcessManager:
             return ('script', script_path)
         
         return (None, None)
+    
+    def _build_command(self, params: Dict[str, Any], script_type: str, script_path: str) -> list:
+        """
+        Build command line arguments with validation and fallbacks.
+        
+        Args:
+            params: Dictionary of scraper parameters
+            script_type: 'module' or 'script'
+            script_path: Path to script or module name
+            
+        Returns:
+            List of command arguments
+        """
+        # Build base command
+        if script_type == 'module':
+            cmd = ['python', '-m', 'luca_scraper.cli']
+        else:
+            cmd = ['python', script_path]
+        
+        # Industry - always set
+        industry = params.get('industry', 'recruiter')
+        cmd.extend(['--industry', str(industry)])
+        
+        # QPI - always set
+        qpi = params.get('qpi', 15)
+        cmd.extend(['--qpi', str(int(qpi))])
+        
+        # Mode - only if not standard
+        mode = params.get('mode', 'standard')
+        if mode and mode != 'standard':
+            # Validate against CLI choices
+            valid_modes = ['learning', 'aggressive', 'snippet_only']
+            if mode in valid_modes:
+                cmd.extend(['--mode', mode])
+            else:
+                logger.warning(f"Skipping invalid mode: {mode}")
+        
+        # Date restrict - only if set
+        daterestrict = params.get('daterestrict', '')
+        if daterestrict and daterestrict.strip():
+            cmd.extend(['--daterestrict', daterestrict.strip()])
+        
+        # Boolean flags
+        if params.get('smart', False):
+            cmd.append('--smart')
+        
+        if params.get('force', False):
+            cmd.append('--force')
+        
+        if params.get('once', True):  # Default True!
+            cmd.append('--once')
+        
+        if params.get('dry_run', False):
+            cmd.append('--dry-run')
+        
+        logger.info(f"Built scraper command: {' '.join(cmd)}")
+        return cmd
     
     def start(self, params: Dict[str, Any], user=None) -> Dict[str, Any]:
         """
@@ -176,42 +255,11 @@ class ProcessManager:
                     'status': 'error'
                 }
             
-            # Build command
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            
-            if script_type == 'module':
-                cmd = ['python', '-m', 'luca_scraper.cli']
-            else:
-                cmd = ['python', script_path]
-            
-            # Add parameters
-            industry = params.get('industry', 'recruiter')
-            cmd.extend(['--industry', industry])
-            
-            qpi = params.get('qpi', 15)
-            cmd.extend(['--qpi', str(qpi)])
-            
-            mode = params.get('mode', 'standard')
-            if mode and mode != 'standard':
-                cmd.extend(['--mode', mode])
-            
-            daterestrict = params.get('daterestrict', '')
-            if daterestrict:
-                cmd.extend(['--daterestrict', daterestrict])
-            
-            if params.get('smart', True):
-                cmd.append('--smart')
-            
-            if params.get('force', False):
-                cmd.append('--force')
-            
-            if params.get('once', True):
-                cmd.append('--once')
-            
-            if params.get('dry_run', False):
-                cmd.append('--dry-run')
+            # Build command with robust validation
+            cmd = self._build_command(params, script_type, script_path)
             
             # Prepare environment
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             env = os.environ.copy()
             env_file = os.path.join(project_root, '.env')
             if os.path.exists(env_file):

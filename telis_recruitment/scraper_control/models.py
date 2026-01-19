@@ -16,6 +16,15 @@ class ScraperConfig(models.Model):
         ('recruiter', 'Recruiter'),
         ('candidates', 'Kandidaten'),
         ('talent_hunt', 'Talent Hunt'),
+        # Extended industries (must match CLI choices)
+        ('nrw', 'NRW Regional'),
+        ('social', 'Social Media'),
+        ('solar', 'Solar/Energie'),
+        ('telekom', 'Telekommunikation'),
+        ('versicherung', 'Versicherung'),
+        ('bau', 'Baubranche'),
+        ('ecom', 'E-Commerce'),
+        ('household', 'Haushalt'),
     ]
     
     MODE_CHOICES = [
