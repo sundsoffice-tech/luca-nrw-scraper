@@ -507,6 +507,13 @@ if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
 load_dotenv(override=True)
 
 USER_AGENT = "Mozilla/5.0 (compatible; VertriebFinder/2.3; +https://example.com)"
+# =========================
+# CONFIGURATION FALLBACKS
+# =========================
+# These are fallback definitions when luca_scraper is not available.
+# When luca_scraper is available, values from luca_scraper.config are used instead (see line ~1200).
+# luca_scraper.config uses centralized configuration with priority: DB → Env → Defaults
+
 DEFAULT_CSV = "vertrieb_kontakte.csv"
 DEFAULT_XLSX = "vertrieb_kontakte.xlsx"
 DB_PATH = os.getenv("SCRAPER_DB", "scraper.db")
@@ -516,17 +523,17 @@ GCS_API_KEY    = os.getenv("GCS_API_KEY", "")
 GCS_CX_RAW     = os.getenv("GCS_CX", "")
 BING_API_KEY   = os.getenv("BING_API_KEY", "")
 
-HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))  # Reduced to 10s for cost control
+HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))
 MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB default
 
-POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
+POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))
 
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
 ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 
-# Neue Async-ENV
-ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
-ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))     # pro Host
+# Async settings
+ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))
+ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
 USE_TOR = False
 
@@ -1154,17 +1161,27 @@ SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 def get_performance_params():
     """
-    Get performance parameters from environment variables or defaults.
-    Legacy dashboard API integration removed - now uses env vars/defaults only.
+    Get performance parameters from centralized configuration.
+    Uses luca_scraper's centralized config system with DB→Env→Default priority.
     """
-    # Legacy dashboard API removed - skip API call
-    # Fallback to environment variables/defaults
-    return {
-        'threads': int(os.getenv("THREADS", "4")),
-        'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
-        'batch_size': int(os.getenv("BATCH_SIZE", "20")),
-        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
-    }
+    if _LUCA_SCRAPER_AVAILABLE:
+        # Use centralized config system
+        from luca_scraper.config import get_scraper_config
+        config = get_scraper_config()
+        return {
+            'threads': int(os.getenv("THREADS", "4")),  # Not in centralized config yet
+            'async_limit': config.get('async_limit', 35),
+            'batch_size': int(os.getenv("BATCH_SIZE", "20")),  # Not in centralized config yet
+            'request_delay': config.get('sleep_between_queries', 2.7)
+        }
+    else:
+        # Fallback to environment variables/defaults if luca_scraper not available
+        return {
+            'threads': int(os.getenv("THREADS", "4")),
+            'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
+            'batch_size': int(os.getenv("BATCH_SIZE", "20")),
+            'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
+        }
 
 # -------------- Logging --------------
 def log(level:str, msg:str, **ctx):
