@@ -320,20 +320,20 @@ class DomainConfigurationAdmin(ModelAdmin):
 class PageAssetAdmin(ModelAdmin):
     """Admin interface for page assets"""
     
-    list_display = ['filename', 'folder', 'file_size_display', 'dimensions', 'uploaded_by', 'uploaded_at']
-    list_filter = ['folder', 'uploaded_at', 'uploaded_by']
-    search_fields = ['filename', 'alt_text', 'folder']
-    readonly_fields = ['file_size', 'width', 'height', 'uploaded_at', 'uploaded_by']
+    list_display = ['name', 'asset_type', 'landing_page', 'file_size_display', 'uploaded_by', 'created_at']
+    list_filter = ['asset_type', 'folder', 'created_at']
+    search_fields = ['name', 'alt_text']
+    readonly_fields = ['file_size', 'width', 'height', 'created_at', 'uploaded_by']
     
     fieldsets = [
         ('File Information', {
-            'fields': ['file', 'filename', 'folder', 'alt_text']
+            'fields': ['landing_page', 'file', 'name', 'asset_type', 'folder', 'alt_text']
         }),
         ('Metadata', {
-            'fields': ['file_size', 'width', 'height']
+            'fields': ['file_size', 'width', 'height', 'mime_type']
         }),
         ('Upload Information', {
-            'fields': ['uploaded_by', 'uploaded_at']
+            'fields': ['uploaded_by', 'created_at']
         }),
     ]
     
@@ -347,13 +347,6 @@ class PageAssetAdmin(ModelAdmin):
         else:
             return f"{size / (1024 * 1024):.1f} MB"
     file_size_display.short_description = 'Size'
-    
-    def dimensions(self, obj):
-        """Display image dimensions"""
-        if obj.width and obj.height:
-            return f"{obj.width} × {obj.height}"
-        return '-'
-    dimensions.short_description = 'Dimensions'
     
     def save_model(self, request, obj, form, change):
         """Track uploader"""
@@ -369,25 +362,24 @@ class BrandSettingsAdmin(ModelAdmin):
     list_display = ['__str__', 'company_name', 'primary_color', 'heading_font', 'body_font']
     
     fieldsets = [
-        ('Colors', {
-            'fields': ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'background_color']
+        ('Farben', {
+            'fields': ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'text_light_color', 'background_color']
         }),
-        ('Typography', {
-            'fields': ['heading_font', 'body_font', 'base_font_size']
+        ('Typografie', {
+            'fields': ['heading_font', 'body_font']
         }),
-        ('Logo & Branding', {
+        ('Logo', {
             'fields': ['logo', 'logo_dark', 'favicon']
         }),
+        ('Unternehmen', {
+            'fields': ['company_name', 'contact_email', 'contact_phone']
+        }),
         ('Social Media', {
-            'fields': ['facebook_url', 'instagram_url', 'linkedin_url', 'twitter_url', 'youtube_url'],
+            'fields': ['facebook_url', 'instagram_url', 'linkedin_url'],
             'classes': ['collapse'],
         }),
-        ('Contact Information', {
-            'fields': ['company_name', 'email', 'phone', 'address'],
-            'classes': ['collapse'],
-        }),
-        ('Legal Links', {
-            'fields': ['privacy_url', 'imprint_url', 'terms_url'],
+        ('Rechtliches', {
+            'fields': ['privacy_url', 'imprint_url'],
             'classes': ['collapse'],
         }),
     ]
@@ -409,13 +401,14 @@ class PageTemplateAdmin(ModelAdmin):
     list_filter = ['category', 'is_active', 'created_at']
     search_fields = ['name']
     readonly_fields = ['usage_count', 'created_at']
+    prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = [
         ('Template Information', {
-            'fields': ['name', 'category', 'is_active', 'thumbnail']
+            'fields': ['name', 'slug', 'category', 'description', 'is_active', 'thumbnail']
         }),
         ('Content', {
-            'fields': ['html_content', 'css_content', 'gjs_data']
+            'fields': ['html_json', 'html', 'css']
         }),
         ('Statistics', {
             'fields': ['usage_count', 'created_at']
