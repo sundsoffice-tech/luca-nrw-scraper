@@ -10,19 +10,94 @@ from django.utils import timezone
 
 
 class ReportGenerator:
-    """Generiert Reports aus der Datenbank"""
+    """Generiert Reports aus der Datenbank mit Filter-Unterstützung"""
     
-    def __init__(self, start_date: datetime = None, end_date: datetime = None):
+    def __init__(
+        self, 
+        start_date: datetime = None, 
+        end_date: datetime = None,
+        filters: dict = None
+    ):
         self.end_date = end_date or timezone.now()
         self.start_date = start_date or (self.end_date - timedelta(days=30))
+        self.filters = filters or {}
+    
+    def _apply_lead_filters(self, queryset):
+        """Wendet Filter auf Lead-Queryset an"""
+        # Status Filter
+        if self.filters.get('status'):
+            statuses = self.filters['status']
+            if isinstance(statuses, str):
+                statuses = [statuses]
+            queryset = queryset.filter(status__in=statuses)
+        
+        # Region Filter (location field in Lead model)
+        if self.filters.get('region'):
+            regions = self.filters['region']
+            if isinstance(regions, str):
+                regions = [regions]
+            queryset = queryset.filter(location__in=regions)
+        
+        # Quelle/Source Filter
+        if self.filters.get('source'):
+            sources = self.filters['source']
+            if isinstance(sources, str):
+                sources = [sources]
+            queryset = queryset.filter(source__in=sources)
+        
+        # Min Score Filter
+        if self.filters.get('min_score'):
+            queryset = queryset.filter(quality_score__gte=int(self.filters['min_score']))
+        
+        # Max Score Filter
+        if self.filters.get('max_score'):
+            queryset = queryset.filter(quality_score__lte=int(self.filters['max_score']))
+        
+        # Mit Telefon Filter
+        if self.filters.get('with_phone'):
+            queryset = queryset.exclude(telefon__isnull=True).exclude(telefon='')
+        
+        # Mit Email Filter
+        if self.filters.get('with_email'):
+            queryset = queryset.exclude(email__isnull=True).exclude(email='')
+        
+        return queryset
+    
+    def _apply_scraper_filters(self, queryset):
+        """Wendet Filter auf ScraperRun-Queryset an"""
+        # Industry Filter (from params_snapshot)
+        if self.filters.get('industry'):
+            industries = self.filters['industry']
+            if isinstance(industries, str):
+                industries = [industries]
+            queryset = queryset.filter(params_snapshot__industry__in=industries)
+        
+        # Status Filter (für Runs)
+        if self.filters.get('run_status'):
+            statuses = self.filters['run_status']
+            if isinstance(statuses, str):
+                statuses = [statuses]
+            queryset = queryset.filter(status__in=statuses)
+        
+        # Mode Filter (from params_snapshot)
+        if self.filters.get('mode'):
+            modes = self.filters['mode']
+            if isinstance(modes, str):
+                modes = [modes]
+            queryset = queryset.filter(params_snapshot__mode__in=modes)
+        
+        return queryset
     
     def generate_lead_report(self) -> Dict[str, Any]:
-        """Lead-Übersicht Report"""
+        """Lead-Übersicht Report MIT Filtern"""
         from leads.models import Lead
         
         leads = Lead.objects.filter(
             created_at__range=[self.start_date, self.end_date]
         )
+        
+        # Filter anwenden
+        leads = self._apply_lead_filters(leads)
         
         total = leads.count()
         with_phone = leads.exclude(telefon__isnull=True).exclude(telefon='').count()
@@ -73,12 +148,15 @@ class ReportGenerator:
         }
     
     def generate_scraper_report(self) -> Dict[str, Any]:
-        """Scraper-Performance Report"""
+        """Scraper-Performance Report MIT Filtern"""
         from scraper_control.models import ScraperRun
         
         runs = ScraperRun.objects.filter(
             started_at__range=[self.start_date, self.end_date]
         )
+        
+        # Filter anwenden
+        runs = self._apply_scraper_filters(runs)
         
         total_runs = runs.count()
         completed = runs.filter(status='completed').count()

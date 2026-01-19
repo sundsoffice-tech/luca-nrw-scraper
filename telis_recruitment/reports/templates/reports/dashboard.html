@@ -49,6 +49,108 @@
         </div>
     </div>
 
+    <!-- Filter Section -->
+    <div class="bg-dark-800 rounded-lg p-6 mb-6 border border-dark-700">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-bold text-gray-100">🔍 Filter & Einstellungen</h3>
+            <button id="reset-filters" class="text-sm text-gray-400 hover:text-primary">
+                Zurücksetzen
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Zeitraum -->
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Zeitraum</label>
+                <select id="filter-days" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    <option value="7">Letzte 7 Tage</option>
+                    <option value="30" selected>Letzte 30 Tage</option>
+                    <option value="90">Letzte 90 Tage</option>
+                    <option value="custom">Benutzerdefiniert</option>
+                </select>
+            </div>
+            
+            <!-- Custom Datum (hidden by default) -->
+            <div id="custom-date-container" class="hidden col-span-2">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Von</label>
+                        <input type="date" id="filter-start-date" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Bis</label>
+                        <input type="date" id="filter-end-date" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Report Typ -->
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">Report-Typ</label>
+                <select id="filter-report-type" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    <option value="lead_overview">📊 Lead-Übersicht</option>
+                    <option value="scraper_performance">🤖 Scraper-Performance</option>
+                    <option value="cost_analysis">💰 Kosten-Analyse</option>
+                    <option value="source_analysis">🔍 Quellen-Analyse</option>
+                    <option value="conversion_funnel">📈 Conversion-Funnel</option>
+                </select>
+            </div>
+            
+            <!-- Status Filter (für Lead Reports) -->
+            <div id="status-filter-container">
+                <label class="block text-sm text-gray-400 mb-2">Status</label>
+                <select id="filter-status" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    <option value="">Alle</option>
+                    <!-- Dynamisch gefüllt -->
+                </select>
+            </div>
+            
+            <!-- Region Filter -->
+            <div id="region-filter-container">
+                <label class="block text-sm text-gray-400 mb-2">Region</label>
+                <select id="filter-region" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    <option value="">Alle Regionen</option>
+                    <!-- Dynamisch gefüllt -->
+                </select>
+            </div>
+            
+            <!-- Industry Filter (für Scraper Reports) -->
+            <div id="industry-filter-container" class="hidden">
+                <label class="block text-sm text-gray-400 mb-2">Industry</label>
+                <select id="filter-industry" class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+                    <option value="">Alle Industries</option>
+                    <!-- Dynamisch gefüllt -->
+                </select>
+            </div>
+            
+            <!-- Score Filter -->
+            <div id="score-filter-container">
+                <label class="block text-sm text-gray-400 mb-2">Min. Score</label>
+                <input type="number" id="filter-min-score" min="0" max="100" placeholder="0" 
+                       class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 text-gray-100">
+            </div>
+            
+            <!-- Checkboxes -->
+            <div class="flex items-end gap-4">
+                <label class="flex items-center text-gray-300">
+                    <input type="checkbox" id="filter-with-phone" class="mr-2 rounded bg-dark-700 border-dark-600">
+                    Nur mit Telefon
+                </label>
+                <label class="flex items-center text-gray-300">
+                    <input type="checkbox" id="filter-with-email" class="mr-2 rounded bg-dark-700 border-dark-600">
+                    Nur mit Email
+                </label>
+            </div>
+        </div>
+        
+        <!-- Apply Button -->
+        <div class="mt-4 flex justify-end gap-4">
+            <button id="apply-filters" class="bg-primary text-dark-900 px-6 py-2 rounded-lg font-bold hover:bg-cyan-400 transition">
+                Filter anwenden
+            </button>
+        </div>
+    </div>
+
     <!-- KPI Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card bg-dark-800 rounded-lg border border-dark-700 p-6">
@@ -317,11 +419,12 @@ async function loadTrend() {
 
 // Report-Daten laden
 async function loadReport() {
-    const days = document.getElementById('periodSelect').value;
-    const reportType = document.getElementById('reportTypeSelect').value;
+    const filters = getFiltersFromUI();
+    const queryString = buildQueryString(filters);
+    const reportType = filters.report_type;
     
     try {
-        const response = await fetch(`/crm/reports/api/report/${reportType}/?days=${days}`);
+        const response = await fetch(`/crm/reports/api/report/${reportType}/?${queryString}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -433,13 +536,122 @@ function updateSourceChart(sourceData) {
     });
 }
 
+// Filter State
+let currentFilters = {
+    days: 30,
+    report_type: 'lead_overview',
+    status: '',
+    region: '',
+    industry: '',
+    min_score: '',
+    with_phone: false,
+    with_email: false,
+    start_date: '',
+    end_date: '',
+};
+
+// Filter-Optionen laden
+async function loadFilterOptions() {
+    try {
+        const response = await fetch('/crm/reports/api/filter-options/');
+        const options = await response.json();
+        
+        // Status Dropdown füllen
+        const statusSelect = document.getElementById('filter-status');
+        if (statusSelect && options.status) {
+            options.status.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label;
+                statusSelect.appendChild(option);
+            });
+        }
+        
+        // Region Dropdown füllen
+        const regionSelect = document.getElementById('filter-region');
+        if (regionSelect && options.regions) {
+            options.regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionSelect.appendChild(option);
+            });
+        }
+        
+        // Industry Dropdown füllen
+        const industrySelect = document.getElementById('filter-industry');
+        if (industrySelect && options.industries) {
+            options.industries.forEach(ind => {
+                const option = document.createElement('option');
+                option.value = ind.value;
+                option.textContent = ind.label;
+                industrySelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading filter options:', error);
+    }
+}
+
+// Filter aus UI lesen
+function getFiltersFromUI() {
+    currentFilters = {
+        days: document.getElementById('filter-days').value,
+        report_type: document.getElementById('filter-report-type').value,
+        status: document.getElementById('filter-status')?.value || '',
+        region: document.getElementById('filter-region')?.value || '',
+        industry: document.getElementById('filter-industry')?.value || '',
+        min_score: document.getElementById('filter-min-score')?.value || '',
+        with_phone: document.getElementById('filter-with-phone')?.checked || false,
+        with_email: document.getElementById('filter-with-email')?.checked || false,
+        start_date: document.getElementById('filter-start-date')?.value || '',
+        end_date: document.getElementById('filter-end-date')?.value || '',
+    };
+    return currentFilters;
+}
+
+// Query-String aus Filtern bauen
+function buildQueryString(filters) {
+    const params = new URLSearchParams();
+    
+    if (filters.days && filters.days !== 'custom') {
+        params.append('days', filters.days);
+    }
+    if (filters.start_date) params.append('start_date', filters.start_date);
+    if (filters.end_date) params.append('end_date', filters.end_date);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.region) params.append('region', filters.region);
+    if (filters.industry) params.append('industry', filters.industry);
+    if (filters.min_score) params.append('min_score', filters.min_score);
+    if (filters.with_phone) params.append('with_phone', 'true');
+    if (filters.with_email) params.append('with_email', 'true');
+    
+    return params.toString();
+}
+
+// Filter UI je nach Report-Typ anzeigen/verstecken
+function updateFilterVisibility() {
+    const reportType = document.getElementById('filter-report-type').value;
+    
+    const leadFilters = ['status-filter-container', 'region-filter-container', 'score-filter-container'];
+    const scraperFilters = ['industry-filter-container'];
+    
+    if (reportType === 'scraper_performance') {
+        leadFilters.forEach(id => document.getElementById(id)?.classList.add('hidden'));
+        scraperFilters.forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+    } else {
+        leadFilters.forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+        scraperFilters.forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    }
+}
+
 // Export Funktion
 function exportReport(format) {
-    const days = document.getElementById('periodSelect').value;
-    const reportType = document.getElementById('reportTypeSelect').value;
+    const filters = getFiltersFromUI();
+    const queryString = buildQueryString(filters);
+    const reportType = filters.report_type;
     
-    const url = `/crm/reports/export/${reportType}/${format}/?days=${days}`;
-    window.location.href = url;
+    window.location.href = `/crm/reports/export/${reportType}/${format}/?${queryString}`;
 }
 
 // Event Listeners
@@ -453,8 +665,42 @@ document.getElementById('reportTypeSelect').addEventListener('change', function(
     loadReport();
 });
 
+// Custom Datum Toggle
+document.getElementById('filter-days')?.addEventListener('change', function() {
+    const customContainer = document.getElementById('custom-date-container');
+    if (this.value === 'custom') {
+        customContainer?.classList.remove('hidden');
+    } else {
+        customContainer?.classList.add('hidden');
+    }
+});
+
+// Report-Typ Change Handler
+document.getElementById('filter-report-type')?.addEventListener('change', updateFilterVisibility);
+
+// Filter Reset
+document.getElementById('reset-filters')?.addEventListener('click', function() {
+    document.getElementById('filter-days').value = '30';
+    document.getElementById('filter-report-type').value = 'lead_overview';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-region').value = '';
+    document.getElementById('filter-industry').value = '';
+    document.getElementById('filter-min-score').value = '';
+    document.getElementById('filter-with-phone').checked = false;
+    document.getElementById('filter-with-email').checked = false;
+    document.getElementById('custom-date-container')?.classList.add('hidden');
+    
+    updateFilterVisibility();
+    loadReport();
+});
+
+// Apply Filters Button
+document.getElementById('apply-filters')?.addEventListener('click', loadReport);
+
 // Beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
+    loadFilterOptions();
+    updateFilterVisibility();
     loadKPIs();
     loadTrend();
     loadReport();
