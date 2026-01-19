@@ -438,6 +438,16 @@ def apply_template(request, template_id):
 def template_list(request):
     """Liste aller Templates"""
     templates = PageTemplate.objects.filter(is_active=True)
-    return render(request, 'pages/template_list.html', {'templates': templates})
+    
+    # Group by category
+    templates_by_category = {}
+    for template in templates:
+        category = template.get_category_display()
+        if category not in templates_by_category:
+            templates_by_category[category] = []
+        templates_by_category[category].append(template)
+    
+    return render(request, 'pages/template_list.html', {'templates_by_category': templates_by_category})
+
 
 

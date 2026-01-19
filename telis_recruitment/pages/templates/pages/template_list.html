@@ -1,0 +1,224 @@
+{% extends 'crm/base.html' %}
+{% load static %}
+
+{% block title %}Select Template - TELIS CRM{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Choose a Template</h1>
+        <p class="text-gray-400">Start with a professional template and customize it to your needs</p>
+    </div>
+
+    <!-- Templates by Category -->
+    {% for category, templates in templates_by_category.items %}
+    <div class="mb-12">
+        <h2 class="text-2xl font-semibold text-white mb-6 pb-2 border-b border-gray-700">
+            {{ category }}
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for template in templates %}
+            <div class="bg-dark-800 rounded-lg overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 hover:transform hover:scale-105">
+                <!-- Template Thumbnail -->
+                <div class="aspect-video bg-dark-700 relative overflow-hidden">
+                    {% if template.thumbnail %}
+                    <img src="{{ template.thumbnail.url }}" alt="{{ template.name }}" class="w-full h-full object-cover">
+                    {% else %}
+                    <div class="w-full h-full flex items-center justify-center text-6xl text-gray-600">
+                        📄
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Usage Count Badge -->
+                    <div class="absolute top-3 right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                        Used {{ template.usage_count }}x
+                    </div>
+                </div>
+                
+                <!-- Template Info -->
+                <div class="p-5">
+                    <h3 class="text-xl font-semibold text-white mb-2">{{ template.name }}</h3>
+                    <p class="text-gray-400 text-sm mb-4">
+                        Perfect for {{ template.get_category_display|lower }} pages
+                    </p>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex gap-3">
+                        <button 
+                            onclick="applyTemplate({{ template.id }}, '{{ template.name }}')"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                            Use Template
+                        </button>
+                        <button 
+                            onclick="previewTemplate({{ template.id }})"
+                            class="bg-dark-700 hover:bg-dark-600 text-white font-semibold py-2 px-4 rounded-lg transition">
+                            👁️
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-20">
+        <div class="text-6xl mb-4">📄</div>
+        <h3 class="text-xl font-semibold text-white mb-2">No Templates Available</h3>
+        <p class="text-gray-400">Templates will appear here once they are created.</p>
+    </div>
+    {% endfor %}
+    
+    <!-- Back Button -->
+    <div class="mt-12 text-center">
+        <a href="{% url 'pages:builder-list' %}" class="inline-block bg-dark-700 hover:bg-dark-600 text-white font-semibold py-3 px-8 rounded-lg transition">
+            ← Back to Pages
+        </a>
+    </div>
+</div>
+
+<!-- Template Application Modal -->
+<div id="templateModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-dark-800 rounded-lg p-8 max-w-md w-full mx-4">
+        <h2 class="text-2xl font-bold text-white mb-4">Apply Template</h2>
+        <p class="text-gray-400 mb-6">Enter a slug for your new page:</p>
+        
+        <form id="applyTemplateForm" onsubmit="submitTemplateForm(event)">
+            <input type="hidden" id="templateId" name="template_id">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Page Slug *</label>
+                <input 
+                    type="text" 
+                    id="pageSlug" 
+                    name="slug" 
+                    required
+                    pattern="[a-z0-9-]+"
+                    placeholder="my-new-page"
+                    class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
+                <p class="text-xs text-gray-500 mt-1">Only lowercase letters, numbers, and hyphens</p>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Page Title *</label>
+                <input 
+                    type="text" 
+                    id="pageTitle" 
+                    name="title" 
+                    required
+                    placeholder="My New Page"
+                    class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500">
+            </div>
+            
+            <div class="flex gap-3">
+                <button 
+                    type="submit"
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                    Create Page
+                </button>
+                <button 
+                    type="button"
+                    onclick="closeModal()"
+                    class="flex-1 bg-dark-700 hover:bg-dark-600 text-white font-semibold py-2 px-4 rounded-lg transition">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function applyTemplate(templateId, templateName) {
+        document.getElementById('templateId').value = templateId;
+        document.getElementById('pageTitle').value = templateName;
+        document.getElementById('pageSlug').value = templateName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        document.getElementById('templateModal').classList.remove('hidden');
+    }
+    
+    function closeModal() {
+        document.getElementById('templateModal').classList.add('hidden');
+    }
+    
+    function submitTemplateForm(event) {
+        event.preventDefault();
+        
+        const templateId = document.getElementById('templateId').value;
+        const slug = document.getElementById('pageSlug').value;
+        const title = document.getElementById('pageTitle').value;
+        
+        const formData = new FormData();
+        formData.append('slug', slug);
+        formData.append('title', title);
+        
+        fetch(`/pages/templates/${templateId}/apply/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Template applied successfully!', 'success');
+                setTimeout(() => {
+                    window.location.href = data.page_url;
+                }, 1000);
+            } else {
+                showToast('Error: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('An error occurred', 'error');
+        });
+    }
+    
+    function previewTemplate(templateId) {
+        // TODO: Implement template preview
+        showToast('Preview feature coming soon!', 'info');
+    }
+    
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        const colors = {
+            'success': '#28a745',
+            'error': '#dc3545',
+            'info': '#17a2b8'
+        };
+        
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${colors[type] || colors.success};
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-weight: 500;
+            animation: slideIn 0.3s ease-out;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+    
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    });
+</script>
+{% endblock %}
