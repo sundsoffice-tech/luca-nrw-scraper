@@ -5,7 +5,6 @@ All CRM URLs are protected and require authentication.
 
 from django.urls import path
 from . import views
-from . import views_scraper
 from . import views_export
 from . import views_support
 
