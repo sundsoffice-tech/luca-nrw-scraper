@@ -5,7 +5,7 @@ from django.http import HttpResponse
 import csv
 from unfold.admin import ModelAdmin
 from unfold.contrib.filters.admin import RangeDateFilter
-from .models import Lead, CallLog, EmailLog, SyncStatus
+from .models import Lead, CallLog, EmailLog, SyncStatus, SavedFilter
 # Note: ScraperRun is registered in scraper_control.admin, not here
 
 
@@ -332,6 +332,65 @@ class SyncStatusAdmin(ModelAdmin):
             '<span style="color: #6b7280;">⏭️  {}</span>',
             obj.leads_skipped
         )
+
+
+@admin.register(SavedFilter)
+class SavedFilterAdmin(ModelAdmin):
+    """Admin for SavedFilter - manage saved filter presets"""
+    
+    list_display = [
+        'name',
+        'user',
+        'shared_badge',
+        'filter_summary',
+        'created_at'
+    ]
+    list_filter = [
+        'is_shared',
+        'user',
+        ('created_at', RangeDateFilter)
+    ]
+    search_fields = ['name', 'description', 'user__username']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Filter-Info', {
+            'fields': ('name', 'description', 'user', 'is_shared')
+        }),
+        ('Filter-Parameter', {
+            'fields': ('filter_params',)
+        }),
+        ('Zeitstempel', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    @admin.display(description='Geteilt')
+    def shared_badge(self, obj):
+        if obj.is_shared:
+            return format_html(
+                '<span style="background-color: #22c55e; color: white; padding: 2px 8px; '
+                'border-radius: 10px; font-size: 11px;">✓ Geteilt</span>'
+            )
+        return format_html('<span style="color: #6b7280;">Privat</span>')
+    
+    @admin.display(description='Filter-Parameter')
+    def filter_summary(self, obj):
+        params = obj.filter_params
+        summary = []
+        if params.get('search'):
+            summary.append(f'🔍 "{params["search"]}"')
+        if params.get('status'):
+            summary.append(f'Status: {params["status"]}')
+        if params.get('source'):
+            summary.append(f'Quelle: {params["source"]}')
+        if params.get('score'):
+            summary.append(f'Score: {params["score"]}')
+        
+        if not summary:
+            return '-'
+        return format_html('<br>'.join(summary))
 
 
 # Admin Site Customization
