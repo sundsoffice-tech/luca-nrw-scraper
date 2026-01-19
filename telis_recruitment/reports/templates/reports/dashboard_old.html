@@ -1,0 +1,194 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Reports - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-400 mx-2">/</span>
+<span class="text-primary">Reports</span>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">Reports & Analysen</h1>
+            <p class="text-gray-400 mt-1">Automatische Reports und Datenanalyse</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg hover:bg-dark-700 transition duration-150">
+                <span class="mr-2">⚙️</span>
+                <span>Einstellungen</span>
+            </button>
+            <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition duration-150">
+                <span class="mr-2">📊</span>
+                <span>Neuer Report</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Coming Soon Notice -->
+    <div class="bg-gradient-to-r from-primary/20 to-cyan-600/20 border border-primary/30 rounded-lg p-6">
+        <div class="flex items-start space-x-4">
+            <div class="text-4xl">🚀</div>
+            <div class="flex-1">
+                <h3 class="text-xl font-bold text-gray-100 mb-2">Reports - Coming Soon</h3>
+                <p class="text-gray-300 mb-4">
+                    Die Reports-Funktionalität wird bald verfügbar sein. Sie können hier automatische Reports planen, 
+                    Datenanalysen durchführen und wichtige Kennzahlen überwachen.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full">📊 Lead-Übersicht</span>
+                    <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full">🤖 Scraper-Performance</span>
+                    <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full">📈 Conversion-Funnel</span>
+                    <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full">🎯 Quellen-Analyse</span>
+                    <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full">💰 Kosten-Analyse</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Schedules -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+        <div class="p-4 border-b border-dark-700">
+            <h2 class="text-xl font-semibold text-gray-100">Aktive Report-Zeitpläne</h2>
+        </div>
+        <div class="p-4">
+            {% if schedules %}
+            <div class="space-y-3">
+                {% for schedule in schedules %}
+                <div class="flex items-center justify-between p-4 bg-dark-900 rounded-lg hover:bg-dark-700 transition duration-150">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center text-2xl">
+                            📊
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">{{ schedule.name }}</h3>
+                            <p class="text-sm text-gray-400">
+                                {{ schedule.get_report_type_display }} • {{ schedule.get_frequency_display }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        {% if schedule.last_run %}
+                        <div class="text-right text-sm">
+                            <p class="text-gray-400">Letzter Lauf</p>
+                            <p class="text-gray-200">{{ schedule.last_run|date:"d.m.Y H:i" }}</p>
+                        </div>
+                        {% endif %}
+                        {% if schedule.next_run %}
+                        <div class="text-right text-sm">
+                            <p class="text-gray-400">Nächster Lauf</p>
+                            <p class="text-gray-200">{{ schedule.next_run|date:"d.m.Y H:i" }}</p>
+                        </div>
+                        {% endif %}
+                        <span class="px-3 py-1 bg-green-500/20 text-green-400 text-sm rounded-full">Aktiv</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-4xl mb-3">📋</div>
+                <p class="text-gray-400">Keine aktiven Report-Zeitpläne vorhanden.</p>
+                <p class="text-sm text-gray-500 mt-1">Erstellen Sie einen neuen Zeitplan im Admin-Panel.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Reports -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+        <div class="p-4 border-b border-dark-700">
+            <h2 class="text-xl font-semibold text-gray-100">Letzte Reports</h2>
+        </div>
+        <div class="p-4">
+            {% if recent_reports %}
+            <div class="space-y-3">
+                {% for report in recent_reports %}
+                <div class="flex items-center justify-between p-4 bg-dark-900 rounded-lg hover:bg-dark-700 transition duration-150">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-cyan-500/20 rounded-lg flex items-center justify-center text-2xl">
+                            {% if report.file_format == 'pdf' %}
+                            📄
+                            {% elif report.file_format == 'xlsx' %}
+                            📊
+                            {% elif report.file_format == 'csv' %}
+                            📋
+                            {% else %}
+                            📁
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-100">{{ report.report_type }}</h3>
+                            <p class="text-sm text-gray-400">
+                                {{ report.period_start|date:"d.m.Y" }} - {{ report.period_end|date:"d.m.Y" }}
+                                {% if report.generated_by %}
+                                • Von {{ report.generated_by.username }}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-right text-sm">
+                            <p class="text-gray-400">Erstellt am</p>
+                            <p class="text-gray-200">{{ report.generated_at|date:"d.m.Y H:i" }}</p>
+                        </div>
+                        {% if report.file_format %}
+                        <span class="px-3 py-1 bg-primary/20 text-primary text-sm rounded-full uppercase">
+                            {{ report.file_format }}
+                        </span>
+                        {% endif %}
+                        <button class="px-3 py-1 bg-dark-700 text-gray-300 rounded hover:bg-dark-600 transition duration-150">
+                            Download
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-4xl mb-3">📊</div>
+                <p class="text-gray-400">Noch keine Reports generiert.</p>
+                <p class="text-sm text-gray-500 mt-1">Reports werden automatisch basierend auf den Zeitplänen erstellt.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Aktive Zeitpläne</span>
+                <span class="text-2xl">⏰</span>
+            </div>
+            <div class="text-2xl font-bold text-gray-100">{{ schedules|length }}</div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Generierte Reports</span>
+                <span class="text-2xl">📊</span>
+            </div>
+            <div class="text-2xl font-bold text-gray-100">{{ recent_reports|length }}</div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Empfänger</span>
+                <span class="text-2xl">👥</span>
+            </div>
+            <div class="text-2xl font-bold text-gray-100">-</div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-400 text-sm">Nächster Lauf</span>
+                <span class="text-2xl">🚀</span>
+            </div>
+            <div class="text-sm font-medium text-gray-100">Bald verfügbar</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
