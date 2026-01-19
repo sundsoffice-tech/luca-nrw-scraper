@@ -161,21 +161,57 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('✅ Template applied successfully!');
-                window.location.href = data.page_url;
+                showToast('Template applied successfully!', 'success');
+                setTimeout(() => {
+                    window.location.href = data.page_url;
+                }, 1000);
             } else {
-                alert('❌ Error: ' + data.error);
+                showToast('Error: ' + data.error, 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('❌ An error occurred');
+            showToast('An error occurred', 'error');
         });
     }
     
     function previewTemplate(templateId) {
         // TODO: Implement template preview
-        alert('Preview feature coming soon!');
+        showToast('Preview feature coming soon!', 'info');
+    }
+    
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        const colors = {
+            'success': '#28a745',
+            'error': '#dc3545',
+            'info': '#17a2b8'
+        };
+        
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${colors[type] || colors.success};
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 10000;
+            font-weight: 500;
+            animation: slideIn 0.3s ease-out;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
     }
     
     // Close modal on escape key

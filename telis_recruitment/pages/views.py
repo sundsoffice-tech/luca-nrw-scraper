@@ -242,14 +242,28 @@ def upload_asset(request):
     """Upload an asset to the asset manager"""
     try:
         from PIL import Image
+        import os
         
         uploaded_file = request.FILES.get('file')
         if not uploaded_file:
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
         
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
+        if uploaded_file.content_type not in allowed_types:
+            return JsonResponse({'success': False, 'error': 'Invalid file type. Only images are allowed.'}, status=400)
+        
+        # Validate file size (max 10MB)
+        if uploaded_file.size > 10 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'File too large. Maximum size is 10MB.'}, status=400)
+        
         # Get additional params
         folder = request.POST.get('folder', '')
         alt_text = request.POST.get('alt_text', '')
+        
+        # Sanitize filename
+        original_filename = uploaded_file.name
+        safe_filename = os.path.basename(original_filename)  # Remove path components
         
         # Get file size
         file_size = uploaded_file.size
@@ -266,7 +280,7 @@ def upload_asset(request):
         # Create asset
         asset = PageAsset.objects.create(
             file=uploaded_file,
-            filename=uploaded_file.name,
+            filename=safe_filename,
             file_size=file_size,
             width=width,
             height=height,
@@ -290,7 +304,7 @@ def upload_asset(request):
         })
     except Exception as e:
         logger.error(f"Error uploading asset: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return JsonResponse({'success': False, 'error': 'Failed to upload asset. Please try again.'}, status=400)
 
 
 @staff_member_required
@@ -338,7 +352,7 @@ def delete_asset(request, asset_id):
         return JsonResponse({'success': False, 'error': 'Asset not found'}, status=404)
     except Exception as e:
         logger.error(f"Error deleting asset {asset_id}: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return JsonResponse({'success': False, 'error': 'Failed to delete asset. Please try again.'}, status=400)
 
 
 # ============================================================================
@@ -398,7 +412,7 @@ def brand_settings(request):
             return JsonResponse({'success': True, 'message': 'Brand settings saved successfully'})
         except Exception as e:
             logger.error(f"Error saving brand settings: {e}")
-            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            return JsonResponse({'success': False, 'error': 'Failed to apply template. Please try again.'}, status=400)
     
     return render(request, 'pages/brand_settings.html', {
         'settings': settings_obj

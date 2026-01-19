@@ -253,7 +253,7 @@ class DomainConfiguration(models.Model):
 class PageAsset(models.Model):
     """Image/media upload with metadata for Asset Manager"""
     
-    file = models.FileField(upload_to='page_assets/')
+    file = models.ImageField(upload_to='page_assets/', help_text="Image file")
     filename = models.CharField(max_length=255)
     file_size = models.PositiveIntegerField(help_text="File size in bytes")
     width = models.PositiveIntegerField(null=True, blank=True, help_text="Image width in pixels")

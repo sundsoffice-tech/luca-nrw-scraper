@@ -422,13 +422,13 @@
         .then(response => response.json())
         .then(data => {
             if (data.success && showNotification) {
-                alert('✅ Page saved successfully!');
+                showToast('Page saved successfully!', 'success');
             }
         })
         .catch(error => {
             console.error('Error saving:', error);
             if (showNotification) {
-                alert('❌ Error saving page');
+                showToast('Error saving page', 'error');
             }
         });
     }
@@ -437,7 +437,7 @@
         if (confirm('Publish this page? It will be visible to the public.')) {
             saveContent(false);
             // TODO: Add publish endpoint
-            alert('Page will be published after implementing publish endpoint');
+            showToast('Publish feature coming soon', 'info');
         }
     }
 
@@ -459,12 +459,14 @@
             .then(data => {
                 if (data.success) {
                     loadAssets();
-                    alert('✅ Asset uploaded: ' + data.asset.filename);
+                    showToast('Asset uploaded: ' + data.asset.filename, 'success');
+                } else {
+                    showToast(data.error || 'Error uploading asset', 'error');
                 }
             })
             .catch(error => {
                 console.error('Error uploading asset:', error);
-                alert('❌ Error uploading asset');
+                showToast('Error uploading asset', 'error');
             });
         });
     }
@@ -489,7 +491,7 @@
                         assetEl.onclick = () => {
                             // Copy URL to clipboard
                             navigator.clipboard.writeText(asset.src);
-                            alert('✅ Asset URL copied to clipboard!');
+                            showToast('Asset URL copied to clipboard!', 'success');
                         };
                         container.appendChild(assetEl);
                     });
@@ -498,6 +500,21 @@
                 }
             })
             .catch(error => console.error('Error loading assets:', error));
+    }
+    
+    // Toast notification system
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = 'notification ' + type;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
     }
 </script>
 {% endblock %}
