@@ -208,8 +208,10 @@ def compute_score_v2(
             from .feedback_loop import get_feedback_system
             feedback_system = get_feedback_system()
             dynamic_adjustment = feedback_system.get_dynamic_score_adjustment(lead)
-            # Scale adjustment to 0-100 range (adjustment is typically -1.0 to +1.0)
-            score += dynamic_adjustment * 20  # Scale to ±20 points max
+            # Scale adjustment to 0-100 range
+            # Adjustments are typically -1.0 to +1.0, scaled to ±20 points max
+            DYNAMIC_SCORING_SCALE = 20  # Max adjustment points from feedback
+            score += dynamic_adjustment * DYNAMIC_SCORING_SCALE
         except Exception:
             pass  # Fallback gracefully if feedback system not available
     

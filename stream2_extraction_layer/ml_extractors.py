@@ -59,6 +59,26 @@ class SimpleNERNameExtractor:
             'north rhine westphalia', 'nordrhein westfalen', 'nrw',
         }
     
+    def _extract_name_from_title_match(self, match: re.Match) -> Optional[str]:
+        """
+        Extracts name from title pattern match.
+        
+        Group structure:
+        - Group 1: Title (Herr, Dr., etc.)
+        - Group 2+: Name (if multiple groups exist)
+        
+        Returns:
+            Extracted name or None
+        """
+        try:
+            # If match has 2+ groups, second group is the name
+            if match.lastindex and match.lastindex >= 2:
+                return match.group(2).strip()
+            # Otherwise, first group might be the name
+            return match.group(1).strip()
+        except (IndexError, AttributeError):
+            return None
+    
     def extract(self, text: str, html: str = "") -> MLExtractionResult:
         """
         Extrahiert Personennamen aus Text mit Konfidenz-Score.
@@ -108,9 +128,9 @@ class SimpleNERNameExtractor:
         if best_confidence < 0.5:
             for title_pattern in self.title_patterns:
                 for match in re.finditer(title_pattern + r'([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)*)', combined):
-                    candidate = match.group(2).strip() if match.lastindex >= 2 else match.group(1).strip()
+                    candidate = self._extract_name_from_title_match(match)
                     
-                    if any(blocked in candidate.lower() for blocked in self.blacklist):
+                    if not candidate or any(blocked in candidate.lower() for blocked in self.blacklist):
                         continue
                     
                     confidence = 0.6  # Höhere Basis-Konfidenz für Titel
@@ -355,6 +375,9 @@ class MLIndustryClassifier:
     - etc.
     """
     
+    # Keyword frequency threshold for learning
+    LEARNING_THRESHOLD = 3  # Keyword must appear 3+ times to be added
+    
     def __init__(self):
         # Branchen-Keywords (wird durch Feedback erweitert)
         self.industry_keywords = {
@@ -445,13 +468,13 @@ class MLIndustryClassifier:
                 self.learning_data[correct_industry][word] = 0
             self.learning_data[correct_industry][word] += 1
         
-        # Füge Keywords mit Häufigkeit >= 3 zu permanenten Keywords hinzu
+        # Füge Keywords mit Häufigkeit >= LEARNING_THRESHOLD zu permanenten Keywords hinzu
         for word, count in self.learning_data[correct_industry].items():
-            if count >= 3 and word not in self.industry_keywords.get(correct_industry, []):
+            if count >= self.LEARNING_THRESHOLD and word not in self.industry_keywords.get(correct_industry, []):
                 if correct_industry not in self.industry_keywords:
                     self.industry_keywords[correct_industry] = []
                 self.industry_keywords[correct_industry].append(word)
-                logger.info(f"Learned new keyword '{word}' for industry '{correct_industry}'")
+                logger.info(f"Learned new keyword '{word}' for industry '{correct_industry}' (count: {count})")
 
 
 # Singleton-Instanzen

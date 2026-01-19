@@ -116,11 +116,8 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
     
     # 2.5. ML-based confidence boosting
     try:
-        # Import ML phone extractor for context-based scoring
-        import sys
-        import os
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'stream2_extraction_layer'))
-        from ml_extractors import get_phone_extractor
+        # Use relative import for ML phone extractor
+        from stream2_extraction_layer.ml_extractors import get_phone_extractor
         
         ml_extractor = get_phone_extractor()
         boosted_results = []
@@ -131,7 +128,7 @@ def extract_phones_advanced(text: str, html: str = "") -> List[Tuple[str, str, f
             final_conf = 0.6 * conf + 0.4 * ml_conf
             boosted_results.append((norm, raw, final_conf))
         results = boosted_results
-    except Exception:
+    except (ImportError, Exception):
         pass  # Fallback to original confidence if ML not available
     
     # 3. Deduplizieren nach normalisierter Nummer
