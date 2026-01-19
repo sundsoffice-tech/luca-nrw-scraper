@@ -14,6 +14,8 @@ class Lead(models.Model):
     name = models.CharField(max_length=255, verbose_name="Name")
     email = models.EmailField(null=True, blank=True, verbose_name="E-Mail")
     telefon = models.CharField(max_length=50, null=True, blank=True, verbose_name="Telefon")
+    phone_type = models.CharField(max_length=20, null=True, blank=True, verbose_name="Telefon-Typ")
+    whatsapp_link = models.CharField(max_length=255, null=True, blank=True, verbose_name="WhatsApp-Link")
     
     # === STATUS-TRACKING ===
     class Status(models.TextChoices):
@@ -51,6 +53,8 @@ class Lead(models.Model):
     
     # === QUALITÄT (vom Scraper) ===
     quality_score = models.IntegerField(default=50, verbose_name="Qualitäts-Score")
+    confidence_score = models.IntegerField(null=True, blank=True, verbose_name="AI-Konfidenz-Score")
+    data_quality = models.IntegerField(null=True, blank=True, verbose_name="Datenqualität")
     
     class LeadType(models.TextChoices):
         ACTIVE_SALESPERSON = 'active_salesperson', 'Aktiver Vertriebler'
@@ -58,6 +62,11 @@ class Lead(models.Model):
         FREELANCER = 'freelancer', 'Freelancer'
         HR_CONTACT = 'hr_contact', 'HR-Kontakt'
         CANDIDATE = 'candidate', 'Jobsuchender'
+        TALENT_HUNT = 'talent_hunt', 'Talent Hunt'
+        RECRUITER = 'recruiter', 'Recruiter'
+        JOB_AD = 'job_ad', 'Stellenanzeige'
+        COMPANY = 'company', 'Firmenkontakt'
+        INDIVIDUAL = 'individual', 'Einzelperson'
         UNKNOWN = 'unknown', 'Unbekannt'
     
     lead_type = models.CharField(
@@ -73,9 +82,40 @@ class Lead(models.Model):
     experience_years = models.IntegerField(null=True, blank=True, verbose_name="Jahre Erfahrung")
     location = models.CharField(max_length=255, null=True, blank=True, verbose_name="Standort")
     
+    # === AI-FELDER ===
+    ai_category = models.CharField(max_length=100, null=True, blank=True, verbose_name="AI-Kategorie")
+    ai_summary = models.TextField(null=True, blank=True, verbose_name="AI-Zusammenfassung")
+    opening_line = models.TextField(null=True, blank=True, verbose_name="Eröffnungszeile")
+    
+    # === STRUKTURIERTE DATEN (JSON) ===
+    tags = models.JSONField(null=True, blank=True, verbose_name="Tags", help_text="Array von Tags")
+    skills = models.JSONField(null=True, blank=True, verbose_name="Fähigkeiten", help_text="Array von Fähigkeiten")
+    
+    # === KANDIDATEN-SPEZIFISCH ===
+    availability = models.CharField(max_length=100, null=True, blank=True, verbose_name="Verfügbarkeit")
+    candidate_status = models.CharField(max_length=100, null=True, blank=True, verbose_name="Kandidaten-Status")
+    mobility = models.CharField(max_length=100, null=True, blank=True, verbose_name="Mobilität/Reisebereitschaft")
+    
+    # === UNTERNEHMENS-DETAILS ===
+    salary_hint = models.CharField(max_length=100, null=True, blank=True, verbose_name="Gehaltshinweis")
+    commission_hint = models.CharField(max_length=100, null=True, blank=True, verbose_name="Provisionshinweis")
+    company_size = models.CharField(max_length=100, null=True, blank=True, verbose_name="Firmengröße")
+    hiring_volume = models.IntegerField(null=True, blank=True, verbose_name="Einstellungsvolumen")
+    industry = models.CharField(max_length=255, null=True, blank=True, verbose_name="Branche")
+    
+    # === KONTAKT-PRÄFERENZEN ===
+    private_address = models.TextField(null=True, blank=True, verbose_name="Privatadresse")
+    contact_preference = models.CharField(max_length=100, null=True, blank=True, verbose_name="Kontaktpräferenz")
+    
+    # === METADATEN ===
+    recency_indicator = models.CharField(max_length=100, null=True, blank=True, verbose_name="Aktualitäts-Indikator")
+    last_updated = models.CharField(max_length=100, null=True, blank=True, verbose_name="Letzte Aktualisierung (Scraper)")
+    
     # === SOCIAL PROFILES ===
     linkedin_url = models.URLField(null=True, blank=True, verbose_name="LinkedIn URL")
     xing_url = models.URLField(null=True, blank=True, verbose_name="XING URL")
+    profile_url = models.URLField(null=True, blank=True, verbose_name="Profil-URL")
+    cv_url = models.URLField(null=True, blank=True, verbose_name="Lebenslauf-URL")
     
     # === TELEFON-TRACKING ===
     interest_level = models.IntegerField(
