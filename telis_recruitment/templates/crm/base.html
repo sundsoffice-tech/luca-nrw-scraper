@@ -99,10 +99,9 @@
                     <div class="text-xs text-gray-500 uppercase font-semibold">Management</div>
                 </div>
                 
-                <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                <a href="{% url 'reports:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'reports' %}active{% endif %}">
                     <span class="text-xl mr-3">📈</span>
                     <span>Reports</span>
-                    <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
                         {% endif %}
                     {% endwith %}

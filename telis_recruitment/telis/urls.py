@@ -44,6 +44,9 @@ urlpatterns = [
     # Email Templates (web interface)
     path('crm/email-templates/', include('email_templates.urls')),
     
+    # Reports (analytics and reporting)
+    path('crm/reports/', include('reports.urls')),
+    
     # CRM (protected)
     path('crm/', include('leads.crm_urls')),
     
