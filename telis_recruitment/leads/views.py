@@ -1021,18 +1021,20 @@ def _build_dashboard_stats(user):
             })
     top_sources.sort(key=lambda x: x['conversion_rate'], reverse=True)
     
-    # Top error reasons (invalid leads with telefon missing or status INVALID)
+    # Top error reasons (optimized with single query)
     error_reasons = []
-    no_mobile = leads_qs.filter(Q(telefon__isnull=True) | Q(telefon='')).count()
-    invalid_status = leads_qs.filter(status=Lead.Status.INVALID).count()
-    no_email = leads_qs.filter(Q(email__isnull=True) | Q(email='')).count()
+    error_counts = leads_qs.aggregate(
+        no_mobile=Count('id', filter=Q(telefon__isnull=True) | Q(telefon='')),
+        invalid_status=Count('id', filter=Q(status=Lead.Status.INVALID)),
+        no_email=Count('id', filter=Q(email__isnull=True) | Q(email=''))
+    )
     
-    if no_mobile > 0:
-        error_reasons.append({'reason': 'Kein Telefon gefunden', 'count': no_mobile})
-    if invalid_status > 0:
-        error_reasons.append({'reason': 'Ungültiger Lead', 'count': invalid_status})
-    if no_email > 0:
-        error_reasons.append({'reason': 'Keine E-Mail gefunden', 'count': no_email})
+    if error_counts['no_mobile'] > 0:
+        error_reasons.append({'reason': 'Kein Telefon gefunden', 'count': error_counts['no_mobile']})
+    if error_counts['invalid_status'] > 0:
+        error_reasons.append({'reason': 'Ungültiger Lead', 'count': error_counts['invalid_status']})
+    if error_counts['no_email'] > 0:
+        error_reasons.append({'reason': 'Keine E-Mail gefunden', 'count': error_counts['no_email']})
     
     # Data quality trends (last 7 days)
     quality_trend = []

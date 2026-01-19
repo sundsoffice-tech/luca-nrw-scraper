@@ -855,12 +855,17 @@ function renderSavedFilters(filters) {
     filters.forEach(filter => {
         const item = document.createElement('button');
         item.className = 'block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-dark-600';
+        
+        // Safely escape HTML content
+        const escapedName = escapeHtml(filter.name);
+        const escapedDescription = filter.description ? escapeHtml(filter.description) : '';
+        
         item.innerHTML = `
             <div class="flex items-center justify-between">
-                <span>${filter.name}</span>
-                ${filter.is_owner ? '<button onclick="deleteFilter(event, ' + filter.id + ')" class="text-red-400 hover:text-red-300 ml-2">🗑️</button>' : ''}
+                <span>${escapedName}</span>
+                ${filter.is_owner ? '<button onclick="deleteFilter(event, ' + parseInt(filter.id) + ')" class="text-red-400 hover:text-red-300 ml-2">🗑️</button>' : ''}
             </div>
-            ${filter.description ? '<div class="text-xs text-gray-500 mt-1">' + filter.description + '</div>' : ''}
+            ${escapedDescription ? '<div class="text-xs text-gray-500 mt-1">' + escapedDescription + '</div>' : ''}
         `;
         item.onclick = (e) => {
             if (e.target.tagName !== 'BUTTON') {
@@ -869,6 +874,15 @@ function renderSavedFilters(filters) {
         };
         container.appendChild(item);
     });
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**

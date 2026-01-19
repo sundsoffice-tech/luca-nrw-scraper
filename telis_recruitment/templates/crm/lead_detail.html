@@ -262,7 +262,9 @@
                             <span class="text-gray-500 text-sm">Keine Tags vorhanden</span>
                         {% endif %}
                     </div>
+                    <!-- Commented out until API implementation is complete
                     <button class="mt-2 text-sm text-primary hover:underline" onclick="addTag()">+ Tag hinzufügen</button>
+                    -->
                 </div>
                 
                 <!-- Notes -->
@@ -273,7 +275,9 @@
                     {% else %}
                         <div class="p-4 bg-dark-900 rounded text-gray-500 text-sm italic">Keine Notizen vorhanden</div>
                     {% endif %}
+                    <!-- Commented out until API implementation is complete
                     <button class="mt-2 text-sm text-primary hover:underline" onclick="editNotes()">✏️ Notizen bearbeiten</button>
+                    -->
                 </div>
             </div>
 
@@ -404,21 +408,5 @@
     </div>
 </div>
 
-<script>
-function addTag() {
-    const tag = prompt('Tag hinzufügen:');
-    if (tag) {
-        // TODO: API call to add tag
-        alert('Tag-Funktion wird bald implementiert');
-    }
-}
-
-function editNotes() {
-    const notes = prompt('Notizen bearbeiten:', '{{ lead.notes|escapejs }}');
-    if (notes !== null) {
-        // TODO: API call to update notes
-        alert('Notizen-Funktion wird bald implementiert');
-    }
-}
-</script>
+<!-- Note: addTag() and editNotes() functions are disabled until API implementation is complete -->
 {% endblock %}
