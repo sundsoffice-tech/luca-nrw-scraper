@@ -26,6 +26,7 @@ def get_ai_config() -> Dict[str, Any]:
     """
     try:
         # Lazy import of Django models - will fail if Django not configured
+        # Catches: django.core.exceptions.ImproperlyConfigured, ImportError, etc.
         from .models import AIConfig
         
         config = AIConfig.objects.filter(is_active=True).first()

@@ -79,6 +79,7 @@ class LearningEngine:
         self.db_path = db_path
         
         # Load AI configuration with fallback (defense in depth)
+        # Catches any errors from get_ai_config() including Django configuration issues
         try:
             self.ai_config = get_ai_config()
             if AI_CONFIG_AVAILABLE:
@@ -88,6 +89,8 @@ class LearningEngine:
                 logger.info("AI config using fallback defaults (Django not available)")
         except Exception as e:
             # Fallback if get_ai_config() fails for any reason
+            # This provides an additional safety layer beyond the loader.py handling
+            # Catches: ImportError, django.core.exceptions.ImproperlyConfigured, etc.
             logger.warning(f"Failed to load AI config, using defaults: {e}")
             self.ai_config = {
                 'temperature': 0.3,
