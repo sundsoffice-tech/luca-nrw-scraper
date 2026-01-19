@@ -660,10 +660,10 @@ function exportReport(format) {
 document.getElementById('periodSelect').addEventListener('change', function() {
     // Update filter section to match
     document.getElementById('filter-days').value = this.value;
-    // Apply filters which will reload everything
-    loadReport();
+    // Reload all data (loadReport is called last as it already handles filter application)
     loadKPIs();
     loadTrend();
+    loadReport();
 });
 
 document.getElementById('reportTypeSelect').addEventListener('change', function() {
@@ -716,9 +716,13 @@ document.getElementById('apply-filters')?.addEventListener('click', function() {
     const filterDays = document.getElementById('filter-days').value;
     const filterReportType = document.getElementById('filter-report-type').value;
     
+    // Sync period select (except for custom date ranges which use date inputs)
     if (filterDays !== 'custom') {
         document.getElementById('periodSelect').value = filterDays;
     }
+    // Note: When custom is selected, old control keeps last selected preset value
+    // as it doesn't support custom date ranges
+    
     document.getElementById('reportTypeSelect').value = filterReportType;
     
     // Reload all data
