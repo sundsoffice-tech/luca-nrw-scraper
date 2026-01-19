@@ -826,8 +826,8 @@ def _build_portal_configs():
             "base_urls": _get_urls('indeed') or [
                 "https://de.indeed.com/Jobs?q=stellengesuch&l=Nordrhein-Westfalen",
                 "https://de.indeed.com/Jobs?q=suche+arbeit+vertrieb&l=NRW",
-                "https://de.indeed.com/Jobs?q=vertrieb+verfügbar&l=Düsseldorf",
-                "https://de.indeed.com/Jobs?q=sales+offen&l=Köln",
+                "https://de.indeed.com/Jobs?q=vertrieb+verf%C3%BCgbar&l=D%C3%BCsseldorf",
+                "https://de.indeed.com/Jobs?q=sales+offen&l=K%C3%B6ln",
             ],
             "delay": 3.0,
             "priority": 4,

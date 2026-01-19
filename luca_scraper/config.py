@@ -714,9 +714,11 @@ def get_portal_config(portal_name: str) -> Dict[str, Any]:
             if portals and portal_name in portals:
                 db_config = portals[portal_name]
                 # Merge with defaults, preferring DB values
+                # Note: config_loader returns 'rate_limit' key from rate_limit_seconds field
+                db_rate_limit = db_config.get('rate_limit') or db_config.get('rate_limit_seconds')
                 return {
                     'urls': db_config.get('urls') or default_config['urls'],
-                    'rate_limit_seconds': db_config.get('rate_limit', default_config['rate_limit_seconds']),
+                    'rate_limit_seconds': db_rate_limit or default_config['rate_limit_seconds'],
                     'max_results': db_config.get('max_results', default_config['max_results']),
                     'is_active': True,  # If in DB and active filter, it's active
                 }

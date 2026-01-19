@@ -312,7 +312,8 @@ def reverse_expand_portal_urls(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        # Depends on both 0007 migrations to handle branch merge
+        # Both 0007 migrations must be applied before this migration.
+        # This is a standard Django pattern for handling branch merges.
         ('scraper_control', '0007_init_config_from_env'),
         ('scraper_control', '0007_observability_enhancements'),
     ]
