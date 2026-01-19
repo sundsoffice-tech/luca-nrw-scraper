@@ -223,6 +223,7 @@ class ScraperConfig(models.Model):
 class ScraperRun(models.Model):
     """
     Tracks individual scraper runs for monitoring and history.
+    Enhanced with comprehensive observability metrics.
     """
     
     STATUS_CHOICES = [
@@ -231,6 +232,7 @@ class ScraperRun(models.Model):
         ('stopped', 'Gestoppt'),
         ('failed', 'Fehlgeschlagen'),
         ('error', 'Fehler'),
+        ('partial', 'Teilweise erfolgreich'),
     ]
     
     status = models.CharField(
@@ -257,6 +259,58 @@ class ScraperRun(models.Model):
         decimal_places=2, 
         default=0.00, 
         verbose_name="API-Kosten (USD)"
+    )
+    
+    # === ENHANCED METRICS ===
+    # Link/URL tracking
+    links_checked = models.IntegerField(default=0, verbose_name="Links geprüft")
+    links_successful = models.IntegerField(default=0, verbose_name="Links erfolgreich")
+    links_failed = models.IntegerField(default=0, verbose_name="Links fehlgeschlagen")
+    
+    # Lead tracking
+    leads_accepted = models.IntegerField(default=0, verbose_name="Leads akzeptiert")
+    leads_rejected = models.IntegerField(default=0, verbose_name="Leads verworfen")
+    
+    # Performance metrics
+    avg_request_time_ms = models.FloatField(
+        default=0.0, 
+        verbose_name="Ø Request-Zeit (ms)",
+        help_text="Durchschnittliche Zeit pro Request in Millisekunden"
+    )
+    
+    # Error rates (percentages 0-100)
+    block_rate = models.FloatField(
+        default=0.0, 
+        verbose_name="Block-Rate (%)",
+        help_text="Prozentsatz blockierter Requests (403, 429, etc.)"
+    )
+    timeout_rate = models.FloatField(
+        default=0.0, 
+        verbose_name="Timeout-Rate (%)",
+        help_text="Prozentsatz der Timeout-Fehler"
+    )
+    error_rate = models.FloatField(
+        default=0.0,
+        verbose_name="Fehler-Rate (%)",
+        help_text="Gesamtfehlerrate"
+    )
+    
+    # Circuit breaker
+    circuit_breaker_triggered = models.BooleanField(
+        default=False,
+        verbose_name="Circuit Breaker ausgelöst"
+    )
+    circuit_breaker_count = models.IntegerField(
+        default=0,
+        verbose_name="Circuit Breaker Auslösungen"
+    )
+    
+    # Portal/Source breakdown (JSON)
+    portal_stats = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Portal-Statistiken",
+        help_text="Statistiken pro Portal/Quelle"
     )
     
     # Logs
@@ -288,6 +342,21 @@ class ScraperRun(models.Model):
         elif self.status == 'running':
             return timezone.now() - self.started_at
         return None
+    
+    @property
+    def success_rate(self):
+        """Calculate overall success rate"""
+        if self.links_checked > 0:
+            return round((self.links_successful / self.links_checked) * 100, 2)
+        return 0.0
+    
+    @property
+    def lead_acceptance_rate(self):
+        """Calculate lead acceptance rate"""
+        total_leads = self.leads_accepted + self.leads_rejected
+        if total_leads > 0:
+            return round((self.leads_accepted / total_leads) * 100, 2)
+        return 0.0
 
 
 class ScraperLog(models.Model):
@@ -297,9 +366,11 @@ class ScraperLog(models.Model):
     """
     
     LEVEL_CHOICES = [
+        ('DEBUG', 'Debug'),
         ('INFO', 'Info'),
         ('WARN', 'Warning'),
         ('ERROR', 'Error'),
+        ('CRITICAL', 'Critical'),
     ]
     
     run = models.ForeignKey(
@@ -318,6 +389,15 @@ class ScraperLog(models.Model):
     
     message = models.TextField(verbose_name="Nachricht")
     
+    # Enhanced filtering
+    portal = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name="Portal/Quelle",
+        help_text="Portal oder Datenquelle"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
     
     class Meta:
@@ -326,10 +406,104 @@ class ScraperLog(models.Model):
         verbose_name_plural = "Scraper-Logs"
         indexes = [
             models.Index(fields=['run', 'created_at']),
+            models.Index(fields=['level', 'created_at']),
+            models.Index(fields=['portal', 'created_at']),
         ]
     
     def __str__(self):
         return f"[{self.level}] {self.message[:50]}"
+
+
+class ErrorLog(models.Model):
+    """
+    Structured error tracking with classification.
+    Enables filtering and analysis of scraper errors.
+    """
+    
+    ERROR_TYPE_CHOICES = [
+        ('block_403', 'Block/403 - Zugriff verweigert'),
+        ('block_429', 'Block/429 - Rate Limit'),
+        ('captcha', 'Captcha/Login erforderlich'),
+        ('parsing', 'Parsing fehlgeschlagen'),
+        ('network_timeout', 'Netzwerk/Timeout'),
+        ('network_connection', 'Netzwerk/Verbindung'),
+        ('data_quality', 'Datenqualität zu niedrig'),
+        ('validation', 'Validierung fehlgeschlagen'),
+        ('unknown', 'Unbekannt'),
+    ]
+    
+    SEVERITY_CHOICES = [
+        ('low', 'Niedrig'),
+        ('medium', 'Mittel'),
+        ('high', 'Hoch'),
+        ('critical', 'Kritisch'),
+    ]
+    
+    run = models.ForeignKey(
+        ScraperRun,
+        on_delete=models.CASCADE,
+        related_name='errors',
+        verbose_name="Scraper-Lauf"
+    )
+    
+    error_type = models.CharField(
+        max_length=30,
+        choices=ERROR_TYPE_CHOICES,
+        verbose_name="Fehler-Typ"
+    )
+    
+    severity = models.CharField(
+        max_length=10,
+        choices=SEVERITY_CHOICES,
+        default='medium',
+        verbose_name="Schweregrad"
+    )
+    
+    portal = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name="Portal/Quelle"
+    )
+    
+    url = models.URLField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name="Betroffene URL"
+    )
+    
+    message = models.TextField(verbose_name="Fehlermeldung")
+    
+    details = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Details",
+        help_text="Zusätzliche Fehlerdetails (Stack Trace, Headers, etc.)"
+    )
+    
+    count = models.IntegerField(
+        default=1,
+        verbose_name="Anzahl",
+        help_text="Wie oft dieser Fehler aufgetreten ist"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstellt am")
+    last_occurrence = models.DateTimeField(auto_now=True, verbose_name="Letztes Auftreten")
+    
+    class Meta:
+        ordering = ['-last_occurrence']
+        verbose_name = "Fehler-Log"
+        verbose_name_plural = "Fehler-Logs"
+        indexes = [
+            models.Index(fields=['run', 'error_type']),
+            models.Index(fields=['severity', 'created_at']),
+            models.Index(fields=['portal', 'error_type']),
+            models.Index(fields=['error_type', 'last_occurrence']),
+        ]
+    
+    def __str__(self):
+        return f"[{self.get_error_type_display()}] {self.portal or 'General'} - {self.message[:50]}"
 
 
 class SearchRegion(models.Model):
@@ -391,7 +565,7 @@ class SearchDork(models.Model):
 
 
 class PortalSource(models.Model):
-    """Editierbare Portal-Quellen"""
+    """Editierbare Portal-Quellen mit Live-Control"""
     
     DIFFICULTY_CHOICES = [
         ('low', 'Einfach'),
@@ -405,13 +579,47 @@ class PortalSource(models.Model):
     base_url = models.URLField(verbose_name="Basis-URL")
     is_active = models.BooleanField(default=True, verbose_name="Aktiv")
     
-    # Rate Limiting
+    # Rate Limiting (can be changed live)
     rate_limit_seconds = models.FloatField(default=3.0, verbose_name="Rate Limit (Sek)", help_text="Pause zwischen Requests")
     max_results = models.IntegerField(default=20, verbose_name="Max. Ergebnisse")
     
     # Technische Config
     requires_login = models.BooleanField(default=False, verbose_name="Login erforderlich")
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='medium', verbose_name="Schwierigkeit")
+    
+    # === LIVE CONTROL FEATURES ===
+    # Circuit breaker
+    circuit_breaker_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Circuit Breaker aktiv"
+    )
+    circuit_breaker_threshold = models.IntegerField(
+        default=5,
+        verbose_name="Circuit Breaker Schwellwert",
+        help_text="Anzahl Fehler bevor Portal pausiert wird"
+    )
+    circuit_breaker_cooldown = models.IntegerField(
+        default=300,
+        verbose_name="Circuit Breaker Cooldown (Sek)",
+        help_text="Pause nach Auslösung in Sekunden"
+    )
+    
+    # Current circuit breaker state
+    circuit_breaker_tripped = models.BooleanField(
+        default=False,
+        verbose_name="Circuit Breaker ausgelöst"
+    )
+    circuit_breaker_reset_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Circuit Breaker Reset"
+    )
+    
+    # Error tracking
+    consecutive_errors = models.IntegerField(
+        default=0,
+        verbose_name="Aufeinanderfolgende Fehler"
+    )
     
     # Custom URLs als JSON
     urls = models.JSONField(default=list, blank=True, verbose_name="URLs", help_text="Liste der zu crawlenden URLs")
