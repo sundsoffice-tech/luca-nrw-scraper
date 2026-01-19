@@ -7,7 +7,6 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.contrib.admin.views.decorators import staff_member_required
-from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 
 from .models import LandingPage, UploadedFile, DomainConfiguration
@@ -193,6 +192,34 @@ def list_files(request, slug):
 
 
 @staff_member_required
+@require_GET
+def get_stats(request, slug):
+    """Get file upload statistics"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    try:
+        uploaded_files = UploadedFile.objects.filter(landing_page=page)
+        total_files = uploaded_files.count()
+        total_size = sum(f.file_size for f in uploaded_files)
+        
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'total_files': total_files,
+                'total_size': total_size,
+                'entry_point': page.entry_point
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"Error getting stats for page {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Fehler beim Laden der Statistiken'
+        }, status=500)
+
+
+@staff_member_required
 @require_POST
 def set_entry_point(request, slug):
     """Set the entry point file"""
@@ -259,11 +286,13 @@ def serve_uploaded_file(request, slug, file_path):
         if not content_type:
             content_type = mimetypes.guess_type(str(full_path))[0] or 'application/octet-stream'
         
-        # Serve file
-        return FileResponse(
-            open(full_path, 'rb'),
-            content_type=content_type
-        )
+        # Serve file with proper resource cleanup
+        try:
+            file_handle = open(full_path, 'rb')
+            return FileResponse(file_handle, content_type=content_type)
+        except Exception as e:
+            logger.error(f"Error opening file {file_path} for page {slug}: {e}")
+            return HttpResponse('Error opening file', status=500)
     
     except UploadedFile.DoesNotExist:
         return HttpResponse('File not found', status=404)

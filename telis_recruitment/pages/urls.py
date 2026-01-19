@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/<slug:slug>/upload/file/', views_upload.upload_file, name='upload-file'),
     path('api/<slug:slug>/upload/delete/', views_upload.delete_file, name='delete-file'),
     path('api/<slug:slug>/upload/list/', views_upload.list_files, name='list-files'),
+    path('api/<slug:slug>/upload/stats/', views_upload.get_stats, name='get-stats'),
     path('api/<slug:slug>/upload/entry-point/', views_upload.set_entry_point, name='set-entry-point'),
     
     # Domain Management (Staff Only)

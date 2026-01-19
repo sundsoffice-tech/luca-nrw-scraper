@@ -451,8 +451,22 @@ function setEntryPoint(path) {
 }
 
 function refreshStats() {
-    // Refresh page stats (simplified - would need an API endpoint in production)
-    location.reload();
+    fetch(`/pages/api/${pageSlug}/upload/stats/`, {
+        headers: {
+            'X-CSRFToken': csrfToken,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('stats-files').textContent = data.data.total_files;
+            document.getElementById('stats-size').textContent = formatFileSize(data.data.total_size);
+            document.getElementById('stats-entry').textContent = data.data.entry_point || 'Not set';
+        }
+    })
+    .catch(error => {
+        console.error('Error refreshing stats:', error);
+    });
 }
 
 // Initialize
@@ -463,4 +477,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
-{% endblock %}
+
