@@ -1154,17 +1154,49 @@ SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 def get_performance_params():
     """
-    Get performance parameters from environment variables or defaults.
-    Legacy dashboard API integration removed - now uses env vars/defaults only.
+    Get performance parameters with priority:
+    1. Django DB configuration (when available)
+    2. Environment variables
+    3. Hardcoded defaults
     """
-    # Legacy dashboard API removed - skip API call
-    # Fallback to environment variables/defaults
-    return {
-        'threads': int(os.getenv("THREADS", "4")),
-        'async_limit': int(os.getenv("ASYNC_LIMIT", "35")),
-        'batch_size': int(os.getenv("BATCH_SIZE", "20")),
-        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))
+    # Default values
+    defaults = {
+        'threads': 4,
+        'async_limit': 35,
+        'pool_size': 12,
+        'batch_size': 20,
+        'request_delay': 2.7
     }
+    
+    # Start with environment variables (override defaults)
+    params = {
+        'threads': int(os.getenv("THREADS", str(defaults['threads']))),
+        'async_limit': int(os.getenv("ASYNC_LIMIT", str(defaults['async_limit']))),
+        'pool_size': int(os.getenv("POOL_SIZE", str(defaults['pool_size']))),
+        'batch_size': int(os.getenv("BATCH_SIZE", str(defaults['batch_size']))),
+        'request_delay': float(os.getenv("SLEEP_BETWEEN_QUERIES", str(defaults['request_delay'])))
+    }
+    
+    # Try to load from Django DB (highest priority)
+    if _LUCA_SCRAPER_AVAILABLE:
+        try:
+            from luca_scraper.config import SCRAPER_CONFIG_AVAILABLE
+            if SCRAPER_CONFIG_AVAILABLE:
+                from telis_recruitment.scraper_control.config_loader import get_scraper_config
+                db_config = get_scraper_config()
+                if db_config:
+                    # Override with DB values if present
+                    if 'async_limit' in db_config:
+                        params['async_limit'] = db_config['async_limit']
+                    if 'pool_size' in db_config:
+                        params['pool_size'] = db_config['pool_size']
+                    if 'sleep_between_queries' in db_config:
+                        params['request_delay'] = db_config['sleep_between_queries']
+        except Exception as e:
+            # If Django DB is not available, silently continue with env vars/defaults
+            pass
+    
+    return params
 
 # -------------- Logging --------------
 def log(level:str, msg:str, **ctx):
