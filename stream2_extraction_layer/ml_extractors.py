@@ -328,15 +328,15 @@ class MLEmailClassifier:
             r'^[a-z]\.[a-z]+$',   # m.mustermann
             r'^[a-z]+_[a-z]+$',   # max_mustermann
             r'^[a-z]+\-[a-z]+$',  # max-mustermann
-            r'^[a-z]+[a-z]$',     # maxmustermann (nur wenn >6 Zeichen)
         ]
         
         for pattern in personal_patterns:
             if re.match(pattern, local):
-                if '.' in local or '_' in local or '-' in local:
-                    return True
-                elif len(local) > 6:  # maxmustermann
-                    return True
+                return True
+        
+        # Long concatenated name (e.g., maxmustermann) only if >10 chars
+        if len(local) > 10 and local.isalpha():
+            return True
         
         return False
 

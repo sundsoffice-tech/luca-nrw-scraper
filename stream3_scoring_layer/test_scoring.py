@@ -30,8 +30,9 @@ def test_compute_score_v2_good_vs_bad():
         "private_address": "",
         "social_profile_url": "",
     }
-    score_good = compute_score_v2("", "https://example.com/kontakt", good_lead)
-    score_without_bonus = compute_score_v2("", "https://example.com/kontakt", without_bonus)
+    # Use use_dynamic_scoring=False for deterministic tests
+    score_good = compute_score_v2("", "https://example.com/kontakt", good_lead, use_dynamic_scoring=False)
+    score_without_bonus = compute_score_v2("", "https://example.com/kontakt", without_bonus, use_dynamic_scoring=False)
     assert score_good >= 80
     assert score_good >= score_without_bonus
 
@@ -39,14 +40,15 @@ def test_compute_score_v2_good_vs_bad():
         "name": "Julia",
         "rolle": "Sales",
         "email": "julia@gmail.com",
-        "telefon": "",
+        "telefon": "+491751234567",  # Add phone to avoid -100 penalty
         "industry": "",
         "region": "",
         "private_address": "Bahnhofstr. 12, 50667 Köln",
         "social_profile_url": "https://www.linkedin.com/in/julia-probe",
     }
     bonus_probe_without = {**bonus_probe, "private_address": "", "social_profile_url": ""}
-    assert compute_score_v2("", "https://example.com", bonus_probe) - compute_score_v2("", "https://example.com", bonus_probe_without) >= 30
+    diff = compute_score_v2("", "https://example.com", bonus_probe, use_dynamic_scoring=False) - compute_score_v2("", "https://example.com", bonus_probe_without, use_dynamic_scoring=False)
+    assert diff >= 30, f"Expected bonus difference >= 30, got {diff}"
 
     bad_lead = {
         "name": "Foo",
@@ -55,7 +57,7 @@ def test_compute_score_v2_good_vs_bad():
         "industry": "",
         "region": "",
     }
-    score_bad = compute_score_v2("", "https://example.com/datenschutz", bad_lead)
+    score_bad = compute_score_v2("", "https://example.com/datenschutz", bad_lead, use_dynamic_scoring=False)
     assert score_bad < score_good
     assert 0 <= score_bad <= 100
 
