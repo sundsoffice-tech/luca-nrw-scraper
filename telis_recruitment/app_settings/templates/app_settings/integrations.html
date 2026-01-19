@@ -1,0 +1,138 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Integrationen - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">/</span>
+<a href="{% url 'app_settings:dashboard' %}" class="text-gray-400 hover:text-primary">Einstellungen</a>
+<span class="text-gray-500">/</span>
+<span class="text-gray-300">Integrationen</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">🔌 Integrationen</h1>
+        <p class="text-gray-400">Verwalten Sie externe Dienste und API-Integrationen</p>
+    </div>
+
+    <!-- Integrations Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Brevo -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                        📧
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Brevo</h3>
+                        <p class="text-sm text-gray-400">E-Mail Marketing & Transaktionsmails</p>
+                    </div>
+                </div>
+                {% if has_brevo %}
+                <span class="px-3 py-1 bg-green-500/20 text-green-500 text-xs font-semibold rounded-full">Aktiv</span>
+                {% else %}
+                <span class="px-3 py-1 bg-gray-500/20 text-gray-500 text-xs font-semibold rounded-full">Inaktiv</span>
+                {% endif %}
+            </div>
+            <p class="text-gray-400 text-sm mb-4">
+                E-Mail-Versand über Brevo (ehemals Sendinblue) für Marketing-Kampagnen und Transaktionsmails.
+            </p>
+            <a href="{% url 'email_templates:brevo-settings' %}" class="inline-flex items-center text-primary hover:text-primary/80 text-sm font-medium">
+                Konfigurieren →
+            </a>
+        </div>
+
+        <!-- AI Provider -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                        🧠
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">AI Provider</h3>
+                        <p class="text-sm text-gray-400">OpenAI & Perplexity</p>
+                    </div>
+                </div>
+                {% if has_ai %}
+                <span class="px-3 py-1 bg-green-500/20 text-green-500 text-xs font-semibold rounded-full">Aktiv</span>
+                {% else %}
+                <span class="px-3 py-1 bg-gray-500/20 text-gray-500 text-xs font-semibold rounded-full">Inaktiv</span>
+                {% endif %}
+            </div>
+            <p class="text-gray-400 text-sm mb-4">
+                KI-gestützte Features für Lead-Bewertung, Content-Generierung und mehr.
+            </p>
+            <a href="/admin/ai_config/aimodel/" class="inline-flex items-center text-primary hover:text-primary/80 text-sm font-medium">
+                Konfigurieren →
+            </a>
+        </div>
+
+        <!-- Google Custom Search -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                        🔍
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Google CSE</h3>
+                        <p class="text-sm text-gray-400">Custom Search Engine</p>
+                    </div>
+                </div>
+                <span class="px-3 py-1 bg-green-500/20 text-green-500 text-xs font-semibold rounded-full">Aktiv</span>
+            </div>
+            <p class="text-gray-400 text-sm mb-4">
+                Google Custom Search Engine für automatisches Lead-Scraping und Recherche.
+            </p>
+            <a href="/admin/scraper_control/scraperconfig/" class="inline-flex items-center text-primary hover:text-primary/80 text-sm font-medium">
+                Konfigurieren →
+            </a>
+        </div>
+
+        <!-- Webhooks -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center text-2xl mr-4">
+                        🔗
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Webhooks</h3>
+                        <p class="text-sm text-gray-400">Eingehende Events</p>
+                    </div>
+                </div>
+                <span class="px-3 py-1 bg-green-500/20 text-green-500 text-xs font-semibold rounded-full">Aktiv</span>
+            </div>
+            <p class="text-gray-400 text-sm mb-4">
+                Webhook-Endpunkte für E-Mail-Events und externe Integrationen.
+            </p>
+            <div class="text-gray-500 text-sm">
+                <code class="bg-dark-700 px-2 py-1 rounded">/crm/mailbox/webhooks/brevo/</code>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Info Box -->
+    <div class="mt-8 bg-dark-800 border border-dark-700 rounded-lg p-6">
+        <div class="flex items-start">
+            <div class="text-3xl mr-4">ℹ️</div>
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">Integrationen verwalten</h3>
+                <p class="text-gray-400 mb-4">
+                    Konfigurieren Sie API-Schlüssel und Credentials für externe Dienste. 
+                    Die meisten Einstellungen können über den Django Admin-Bereich verwaltet werden.
+                </p>
+                <a href="/admin/" class="inline-flex items-center text-primary hover:text-primary/80 text-sm font-medium">
+                    Zum Admin-Bereich →
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

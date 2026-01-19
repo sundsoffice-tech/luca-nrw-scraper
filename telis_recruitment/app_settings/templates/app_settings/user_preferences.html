@@ -1,0 +1,110 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Benutzereinstellungen - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">/</span>
+<a href="{% url 'app_settings:dashboard' %}" class="text-gray-400 hover:text-primary">Einstellungen</a>
+<span class="text-gray-500">/</span>
+<span class="text-gray-300">Benutzerprofil</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">👤 Benutzereinstellungen</h1>
+        <p class="text-gray-400">Passen Sie Ihre persönlichen Einstellungen an</p>
+    </div>
+
+    {% if messages %}
+    <div class="mb-6">
+        {% for message in messages %}
+        <div class="bg-green-500/20 border border-green-500 text-green-500 px-4 py-3 rounded-lg mb-2">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Appearance -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🎨 Darstellung
+            </h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Theme</label>
+                    <select name="theme" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="dark" {% if user_prefs.theme == 'dark' %}selected{% endif %}>Dark Mode</option>
+                        <option value="light" {% if user_prefs.theme == 'light' %}selected{% endif %}>Light Mode</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Sprache</label>
+                    <select name="language" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="de" {% if user_prefs.language == 'de' %}selected{% endif %}>Deutsch</option>
+                        <option value="en" {% if user_prefs.language == 'en' %}selected{% endif %}>English</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Options -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                📊 Anzeigeoptionen
+            </h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Elemente pro Seite</label>
+                    <select name="items_per_page" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="10" {% if user_prefs.items_per_page == 10 %}selected{% endif %}>10</option>
+                        <option value="25" {% if user_prefs.items_per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if user_prefs.items_per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if user_prefs.items_per_page == 100 %}selected{% endif %}>100</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Standard-Ansicht für Leads</label>
+                    <select name="default_lead_view" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="list" {% if user_prefs.default_lead_view == 'list' %}selected{% endif %}>Liste</option>
+                        <option value="grid" {% if user_prefs.default_lead_view == 'grid' %}selected{% endif %}>Kacheln</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                🔔 Benachrichtigungen
+            </h2>
+            
+            <div class="space-y-4">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" name="email_notifications" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if user_prefs.email_notifications %}checked{% endif %}>
+                    <span class="ml-3 text-gray-300">E-Mail-Benachrichtigungen aktivieren</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-4 justify-end">
+            <a href="{% url 'app_settings:dashboard' %}" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-white font-semibold rounded-lg transition">
+                Abbrechen
+            </a>
+            <button type="submit" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white font-semibold rounded-lg transition shadow-lg shadow-primary/20">
+                💾 Speichern
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
