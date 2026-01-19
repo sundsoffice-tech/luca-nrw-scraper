@@ -8,7 +8,9 @@
 {% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" 
+        integrity="sha384-TUkML0ApqVTw7LZsl3+pCGKjC62VRjpqVqPRlP7sP2K+7Y9mRBwZqkqPz2Qb4Q3i" 
+        crossorigin="anonymous"></script>
 <style>
     .card {
         transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -208,7 +210,7 @@ async function loadKPIs() {
     const days = document.getElementById('periodSelect').value;
     
     try {
-        const response = await fetch(`/reports/api/kpis/?days=${days}`);
+        const response = await fetch(`/crm/reports/api/kpis/?days=${days}`);
         const data = await response.json();
         
         // Update KPI Cards
@@ -224,6 +226,10 @@ async function loadKPIs() {
         
     } catch (error) {
         console.error('Fehler beim Laden der KPIs:', error);
+        // Show user-friendly error message
+        document.getElementById('kpi-total-leads').textContent = 'Fehler';
+        document.getElementById('kpi-with-phone').textContent = 'Fehler';
+        document.getElementById('kpi-phone-rate').textContent = 'Fehler';
     }
 }
 
@@ -242,7 +248,10 @@ async function loadTrend() {
     const days = document.getElementById('periodSelect').value;
     
     try {
-        const response = await fetch(`/reports/api/trend/?days=${days}`);
+        const response = await fetch(`/crm/reports/api/trend/?days=${days}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         
         const labels = data.trend.map(t => t.date);
@@ -312,7 +321,10 @@ async function loadReport() {
     const reportType = document.getElementById('reportTypeSelect').value;
     
     try {
-        const response = await fetch(`/reports/api/report/${reportType}/?days=${days}`);
+        const response = await fetch(`/crm/reports/api/report/${reportType}/?days=${days}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         
         if (data.error) {
@@ -426,7 +438,7 @@ function exportReport(format) {
     const days = document.getElementById('periodSelect').value;
     const reportType = document.getElementById('reportTypeSelect').value;
     
-    const url = `/reports/export/${reportType}/${format}/?days=${days}`;
+    const url = `/crm/reports/export/${reportType}/${format}/?days=${days}`;
     window.location.href = url;
 }
 

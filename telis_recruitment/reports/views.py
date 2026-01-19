@@ -22,7 +22,8 @@ def reports_dashboard(request):
         from .models import ReportSchedule, ReportHistory
         schedules = ReportSchedule.objects.filter(is_active=True)[:5]
         recent_reports = ReportHistory.objects.all()[:10]
-    except:
+    except (ImportError, AttributeError) as e:
+        # Handle missing models or database errors gracefully
         schedules = []
         recent_reports = []
     

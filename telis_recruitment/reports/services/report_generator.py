@@ -194,7 +194,11 @@ class ReportGenerator:
         except ImportError:
             return {
                 'report_type': 'cost_analysis',
-                'error': 'ai_config App nicht verfügbar',
+                'error': 'AI-Kostenanalyse ist nicht aktiviert. Bitte aktivieren Sie das ai_config Modul.',
+                'period': {
+                    'start': self.start_date.isoformat(),
+                    'end': self.end_date.isoformat(),
+                },
                 'summary': {},
             }
     
