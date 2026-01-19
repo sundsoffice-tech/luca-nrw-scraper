@@ -1,0 +1,421 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Domain Settings - {{ page.title }} - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:builder-list' %}" class="text-gray-400 hover:text-white">Landing Pages</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:page-builder' slug=page.slug %}" class="text-gray-400 hover:text-white">{{ page.title }}</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Domain Settings</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dns-record-box {
+        background-color: #1F2937;
+        border: 1px solid #374151;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+    }
+    .verified-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .verified-badge.success {
+        background-color: rgba(34, 197, 94, 0.2);
+        color: #22C55E;
+    }
+    .verified-badge.pending {
+        background-color: rgba(251, 191, 36, 0.2);
+        color: #FBD038;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Domain Settings</h1>
+            <p class="text-gray-400">{{ page.title }}</p>
+        </div>
+        <div class="flex space-x-2">
+            <a href="{% url 'pages:page-builder' slug=page.slug %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
+                ← Back to Builder
+            </a>
+            <a href="{% url 'pages:upload-manager' slug=page.slug %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition border border-dark-600">
+                📦 Upload Manager
+            </a>
+        </div>
+    </div>
+
+    <!-- DNS Verification Status -->
+    {% if page.get_full_domain %}
+    <div class="mb-6 bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <div class="flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-semibold text-white mb-2">DNS Status</h3>
+                <p class="text-gray-400">Domain: <span class="text-blue-400 font-mono">{{ page.get_full_domain }}</span></p>
+            </div>
+            <div>
+                {% if page.dns_verified %}
+                <span class="verified-badge success">✓ Verifiziert</span>
+                {% else %}
+                <span class="verified-badge pending">⏳ Ausstehend</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <button onclick="verifyDNS()" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                🔍 DNS Jetzt Prüfen
+            </button>
+        </div>
+        
+        <div id="verification-result" class="mt-4 hidden">
+            <!-- Verification results will appear here -->
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left Column: Domain Configuration -->
+        <div class="space-y-6">
+            <!-- Hosting Type -->
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">Hosting-Typ</h2>
+                
+                <div class="space-y-3">
+                    <label class="flex items-center p-3 bg-dark-700 rounded-lg cursor-pointer hover:bg-dark-600 transition">
+                        <input type="radio" name="hosting_type" value="internal" 
+                               {% if page.hosting_type == 'internal' %}checked{% endif %}
+                               class="mr-3">
+                        <div>
+                            <div class="text-white font-medium">Internes Hosting</div>
+                            <div class="text-gray-400 text-sm">Hoste auf deiner eigenen Infrastruktur</div>
+                        </div>
+                    </label>
+                    
+                    <label class="flex items-center p-3 bg-dark-700 rounded-lg cursor-pointer hover:bg-dark-600 transition">
+                        <input type="radio" name="hosting_type" value="strato" 
+                               {% if page.hosting_type == 'strato' %}checked{% endif %}
+                               class="mr-3">
+                        <div>
+                            <div class="text-white font-medium">STRATO Domain</div>
+                            <div class="text-gray-400 text-sm">Verbinde mit deiner STRATO Domain</div>
+                        </div>
+                    </label>
+                    
+                    <label class="flex items-center p-3 bg-dark-700 rounded-lg cursor-pointer hover:bg-dark-600 transition">
+                        <input type="radio" name="hosting_type" value="custom" 
+                               {% if page.hosting_type == 'custom' %}checked{% endif %}
+                               class="mr-3">
+                        <div>
+                            <div class="text-white font-medium">Benutzerdefinierte Domain</div>
+                            <div class="text-gray-400 text-sm">Verwende eine beliebige externe Domain</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Domain Configuration -->
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">Domain-Konfiguration</h2>
+                
+                <!-- STRATO Domain Fields -->
+                <div id="strato-fields" class="space-y-4 {% if page.hosting_type != 'strato' %}hidden{% endif %}">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Subdomain</label>
+                        <input type="text" id="strato-subdomain" 
+                               value="{{ page.strato_subdomain }}"
+                               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                               placeholder="z.B. bewerbung, karriere, jobs">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Hauptdomain</label>
+                        <input type="text" id="strato-main-domain" 
+                               value="{{ page.strato_main_domain }}"
+                               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                               placeholder="z.B. meinefirma.de">
+                    </div>
+                </div>
+                
+                <!-- Custom Domain Field -->
+                <div id="custom-field" class="{% if page.hosting_type != 'custom' %}hidden{% endif %}">
+                    <label class="block text-sm text-gray-400 mb-2">Custom Domain</label>
+                    <input type="text" id="custom-domain" 
+                           value="{{ page.custom_domain }}"
+                           class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                           placeholder="z.B. bewerbung.meinefirma.de">
+                </div>
+                
+                <!-- SSL Setting -->
+                <div class="mt-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="ssl-enabled" 
+                               {% if page.ssl_enabled %}checked{% endif %}
+                               class="mr-3 h-4 w-4">
+                        <span class="text-white">SSL/HTTPS aktivieren</span>
+                    </label>
+                    <p class="text-gray-500 text-xs mt-1 ml-7">Empfohlen für Produktionsumgebungen</p>
+                </div>
+                
+                <div class="mt-6">
+                    <button onclick="saveDomainSettings()" 
+                            class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
+                        💾 Einstellungen Speichern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: DNS Instructions & nginx Config -->
+        <div class="space-y-6">
+            <!-- DNS Instructions -->
+            {% if dns_instructions %}
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">📋 STRATO DNS-Anleitung</h2>
+                
+                <div class="space-y-4">
+                    {% for record in dns_instructions.records %}
+                    <div class="dns-record-box">
+                        <div class="text-gray-400 text-xs mb-1">{{ record.type }} Record</div>
+                        <div class="text-white">
+                            <div><span class="text-gray-500">Name:</span> {{ record.name }}</div>
+                            <div><span class="text-gray-500">Wert:</span> {{ record.value }}</div>
+                            <div><span class="text-gray-500">TTL:</span> {{ record.ttl }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-6 bg-dark-900 rounded-lg p-4">
+                    <h3 class="text-sm font-semibold text-white mb-3">Schritt-für-Schritt Anleitung:</h3>
+                    <ol class="text-sm text-gray-300 space-y-2">
+                        {% for step in dns_instructions.strato_steps %}
+                        <li>{{ step }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                
+                <div class="mt-4">
+                    <div class="text-xs text-gray-500">
+                        <strong>Verifikations-Token:</strong>
+                        <code class="bg-dark-900 px-2 py-1 rounded text-blue-400">{{ page.dns_verification_token }}</code>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- nginx Configuration -->
+            {% if page.get_full_domain %}
+            <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">⚙️ nginx Konfiguration</h2>
+                
+                <p class="text-gray-400 text-sm mb-4">
+                    Lade die nginx Server-Block Konfiguration für deine Domain herunter.
+                </p>
+                
+                <a href="{% url 'pages:nginx-config' slug=page.slug %}" 
+                   download
+                   class="inline-block px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                    📥 nginx Config Herunterladen
+                </a>
+            </div>
+            {% endif %}
+            
+            <!-- Info Box -->
+            <div class="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-blue-400 mb-2">💡 Hinweise</h3>
+                <ul class="text-sm text-gray-300 space-y-2">
+                    <li>• DNS-Änderungen können 5-15 Minuten dauern</li>
+                    <li>• SSL-Zertifikate müssen separat mit Let's Encrypt oder einem anderen Provider konfiguriert werden</li>
+                    <li>• Nach der DNS-Verifikation kann die Domain aktiviert werden</li>
+                    <li>• STRATO DNS-Einstellungen findest du im Kunden-Login unter "Domains"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Toast -->
+    <div id="message-toast" class="fixed bottom-4 right-4 hidden">
+        <div class="bg-dark-800 border border-dark-700 rounded-lg shadow-xl p-4 max-w-sm">
+            <div class="flex items-start">
+                <div id="message-icon" class="flex-shrink-0 mr-3"></div>
+                <div>
+                    <p id="message-text" class="text-white text-sm"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token }}';
+const pageSlug = '{{ page.slug }}';
+
+// Message functions
+function showMessage(message, type = 'success') {
+    const toast = document.getElementById('message-toast');
+    const text = document.getElementById('message-text');
+    const icon = document.getElementById('message-icon');
+    
+    text.textContent = message;
+    
+    if (type === 'success') {
+        icon.innerHTML = '<span class="text-green-500 text-2xl">✓</span>';
+    } else if (type === 'error') {
+        icon.innerHTML = '<span class="text-red-500 text-2xl">✕</span>';
+    } else {
+        icon.innerHTML = '<span class="text-blue-500 text-2xl">ℹ</span>';
+    }
+    
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 5000);
+}
+
+// Toggle domain fields based on hosting type
+document.querySelectorAll('input[name="hosting_type"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        const stratoFields = document.getElementById('strato-fields');
+        const customField = document.getElementById('custom-field');
+        
+        stratoFields.classList.add('hidden');
+        customField.classList.add('hidden');
+        
+        if (e.target.value === 'strato') {
+            stratoFields.classList.remove('hidden');
+        } else if (e.target.value === 'custom') {
+            customField.classList.remove('hidden');
+        }
+    });
+});
+
+// Save domain settings
+function saveDomainSettings() {
+    const hostingType = document.querySelector('input[name="hosting_type"]:checked').value;
+    const stratoSubdomain = document.getElementById('strato-subdomain').value;
+    const stratoMainDomain = document.getElementById('strato-main-domain').value;
+    const customDomain = document.getElementById('custom-domain').value;
+    const sslEnabled = document.getElementById('ssl-enabled').checked;
+    
+    const data = {
+        hosting_type: hostingType,
+        strato_subdomain: stratoSubdomain,
+        strato_main_domain: stratoMainDomain,
+        custom_domain: customDomain,
+        ssl_enabled: sslEnabled
+    };
+    
+    fetch(`/pages/api/${pageSlug}/domain/save/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage(data.message, 'success');
+            // Reload page to show updated DNS instructions
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showMessage(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showMessage('Fehler beim Speichern der Einstellungen', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Verify DNS
+function verifyDNS() {
+    const resultDiv = document.getElementById('verification-result');
+    resultDiv.innerHTML = '<div class="text-gray-400">Prüfe DNS-Konfiguration...</div>';
+    resultDiv.classList.remove('hidden');
+    
+    fetch(`/pages/api/${pageSlug}/domain/verify/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let html = '<div class="bg-dark-900 rounded-lg p-4">';
+            
+            if (data.verified) {
+                html += '<div class="text-green-400 font-semibold mb-2">✓ DNS erfolgreich verifiziert!</div>';
+            } else {
+                html += '<div class="text-yellow-400 font-semibold mb-2">⚠ DNS noch nicht korrekt konfiguriert</div>';
+            }
+            
+            html += '<div class="text-sm text-gray-300 mt-3">';
+            html += '<div class="font-semibold mb-2">Ergebnisse:</div>';
+            
+            if (data.data.checks) {
+                for (const [key, value] of Object.entries(data.data.checks)) {
+                    const status = value.match ? '✓' : '✗';
+                    const color = value.match ? 'text-green-400' : 'text-red-400';
+                    html += `<div class="${color}">${status} ${key}: ${JSON.stringify(value)}</div>`;
+                }
+            }
+            
+            if (data.data.errors && data.data.errors.length > 0) {
+                html += '<div class="mt-3 text-red-400">';
+                html += '<div class="font-semibold">Fehler:</div>';
+                data.data.errors.forEach(error => {
+                    html += `<div>• ${error}</div>`;
+                });
+                html += '</div>';
+            }
+            
+            html += '</div></div>';
+            
+            resultDiv.innerHTML = html;
+            
+            if (data.verified) {
+                showMessage('DNS erfolgreich verifiziert!', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                showMessage('DNS-Konfiguration noch nicht korrekt', 'info');
+            }
+        } else {
+            resultDiv.innerHTML = `<div class="text-red-400">Fehler: ${data.error}</div>`;
+            showMessage(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = '<div class="text-red-400">Netzwerkfehler bei der Verifikation</div>';
+        showMessage('Fehler bei der DNS-Verifikation', 'error');
+        console.error('Error:', error);
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}
