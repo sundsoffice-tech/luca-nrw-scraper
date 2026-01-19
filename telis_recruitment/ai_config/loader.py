@@ -3,13 +3,13 @@ AI Configuration Loader
 
 This module provides functions to load AI configuration, prompts, and log usage.
 Designed to be imported by scraper modules to avoid hardcoded AI parameters.
+
+All Django imports are lazy to support standalone operation without Django.
 """
 
 from typing import Optional, Dict, Any, Tuple
 from decimal import Decimal
-from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Sum
 
 
 def get_ai_config() -> Dict[str, Any]:
@@ -24,9 +24,11 @@ def get_ai_config() -> Dict[str, Any]:
         temperature = config['temperature']
         provider = config['default_provider']
     """
-    from .models import AIConfig
-    
     try:
+        # Lazy import of Django models - will fail if Django not configured
+        # Catches: django.core.exceptions.ImproperlyConfigured, ImportError, etc.
+        from .models import AIConfig
+        
         config = AIConfig.objects.filter(is_active=True).first()
         
         if config:
@@ -45,10 +47,14 @@ def get_ai_config() -> Dict[str, Any]:
                 'default_model_display': config.default_model.display_name if config.default_model else None,
             }
     except Exception:
-        # If there's any error (e.g., table doesn't exist yet), return defaults
+        # Catch ALL exceptions including:
+        # - django.core.exceptions.ImproperlyConfigured (Django not configured)
+        # - ImportError (Django not installed)
+        # - Database errors (table doesn't exist)
+        # Fall through to return defaults
         pass
     
-    # Return sensible defaults if no config found
+    # Return sensible defaults if no config found OR Django not configured
     return {
         'temperature': 0.3,
         'top_p': 1.0,
@@ -179,43 +185,60 @@ def check_budget() -> Tuple[bool, Dict[str, float]]:
             # Proceed with AI request
             pass
     """
-    from .models import AIConfig, AIUsageLog
-    
-    config = get_ai_config()
-    daily_budget = config['daily_budget']
-    monthly_budget = config['monthly_budget']
-    
-    # Calculate today's spending
-    today = timezone.now().date()
-    today_spent = AIUsageLog.objects.filter(
-        created_at__date=today
-    ).aggregate(total=Sum('cost'))['total'] or Decimal('0')
-    today_spent = float(today_spent)
-    
-    # Calculate this month's spending
-    first_day_of_month = today.replace(day=1)
-    month_spent = AIUsageLog.objects.filter(
-        created_at__date__gte=first_day_of_month
-    ).aggregate(total=Sum('cost'))['total'] or Decimal('0')
-    month_spent = float(month_spent)
-    
-    # Calculate remaining budgets
-    daily_remaining = daily_budget - today_spent
-    monthly_remaining = monthly_budget - month_spent
-    
-    # Check if both budgets allow usage
-    allowed = daily_remaining > 0 and monthly_remaining > 0
-    
-    budget_info = {
-        'daily_spent': today_spent,
-        'daily_budget': daily_budget,
-        'daily_remaining': daily_remaining,
-        'monthly_spent': month_spent,
-        'monthly_budget': monthly_budget,
-        'monthly_remaining': monthly_remaining,
-    }
-    
-    return allowed, budget_info
+    try:
+        from django.utils import timezone
+        from django.db.models import Sum
+        from .models import AIConfig, AIUsageLog
+        
+        config = get_ai_config()
+        daily_budget = config['daily_budget']
+        monthly_budget = config['monthly_budget']
+        
+        # Calculate today's spending
+        today = timezone.now().date()
+        today_spent = AIUsageLog.objects.filter(
+            created_at__date=today
+        ).aggregate(total=Sum('cost'))['total'] or Decimal('0')
+        today_spent = float(today_spent)
+        
+        # Calculate this month's spending
+        first_day_of_month = today.replace(day=1)
+        month_spent = AIUsageLog.objects.filter(
+            created_at__date__gte=first_day_of_month
+        ).aggregate(total=Sum('cost'))['total'] or Decimal('0')
+        month_spent = float(month_spent)
+        
+        # Calculate remaining budgets
+        daily_remaining = daily_budget - today_spent
+        monthly_remaining = monthly_budget - month_spent
+        
+        # Check if both budgets allow usage
+        allowed = daily_remaining > 0 and monthly_remaining > 0
+        
+        budget_info = {
+            'daily_spent': today_spent,
+            'daily_budget': daily_budget,
+            'daily_remaining': daily_remaining,
+            'monthly_spent': month_spent,
+            'monthly_budget': monthly_budget,
+            'monthly_remaining': monthly_remaining,
+        }
+        
+        return allowed, budget_info
+    except Exception:
+        # If Django is not configured, return defaults
+        config = get_ai_config()
+        daily_budget = config['daily_budget']
+        monthly_budget = config['monthly_budget']
+        
+        return True, {
+            'daily_spent': 0.0,
+            'daily_budget': daily_budget,
+            'daily_remaining': daily_budget,
+            'monthly_spent': 0.0,
+            'monthly_budget': monthly_budget,
+            'monthly_remaining': monthly_budget,
+        }
 
 
 def get_model_costs(provider: str, model: str) -> Tuple[float, float]:
