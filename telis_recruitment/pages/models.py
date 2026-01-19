@@ -288,6 +288,7 @@ class BrandSettings(models.Model):
     secondary_color = models.CharField(max_length=7, default='#06b6d4')
     accent_color = models.CharField(max_length=7, default='#22c55e')
     text_color = models.CharField(max_length=7, default='#1f2937')
+    text_light_color = models.CharField(max_length=7, default='#6b7280')
     background_color = models.CharField(max_length=7, default='#ffffff')
     
     # Typography
@@ -319,7 +320,7 @@ class BrandSettings(models.Model):
         verbose_name = 'Marken-Einstellungen'
     
     def save(self, *args, **kwargs):
-        self.pk = 1
+        self.pk = 1  # Singleton
         super().save(*args, **kwargs)
     
     @classmethod
@@ -339,18 +340,7 @@ class BrandSettings(models.Model):
     
     def __str__(self):
         return f"Brand Settings (ID: {self.id})"
-    
-    def save(self, *args, **kwargs):
-        self.pk = 1  # Singleton
-        super().save(*args, **kwargs)
-    
-    @classmethod
-    def get_settings(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-    
-    def get_css_variables(self):
-        return f":root{{--color-primary:{self.primary_color};--color-secondary:{self.secondary_color};}}"
+
 
 
 class PageTemplate(models.Model):
