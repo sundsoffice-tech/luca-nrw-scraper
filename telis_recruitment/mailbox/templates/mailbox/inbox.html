@@ -5,27 +5,67 @@
 
 {% block extra_head %}
 <style>
-    .mailbox-sidebar {
+    /* Mailbox Navigation Tabs */
+    .mailbox-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
         background: #1e293b;
-        border-right: 1px solid #334155;
-        min-height: calc(100vh - 60px);
+        border: 1px solid #334155;
+        border-radius: 12px;
     }
-    .mailbox-sidebar .nav-link {
-        display: block;
+    .nav-tab {
+        display: inline-flex;
+        align-items: center;
         color: #94a3b8;
-        padding: 12px 20px;
+        padding: 10px 16px;
         border-radius: 8px;
-        margin: 4px 12px;
         transition: all 0.2s;
         text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid transparent;
     }
-    .mailbox-sidebar .nav-link:hover {
+    .nav-tab:hover {
         background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
         color: #f1f5f9;
     }
-    .mailbox-sidebar .nav-link.active {
+    .nav-tab.active {
         background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         color: #fff;
+        border-color: #6366f1;
+    }
+    .nav-tab .badge-count {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        margin-left: 8px;
+    }
+    .nav-tab:not(.active) .badge-count {
+        background: #6366f1;
+    }
+    .compose-btn {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-size: 14px;
+        margin-left: auto;
+    }
+    .compose-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
     }
     .conversation-item {
         padding: 16px 20px;
@@ -69,13 +109,6 @@
         color: #64748b;
         font-size: 12px;
     }
-    .badge-count {
-        background: #6366f1;
-        color: #fff;
-        font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 12px;
-    }
     .badge-info {
         background: #06b6d4;
         color: #fff;
@@ -83,6 +116,13 @@
         padding: 2px 8px;
         border-radius: 4px;
         display: inline-block;
+    }
+    .badge-count-conversation {
+        background: #6366f1;
+        color: #fff;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 12px;
     }
     .star-btn {
         color: #64748b;
@@ -98,21 +138,21 @@
     .star-btn.starred {
         color: #fbbf24;
     }
-    .compose-btn {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        color: #fff;
-        font-weight: 600;
-        width: 100%;
-        margin-bottom: 20px;
-        transition: all 0.2s;
-        text-decoration: none;
+    .mailbox-content {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        overflow: hidden;
     }
-    .compose-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    .search-actions-bar {
+        padding: 1rem;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    .search-actions-bar form {
+        flex-grow: 1;
     }
     .search-box {
         background: #1e293b;
@@ -158,6 +198,9 @@
         cursor: pointer;
         accent-color: #6366f1;
     }
+    .conversation-list {
+        min-height: 400px;
+    }
     .pagination-link {
         padding: 6px 12px;
         border-radius: 6px;
@@ -176,6 +219,22 @@
         padding: 6px 12px;
         color: #94a3b8;
         font-size: 14px;
+    }
+    .pagination-container {
+        padding: 1rem;
+        border-top: 1px solid #334155;
+    }
+    /* Secondary Navigation */
+    .secondary-nav {
+        margin-top: 1rem;
+    }
+    .secondary-nav-title {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+        padding: 0 1rem;
     }
     /* Utility classes */
     .flex { display: flex; }
@@ -205,88 +264,68 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex" style="min-height: calc(100vh - 60px);">
-    <!-- Sidebar -->
-    <div class="mailbox-sidebar" style="width: 280px; flex-shrink: 0;">
-        <div class="p-3">
-            <a href="{% url 'mailbox:compose' %}" class="compose-btn block text-center no-underline">
-                ✉️ Neue Email
-            </a>
-            
-            <nav class="flex flex-col">
-                <a href="?folder=all" class="nav-link {% if folder == 'all' %}active{% endif %}">
-                    📥 Posteingang
-                    {% if unread_count %}<span class="badge-count float-right">{{ unread_count }}</span>{% endif %}
-                </a>
-                <a href="?folder=unread" class="nav-link {% if folder == 'unread' %}active{% endif %}">
-                    📧 Ungelesen
-                </a>
-                <a href="?folder=starred" class="nav-link {% if folder == 'starred' %}active{% endif %}">
-                    ⭐ Markiert
-                </a>
-                <a href="?folder=sent" class="nav-link {% if folder == 'sent' %}active{% endif %}">
-                    📤 Gesendet
-                </a>
-                <a href="?folder=drafts" class="nav-link {% if folder == 'drafts' %}active{% endif %}">
-                    📝 Entwürfe
-                </a>
-                <a href="?folder=scheduled" class="nav-link {% if folder == 'scheduled' %}active{% endif %}">
-                    ⏰ Geplant
-                </a>
-                <a href="?folder=trash" class="nav-link {% if folder == 'trash' %}active{% endif %}">
-                    🗑️ Papierkorb
-                </a>
-            </nav>
-            
-            {% if labels %}
-            <hr style="border-color: #2d2d44;">
-            <h6 class="px-3 text-gray-500 mb-2">Labels</h6>
-            <nav class="flex flex-col">
-                {% for label in labels %}
-                <a href="?label={{ label.id }}" class="nav-link">
-                    <span style="color: {{ label.color }};">●</span> {{ label.name }}
-                </a>
-                {% endfor %}
-            </nav>
-            {% endif %}
-            
-            <hr style="border-color: #2d2d44;">
-            <nav class="flex flex-col">
-                <a href="{% url 'mailbox:settings' %}" class="nav-link">
-                    ⚙️ Einstellungen
-                </a>
-                <a href="{% url 'mailbox:signatures' %}" class="nav-link">
-                    ✍️ Signaturen
-                </a>
-                <a href="{% url 'mailbox:quick-replies' %}" class="nav-link">
-                    ⚡ Schnellantworten
-                </a>
-            </nav>
-        </div>
+<div class="max-w-7xl mx-auto">
+    <!-- Mailbox Navigation Tabs -->
+    <div class="mailbox-nav">
+        <a href="?folder=all" class="nav-tab {% if folder == 'all' %}active{% endif %}">
+            📥 Posteingang
+            {% if unread_count %}<span class="badge-count">{{ unread_count }}</span>{% endif %}
+        </a>
+        <a href="?folder=unread" class="nav-tab {% if folder == 'unread' %}active{% endif %}">
+            📧 Ungelesen
+        </a>
+        <a href="?folder=starred" class="nav-tab {% if folder == 'starred' %}active{% endif %}">
+            ⭐ Markiert
+        </a>
+        <a href="?folder=sent" class="nav-tab {% if folder == 'sent' %}active{% endif %}">
+            📤 Gesendet
+        </a>
+        <a href="?folder=drafts" class="nav-tab {% if folder == 'drafts' %}active{% endif %}">
+            📝 Entwürfe
+        </a>
+        <a href="?folder=scheduled" class="nav-tab {% if folder == 'scheduled' %}active{% endif %}">
+            ⏰ Geplant
+        </a>
+        <a href="?folder=trash" class="nav-tab {% if folder == 'trash' %}active{% endif %}">
+            🗑️ Papierkorb
+        </a>
+        <a href="{% url 'mailbox:compose' %}" class="compose-btn">
+            ✉️ Neue Email
+        </a>
     </div>
     
-    <!-- Main Content -->
-    <div class="flex-grow" style="background: #0f0f1a;">
+    <!-- Secondary Navigation (Settings) -->
+    <div class="mailbox-nav secondary-nav">
+        <div class="secondary-nav-title">Verwaltung</div>
+        <a href="{% url 'mailbox:settings' %}" class="nav-tab">
+            ⚙️ Einstellungen
+        </a>
+        <a href="{% url 'mailbox:signatures' %}" class="nav-tab">
+            ✍️ Signaturen
+        </a>
+        <a href="{% url 'mailbox:quick-replies' %}" class="nav-tab">
+            ⚡ Schnellantworten
+        </a>
+    </div>
+    
+    <!-- Main Mailbox Content -->
+    <div class="mailbox-content">
         <!-- Search & Actions Bar -->
-        <div class="p-3 border-b" style="border-color: #2d2d44 !important;">
-            <div class="flex gap-3">
-                <form method="get" class="flex-grow">
-                    <input type="hidden" name="folder" value="{{ folder }}">
-                    <input type="text" name="search" class="search-box w-full" 
-                           placeholder="🔍 Emails durchsuchen..." value="{{ search }}">
-                </form>
-                <div class="flex gap-2">
-                    <button class="action-btn" onclick="markSelectedRead()">
-                        ✓ Gelesen
-                    </button>
-                    <button class="action-btn" onclick="archiveSelected()">
-                        📁 Archivieren
-                    </button>
-                    <button class="action-btn-danger" onclick="deleteSelected()">
-                        🗑️ Löschen
-                    </button>
-                </div>
-            </div>
+        <div class="search-actions-bar">
+            <form method="get">
+                <input type="hidden" name="folder" value="{{ folder }}">
+                <input type="text" name="search" class="search-box w-full" 
+                       placeholder="🔍 Emails durchsuchen..." value="{{ search }}">
+            </form>
+            <button class="action-btn" onclick="markSelectedRead()">
+                ✓ Gelesen
+            </button>
+            <button class="action-btn" onclick="archiveSelected()">
+                📁 Archivieren
+            </button>
+            <button class="action-btn-danger" onclick="deleteSelected()">
+                🗑️ Löschen
+            </button>
         </div>
         
         <!-- Conversation List -->
@@ -315,7 +354,7 @@
                         <div class="snippet">{{ conv.messages.last.snippet|default:"" }}</div>
                     </div>
                     {% if conv.message_count > 1 %}
-                    <span class="badge-count">{{ conv.message_count }}</span>
+                    <span class="badge-count-conversation">{{ conv.message_count }}</span>
                     {% endif %}
                 </div>
             </div>
@@ -329,7 +368,7 @@
         
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
-        <div class="p-3 border-t" style="border-color: #2d2d44 !important;">
+        <div class="pagination-container">
             <nav>
                 <div class="flex justify-center items-center gap-2 mb-0">
                     {% if page_obj.has_previous %}
