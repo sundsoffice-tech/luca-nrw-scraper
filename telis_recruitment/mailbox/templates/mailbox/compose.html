@@ -166,7 +166,7 @@ document.getElementById('template').addEventListener('change', async function() 
     if (!templateId) return;
     
     try {
-        const response = await fetch(`/crm/email-templates/api/templates/${templateId}/`);
+        const response = await fetch(`/api/email-templates/templates/${templateId}/`);
         const template = await response.json();
         
         // Set subject if empty
