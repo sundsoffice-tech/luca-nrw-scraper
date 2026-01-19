@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models as db_models
 
 from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
 from leads.models import Lead
@@ -275,9 +275,14 @@ def upload_asset(request):
     
     asset = PageAsset.objects.create(
         landing_page=landing_page,
-        file=file, name=file.name, asset_type=asset_type,
-        width=width, height=height, file_size=file.size,
-        mime_type=mime, folder=request.POST.get('folder', ''),
+        file=file,
+        name=file.name,
+        asset_type=asset_type,
+        width=width,
+        height=height,
+        file_size=file.size,
+        mime_type=mime,
+        folder=request.POST.get('folder', ''),
         uploaded_by=request.user
     )
     
@@ -287,8 +292,6 @@ def upload_asset(request):
 @staff_member_required
 def list_assets(request):
     """Liste Assets für GrapesJS Asset Manager"""
-    from django.db import models as db_models
-    
     assets = PageAsset.objects.filter(asset_type='image')
     page_id = request.GET.get('landing_page_id')
     if page_id:
