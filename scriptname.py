@@ -494,8 +494,11 @@ def export_xlsx(filename: str, rows=None):
     df.to_excel(filename, index=False)
 
 
-# Warnungen zu unsicherem SSL dämpfen (bewusstes Fallback via Flag)
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# SSL warnings only suppressed when explicitly enabled via ALLOW_INSECURE_SSL
+if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    import logging
+    logging.warning("⚠️  UNSICHERER MODUS: SSL-Zertifikat-Validierung ist deaktiviert! Nur für Entwicklung verwenden.")
 
 # =========================
 # Konfiguration & Globals
@@ -519,7 +522,7 @@ MAX_FETCH_SIZE = int(os.getenv("MAX_FETCH_SIZE", str(2 * 1024 * 1024)))  # 2MB d
 POOL_SIZE = int(os.getenv("POOL_SIZE", "12"))  # (historisch; wird in Async-Version nicht mehr genutzt)
 
 ALLOW_PDF = (os.getenv("ALLOW_PDF", "0") == "1")
-ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "1") == "1")
+ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by default
 
 # Neue Async-ENV
 ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))          # globale max. gleichzeitige Requests (reduziert von 50)
