@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/scraper/status/', views.api_scraper_status, name='api-status'),
     path('api/scraper/start/', views.api_scraper_start, name='api-start'),
     path('api/scraper/stop/', views.api_scraper_stop, name='api-stop'),
+    path('api/scraper/preview/', views.api_scraper_command_preview, name='api-preview'),
     path('api/scraper/logs/stream/', views.api_scraper_logs_stream, name='api-logs-stream'),
     path('api/scraper/config/', views.api_scraper_config, name='api-config'),
     path('api/scraper/config/update/', views.api_scraper_config_update, name='api-config-update'),

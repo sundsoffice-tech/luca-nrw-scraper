@@ -156,6 +156,49 @@ def api_scraper_start(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
+def api_scraper_command_preview(request):
+    """
+    POST /crm/scraper/api/scraper/preview/
+    
+    Get a preview of the command that would be executed.
+    This allows administrators to verify configuration before starting.
+    
+    POST data:
+    {
+        "industry": "recruiter",
+        "qpi": 15,
+        "mode": "standard",
+        ...
+    }
+    
+    Returns:
+    {
+        "success": true,
+        "command": "python scriptname.py --industry recruiter --qpi 15 ...",
+        "command_args": ["python", "scriptname.py", "--industry", ...],
+        "working_directory": "/path/to/project",
+        "environment": {"SCRAPER_POOL_SIZE": "12", ...},
+        "params": {...}
+    }
+    """
+    try:
+        params = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        
+        manager = get_manager()
+        preview = manager.get_command_preview(params)
+        
+        return Response(preview, status=http_status.HTTP_200_OK)
+            
+    except Exception as e:
+        logger.error(f"Error generating command preview: {e}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def api_scraper_stop(request):
     """
     POST /crm/scraper/api/scraper/stop/
@@ -294,11 +337,23 @@ def api_scraper_config_update(request):
         "smart": true,
         "force": false,
         "once": true,
-        "dry_run": false
+        "dry_run": false,
+        // Live-updateable parameters:
+        "pool_size": 12,
+        "sleep_between_queries": 2.7,
+        "async_limit": 35,
+        "min_score": 40,
+        "max_per_domain": 5
     }
+    
+    Live-updateable parameters (pool_size, sleep_between_queries, etc.) will be
+    signaled to the running scraper process if one is active.
     """
     try:
         config = ScraperConfig.get_config()
+        
+        # Track which live-updateable parameters changed
+        live_updates = {}
         
         # Update fields
         if 'industry' in request.data:
@@ -318,12 +373,49 @@ def api_scraper_config_update(request):
         if 'dry_run' in request.data:
             config.dry_run = bool(request.data['dry_run'])
         
+        # Live-updateable parameters
+        if 'pool_size' in request.data:
+            new_val = int(request.data['pool_size'])
+            if config.pool_size != new_val:
+                live_updates['pool_size'] = new_val
+            config.pool_size = new_val
+        if 'sleep_between_queries' in request.data:
+            new_val = float(request.data['sleep_between_queries'])
+            if config.sleep_between_queries != new_val:
+                live_updates['sleep_between_queries'] = new_val
+            config.sleep_between_queries = new_val
+        if 'async_limit' in request.data:
+            new_val = int(request.data['async_limit'])
+            if config.async_limit != new_val:
+                live_updates['async_limit'] = new_val
+            config.async_limit = new_val
+        if 'min_score' in request.data:
+            new_val = int(request.data['min_score'])
+            if config.min_score != new_val:
+                live_updates['min_score'] = new_val
+            config.min_score = new_val
+        if 'max_per_domain' in request.data:
+            new_val = int(request.data['max_per_domain'])
+            if config.max_per_domain != new_val:
+                live_updates['max_per_domain'] = new_val
+            config.max_per_domain = new_val
+        
         config.updated_by = request.user
         config.save()
         
+        # Signal live updates to running process if any changes
+        live_signal_sent = False
+        if live_updates:
+            manager = get_manager()
+            if manager.is_running():
+                live_signal_sent = manager.write_config_update_signal(live_updates)
+                logger.info(f"Signaled live config updates to running scraper: {live_updates}")
+        
         return Response({
             'success': True,
-            'message': 'Konfiguration aktualisiert'
+            'message': 'Konfiguration aktualisiert',
+            'live_updates': live_updates if live_updates else None,
+            'live_signal_sent': live_signal_sent
         }, status=http_status.HTTP_200_OK)
             
     except Exception as e:

@@ -1,13 +1,19 @@
 """
 Scraper Process Manager - Manages scraper subprocess lifecycle.
 Singleton class to start, stop, and monitor the scraper subprocess.
+
+Enhanced features:
+- Command preview before execution
+- CRM-based environment variable loading
+- Live configuration updates via database flag
 """
 
 import os
 import subprocess
 import psutil
 import threading
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
@@ -47,6 +53,8 @@ class ProcessManager:
         self.output_thread: Optional[threading.Thread] = None
         self.current_run_id: Optional[int] = None
         self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
+        self._config_check_interval: int = 5  # Seconds between config reload checks
+        self._last_config_hash: Optional[str] = None  # Track config changes
         self._initialized = True
     
     def _read_output(self):
@@ -224,6 +232,202 @@ class ProcessManager:
         logger.info(f"Built scraper command: {' '.join(cmd)}")
         return cmd
     
+    def _build_environment_from_crm(self) -> Dict[str, str]:
+        """
+        Build environment variables from CRM/ScraperConfig instead of .env files.
+        
+        Reads configuration from the ScraperConfig model and converts to environment
+        variables that the scraper subprocess can use.
+        
+        Returns:
+            Dictionary of environment variables
+        """
+        env = os.environ.copy()
+        
+        try:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            
+            # Map ScraperConfig fields to environment variables
+            crm_env_mapping = {
+                # HTTP & Networking
+                'SCRAPER_HTTP_TIMEOUT': str(config.http_timeout),
+                'SCRAPER_ASYNC_LIMIT': str(config.async_limit),
+                'SCRAPER_POOL_SIZE': str(config.pool_size),
+                'SCRAPER_HTTP2_ENABLED': '1' if config.http2_enabled else '0',
+                
+                # Rate Limiting
+                'SCRAPER_SLEEP_BETWEEN_QUERIES': str(config.sleep_between_queries),
+                'SCRAPER_MAX_GOOGLE_PAGES': str(config.max_google_pages),
+                'SCRAPER_CIRCUIT_BREAKER_PENALTY': str(config.circuit_breaker_penalty),
+                'SCRAPER_RETRY_MAX_PER_URL': str(config.retry_max_per_url),
+                
+                # Scoring
+                'SCRAPER_MIN_SCORE': str(config.min_score),
+                'SCRAPER_MAX_PER_DOMAIN': str(config.max_per_domain),
+                'SCRAPER_DEFAULT_QUALITY_SCORE': str(config.default_quality_score),
+                'SCRAPER_CONFIDENCE_THRESHOLD': str(config.confidence_threshold),
+                
+                # Feature Flags
+                'SCRAPER_ENABLE_KLEINANZEIGEN': '1' if config.enable_kleinanzeigen else '0',
+                'SCRAPER_ENABLE_TELEFONBUCH': '1' if config.enable_telefonbuch else '0',
+                'SCRAPER_ENABLE_PERPLEXITY': '1' if config.enable_perplexity else '0',
+                'SCRAPER_ENABLE_BING': '1' if config.enable_bing else '0',
+                'SCRAPER_PARALLEL_PORTAL_CRAWL': '1' if config.parallel_portal_crawl else '0',
+                'SCRAPER_MAX_CONCURRENT_PORTALS': str(config.max_concurrent_portals),
+                
+                # Content
+                'SCRAPER_ALLOW_PDF': '1' if config.allow_pdf else '0',
+                'SCRAPER_MAX_CONTENT_LENGTH': str(config.max_content_length),
+                
+                # Security
+                'SCRAPER_ALLOW_INSECURE_SSL': '1' if config.allow_insecure_ssl else '0',
+            }
+            
+            # Update environment with CRM settings
+            env.update(crm_env_mapping)
+            
+            logger.info(f"Loaded {len(crm_env_mapping)} environment variables from CRM config")
+            
+        except Exception as e:
+            logger.warning(f"Could not load CRM config for environment: {e}")
+        
+        # Fallback: Also load from .env file if it exists (for API keys, etc.)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        env_file = os.path.join(project_root, '.env')
+        if os.path.exists(env_file):
+            try:
+                from dotenv import dotenv_values
+                env_vars = dotenv_values(env_file)
+                # Only add .env values that are not already set by CRM config
+                for key, value in env_vars.items():
+                    if key not in env:
+                        env[key] = value
+                logger.info(f"Supplemented with {len(env_vars)} .env variables (API keys, etc.)")
+            except ImportError:
+                logger.debug("python-dotenv not installed, skipping .env file")
+        
+        return env
+    
+    def get_command_preview(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a preview of the command that would be executed.
+        
+        This allows administrators to verify the configuration before starting.
+        
+        Args:
+            params: Dictionary of scraper parameters
+            
+        Returns:
+            Dictionary with command preview information
+        """
+        script_type, script_path = self._find_scraper_script()
+        
+        if script_type is None:
+            return {
+                'success': False,
+                'error': 'Scraper script nicht gefunden',
+                'command': None,
+                'environment': {}
+            }
+        
+        # Build command
+        cmd = self._build_command(params, script_type, script_path)
+        
+        # Get environment variables (only show scraper-related ones)
+        env = self._build_environment_from_crm()
+        scraper_env = {k: v for k, v in env.items() if k.startswith('SCRAPER_')}
+        
+        # Get project root for context
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        return {
+            'success': True,
+            'command': ' '.join(cmd),
+            'command_args': cmd,
+            'script_type': script_type,
+            'script_path': script_path,
+            'working_directory': project_root,
+            'environment': scraper_env,
+            'params': params
+        }
+    
+    def check_live_config_updates(self) -> Optional[Dict[str, Any]]:
+        """
+        Check if configuration has been updated and return changed parameters.
+        
+        This enables runtime configuration changes by checking the database
+        for updates to pool_size, sleep_between_queries, etc.
+        
+        Returns:
+            Dictionary of changed config values, or None if no changes
+        """
+        try:
+            from .models import ScraperConfig
+            config = ScraperConfig.get_config()
+            
+            # Create a hash of live-updateable config values
+            live_config = {
+                'pool_size': config.pool_size,
+                'sleep_between_queries': config.sleep_between_queries,
+                'async_limit': config.async_limit,
+                'min_score': config.min_score,
+                'max_per_domain': config.max_per_domain,
+            }
+            
+            config_hash = json.dumps(live_config, sort_keys=True)
+            
+            if self._last_config_hash is None:
+                # First check - just store the hash
+                self._last_config_hash = config_hash
+                return None
+            
+            if config_hash != self._last_config_hash:
+                # Config changed!
+                old_hash = self._last_config_hash
+                self._last_config_hash = config_hash
+                
+                logger.info(f"Live config update detected: {live_config}")
+                return live_config
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Could not check live config updates: {e}")
+            return None
+    
+    def write_config_update_signal(self, config_values: Dict[str, Any]) -> bool:
+        """
+        Write a config update signal file that the running scraper can read.
+        
+        The scraper can poll this file to pick up runtime configuration changes.
+        
+        Args:
+            config_values: Dictionary of configuration values to update
+            
+        Returns:
+            True if signal was written successfully
+        """
+        try:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            signal_file = os.path.join(project_root, '.scraper_config_update.json')
+            
+            signal_data = {
+                'timestamp': timezone.now().isoformat(),
+                'config': config_values,
+                'run_id': self.current_run_id
+            }
+            
+            with open(signal_file, 'w') as f:
+                json.dump(signal_data, f)
+            
+            logger.info(f"Wrote config update signal to {signal_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to write config update signal: {e}")
+            return False
+    
     def start(self, params: Dict[str, Any], user=None) -> Dict[str, Any]:
         """
         Start the scraper with given parameters.
@@ -278,17 +482,13 @@ class ProcessManager:
             # Build command with robust validation
             cmd = self._build_command(params, script_type, script_path)
             
-            # Prepare environment
+            # Prepare environment from CRM config (enhanced approach)
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            env = os.environ.copy()
-            env_file = os.path.join(project_root, '.env')
-            if os.path.exists(env_file):
-                try:
-                    from dotenv import dotenv_values
-                    env_vars = dotenv_values(env_file)
-                    env.update(env_vars)
-                except ImportError:
-                    pass
+            env = self._build_environment_from_crm()
+            
+            # Initialize config hash for live updates
+            self._last_config_hash = None
+            self.check_live_config_updates()  # Initialize tracking
             
             # Start process
             self.process = subprocess.Popen(
