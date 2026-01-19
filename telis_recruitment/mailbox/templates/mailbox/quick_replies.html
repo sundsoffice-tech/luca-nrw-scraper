@@ -8,10 +8,10 @@
         max-width: 1400px;
         margin: 0 auto;
     }
-    .category-section {
+    .replies-section {
         margin-bottom: 2rem;
     }
-    .category-header {
+    .section-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -21,7 +21,7 @@
         border-radius: 12px 12px 0 0;
         margin-bottom: 0;
     }
-    .category-title {
+    .section-title {
         color: #f1f5f9;
         font-weight: 600;
         font-size: 18px;
@@ -29,7 +29,7 @@
         align-items: center;
         gap: 12px;
     }
-    .category-count {
+    .section-count {
         background: #334155;
         color: #94a3b8;
         padding: 4px 12px;
@@ -155,38 +155,6 @@
         border-color: #6366f1;
         color: #f1f5f9;
     }
-    .form-card {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 2rem;
-    }
-    .form-label {
-        display: block;
-        color: #94a3b8;
-        font-weight: 500;
-        margin-bottom: 8px;
-    }
-    .form-control, .form-select, .form-textarea {
-        width: 100%;
-        background: #0f172a;
-        border: 1px solid #334155;
-        color: #f1f5f9;
-        border-radius: 8px;
-        padding: 12px;
-    }
-    .form-control:focus, .form-select:focus, .form-textarea:focus {
-        background: #0f172a;
-        border-color: #6366f1;
-        color: #f1f5f9;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        outline: none;
-    }
-    .form-textarea {
-        min-height: 150px;
-        font-size: 14px;
-    }
     .empty-state {
         text-align: center;
         padding: 4rem 1rem;
@@ -202,13 +170,10 @@
     }
     /* Utilities */
     h2 { color: #f1f5f9; margin-bottom: 1.5rem; }
-    h3 { color: #f1f5f9; margin-bottom: 1rem; font-size: 20px; }
-    .mb-3 { margin-bottom: 1rem; }
     .flex { display: flex; }
     .justify-between { justify-content: space-between; }
     .items-center { align-items: center; }
     .gap-2 { gap: 0.5rem; }
-    .hidden { display: none; }
 </style>
 {% endblock %}
 
@@ -217,201 +182,109 @@
     <div class="flex justify-between items-center" style="margin-bottom: 1.5rem;">
         <h2>⚡ Schnellantworten verwalten</h2>
         <div class="flex gap-2">
-            <button onclick="showCreateForm()" class="btn-primary">
+            <a href="/admin/mailbox/quickreply/add/" class="btn-primary">
                 ➕ Neue Schnellantwort
-            </button>
+            </a>
             <a href="{% url 'mailbox:settings' %}" class="btn-secondary">
                 ← Zurück zu Einstellungen
             </a>
         </div>
     </div>
     
-    <!-- Create/Edit Form (Initially hidden) -->
-    <div id="quick-reply-form" class="form-card hidden">
-        <h3 id="form-title">Neue Schnellantwort erstellen</h3>
-        <form method="post" action="/admin/mailbox/quickreply/add/">
-            {% csrf_token %}
-            
-            <div class="mb-3">
-                <label for="shortcut" class="form-label">Kürzel</label>
-                <input type="text" class="form-control" id="shortcut" name="shortcut" required placeholder="z.B. /gruß, /termin, /info">
-                <small style="color: #64748b; display: block; margin-top: 4px;">
-                    💡 Beginnen Sie mit / gefolgt von einem kurzen Wort
-                </small>
+    <!-- User's Quick Replies -->
+    {% if user_quick_replies %}
+    <div class="replies-section">
+        <div class="section-header">
+            <div class="section-title">
+                👤 Meine Schnellantworten
+                <span class="section-count">{{ user_quick_replies|length }}</span>
             </div>
-            
-            <div class="mb-3">
-                <label for="title" class="form-label">Titel</label>
-                <input type="text" class="form-control" id="title" name="title" required placeholder="z.B. Freundliche Begrüßung">
+        </div>
+        <div class="replies-grid">
+            {% for reply in user_quick_replies %}
+            <div class="reply-card" onclick="viewReply({{ reply.id }})">
+                <div class="reply-header">
+                    {% if reply.shortcut %}
+                    <span class="reply-shortcut">{{ reply.shortcut }}</span>
+                    {% else %}
+                    <span style="color: #64748b; font-size: 12px;">Kein Kürzel</span>
+                    {% endif %}
+                    <div class="reply-actions" onclick="event.stopPropagation()">
+                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/change/" class="btn-icon">✏️</a>
+                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/delete/" class="btn-icon btn-danger">🗑️</a>
+                    </div>
+                </div>
+                <div class="reply-title">{{ reply.name }}</div>
+                <div class="reply-content">{{ reply.content_text|truncatewords:20 }}</div>
+                {% if reply.usage_count %}
+                <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+                    📊 {{ reply.usage_count }}x verwendet
+                </div>
+                {% endif %}
             </div>
-            
-            <div class="mb-3">
-                <label for="category" class="form-label">Kategorie</label>
-                <select class="form-select" id="category" name="category" required>
-                    <option value="general">Allgemein</option>
-                    <option value="greeting">Begrüßung</option>
-                    <option value="followup">Nachfassen</option>
-                    <option value="closing">Abschluss</option>
-                    <option value="meeting">Termine</option>
-                    <option value="technical">Technisch</option>
-                </select>
-            </div>
-            
-            <div class="mb-3">
-                <label for="content" class="form-label">Antwort-Inhalt</label>
-                <textarea id="content" name="content" class="form-textarea" required placeholder="Der vollständige Text der Schnellantwort..."></textarea>
-            </div>
-            
-            <div class="flex gap-2">
-                <button type="submit" class="btn-primary">
-                    💾 Schnellantwort speichern
-                </button>
-                <button type="button" onclick="hideForm()" class="btn-secondary">
-                    ✕ Abbrechen
-                </button>
-            </div>
-        </form>
+            {% endfor %}
+        </div>
     </div>
+    {% endif %}
     
-    <!-- Quick Replies by Category -->
-    <div id="quick-replies-list">
-        {% if quick_replies %}
-            <!-- General Category -->
-            <div class="category-section">
-                <div class="category-header">
-                    <div class="category-title">
-                        📝 Allgemein
-                        <span class="category-count">{{ quick_replies.general|length }}</span>
+    <!-- Shared Quick Replies -->
+    {% if shared_quick_replies %}
+    <div class="replies-section">
+        <div class="section-header">
+            <div class="section-title">
+                🌐 Geteilte Schnellantworten
+                <span class="section-count">{{ shared_quick_replies|length }}</span>
+            </div>
+        </div>
+        <div class="replies-grid">
+            {% for reply in shared_quick_replies %}
+            <div class="reply-card" onclick="viewReply({{ reply.id }})">
+                <div class="reply-header">
+                    {% if reply.shortcut %}
+                    <span class="reply-shortcut">{{ reply.shortcut }}</span>
+                    {% else %}
+                    <span style="color: #64748b; font-size: 12px;">Kein Kürzel</span>
+                    {% endif %}
+                    <div class="reply-actions" onclick="event.stopPropagation()">
+                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/" class="btn-icon">👁️</a>
                     </div>
                 </div>
-                <div class="replies-grid">
-                    {% for reply in quick_replies.general %}
-                    <div class="reply-card" onclick="viewReply({{ reply.id }})">
-                        <div class="reply-header">
-                            <span class="reply-shortcut">{{ reply.shortcut }}</span>
-                            <div class="reply-actions" onclick="event.stopPropagation()">
-                                <a href="/admin/mailbox/quickreply/{{ reply.id }}/change/" class="btn-icon">✏️</a>
-                                <button onclick="deleteReply({{ reply.id }}, '{{ reply.title|escapejs }}')" class="btn-icon btn-danger">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="reply-title">{{ reply.title }}</div>
-                        <div class="reply-content">{{ reply.content }}</div>
-                    </div>
-                    {% empty %}
-                    <div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 2rem;">
-                        Keine Schnellantworten in dieser Kategorie
-                    </div>
-                    {% endfor %}
+                <div class="reply-title">{{ reply.name }}</div>
+                <div class="reply-content">{{ reply.content_text|truncatewords:20 }}</div>
+                <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+                    👤 Von: {{ reply.owner.username|default:"System" }}
+                    {% if reply.usage_count %}
+                    • 📊 {{ reply.usage_count }}x verwendet
+                    {% endif %}
                 </div>
             </div>
-            
-            <!-- Greeting Category -->
-            <div class="category-section">
-                <div class="category-header">
-                    <div class="category-title">
-                        👋 Begrüßung
-                        <span class="category-count">{{ quick_replies.greeting|length }}</span>
-                    </div>
-                </div>
-                <div class="replies-grid">
-                    {% for reply in quick_replies.greeting %}
-                    <div class="reply-card" onclick="viewReply({{ reply.id }})">
-                        <div class="reply-header">
-                            <span class="reply-shortcut">{{ reply.shortcut }}</span>
-                            <div class="reply-actions" onclick="event.stopPropagation()">
-                                <a href="/admin/mailbox/quickreply/{{ reply.id }}/change/" class="btn-icon">✏️</a>
-                                <button onclick="deleteReply({{ reply.id }}, '{{ reply.title|escapejs }}')" class="btn-icon btn-danger">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="reply-title">{{ reply.title }}</div>
-                        <div class="reply-content">{{ reply.content }}</div>
-                    </div>
-                    {% empty %}
-                    <div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 2rem;">
-                        Keine Schnellantworten in dieser Kategorie
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            
-            <!-- Follow-up Category -->
-            <div class="category-section">
-                <div class="category-header">
-                    <div class="category-title">
-                        🔄 Nachfassen
-                        <span class="category-count">{{ quick_replies.followup|length }}</span>
-                    </div>
-                </div>
-                <div class="replies-grid">
-                    {% for reply in quick_replies.followup %}
-                    <div class="reply-card" onclick="viewReply({{ reply.id }})">
-                        <div class="reply-header">
-                            <span class="reply-shortcut">{{ reply.shortcut }}</span>
-                            <div class="reply-actions" onclick="event.stopPropagation()">
-                                <a href="/admin/mailbox/quickreply/{{ reply.id }}/change/" class="btn-icon">✏️</a>
-                                <button onclick="deleteReply({{ reply.id }}, '{{ reply.title|escapejs }}')" class="btn-icon btn-danger">🗑️</button>
-                            </div>
-                        </div>
-                        <div class="reply-title">{{ reply.title }}</div>
-                        <div class="reply-content">{{ reply.content }}</div>
-                    </div>
-                    {% empty %}
-                    <div style="grid-column: 1/-1; text-align: center; color: #64748b; padding: 2rem;">
-                        Keine Schnellantworten in dieser Kategorie
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% else %}
-            <div class="category-section">
-                <div class="category-header">
-                    <div class="category-title">⚡ Schnellantworten</div>
-                </div>
-                <div class="empty-state">
-                    <div class="icon">⚡</div>
-                    <h3>Noch keine Schnellantworten vorhanden</h3>
-                    <p>Erstellen Sie Schnellantworten, um häufig verwendete Texte schnell einzufügen.</p>
-                    <button onclick="showCreateForm()" class="btn-primary">
-                        ➕ Erste Schnellantwort erstellen
-                    </button>
-                </div>
-            </div>
-        {% endif %}
+            {% endfor %}
+        </div>
     </div>
+    {% endif %}
+    
+    <!-- Empty State -->
+    {% if not user_quick_replies and not shared_quick_replies %}
+    <div class="replies-section">
+        <div class="section-header">
+            <div class="section-title">⚡ Schnellantworten</div>
+        </div>
+        <div class="empty-state">
+            <div class="icon">⚡</div>
+            <h3 style="color: #f1f5f9; margin-bottom: 1rem; font-size: 20px;">Noch keine Schnellantworten vorhanden</h3>
+            <p>Erstellen Sie Schnellantworten, um häufig verwendete Texte schnell einzufügen.</p>
+            <a href="/admin/mailbox/quickreply/add/" class="btn-primary">
+                ➕ Erste Schnellantwort erstellen
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
-function showCreateForm() {
-    document.getElementById('quick-reply-form').classList.remove('hidden');
-    document.getElementById('quick-replies-list').style.opacity = '0.5';
-    document.getElementById('form-title').textContent = 'Neue Schnellantwort erstellen';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function hideForm() {
-    document.getElementById('quick-reply-form').classList.add('hidden');
-    document.getElementById('quick-replies-list').style.opacity = '1';
-}
-
 function viewReply(id) {
     // This could open a modal or expand the card to show full content
     console.log('View reply:', id);
 }
-
-function deleteReply(id, title) {
-    if (confirm(`Möchten Sie die Schnellantwort "${title}" wirklich löschen?`)) {
-        // This would normally post to a delete endpoint
-        // For now, redirect to admin delete confirmation
-        window.location.href = `/admin/mailbox/quickreply/${id}/delete/`;
-    }
-}
-
-// Keyboard shortcut to open create form
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'n' && e.ctrlKey) {
-        e.preventDefault();
-        showCreateForm();
-    }
-});
 </script>
 {% endblock %}
