@@ -6,20 +6,22 @@
 {% block extra_head %}
 <style>
     .mailbox-sidebar {
-        background: #1a1a2e;
-        border-right: 1px solid #2d2d44;
+        background: #1e293b;
+        border-right: 1px solid #334155;
         min-height: calc(100vh - 60px);
     }
     .mailbox-sidebar .nav-link {
-        color: #a0a0b0;
+        display: block;
+        color: #94a3b8;
         padding: 12px 20px;
         border-radius: 8px;
         margin: 4px 12px;
         transition: all 0.2s;
+        text-decoration: none;
     }
     .mailbox-sidebar .nav-link:hover {
         background: rgba(99, 102, 241, 0.1);
-        color: #fff;
+        color: #f1f5f9;
     }
     .mailbox-sidebar .nav-link.active {
         background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
@@ -27,7 +29,7 @@
     }
     .conversation-item {
         padding: 16px 20px;
-        border-bottom: 1px solid #2d2d44;
+        border-bottom: 1px solid #334155;
         cursor: pointer;
         transition: all 0.2s;
     }
@@ -40,14 +42,14 @@
     }
     .conversation-item .subject {
         font-weight: 500;
-        color: #fff;
+        color: #f1f5f9;
         margin-bottom: 4px;
     }
     .conversation-item.unread .subject {
         font-weight: 700;
     }
     .conversation-item .snippet {
-        color: #888;
+        color: #64748b;
         font-size: 14px;
         white-space: nowrap;
         overflow: hidden;
@@ -60,11 +62,11 @@
         margin-bottom: 8px;
     }
     .conversation-item .contact {
-        color: #a0a0b0;
+        color: #94a3b8;
         font-size: 14px;
     }
     .conversation-item .time {
-        color: #666;
+        color: #64748b;
         font-size: 12px;
     }
     .badge-count {
@@ -74,12 +76,24 @@
         padding: 2px 8px;
         border-radius: 12px;
     }
+    .badge-info {
+        background: #06b6d4;
+        color: #fff;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
     .star-btn {
-        color: #666;
+        color: #64748b;
         background: none;
         border: none;
         cursor: pointer;
         font-size: 18px;
+        transition: color 0.2s;
+    }
+    .star-btn:hover {
+        color: #94a3b8;
     }
     .star-btn.starred {
         color: #fbbf24;
@@ -93,39 +107,116 @@
         font-weight: 600;
         width: 100%;
         margin-bottom: 20px;
+        transition: all 0.2s;
+        text-decoration: none;
     }
     .compose-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
     }
     .search-box {
-        background: #16162a;
-        border: 1px solid #2d2d44;
+        background: #1e293b;
+        border: 1px solid #334155;
         border-radius: 8px;
         padding: 12px 16px;
-        color: #fff;
+        color: #f1f5f9;
+        width: 100%;
     }
     .search-box:focus {
         border-color: #6366f1;
         outline: none;
         box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
     }
+    .action-btn, .action-btn-danger {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid #334155;
+        background: #1e293b;
+        color: #94a3b8;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .action-btn:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+        color: #f1f5f9;
+    }
+    .action-btn-danger {
+        border-color: #991b1b;
+        color: #fca5a5;
+    }
+    .action-btn-danger:hover {
+        background: rgba(220, 38, 38, 0.1);
+        border-color: #dc2626;
+        color: #fee2e2;
+    }
+    .checkbox-input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #6366f1;
+    }
+    .pagination-link {
+        padding: 6px 12px;
+        border-radius: 6px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+    .pagination-link:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+        color: #f1f5f9;
+    }
+    .pagination-info {
+        padding: 6px 12px;
+        color: #94a3b8;
+        font-size: 14px;
+    }
+    /* Utility classes */
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .flex-grow { flex-grow: 1; }
+    .items-start { align-items: flex-start; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .gap-2 { gap: 0.5rem; }
+    .gap-3 { gap: 0.75rem; }
+    .mr-3 { margin-right: 0.75rem; }
+    .ml-2 { margin-left: 0.5rem; }
+    .mt-1 { margin-top: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-0 { margin-bottom: 0; }
+    .p-3 { padding: 0.75rem; }
+    .py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+    .w-full { width: 100%; }
+    .border-b { border-bottom-width: 1px; }
+    .border-t { border-top-width: 1px; }
+    .text-center { text-align: center; }
+    .text-gray-500 { color: #64748b; }
+    .no-underline { text-decoration: none; }
+    .block { display: block; }
+    .float-right { float: right; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex" style="min-height: calc(100vh - 60px);">
+<div class="flex" style="min-height: calc(100vh - 60px);">
     <!-- Sidebar -->
     <div class="mailbox-sidebar" style="width: 280px; flex-shrink: 0;">
         <div class="p-3">
-            <a href="{% url 'mailbox:compose' %}" class="compose-btn d-block text-center text-decoration-none">
+            <a href="{% url 'mailbox:compose' %}" class="compose-btn block text-center no-underline">
                 ✉️ Neue Email
             </a>
             
-            <nav class="nav flex-column">
+            <nav class="flex flex-col">
                 <a href="?folder=all" class="nav-link {% if folder == 'all' %}active{% endif %}">
                     📥 Posteingang
-                    {% if unread_count %}<span class="badge-count float-end">{{ unread_count }}</span>{% endif %}
+                    {% if unread_count %}<span class="badge-count float-right">{{ unread_count }}</span>{% endif %}
                 </a>
                 <a href="?folder=unread" class="nav-link {% if folder == 'unread' %}active{% endif %}">
                     📧 Ungelesen
@@ -149,8 +240,8 @@
             
             {% if labels %}
             <hr style="border-color: #2d2d44;">
-            <h6 class="px-3 text-muted mb-2">Labels</h6>
-            <nav class="nav flex-column">
+            <h6 class="px-3 text-gray-500 mb-2">Labels</h6>
+            <nav class="flex flex-col">
                 {% for label in labels %}
                 <a href="?label={{ label.id }}" class="nav-link">
                     <span style="color: {{ label.color }};">●</span> {{ label.name }}
@@ -160,7 +251,7 @@
             {% endif %}
             
             <hr style="border-color: #2d2d44;">
-            <nav class="nav flex-column">
+            <nav class="flex flex-col">
                 <a href="{% url 'mailbox:settings' %}" class="nav-link">
                     ⚙️ Einstellungen
                 </a>
@@ -175,23 +266,23 @@
     </div>
     
     <!-- Main Content -->
-    <div class="flex-grow-1" style="background: #0f0f1a;">
+    <div class="flex-grow" style="background: #0f0f1a;">
         <!-- Search & Actions Bar -->
-        <div class="p-3 border-bottom" style="border-color: #2d2d44 !important;">
-            <div class="d-flex gap-3">
-                <form method="get" class="flex-grow-1">
+        <div class="p-3 border-b" style="border-color: #2d2d44 !important;">
+            <div class="flex gap-3">
+                <form method="get" class="flex-grow">
                     <input type="hidden" name="folder" value="{{ folder }}">
-                    <input type="text" name="search" class="search-box w-100" 
+                    <input type="text" name="search" class="search-box w-full" 
                            placeholder="🔍 Emails durchsuchen..." value="{{ search }}">
                 </form>
-                <div class="btn-group">
-                    <button class="btn btn-outline-secondary btn-sm" onclick="markSelectedRead()">
+                <div class="flex gap-2">
+                    <button class="action-btn" onclick="markSelectedRead()">
                         ✓ Gelesen
                     </button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="archiveSelected()">
+                    <button class="action-btn" onclick="archiveSelected()">
                         📁 Archivieren
                     </button>
-                    <button class="btn btn-outline-danger btn-sm" onclick="deleteSelected()">
+                    <button class="action-btn-danger" onclick="deleteSelected()">
                         🗑️ Löschen
                     </button>
                 </div>
@@ -203,19 +294,19 @@
             {% for conv in page_obj %}
             <div class="conversation-item {% if not conv.is_read %}unread{% endif %}" 
                  onclick="window.location='{% url 'mailbox:conversation' conv.id %}'">
-                <div class="d-flex align-items-start">
-                    <input type="checkbox" class="form-check-input me-3 mt-1" 
+                <div class="flex items-start">
+                    <input type="checkbox" class="checkbox-input mr-3 mt-1" 
                            onclick="event.stopPropagation();" data-id="{{ conv.id }}">
-                    <button class="star-btn me-3 {% if conv.is_starred %}starred{% endif %}" 
+                    <button class="star-btn mr-3 {% if conv.is_starred %}starred{% endif %}" 
                             onclick="event.stopPropagation(); toggleStar({{ conv.id }});">
                         {% if conv.is_starred %}★{% else %}☆{% endif %}
                     </button>
-                    <div class="flex-grow-1">
+                    <div class="flex-grow">
                         <div class="meta">
                             <span class="contact">
                                 {{ conv.contact_name|default:conv.contact_email }}
                                 {% if conv.lead %}
-                                    <span class="badge bg-info ms-2">Lead</span>
+                                    <span class="badge-info ml-2">Lead</span>
                                 {% endif %}
                             </span>
                             <span class="time">{{ conv.last_message_at|timesince }} ago</span>
@@ -229,7 +320,7 @@
                 </div>
             </div>
             {% empty %}
-            <div class="text-center py-5 text-muted">
+            <div class="text-center py-12 text-gray-500">
                 <p style="font-size: 48px;">📭</p>
                 <p>Keine Emails in diesem Ordner</p>
             </div>
@@ -238,23 +329,17 @@
         
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
-        <div class="p-3 border-top" style="border-color: #2d2d44 !important;">
+        <div class="p-3 border-t" style="border-color: #2d2d44 !important;">
             <nav>
-                <ul class="pagination pagination-sm justify-content-center mb-0">
+                <div class="flex justify-center items-center gap-2 mb-0">
                     {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&folder={{ folder }}">←</a>
-                    </li>
+                    <a class="pagination-link" href="?page={{ page_obj.previous_page_number }}&folder={{ folder }}">←</a>
                     {% endif %}
-                    <li class="page-item disabled">
-                        <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-                    </li>
+                    <span class="pagination-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
                     {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&folder={{ folder }}">→</a>
-                    </li>
+                    <a class="pagination-link" href="?page={{ page_obj.next_page_number }}&folder={{ folder }}">→</a>
                     {% endif %}
-                </ul>
+                </div>
             </nav>
         </div>
         {% endif %}

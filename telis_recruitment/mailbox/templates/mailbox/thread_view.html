@@ -2,131 +2,356 @@
 
 {% block title %}{{ conversation.subject }} - Mailbox{% endblock %}
 
+{% block extra_head %}
+<style>
+    .thread-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .back-btn {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 14px;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+    .back-btn:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+        color: #f1f5f9;
+    }
+    .thread-header {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 1rem;
+    }
+    .thread-header h4 {
+        color: #f1f5f9;
+        margin-bottom: 1rem;
+    }
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        margin-right: 8px;
+    }
+    .badge-secondary {
+        background: #334155;
+        color: #94a3b8;
+    }
+    .badge-info {
+        background: #06b6d4;
+        color: #fff;
+    }
+    .badge-light {
+        background: #475569;
+        color: #f1f5f9;
+    }
+    .email-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+    .email-card.outbound {
+        border-left: 3px solid #6366f1;
+    }
+    .email-card.inbound {
+        border-left: 3px solid #06b6d4;
+    }
+    .email-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #334155;
+    }
+    .email-from {
+        color: #f1f5f9;
+        font-weight: 600;
+    }
+    .email-to {
+        color: #64748b;
+        font-size: 14px;
+        margin-left: 8px;
+    }
+    .email-date {
+        color: #64748b;
+        font-size: 14px;
+    }
+    .email-content {
+        color: #94a3b8;
+        max-width: 100%;
+        overflow-x: auto;
+        line-height: 1.6;
+    }
+    .email-content pre {
+        background: #0f172a;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        color: #94a3b8;
+        margin: 0;
+    }
+    .alert {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 14px;
+    }
+    .alert-info {
+        background: rgba(6, 182, 212, 0.1);
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        color: #06b6d4;
+    }
+    .attachments {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #334155;
+    }
+    .attachments strong {
+        color: #94a3b8;
+        display: block;
+        margin-bottom: 8px;
+    }
+    .attachment-badge {
+        display: inline-block;
+        background: #334155;
+        color: #94a3b8;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+    }
+    .reply-section {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .reply-section h5 {
+        color: #f1f5f9;
+        margin-bottom: 1rem;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .btn-secondary {
+        background: #1e293b;
+        border: 1px solid #334155;
+        padding: 10px 20px;
+        border-radius: 8px;
+        color: #94a3b8;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-left: 8px;
+    }
+    .btn-secondary:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+        color: #f1f5f9;
+    }
+    .sidebar-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .sidebar-card-header {
+        background: #0f172a;
+        padding: 12px 16px;
+        border-bottom: 1px solid #334155;
+    }
+    .sidebar-card-header h6 {
+        color: #f1f5f9;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .sidebar-card-body {
+        padding: 16px;
+    }
+    .sidebar-detail {
+        margin-bottom: 12px;
+        color: #94a3b8;
+        font-size: 14px;
+    }
+    .sidebar-detail strong {
+        display: block;
+        color: #f1f5f9;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    /* Grid layout */
+    .grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+    .grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .col-span-2 {
+        grid-column: span 2 / span 2;
+    }
+    /* Responsive */
+    @media (max-width: 768px) {
+        .grid-cols-3 {
+            grid-template-columns: 1fr;
+        }
+        .col-span-2 {
+            grid-column: span 1 / span 1;
+        }
+    }
+    /* Utilities */
+    .flex { display: flex; }
+    .justify-between { justify-content: space-between; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .ml-2 { margin-left: 0.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-9">
+<div class="thread-container">
+    <div class="grid grid-cols-3">
+        <div class="col-span-2">
             <!-- Back button -->
-            <a href="{% url 'mailbox:inbox' %}" class="btn btn-sm btn-outline-secondary mb-3">
-                <i class="bi bi-arrow-left"></i> Zurück zum Posteingang
+            <a href="{% url 'mailbox:inbox' %}" class="back-btn">
+                ← Zurück zum Posteingang
             </a>
             
             <!-- Conversation header -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h4 class="mb-2">{{ conversation.subject }}</h4>
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <span class="badge bg-secondary">{{ conversation.message_count }} Nachrichten</span>
-                            {% if conversation.lead %}
-                            <a href="/admin/leads/lead/{{ conversation.lead.id }}/change/" class="badge bg-info text-decoration-none">
-                                Lead: {{ conversation.lead.name }}
-                            </a>
-                            {% endif %}
-                        </div>
-                        <div>
-                            <span class="badge bg-light text-dark">{{ conversation.get_status_display }}</span>
-                        </div>
+            <div class="thread-header">
+                <h4>{{ conversation.subject }}</h4>
+                <div class="flex justify-between">
+                    <div>
+                        <span class="badge badge-secondary">{{ conversation.message_count }} Nachrichten</span>
+                        {% if conversation.lead %}
+                        <a href="/admin/leads/lead/{{ conversation.lead.id }}/change/" class="badge badge-info">
+                            Lead: {{ conversation.lead.name }}
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="badge badge-light">{{ conversation.get_status_display }}</span>
                     </div>
                 </div>
             </div>
             
             <!-- Email messages -->
             {% for email in emails %}
-            <div class="card mb-3 {% if email.direction == 'outbound' %}border-primary{% endif %}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2">
-                        <div>
-                            <strong>
-                                {% if email.direction == 'inbound' %}
-                                    {{ email.from_name|default:email.from_email }}
-                                {% else %}
-                                    <i class="bi bi-send"></i> {{ email.from_name|default:email.from_email }}
-                                {% endif %}
-                            </strong>
-                            <small class="text-muted ms-2">{{ email.to_emails.0.email }}</small>
-                        </div>
-                        <small class="text-muted">
-                            {% if email.sent_at %}
-                                {{ email.sent_at|date:"d.m.Y H:i" }}
-                            {% elif email.received_at %}
-                                {{ email.received_at|date:"d.m.Y H:i" }}
-                            {% else %}
-                                {{ email.created_at|date:"d.m.Y H:i" }}
-                            {% endif %}
-                        </small>
-                    </div>
-                    
-                    {% if email.status != 'sent' and email.direction == 'outbound' %}
-                    <div class="alert alert-sm alert-info">
-                        Status: {{ email.get_status_display }}
-                    </div>
-                    {% endif %}
-                    
-                    <hr>
-                    
-                    {% if email.body_html %}
-                        <div class="email-content">
-                            {{ email.body_html|safe }}
-                        </div>
-                    {% else %}
-                        <pre class="mb-0">{{ email.body_text }}</pre>
-                    {% endif %}
-                    
-                    {% if email.attachments.exists %}
-                    <hr>
+            <div class="email-card {% if email.direction == 'outbound' %}outbound{% else %}inbound{% endif %}">
+                <div class="email-header">
                     <div>
-                        <strong>Anhänge:</strong>
-                        {% for attachment in email.attachments.all %}
-                        <div class="badge bg-secondary">
-                            <i class="bi bi-paperclip"></i> {{ attachment.filename }}
-                        </div>
-                        {% endfor %}
+                        <span class="email-from">
+                            {% if email.direction == 'inbound' %}
+                                {{ email.from_name|default:email.from_email }}
+                            {% else %}
+                                📤 {{ email.from_name|default:email.from_email }}
+                            {% endif %}
+                        </span>
+                        <span class="email-to">{{ email.to_emails.0.email }}</span>
                     </div>
+                    <span class="email-date">
+                        {% if email.sent_at %}
+                            {{ email.sent_at|date:"d.m.Y H:i" }}
+                        {% elif email.received_at %}
+                            {{ email.received_at|date:"d.m.Y H:i" }}
+                        {% else %}
+                            {{ email.created_at|date:"d.m.Y H:i" }}
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if email.status != 'sent' and email.direction == 'outbound' %}
+                <div class="alert alert-info">
+                    Status: {{ email.get_status_display }}
+                </div>
+                {% endif %}
+                
+                <div class="email-content">
+                    {% if email.body_html %}
+                        {{ email.body_html|safe }}
+                    {% else %}
+                        <pre>{{ email.body_text }}</pre>
                     {% endif %}
                 </div>
+                
+                {% if email.attachments.exists %}
+                <div class="attachments">
+                    <strong>Anhänge:</strong>
+                    {% for attachment in email.attachments.all %}
+                    <span class="attachment-badge">
+                        📎 {{ attachment.filename }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
             
             <!-- Reply form -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Antworten</h5>
-                </div>
-                <div class="card-body">
-                    {% if emails %}
-                    <a href="{% url 'mailbox:reply' emails.last.id %}" class="btn btn-primary">
-                        ↩️ Antworten
-                    </a>
-                    {% endif %}
-                    <a href="{% url 'mailbox:compose' %}" class="btn btn-outline-primary ms-2">✉️ Neue Email schreiben</a>
-                </div>
+            <div class="reply-section">
+                <h5>Antworten</h5>
+                {% if emails %}
+                <a href="{% url 'mailbox:reply' emails.last.id %}" class="btn-primary">
+                    ↩️ Antworten
+                </a>
+                {% endif %}
+                <a href="{% url 'mailbox:compose' %}" class="btn-secondary">✉️ Neue Email schreiben</a>
             </div>
         </div>
         
         <!-- Sidebar -->
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">Konversationsdetails</h6>
+        <div>
+            <div class="sidebar-card">
+                <div class="sidebar-card-header">
+                    <h6>Konversationsdetails</h6>
                 </div>
-                <div class="card-body">
-                    <div class="mb-2">
-                        <strong>Kontakt:</strong><br>
+                <div class="sidebar-card-body">
+                    <div class="sidebar-detail">
+                        <strong>Kontakt:</strong>
                         {{ conversation.contact_email }}
                     </div>
-                    <div class="mb-2">
-                        <strong>Konto:</strong><br>
+                    <div class="sidebar-detail">
+                        <strong>Konto:</strong>
                         {{ conversation.account.name }}
                     </div>
                     {% if conversation.assigned_to %}
-                    <div class="mb-2">
-                        <strong>Zugewiesen an:</strong><br>
+                    <div class="sidebar-detail">
+                        <strong>Zugewiesen an:</strong>
                         {{ conversation.assigned_to.username }}
                     </div>
                     {% endif %}
-                    <div class="mb-2">
-                        <strong>Erstellt:</strong><br>
+                    <div class="sidebar-detail">
+                        <strong>Erstellt:</strong>
                         {{ conversation.created_at|date:"d.m.Y H:i" }}
                     </div>
                 </div>
@@ -134,11 +359,4 @@
         </div>
     </div>
 </div>
-
-<style>
-    .email-content {
-        max-width: 100%;
-        overflow-x: auto;
-    }
-</style>
 {% endblock %}
