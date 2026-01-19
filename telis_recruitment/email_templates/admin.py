@@ -226,12 +226,22 @@ class EmailFlowAdmin(ModelAdmin):
     
     @admin.action(description='Flow duplizieren')
     def duplicate_flow(self, request, queryset):
+        from django.utils.text import slugify
+        import time
+        
         for flow in queryset:
             # Speichere Steps
             steps = list(flow.steps.all())
             # Dupliziere Flow
             flow.pk = None
-            flow.slug = f"{flow.slug}-copy"
+            # Generate unique slug
+            base_slug = f"{flow.slug}-copy"
+            slug = base_slug
+            counter = 1
+            while EmailFlow.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            flow.slug = slug
             flow.name = f"{flow.name} (Kopie)"
             flow.execution_count = 0
             flow.last_executed_at = None

@@ -536,7 +536,7 @@ async function saveFlow() {
     // Build flow data
     const flowData = {
         name: name,
-        slug: currentFlow.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        slug: currentFlow.slug || generateUniqueSlug(name),
         description: description,
         trigger_type: triggerType,
         trigger_config: triggerConfig,
@@ -562,16 +562,46 @@ async function saveFlow() {
         
         if (response.ok) {
             const result = await response.json();
-            alert('Flow erfolgreich gespeichert!');
+            showNotification('Flow erfolgreich gespeichert!', 'success');
             window.location.href = `/crm/email-templates/flows/${result.slug}/`;
         } else {
             const error = await response.json();
-            alert('Fehler beim Speichern: ' + JSON.stringify(error));
+            showNotification('Fehler beim Speichern: ' + JSON.stringify(error), 'error');
         }
     } catch (error) {
         console.error('Error saving flow:', error);
-        alert('Fehler beim Speichern: ' + error.message);
+        showNotification('Fehler beim Speichern: ' + error.message, 'error');
     }
+}
+
+/**
+ * Generate unique slug from name
+ */
+function generateUniqueSlug(name) {
+    const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const timestamp = Date.now().toString().slice(-6);
+    return `${baseSlug}-${timestamp}`;
+}
+
+/**
+ * Show notification message
+ */
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg text-white ${
+        type === 'success' ? 'bg-green-500' : 
+        type === 'error' ? 'bg-red-500' : 
+        'bg-blue-500'
+    }`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
 }
 
 /**

@@ -274,7 +274,16 @@ class EmailFlowViewSet(viewsets.ModelViewSet):
         
         # Dupliziere Flow
         flow.pk = None
-        flow.slug = f"{slug}-copy"
+        
+        # Generate unique slug
+        base_slug = f"{slug}-copy"
+        new_slug = base_slug
+        counter = 1
+        while EmailFlow.objects.filter(slug=new_slug).exists():
+            new_slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        flow.slug = new_slug
         flow.name = f"{flow.name} (Kopie)"
         flow.execution_count = 0
         flow.last_executed_at = None
