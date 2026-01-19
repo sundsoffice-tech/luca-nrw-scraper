@@ -128,6 +128,12 @@ class SystemSettings(models.Model):
         verbose_name_plural = 'Systemeinstellungen'
     
     def save(self, *args, **kwargs):
+        """
+        Enforce singleton pattern by ensuring pk=1.
+        Note: This is a simple singleton implementation suitable for single-server deployments.
+        For high-concurrency or multi-server setups, consider using database-level constraints
+        or distributed locking mechanisms.
+        """
         self.pk = 1  # Singleton pattern
         super().save(*args, **kwargs)
     

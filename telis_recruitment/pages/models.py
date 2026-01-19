@@ -320,6 +320,12 @@ class BrandSettings(models.Model):
         verbose_name = 'Marken-Einstellungen'
     
     def save(self, *args, **kwargs):
+        """
+        Enforce singleton pattern by ensuring pk=1.
+        Note: This is a simple singleton implementation suitable for single-server deployments.
+        For high-concurrency or multi-server setups, consider using database-level constraints
+        or distributed locking mechanisms.
+        """
         self.pk = 1  # Singleton
         super().save(*args, **kwargs)
     
