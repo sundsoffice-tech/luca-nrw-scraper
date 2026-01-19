@@ -309,7 +309,8 @@ let trendChart, statusChart, sourceChart;
 
 // KPIs laden
 async function loadKPIs() {
-    const days = document.getElementById('periodSelect').value;
+    const filters = getFiltersFromUI();
+    const days = filters.days !== 'custom' ? filters.days : 30;
     
     try {
         const response = await fetch(`/crm/reports/api/kpis/?days=${days}`);
@@ -347,7 +348,8 @@ function updateChangeDisplay(elementId, change) {
 
 // Trend-Daten laden
 async function loadTrend() {
-    const days = document.getElementById('periodSelect').value;
+    const filters = getFiltersFromUI();
+    const days = filters.days !== 'custom' ? filters.days : 30;
     
     try {
         const response = await fetch(`/crm/reports/api/trend/?days=${days}`);
@@ -654,14 +656,21 @@ function exportReport(format) {
     window.location.href = `/crm/reports/export/${reportType}/${format}/?${queryString}`;
 }
 
-// Event Listeners
+// Event Listeners - Synchronize old controls with filter section
 document.getElementById('periodSelect').addEventListener('change', function() {
+    // Update filter section to match
+    document.getElementById('filter-days').value = this.value;
+    // Reload all data (loadReport is called last as it already handles filter application)
     loadKPIs();
     loadTrend();
     loadReport();
 });
 
 document.getElementById('reportTypeSelect').addEventListener('change', function() {
+    // Update filter section to match
+    document.getElementById('filter-report-type').value = this.value;
+    updateFilterVisibility();
+    // Apply filters which will reload everything
     loadReport();
 });
 
@@ -690,12 +699,37 @@ document.getElementById('reset-filters')?.addEventListener('click', function() {
     document.getElementById('filter-with-email').checked = false;
     document.getElementById('custom-date-container')?.classList.add('hidden');
     
+    // Sync old controls
+    document.getElementById('periodSelect').value = '30';
+    document.getElementById('reportTypeSelect').value = 'lead_overview';
+    
     updateFilterVisibility();
+    // Reload all data
+    loadKPIs();
+    loadTrend();
     loadReport();
 });
 
 // Apply Filters Button
-document.getElementById('apply-filters')?.addEventListener('click', loadReport);
+document.getElementById('apply-filters')?.addEventListener('click', function() {
+    // Update old controls to match filter section
+    const filterDays = document.getElementById('filter-days').value;
+    const filterReportType = document.getElementById('filter-report-type').value;
+    
+    // Sync period select (except for custom date ranges which use date inputs)
+    if (filterDays !== 'custom') {
+        document.getElementById('periodSelect').value = filterDays;
+    }
+    // Note: When custom is selected, old control keeps last selected preset value
+    // as it doesn't support custom date ranges
+    
+    document.getElementById('reportTypeSelect').value = filterReportType;
+    
+    // Reload all data
+    loadKPIs();
+    loadTrend();
+    loadReport();
+});
 
 // Beim Laden der Seite
 document.addEventListener('DOMContentLoaded', function() {
