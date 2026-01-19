@@ -70,6 +70,7 @@ def get_scraper_config() -> Dict[str, Any]:
 def get_regions() -> Dict[str, List[str]]:
     """Lädt aktive Regionen aus DB."""
     from .models import SearchRegion
+    from django.db import OperationalError
     
     try:
         all_regions = list(SearchRegion.objects.filter(is_active=True).values_list('name', flat=True))
@@ -79,26 +80,36 @@ def get_regions() -> Dict[str, List[str]]:
             'all': all_regions,
             'metropolis': metropolis,
         }
-    except Exception:
+    except OperationalError as e:
+        logger.warning(f"Database not available for regions: {e}")
+        return {'all': [], 'metropolis': []}
+    except Exception as e:
+        logger.warning(f"Could not load regions from DB: {e}")
         return {'all': [], 'metropolis': []}
 
 
 def get_dorks(category: str = None) -> List[str]:
     """Lädt aktive Dorks aus DB."""
     from .models import SearchDork
+    from django.db import OperationalError
     
     try:
         qs = SearchDork.objects.filter(is_active=True)
         if category:
             qs = qs.filter(category=category)
         return list(qs.order_by('-priority', '-success_rate').values_list('query', flat=True))
-    except Exception:
+    except OperationalError as e:
+        logger.warning(f"Database not available for dorks: {e}")
+        return []
+    except Exception as e:
+        logger.warning(f"Could not load dorks from DB: {e}")
         return []
 
 
 def get_portals() -> Dict[str, Dict]:
     """Lädt Portal-Konfigurationen aus DB."""
     from .models import PortalSource
+    from django.db import OperationalError
     
     try:
         portals = {}
@@ -112,13 +123,18 @@ def get_portals() -> Dict[str, Dict]:
                 'requires_login': p.requires_login,
             }
         return portals
-    except Exception:
+    except OperationalError as e:
+        logger.warning(f"Database not available for portals: {e}")
+        return {}
+    except Exception as e:
+        logger.warning(f"Could not load portals from DB: {e}")
         return {}
 
 
 def get_blacklists() -> Dict[str, Set[str]]:
     """Lädt Blacklist-Einträge aus DB."""
     from .models import BlacklistEntry
+    from django.db import OperationalError
     
     try:
         return {
@@ -126,5 +142,9 @@ def get_blacklists() -> Dict[str, Set[str]]:
             'path_patterns': set(BlacklistEntry.objects.filter(is_active=True, entry_type='path_pattern').values_list('value', flat=True)),
             'mailbox_prefixes': set(BlacklistEntry.objects.filter(is_active=True, entry_type='mailbox_prefix').values_list('value', flat=True)),
         }
-    except Exception:
+    except OperationalError as e:
+        logger.warning(f"Database not available for blacklists: {e}")
+        return {'domains': set(), 'path_patterns': set(), 'mailbox_prefixes': set()}
+    except Exception as e:
+        logger.warning(f"Could not load blacklists from DB: {e}")
         return {'domains': set(), 'path_patterns': set(), 'mailbox_prefixes': set()}

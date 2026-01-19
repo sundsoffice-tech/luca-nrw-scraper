@@ -152,14 +152,19 @@ class ScraperConfig(models.Model):
     enable_perplexity = models.BooleanField(default=False, verbose_name="Perplexity AI aktivieren")
     enable_bing = models.BooleanField(default=False, verbose_name="Bing Search aktivieren")
     parallel_portal_crawl = models.BooleanField(default=True, verbose_name="Paralleles Portal-Crawling")
-    max_concurrent_portals = models.IntegerField(default=5, verbose_name="Max. parallele Portale")
+    max_concurrent_portals = models.IntegerField(
+        default=5, 
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        verbose_name="Max. parallele Portale"
+    )
     
     # === NEUE FELDER: Content ===
     allow_pdf = models.BooleanField(default=False, verbose_name="PDF-Dateien erlauben")
     max_content_length = models.IntegerField(
         default=2097152,
+        validators=[MinValueValidator(1024), MaxValueValidator(104857600)],  # 1KB to 100MB
         verbose_name="Max. Content-Größe (Bytes)",
-        help_text="Standard: 2MB"
+        help_text="Standard: 2MB, Max: 100MB"
     )
     
     # Metadata
