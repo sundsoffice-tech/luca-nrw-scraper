@@ -12,11 +12,14 @@ class ScraperConfig(models.Model):
     
     # Industry/mode configuration
     INDUSTRY_CHOICES = [
+        # Basis-Modi
         ('all', 'Alle'),
         ('recruiter', 'Recruiter'),
         ('candidates', 'Kandidaten'),
         ('talent_hunt', 'Talent Hunt'),
-        # Extended industries (must match CLI choices)
+        ('handelsvertreter', 'Handelsvertreter'),
+        
+        # Erweiterte Branchen
         ('nrw', 'NRW Regional'),
         ('social', 'Social Media'),
         ('solar', 'Solar/Energie'),
@@ -25,6 +28,10 @@ class ScraperConfig(models.Model):
         ('bau', 'Baubranche'),
         ('ecom', 'E-Commerce'),
         ('household', 'Haushalt'),
+        
+        # Weitere spezifische
+        ('d2d', 'Door-to-Door'),
+        ('callcenter', 'Call Center'),
     ]
     
     MODE_CHOICES = [

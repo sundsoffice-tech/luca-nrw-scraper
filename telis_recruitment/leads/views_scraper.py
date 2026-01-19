@@ -64,7 +64,7 @@ def scraper_start(request):
     
     POST data:
     {
-        "industry": "recruiter|candidates|talent_hunt|all",
+        "industry": "recruiter|candidates|talent_hunt|all|handelsvertreter|...",
         "qpi": 15,
         "mode": "standard|headhunter|aggressive|snippet_only|learning",
         "smart": true,
@@ -74,14 +74,18 @@ def scraper_start(request):
     }
     """
     try:
+        # Import choices from the correct model
+        from scraper_control.models import ScraperConfig as ControlScraperConfig
+        valid_industries = [c[0] for c in ControlScraperConfig.INDUSTRY_CHOICES]
+        
         params = request.data
         
         # Validate parameters
         industry = params.get('industry', 'recruiter')
-        if industry not in ['recruiter', 'candidates', 'talent_hunt', 'all']:
+        if industry not in valid_industries:
             return Response({
                 'success': False,
-                'error': 'Ungültige Industry-Auswahl'
+                'error': f'Ungültige Industry: {industry}. Erlaubt: {valid_industries}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         qpi = params.get('qpi', 15)

@@ -56,8 +56,12 @@ def parse_args() -> Any:
     Returns:
         Parsed arguments namespace
     """
-    # Get industry order - would come from config
-    INDUSTRY_ORDER = ["nrw", "social", "solar", "telekom", "versicherung", "bau", "ecom", "household"]
+    # Complete industry list synchronized with ScraperConfig.INDUSTRY_CHOICES
+    ALL_INDUSTRIES = [
+        "all", "recruiter", "candidates", "talent_hunt", "handelsvertreter",
+        "nrw", "social", "solar", "telekom", "versicherung",
+        "bau", "ecom", "household", "d2d", "callcenter"
+    ]
     
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     
@@ -79,9 +83,9 @@ def parse_args() -> Any:
     
     # Industry and query configuration
     ap.add_argument("--industry", 
-                    choices=["all", "recruiter", "candidates", "talent_hunt"] + list(INDUSTRY_ORDER),
+                    choices=ALL_INDUSTRIES,
                     default=os.getenv("INDUSTRY", "all"),
-                    help="Branche für diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
+                    help="Branche/Modus für diesen Run")
     ap.add_argument("--qpi", type=int, 
                     default=int(os.getenv("QPI", "6")),
                     help="Queries pro Branche in diesem Run (Standard: 6)")
