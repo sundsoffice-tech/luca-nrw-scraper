@@ -2,13 +2,15 @@
 Tests for scraper_control app - parameter validation and synchronization.
 """
 
+from unittest.mock import patch, MagicMock
+
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase
 from rest_framework import status
+
 from .models import ScraperConfig, ScraperRun
 from .process_manager import ProcessManager
-from unittest.mock import patch, MagicMock
 
 
 class ScraperConfigModelTest(TestCase):

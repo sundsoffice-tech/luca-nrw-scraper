@@ -118,8 +118,8 @@ def scraper_start(request):
             config.industry = params.get('industry', config.industry)
             config.qpi = qpi  # Use validated qpi value
             config.mode = params.get('mode', config.mode)
-            # Boolean fields: JS sends explicit true/false values
-            # If key is missing, default to False (conservative)
+            # Boolean fields: JS sends JSON with explicit true/false boolean values
+            # (see scraper-control.js getFormData() which converts 'on' to true/false)
             config.smart = bool(params.get('smart', False))
             config.once = bool(params.get('once', False))
             config.force = bool(params.get('force', False))
