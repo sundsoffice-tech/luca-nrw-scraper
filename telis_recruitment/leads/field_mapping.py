@@ -197,6 +197,11 @@ def is_integer_field(field_name):
     return field_name in INTEGER_FIELDS
 
 
+def is_boolean_field(field_name):
+    """Check if a field should be treated as a boolean."""
+    return field_name in BOOLEAN_FIELDS
+
+
 def is_url_field(field_name):
     """Check if a field should be treated as a URL."""
     return field_name in URL_FIELDS
