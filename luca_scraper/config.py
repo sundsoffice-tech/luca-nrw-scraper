@@ -634,6 +634,130 @@ LEAD_FIELDS: List[str] = [
 # HELPER FUNCTIONS
 # =========================
 
+def get_portal_urls(portal_name: str) -> List[str]:
+    """
+    Get URLs for a portal from database, with fallback to hardcoded lists.
+    
+    This function enables database-managed portal URLs while maintaining
+    backward compatibility with hardcoded URL lists.
+    
+    Args:
+        portal_name: Internal portal name (e.g., 'kleinanzeigen', 'markt_de')
+    
+    Returns:
+        List of URLs to crawl for the portal
+        
+    Priority:
+        1. Django DB (PortalSource.urls) - if available and non-empty
+        2. Hardcoded URL lists - as fallback
+    """
+    # Mapping from portal names to hardcoded URL lists
+    _HARDCODED_URLS = {
+        'kleinanzeigen': KLEINANZEIGEN_URLS,
+        'markt_de': MARKT_DE_URLS,
+        'quoka': QUOKA_DE_URLS,
+        'kalaydo': KALAYDO_DE_URLS,
+        'meinestadt': MEINESTADT_DE_URLS,
+        'dhd24': DHD24_URLS,
+        'freelancermap': FREELANCERMAP_URLS,
+        'freelance_de': FREELANCE_DE_URLS,
+        'freelancer_portals': FREELANCER_PORTAL_URLS,
+    }
+    
+    # Try to load from database first
+    if SCRAPER_CONFIG_AVAILABLE:
+        try:
+            portals = _get_portals_django()
+            if portals and portal_name in portals:
+                db_urls = portals[portal_name].get('urls', [])
+                if db_urls:
+                    logger.debug(f"Loaded {len(db_urls)} URLs for {portal_name} from database")
+                    return db_urls
+        except Exception as e:
+            logger.debug(f"Could not load portal URLs from DB for {portal_name}: {e}")
+    
+    # Fallback to hardcoded lists
+    fallback_urls = _HARDCODED_URLS.get(portal_name, [])
+    if fallback_urls:
+        logger.debug(f"Using {len(fallback_urls)} hardcoded URLs for {portal_name}")
+    return fallback_urls
+
+
+def get_portal_config(portal_name: str) -> Dict[str, Any]:
+    """
+    Get complete configuration for a portal from database, with fallback to defaults.
+    
+    Returns a dict with:
+        - urls: List[str] - URLs to crawl
+        - rate_limit_seconds: float - Delay between requests
+        - max_results: int - Maximum results per crawl
+        - is_active: bool - Whether portal is enabled
+    
+    Args:
+        portal_name: Internal portal name (e.g., 'kleinanzeigen', 'markt_de')
+    
+    Returns:
+        Dict with portal configuration
+    """
+    # Default configuration using hardcoded values
+    default_config = {
+        'urls': get_portal_urls(portal_name),
+        'rate_limit_seconds': PORTAL_DELAYS.get(portal_name, 3.0),
+        'max_results': 20,
+        'is_active': DIRECT_CRAWL_SOURCES.get(portal_name, False),
+    }
+    
+    # Try to load from database
+    if SCRAPER_CONFIG_AVAILABLE:
+        try:
+            portals = _get_portals_django()
+            if portals and portal_name in portals:
+                db_config = portals[portal_name]
+                # Merge with defaults, preferring DB values
+                # Note: config_loader returns 'rate_limit' key from rate_limit_seconds field
+                db_rate_limit = db_config.get('rate_limit') or db_config.get('rate_limit_seconds')
+                return {
+                    'urls': db_config.get('urls') or default_config['urls'],
+                    'rate_limit_seconds': db_rate_limit or default_config['rate_limit_seconds'],
+                    'max_results': db_config.get('max_results', default_config['max_results']),
+                    'is_active': True,  # If in DB and active filter, it's active
+                }
+        except Exception as e:
+            logger.debug(f"Could not load portal config from DB for {portal_name}: {e}")
+    
+    return default_config
+
+
+def get_all_portal_configs() -> Dict[str, Dict[str, Any]]:
+    """
+    Get configurations for all portals from database, with fallback to defaults.
+    
+    Returns a dict mapping portal names to their configurations.
+    New portals can be added via the database without code changes.
+    """
+    # Start with hardcoded portal names
+    all_portals = {
+        'kleinanzeigen', 'markt_de', 'quoka', 'kalaydo', 'meinestadt',
+        'dhd24', 'freelancermap', 'freelance_de'
+    }
+    
+    # Try to get additional portals from database
+    if SCRAPER_CONFIG_AVAILABLE:
+        try:
+            db_portals = _get_portals_django()
+            if db_portals:
+                all_portals.update(db_portals.keys())
+        except Exception as e:
+            logger.debug(f"Could not load portal list from DB: {e}")
+    
+    # Build config for all portals
+    configs = {}
+    for portal_name in all_portals:
+        configs[portal_name] = get_portal_config(portal_name)
+    
+    return configs
+
+
 def _normalize_cx(s: str) -> str:
     """Normalize Google Custom Search CX parameter."""
     if not s:

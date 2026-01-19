@@ -147,6 +147,11 @@ from .config import (
     _jitter,
     _env_list,
     
+    # Portal URL Loading (database-backed)
+    get_portal_urls,
+    get_portal_config,
+    get_all_portal_configs,
+    
     # Base Dorks
     BASE_DORKS,
 )
@@ -406,6 +411,11 @@ __all__ = [
     "_jitter",
     "_env_list",
     "BASE_DORKS",
+    
+    # Portal URL Loading (database-backed)
+    "get_portal_urls",
+    "get_portal_config",
+    "get_all_portal_configs",
     
     # Database
     "db",
