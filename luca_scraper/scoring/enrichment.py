@@ -382,6 +382,17 @@ async def query_dasoertliche(name: str, city: str) -> List[Dict]:
             if city_elem:
                 result["city"] = city_elem.get_text(strip=True)
             
+            # Extract company/organization information
+            company_elem = (
+                entry.find(itemprop="worksFor") or
+                entry.find(class_=re.compile(r"org|company|firma|organization", re.I))
+            )
+            if company_elem:
+                company = company_elem.get_text(strip=True)
+                # Only add if different from name (avoid duplicates)
+                if company and result.get("name") and company.lower() != result["name"].lower():
+                    result["company"] = company
+            
             if result.get("name") and result.get("phone"):
                 results.append(result)
         
@@ -528,20 +539,22 @@ async def enrich_phone_from_telefonbuch(
     
     phone = result.get("phone", "")
     address = result.get("address", "")
+    company = result.get("company", "")
     
     log("info", "Telefonbuch-Enrichment erfolgreich", 
         name=name, city=city, phone=phone[:8]+"..." if len(phone) > 8 else phone)
     
     return {
         "phone": phone,
-        "address": address
+        "address": address,
+        "company": company
     }
 
 
 async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Enriches leads without phone numbers using telefonbuch lookup.
-    Returns the enriched leads list.
+    Returns the enriched leads list with phone, address, and company information.
     """
     if not TELEFONBUCH_ENRICHMENT_ENABLED or not leads:
         return leads
@@ -569,6 +582,10 @@ async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dic
                         
                         if enrichment.get("address"):
                             lead["private_address"] = enrichment["address"]
+                        
+                        # Add company/organization if available
+                        if enrichment.get("company"):
+                            lead["company_name"] = enrichment["company"]
                         
                         tags = lead.get("tags", "")
                         if tags:
