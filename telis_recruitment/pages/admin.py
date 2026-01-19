@@ -321,8 +321,8 @@ class PageAssetAdmin(ModelAdmin):
     """Admin interface for page assets"""
     
     list_display = ['name', 'asset_type', 'landing_page', 'file_size_display', 'uploaded_by', 'created_at']
-    list_filter = ['asset_type', 'folder', 'created_at']
-    search_fields = ['name', 'alt_text']
+    list_filter = ['asset_type', 'folder', 'created_at', 'uploaded_by']
+    search_fields = ['name', 'alt_text', 'folder']
     readonly_fields = ['file_size', 'width', 'height', 'created_at', 'uploaded_by']
     
     fieldsets = [
@@ -330,7 +330,7 @@ class PageAssetAdmin(ModelAdmin):
             'fields': ['landing_page', 'file', 'name', 'asset_type', 'folder', 'alt_text']
         }),
         ('Metadata', {
-            'fields': ['file_size', 'width', 'height', 'mime_type']
+            'fields': ['mime_type', 'file_size', 'width', 'height']
         }),
         ('Upload Information', {
             'fields': ['uploaded_by', 'created_at']
@@ -363,9 +363,9 @@ class BrandSettingsAdmin(ModelAdmin):
     
     fieldsets = [
         ('Farben', {
-            'fields': ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'text_light_color', 'background_color']
+            'fields': ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'background_color']
         }),
-        ('Typografie', {
+        ('Typography', {
             'fields': ['heading_font', 'body_font']
         }),
         ('Logo', {
@@ -374,13 +374,11 @@ class BrandSettingsAdmin(ModelAdmin):
         ('Unternehmen', {
             'fields': ['company_name', 'contact_email', 'contact_phone']
         }),
-        ('Social Media', {
-            'fields': ['facebook_url', 'instagram_url', 'linkedin_url'],
-            'classes': ['collapse'],
+        ('Social', {
+            'fields': ['facebook_url', 'instagram_url', 'linkedin_url']
         }),
-        ('Rechtliches', {
-            'fields': ['privacy_url', 'imprint_url'],
-            'classes': ['collapse'],
+        ('Legal', {
+            'fields': ['privacy_url', 'imprint_url']
         }),
     ]
     
@@ -399,7 +397,8 @@ class PageTemplateAdmin(ModelAdmin):
     
     list_display = ['name', 'category', 'usage_count', 'is_active', 'created_at', 'preview_thumbnail']
     list_filter = ['category', 'is_active', 'created_at']
-    search_fields = ['name']
+    search_fields = ['name', 'slug', 'description']
+    prepopulated_fields = {'slug': ('name',)}
     readonly_fields = ['usage_count', 'created_at']
     prepopulated_fields = {'slug': ('name',)}
     

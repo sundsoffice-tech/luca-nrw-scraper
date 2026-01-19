@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models as db_models
 
 from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
 from leads.models import Lead
@@ -239,70 +239,65 @@ def get_client_ip(request):
 @staff_member_required
 @require_POST
 def upload_asset(request):
-    """Upload asset für GrapesJS Asset Manager"""
+    """Upload asset für GrapesJS"""
     if 'file' not in request.FILES:
-        return JsonResponse({'success': False, 'error': 'Keine Datei'}, status=400)
+        return JsonResponse({'error': 'Keine Datei'}, status=400)
     
     file = request.FILES['file']
-    mime_type = file.content_type
+    mime = file.content_type
     width, height = None, None
     
-    if mime_type.startswith('image/'):
-        asset_type = 'image'
+    # Validate file size (max 10MB)
+    if file.size > 10 * 1024 * 1024:
+        return JsonResponse({'error': 'Datei zu groß. Maximum 10MB.'}, status=400)
+    
+    # Get landing_page if provided
+    landing_page = None
+    page_id = request.POST.get('landing_page_id')
+    if page_id:
+        try:
+            landing_page = LandingPage.objects.get(id=page_id)
+        except LandingPage.DoesNotExist:
+            return JsonResponse({'error': 'Landing Page nicht gefunden'}, status=400)
+    
+    if mime.startswith('image/'):
         try:
             from PIL import Image
             img = Image.open(file)
             width, height = img.size
             file.seek(0)
-        except Exception as e:
-            logger.warning(f"Could not extract image dimensions: {e}")
+        except (IOError, Image.UnidentifiedImageError) as e:
+            logger.warning(f"Failed to process image: {e}")
+            # Continue without dimensions
+        asset_type = 'image'
     else:
         asset_type = 'document'
     
-    landing_page_id = request.POST.get('landing_page_id')
-    if landing_page_id and landing_page_id.strip():
-        try:
-            landing_page_id = int(landing_page_id)
-        except (ValueError, TypeError):
-            landing_page_id = None
-    else:
-        landing_page_id = None
-    
     asset = PageAsset.objects.create(
-        landing_page_id=landing_page_id,
+        landing_page=landing_page,
         file=file,
         name=file.name,
         asset_type=asset_type,
         width=width,
         height=height,
         file_size=file.size,
-        mime_type=mime_type,
-        alt_text=request.POST.get('alt_text', ''),
+        mime_type=mime,
         folder=request.POST.get('folder', ''),
         uploaded_by=request.user
     )
     
-    return JsonResponse({
-        'success': True,
-        'data': [{'src': asset.url, 'name': asset.name, 'width': asset.width, 'height': asset.height}]
-    })
+    return JsonResponse({'src': asset.url, 'name': asset.name, 'width': width, 'height': height})
 
 
 @staff_member_required
 def list_assets(request):
-    """List assets für GrapesJS"""
-    from django.db import models as db_models
-    
+    """Liste Assets für GrapesJS Asset Manager"""
     assets = PageAsset.objects.filter(asset_type='image')
-    landing_page_id = request.GET.get('landing_page_id')
+    page_id = request.GET.get('landing_page_id')
+    if page_id:
+        assets = assets.filter(db_models.Q(landing_page_id=page_id) | db_models.Q(landing_page__isnull=True))
     
-    if landing_page_id:
-        assets = assets.filter(
-            db_models.Q(landing_page_id=landing_page_id) | db_models.Q(landing_page__isnull=True)
-        )
-    
-    data = [{'src': a.url, 'name': a.name, 'width': a.width, 'height': a.height} for a in assets]
-    return JsonResponse(data, safe=False)
+    return JsonResponse([{'src': a.url, 'name': a.name} for a in assets], safe=False)
 
 
 @staff_member_required
@@ -331,35 +326,30 @@ def delete_asset(request, asset_id):
 # ============================================================================
 
 @staff_member_required
-def brand_settings(request):
+def brand_settings_view(request):
     """Brand Settings Seite"""
     from django.contrib import messages
     
     settings = BrandSettings.get_settings()
-    
     if request.method == 'POST':
-        # Define allowed text fields to update from POST
-        allowed_fields = [
-            'primary_color', 'secondary_color', 'accent_color', 'text_color', 
-            'text_light_color', 'heading_font', 'body_font', 'company_name', 
-            'contact_email', 'contact_phone', 'facebook_url', 'instagram_url', 
-            'linkedin_url', 'privacy_url', 'imprint_url'
-        ]
-        
-        for field in allowed_fields:
-            if field in request.POST:
-                setattr(settings, field, request.POST[field])
+        # Update all fields from POST
+        for f in ['primary_color', 'secondary_color', 'accent_color', 'text_color', 'background_color',
+                  'heading_font', 'body_font', 'company_name', 'contact_email', 'contact_phone',
+                  'facebook_url', 'instagram_url', 'linkedin_url', 'privacy_url', 'imprint_url']:
+            if f in request.POST:
+                setattr(settings, f, request.POST[f])
         
         # Handle file uploads
         if 'logo' in request.FILES:
             settings.logo = request.FILES['logo']
+        if 'logo_dark' in request.FILES:
+            settings.logo_dark = request.FILES['logo_dark']
         if 'favicon' in request.FILES:
             settings.favicon = request.FILES['favicon']
         
         settings.save()
-        messages.success(request, 'Einstellungen gespeichert!')
-        return redirect('pages:brand_settings')
-    
+        messages.success(request, 'Gespeichert!')
+        return redirect('pages:brand-settings')
     return render(request, 'pages/brand_settings.html', {'settings': settings})
 
 
@@ -367,8 +357,7 @@ def brand_settings(request):
 @require_http_methods(["GET"])
 def get_brand_css(request):
     """Get brand settings as CSS variables"""
-    
-    settings_obj = BrandSettings.get_settings()
+    settings_obj = BrandSettings.objects.first()
     if settings_obj:
         css = settings_obj.get_css_variables()
         return HttpResponse(css, content_type='text/css')
@@ -383,8 +372,6 @@ def get_brand_css(request):
 @staff_member_required
 def select_template(request):
     """Template selection page"""
-    from .models import PageTemplate
-    
     templates = PageTemplate.objects.filter(is_active=True)
     
     # Group by category
@@ -404,8 +391,6 @@ def select_template(request):
 @require_POST
 def apply_template(request, template_id):
     """Apply a template to a new or existing page"""
-    from .models import PageTemplate
-    
     try:
         template = PageTemplate.objects.get(id=template_id)
         

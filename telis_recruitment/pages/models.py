@@ -252,12 +252,7 @@ class DomainConfiguration(models.Model):
 
 class PageAsset(models.Model):
     """Bilder und Medien für Landing Pages"""
-    
-    ASSET_TYPES = [
-        ('image', 'Bild'),
-        ('video', 'Video'),
-        ('document', 'Dokument'),
-    ]
+    ASSET_TYPES = [('image', 'Bild'), ('video', 'Video'), ('document', 'Dokument')]
     
     landing_page = models.ForeignKey(LandingPage, on_delete=models.CASCADE,
                                     related_name='assets', null=True, blank=True)
@@ -269,32 +264,30 @@ class PageAsset(models.Model):
     file_size = models.IntegerField(default=0)
     mime_type = models.CharField(max_length=100, blank=True)
     alt_text = models.CharField(max_length=255, blank=True)
-    folder = models.CharField(max_length=100, blank=True, default='')
+    folder = models.CharField(max_length=100, blank=True)
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         ordering = ['-created_at']
-        verbose_name = 'Seiten-Asset'
-        verbose_name_plural = 'Seiten-Assets'
+        verbose_name = 'Page Asset'
+        verbose_name_plural = 'Page Assets'
+    
+    def __str__(self):
+        return f"{self.name} ({self.folder or 'root'})"
     
     @property
     def url(self):
         return self.file.url if self.file else ''
-    
-    def __str__(self):
-        return f"{self.name} ({self.folder or 'root'})"
 
 
 class BrandSettings(models.Model):
     """Globale Marken-Einstellungen"""
-    
     # Colors
     primary_color = models.CharField(max_length=7, default='#6366f1')
     secondary_color = models.CharField(max_length=7, default='#06b6d4')
     accent_color = models.CharField(max_length=7, default='#22c55e')
     text_color = models.CharField(max_length=7, default='#1f2937')
-    text_light_color = models.CharField(max_length=7, default='#6b7280')
     background_color = models.CharField(max_length=7, default='#ffffff')
     
     # Typography
@@ -346,11 +339,22 @@ class BrandSettings(models.Model):
     
     def __str__(self):
         return f"Brand Settings (ID: {self.id})"
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1  # Singleton
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+    
+    def get_css_variables(self):
+        return f":root{{--color-primary:{self.primary_color};--color-secondary:{self.secondary_color};}}"
 
 
 class PageTemplate(models.Model):
     """Vorgefertigte Seiten-Templates"""
-    
     CATEGORIES = [
         ('lead_gen', 'Lead Generation'),
         ('product', 'Produktseite'),
@@ -372,7 +376,8 @@ class PageTemplate(models.Model):
     
     class Meta:
         ordering = ['category', 'name']
-        verbose_name = 'Seiten-Template'
+        verbose_name = 'Page Template'
+        verbose_name_plural = 'Page Templates'
     
     def __str__(self):
         return f"{self.name} ({self.get_category_display()})"
