@@ -1,16 +1,25 @@
 """
 Tests for parallel phone extraction and dynamic scoring.
 
-These tests verify that:
-1. Phone extraction runs regex and advanced patterns in parallel
-2. Dynamic scoring considers data quality, completeness, and portal reputation
+This module tests:
+1. Parallel phone extraction - running regex and advanced patterns simultaneously
+2. Dynamic lead scoring - score calculation based on data quality and source reputation
+3. Lead data structure - ensuring all required fields are present
 """
 
 import pytest
 
 
 class TestParallelPhoneExtraction:
-    """Test parallel phone extraction functionality"""
+    """
+    Test parallel phone extraction functionality.
+    
+    These tests verify that:
+    - All extraction methods run simultaneously (not sequentially)
+    - Results from different methods are merged correctly
+    - Deduplication keeps highest confidence scores
+    - Results are sorted by confidence (highest first)
+    """
 
     def test_extract_multiple_methods_parallel(self):
         """Test that extraction runs all methods in parallel and merges results"""
@@ -85,107 +94,96 @@ class TestParallelPhoneExtraction:
 
 
 class TestDynamicScoring:
-    """Test dynamic lead scoring functionality"""
+    """
+    Test dynamic lead scoring functionality.
+    
+    These tests verify that the scoring system correctly:
+    - Increases scores based on data completeness
+    - Applies portal reputation bonuses
+    - Considers phone source quality
+    - Caps scores to valid ranges
+    """
 
     def test_score_increases_with_completeness(self):
-        """Test that score increases with more complete data"""
-        # We can't easily test the crawler functions directly,
-        # but we can verify the scoring logic conceptually
+        """Test that score increases with more complete data using centralized module"""
+        from luca_scraper.scoring.dynamic_scoring import calculate_dynamic_score
         
-        # Base score should be lower
-        base_score = 50
+        # Base score with no data
+        score_none, _, _ = calculate_dynamic_score(portal="generic")
         
-        # Phone adds 20 points
-        score_with_phone = base_score + 20
-        assert score_with_phone > base_score
+        # Score with phone
+        score_phone, _, _ = calculate_dynamic_score(has_phone=True, portal="generic")
+        assert score_phone > score_none
         
-        # Email adds 15 more points
-        score_with_email = score_with_phone + 15
-        assert score_with_email > score_with_phone
+        # Score with phone + email
+        score_email, _, _ = calculate_dynamic_score(has_phone=True, has_email=True, portal="generic")
+        assert score_email > score_phone
         
-        # Name adds 10 more points
-        score_with_name = score_with_email + 10
-        assert score_with_name > score_with_email
+        # Score with phone + email + name
+        score_name, _, _ = calculate_dynamic_score(
+            has_phone=True, has_email=True, has_name=True, portal="generic"
+        )
+        assert score_name > score_email
 
     def test_portal_reputation_affects_score(self):
-        """Test that portal reputation affects the score"""
-        portal_reputation_map = {
-            "kleinanzeigen": 10,
-            "direct_crawl": 5,
-            "markt_de": 8,
-            "quoka": 6,
-            "meinestadt": 7,
-            "kalaydo": 6,
-            "dhd24": 4,
-        }
+        """Test that portal reputation affects the score using centralized module"""
+        from luca_scraper.scoring.dynamic_scoring import PORTAL_REPUTATION
         
         # Kleinanzeigen should have highest reputation
-        assert portal_reputation_map["kleinanzeigen"] == max(portal_reputation_map.values())
+        assert PORTAL_REPUTATION["kleinanzeigen"] == max(PORTAL_REPUTATION.values())
         
         # DHD24 should have lowest reputation
-        assert portal_reputation_map["dhd24"] == min(portal_reputation_map.values())
+        assert PORTAL_REPUTATION["dhd24"] == min(PORTAL_REPUTATION.values())
 
     def test_phone_source_quality_affects_score(self):
-        """Test that phone source quality affects the score"""
-        source_quality_map = {
-            "regex_standard": 0.10,
-            "whatsapp_enhanced": 0.15,
-            "whatsapp_link": 0.15,
-            "advanced_whatsapp": 0.15,
-            "advanced_standard": 0.08,
-            "advanced_spaced": 0.05,
-            "advanced_obfuscated": 0.03,
-            "advanced_words": 0.02,
-            "advanced_best": 0.08,
-            "browser_extraction": 0.06,
-        }
+        """Test that phone source quality affects the score using centralized module"""
+        from luca_scraper.scoring.dynamic_scoring import PHONE_SOURCE_QUALITY
         
         # WhatsApp should have highest quality
         whatsapp_quality = max(
-            source_quality_map.get("whatsapp_enhanced", 0),
-            source_quality_map.get("whatsapp_link", 0),
-            source_quality_map.get("advanced_whatsapp", 0),
+            PHONE_SOURCE_QUALITY.get("whatsapp_enhanced", 0),
+            PHONE_SOURCE_QUALITY.get("whatsapp_link", 0),
+            PHONE_SOURCE_QUALITY.get("advanced_whatsapp", 0),
         )
         assert whatsapp_quality == 0.15
         
         # Word-based should have lowest quality
-        assert source_quality_map["advanced_words"] == min(source_quality_map.values())
+        assert PHONE_SOURCE_QUALITY["advanced_words"] == min(PHONE_SOURCE_QUALITY.values())
 
     def test_score_capped_at_valid_range(self):
-        """Test that score is capped at 0-100"""
-        # Maximum possible score components:
-        max_score = (
-            55  # base for kleinanzeigen
-            + 20  # phone
-            + 15  # email
-            + 10  # name
-            + 5   # title
-            + 3   # location
-            + 5   # multiple phones
-            + 8   # whatsapp
-            + 7   # source bonus (0.15 * 50)
-            + 10  # portal reputation
-        )
+        """Test that score is capped at 0-100 using centralized module"""
+        from luca_scraper.scoring.dynamic_scoring import calculate_dynamic_score, cap_score
         
-        # Even with all bonuses, score should be capped at 100
-        capped_score = max(0, min(100, max_score))
-        assert capped_score <= 100
+        # Test cap_score function directly
+        assert cap_score(150) == 100
+        assert cap_score(-10) == 0
+        assert cap_score(75) == 75
+        
+        # Test that calculate_dynamic_score returns capped values
+        score, _, _ = calculate_dynamic_score(
+            has_phone=True, has_email=True, has_name=True,
+            has_title=True, has_location=True,
+            phones_count=3, has_whatsapp=True,
+            phone_source="whatsapp_enhanced", portal="kleinanzeigen"
+        )
+        assert 0 <= score <= 100
 
     def test_confidence_capped_at_valid_range(self):
-        """Test that confidence is capped at 0.0-1.0"""
-        # Maximum possible confidence components:
-        max_confidence = (
-            0.55  # base for kleinanzeigen
-            + 0.20  # phone
-            + 0.10  # email
-            + 0.08  # name
-            + 0.07  # whatsapp
-            + 0.05  # whatsapp source
-        )
+        """Test that confidence is capped at 0.0-1.0 using centralized module"""
+        from luca_scraper.scoring.dynamic_scoring import calculate_dynamic_score, cap_confidence
         
-        # Even with all bonuses, confidence should be capped at 1.0
-        capped_confidence = max(0.0, min(1.0, max_confidence))
-        assert capped_confidence <= 1.0
+        # Test cap_confidence function directly
+        assert cap_confidence(1.5) == 1.0
+        assert cap_confidence(-0.5) == 0.0
+        assert cap_confidence(0.75) == 0.75
+        
+        # Test that calculate_dynamic_score returns capped confidence
+        _, _, confidence = calculate_dynamic_score(
+            has_phone=True, has_email=True, has_name=True,
+            has_whatsapp=True, phone_source="whatsapp_enhanced",
+            portal="kleinanzeigen"
+        )
+        assert 0.0 <= confidence <= 1.0
 
 
 class TestLeadDataStructure:
