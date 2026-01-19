@@ -1,101 +1,231 @@
 {% extends "crm/base.html" %}
+{% load static %}
 
-{% block title %}Neue Email - Mailbox{% endblock %}
+{% block title %}✉️ Neue Email - Mailbox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .compose-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .compose-card {
+        background: #1a1a2e;
+        border-radius: 12px;
+        border: 1px solid #2d2d44;
+        padding: 24px;
+    }
+    .form-label {
+        color: #a0a0b0;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    .form-control, .form-select {
+        background: #16162a;
+        border: 1px solid #2d2d44;
+        color: #fff;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .form-control:focus, .form-select:focus {
+        background: #16162a;
+        border-color: #6366f1;
+        color: #fff;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    .btn-send {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 12px 32px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+    }
+    .btn-send:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-10 offset-md-1">
-            <h2 class="mb-4">Neue Email schreiben</h2>
+<div class="compose-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0">✉️ Neue Email schreiben</h3>
+        <a href="{% url 'mailbox:inbox' %}" class="btn btn-outline-secondary">
+            ← Zurück zum Posteingang
+        </a>
+    </div>
+    
+    <div class="compose-card">
+        <form method="post" enctype="multipart/form-data" id="compose-form">
+            {% csrf_token %}
             
-            <div class="card">
-                <div class="card-body">
-                    <form id="compose-form">
-                        <!-- Account selection -->
-                        <div class="mb-3">
-                            <label for="account" class="form-label">Von</label>
-                            <select class="form-select" id="account" name="account" required>
-                                <option value="">Wählen Sie ein Konto...</option>
-                                {% for account in accounts %}
-                                <option value="{{ account.id }}">{{ account.name }} ({{ account.email_address }})</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <!-- To -->
-                        <div class="mb-3">
-                            <label for="to" class="form-label">An</label>
-                            <input type="email" class="form-control" id="to" name="to" value="{{ to_email }}" required multiple>
-                            <small class="form-text text-muted">Mehrere Empfänger mit Komma trennen</small>
-                        </div>
-                        
-                        <!-- CC -->
-                        <div class="mb-3">
-                            <label for="cc" class="form-label">CC</label>
-                            <input type="email" class="form-control" id="cc" name="cc" multiple>
-                        </div>
-                        
-                        <!-- Subject -->
-                        <div class="mb-3">
-                            <label for="subject" class="form-label">Betreff</label>
-                            <input type="text" class="form-control" id="subject" name="subject" required>
-                        </div>
-                        
-                        <!-- Template selection -->
-                        {% if templates %}
-                        <div class="mb-3">
-                            <label for="template" class="form-label">Template</label>
-                            <select class="form-select" id="template" name="template">
-                                <option value="">Kein Template</option>
-                                {% for template in templates %}
-                                <option value="{{ template.id }}">{{ template.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Body -->
-                        <div class="mb-3">
-                            <label for="body" class="form-label">Nachricht</label>
-                            <textarea class="form-control" id="body" name="body" rows="10" required></textarea>
-                            <small class="form-text text-muted">Rich-Text-Editor wird in einer zukünftigen Version hinzugefügt</small>
-                        </div>
-                        
-                        <!-- Signature selection -->
-                        {% if signatures %}
-                        <div class="mb-3">
-                            <label for="signature" class="form-label">Signatur</label>
-                            <select class="form-select" id="signature" name="signature">
-                                <option value="">Keine Signatur</option>
-                                {% for sig in signatures %}
-                                <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>{{ sig.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Actions -->
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-send"></i> Senden
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary">
-                                <i class="bi bi-save"></i> Als Entwurf speichern
-                            </button>
-                            <a href="{% url 'mailbox:inbox' %}" class="btn btn-outline-secondary">
-                                <i class="bi bi-x"></i> Abbrechen
-                            </a>
-                        </div>
-                    </form>
-                </div>
+            <!-- Account selection -->
+            <div class="mb-3">
+                <label for="account" class="form-label">Von</label>
+                <select class="form-select" id="account" name="account" required>
+                    <option value="">Wählen Sie ein Konto...</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.id }}">{{ account.name }} ({{ account.email_address }})</option>
+                    {% endfor %}
+                </select>
             </div>
             
-            <div class="alert alert-info mt-3">
-                <strong>Hinweis:</strong> Die Sende-Funktionalität ist über die API verfügbar. 
-                Verwenden Sie die Admin-Oberfläche oder nutzen Sie die REST API unter 
-                <code>/crm/mailbox/api/emails/send/</code>
+            <!-- To -->
+            <div class="mb-3">
+                <label for="to" class="form-label">An</label>
+                <input type="text" class="form-control" id="to" name="to" value="{{ to_email }}" required>
+                <small class="form-text text-muted">Mehrere Empfänger mit Komma trennen</small>
             </div>
-        </div>
+            
+            <!-- CC -->
+            <div class="mb-3">
+                <label for="cc" class="form-label">CC</label>
+                <input type="text" class="form-control" id="cc" name="cc">
+            </div>
+            
+            <!-- Subject -->
+            <div class="mb-3">
+                <label for="subject" class="form-label">Betreff</label>
+                <input type="text" class="form-control" id="subject" name="subject" required>
+            </div>
+            
+            <!-- Template selection -->
+            {% if templates %}
+            <div class="mb-3">
+                <label for="template" class="form-label">Template</label>
+                <select class="form-select" id="template" name="template">
+                    <option value="">Kein Template</option>
+                    {% for template in templates %}
+                    <option value="{{ template.id }}">{{ template.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
+            <!-- Body -->
+            <div class="mb-3">
+                <label for="body" class="form-label">Nachricht</label>
+                <textarea id="body" name="body" class="form-control"></textarea>
+            </div>
+            
+            <!-- Signature selection -->
+            {% if signatures %}
+            <div class="mb-3">
+                <label for="signature" class="form-label">Signatur</label>
+                <select class="form-select" id="signature" name="signature">
+                    <option value="">Keine Signatur</option>
+                    {% for sig in signatures %}
+                    <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>{{ sig.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            
+            <!-- Attachments -->
+            <div class="mb-3">
+                <label for="attachments" class="form-label">Anhänge</label>
+                <input type="file" name="attachments" id="attachments" class="form-control" multiple>
+                <small class="form-text text-muted">Mehrere Dateien können ausgewählt werden</small>
+            </div>
+            
+            <!-- Actions -->
+            <div class="d-flex gap-2">
+                <button type="submit" name="action" value="send" class="btn btn-send">
+                    📤 Senden
+                </button>
+                <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+                    💾 Als Entwurf speichern
+                </button>
+                <a href="{% url 'mailbox:inbox' %}" class="btn btn-outline-secondary">
+                    ✕ Abbrechen
+                </a>
+            </div>
+        </form>
     </div>
 </div>
+
+<!-- TinyMCE -->
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+tinymce.init({
+    selector: '#body',
+    height: 400,
+    menubar: false,
+    plugins: 'link image lists table code',
+    toolbar: 'undo redo | formatselect | bold italic underline | alignleft aligncenter alignright | bullist numlist | link image | code',
+    skin: 'oxide-dark',
+    content_css: 'dark'
+});
+
+// Template loading
+document.getElementById('template').addEventListener('change', async function() {
+    const templateId = this.value;
+    if (!templateId) return;
+    
+    try {
+        const response = await fetch(`/api/email-templates/templates/${templateId}/`);
+        const template = await response.json();
+        
+        // Set subject if empty
+        if (!document.getElementById('subject').value) {
+            document.getElementById('subject').value = template.subject;
+        }
+        
+        // Set body content
+        if (typeof tinymce !== 'undefined') {
+            tinymce.get('body').setContent(template.html_content);
+        } else {
+            document.getElementById('body').value = template.html_content;
+        }
+    } catch (error) {
+        console.error('Error loading template:', error);
+    }
+});
+
+// Signature management
+const signatures = {
+    {% for sig in signatures %}
+    '{{ sig.id }}': `{{ sig.content_html|escapejs }}`,
+    {% endfor %}
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const signatureSelect = document.getElementById('signature');
+    
+    // Insert default signature on load
+    const defaultSig = signatureSelect.value;
+    if (defaultSig && signatures[defaultSig]) {
+        setTimeout(() => appendSignature(signatures[defaultSig]), 500);
+    }
+    
+    // Change signature
+    signatureSelect.addEventListener('change', function() {
+        removeSignature();
+        if (this.value && signatures[this.value]) {
+            appendSignature(signatures[this.value]);
+        }
+    });
+    
+    function appendSignature(sigHtml) {
+        if (typeof tinymce !== 'undefined' && tinymce.get('body')) {
+            const editor = tinymce.get('body');
+            const content = editor.getContent();
+            editor.setContent(content + '<br><br>--<br>' + sigHtml);
+        }
+    }
+    
+    function removeSignature() {
+        if (typeof tinymce !== 'undefined' && tinymce.get('body')) {
+            const editor = tinymce.get('body');
+            let content = editor.getContent();
+            // Remove existing signature (everything after --)
+            content = content.replace(/<br><br>--<br>[\s\S]*$/, '');
+            editor.setContent(content);
+        }
+    }
+});
+</script>
 {% endblock %}

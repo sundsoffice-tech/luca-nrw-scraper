@@ -94,8 +94,12 @@
                     <h5 class="mb-0">Antworten</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">Antwortfunktion in Entwicklung. Nutzen Sie vorerst die API oder den Admin-Bereich.</p>
-                    <a href="{% url 'mailbox:compose' %}" class="btn btn-primary">Neue Email schreiben</a>
+                    {% if emails %}
+                    <a href="{% url 'mailbox:reply' emails.last.id %}" class="btn btn-primary">
+                        ↩️ Antworten
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'mailbox:compose' %}" class="btn btn-outline-primary ms-2">✉️ Neue Email schreiben</a>
                 </div>
             </div>
         </div>
