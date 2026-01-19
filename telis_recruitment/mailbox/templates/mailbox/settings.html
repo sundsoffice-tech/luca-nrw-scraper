@@ -2,23 +2,177 @@
 
 {% block title %}Email-Konten - Mailbox{% endblock %}
 
+{% block extra_head %}
+<style>
+    .settings-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .settings-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .settings-card-header {
+        background: #0f172a;
+        padding: 16px 20px;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .settings-card-header h5 {
+        margin: 0;
+        color: #f1f5f9;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .settings-card-body {
+        padding: 20px;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .btn-secondary {
+        background: #1e293b;
+        border: 1px solid #334155;
+        padding: 8px 16px;
+        border-radius: 8px;
+        color: #94a3b8;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #6366f1;
+        color: #f1f5f9;
+    }
+    .table-wrapper {
+        overflow-x: auto;
+    }
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .custom-table thead tr {
+        border-bottom: 2px solid #334155;
+    }
+    .custom-table th {
+        padding: 12px 16px;
+        text-align: left;
+        color: #94a3b8;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .custom-table tbody tr {
+        border-bottom: 1px solid #334155;
+        transition: background 0.2s;
+    }
+    .custom-table tbody tr:hover {
+        background: rgba(99, 102, 241, 0.05);
+    }
+    .custom-table td {
+        padding: 12px 16px;
+        color: #f1f5f9;
+        font-size: 14px;
+    }
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: 8px;
+    }
+    .badge-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: #fff;
+    }
+    .badge-success {
+        background: #10b981;
+        color: #fff;
+    }
+    .badge-secondary {
+        background: #475569;
+        color: #f1f5f9;
+    }
+    .alert {
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin-top: 1.5rem;
+        border-left: 4px solid;
+    }
+    .alert-info {
+        background: rgba(6, 182, 212, 0.1);
+        border-color: #06b6d4;
+        color: #06b6d4;
+    }
+    .alert strong {
+        font-weight: 600;
+        color: #22d3ee;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #64748b;
+    }
+    .empty-state p {
+        margin-bottom: 1rem;
+    }
+    /* Grid layout */
+    .grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+    .grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* Responsive */
+    @media (max-width: 768px) {
+        .grid-cols-2 {
+            grid-template-columns: 1fr;
+        }
+    }
+    /* Utilities */
+    h2 { color: #f1f5f9; margin-bottom: 1.5rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <h2 class="mb-4">Email-Konten</h2>
+<div class="settings-container">
+    <h2>Email-Konten</h2>
     
-    <div class="card">
-        <div class="card-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Ihre Email-Konten</h5>
-                <a href="/admin/mailbox/emailaccount/add/" class="btn btn-primary btn-sm">
-                    <i class="bi bi-plus-circle"></i> Neues Konto
-                </a>
-            </div>
+    <div class="settings-card">
+        <div class="settings-card-header">
+            <h5>Ihre Email-Konten</h5>
+            <a href="/admin/mailbox/emailaccount/add/" class="btn-primary">
+                ➕ Neues Konto
+            </a>
         </div>
-        <div class="card-body">
+        <div class="settings-card-body">
             {% if accounts %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
+                <div class="table-wrapper">
+                    <table class="custom-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -35,16 +189,16 @@
                                 <td>
                                     {{ account.name }}
                                     {% if account.is_default %}
-                                    <span class="badge bg-primary">Standard</span>
+                                    <span class="badge badge-primary">Standard</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ account.email_address }}</td>
                                 <td>{{ account.get_account_type_display }}</td>
                                 <td>
                                     {% if account.is_active %}
-                                    <span class="badge bg-success">Aktiv</span>
+                                    <span class="badge badge-success">Aktiv</span>
                                     {% else %}
-                                    <span class="badge bg-secondary">Inaktiv</span>
+                                    <span class="badge badge-secondary">Inaktiv</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -55,8 +209,8 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="/admin/mailbox/emailaccount/{{ account.id }}/change/" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-pencil"></i> Bearbeiten
+                                    <a href="/admin/mailbox/emailaccount/{{ account.id }}/change/" class="btn-secondary">
+                                        ✏️ Bearbeiten
                                     </a>
                                 </td>
                             </tr>
@@ -65,42 +219,40 @@
                     </table>
                 </div>
             {% else %}
-                <p class="text-muted">Sie haben noch keine Email-Konten konfiguriert.</p>
-                <a href="/admin/mailbox/emailaccount/add/" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Erstes Konto hinzufügen
-                </a>
+                <div class="empty-state">
+                    <p>Sie haben noch keine Email-Konten konfiguriert.</p>
+                    <a href="/admin/mailbox/emailaccount/add/" class="btn-primary">
+                        ➕ Erstes Konto hinzufügen
+                    </a>
+                </div>
             {% endif %}
         </div>
     </div>
     
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Signaturen</h5>
-                </div>
-                <div class="card-body">
-                    <a href="/admin/mailbox/emailsignature/" class="btn btn-outline-primary">
-                        Signaturen verwalten
-                    </a>
-                </div>
+    <div class="grid grid-cols-2">
+        <div class="settings-card">
+            <div class="settings-card-header">
+                <h5>Signaturen</h5>
+            </div>
+            <div class="settings-card-body">
+                <a href="{% url 'mailbox:signatures' %}" class="btn-secondary">
+                    Signaturen verwalten
+                </a>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Schnellantworten</h5>
-                </div>
-                <div class="card-body">
-                    <a href="/admin/mailbox/quickreply/" class="btn btn-outline-primary">
-                        Schnellantworten verwalten
-                    </a>
-                </div>
+        <div class="settings-card">
+            <div class="settings-card-header">
+                <h5>Schnellantworten</h5>
+            </div>
+            <div class="settings-card-body">
+                <a href="{% url 'mailbox:quick-replies' %}" class="btn-secondary">
+                    Schnellantworten verwalten
+                </a>
             </div>
         </div>
     </div>
     
-    <div class="alert alert-info mt-4">
+    <div class="alert alert-info">
         <strong>Tipp:</strong> Konfigurieren Sie IMAP/SMTP-Einstellungen in den Konto-Details im Admin-Bereich.
         Für Brevo-Integration fügen Sie Ihren API-Schlüssel hinzu.
     </div>
