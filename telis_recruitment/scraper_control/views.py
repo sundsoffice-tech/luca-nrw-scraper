@@ -106,7 +106,7 @@ def api_scraper_start(request):
         valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
         valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
         
-        params = request.data.copy()  # Mutable copy for modifications
+        params = request.data.copy()  # Mutable copy - request.data is immutable, we need to modify for parameter sanitization
         
         # Validate and set defaults for industry
         industry = params.get('industry', 'recruiter')

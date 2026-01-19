@@ -195,7 +195,7 @@ class ProcessManager:
         if params.get('force', False):
             cmd.append('--force')
         
-        if params.get('once', True):  # Default True!
+        if params.get('once', True):  # Default True for single-run execution
             cmd.append('--once')
         
         if params.get('dry_run', False):
