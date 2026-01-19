@@ -201,6 +201,13 @@ class ScraperConfig(models.Model):
         verbose_name="Aktualisiert von"
     )
     
+    # Live config reload tracking
+    config_version = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Konfigurationsversion",
+        help_text="Wird bei jeder Änderung inkrementiert. Ermöglicht Live-Reload."
+    )
+    
     class Meta:
         verbose_name = "Scraper-Konfiguration"
         verbose_name_plural = "Scraper-Konfigurationen"
@@ -215,8 +222,14 @@ class ScraperConfig(models.Model):
         return config
     
     def save(self, *args, **kwargs):
-        """Ensure only one instance exists"""
+        """Ensure only one instance exists and increment config_version on changes."""
         self.pk = 1
+        # Increment config_version unless explicitly told not to
+        # (e.g., when loading initial data or for non-config fields)
+        if not kwargs.pop('skip_version_increment', False):
+            # Check if this is an update (not initial creation)
+            if ScraperConfig.objects.filter(pk=1).exists():
+                self.config_version = (self.config_version or 0) + 1
         super().save(*args, **kwargs)
 
 
