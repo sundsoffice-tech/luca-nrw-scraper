@@ -11,3 +11,4 @@ openpyxl>=3.1.0
 django-unfold>=0.47.0
 urllib3>=2.0.0,<3.0.0
 requests>=2.31.0,<3.0.0
+dnspython>=2.4.0

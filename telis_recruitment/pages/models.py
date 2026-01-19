@@ -37,6 +37,29 @@ class LandingPage(models.Model):
     brevo_list_id = models.IntegerField(null=True, blank=True,
                                        help_text="Brevo list ID for form submissions")
     
+    # Upload-based Website
+    is_uploaded_site = models.BooleanField(default=False, 
+                                           help_text="True if this is an uploaded website (ZIP/files)")
+    uploaded_files_path = models.CharField(max_length=500, blank=True,
+                                          help_text="Path to uploaded files directory")
+    entry_point = models.CharField(max_length=255, default='index.html',
+                                   help_text="Main entry file for uploaded site")
+    
+    # Domain Hosting
+    HOSTING_TYPE_CHOICES = [
+        ('internal', 'Internes Hosting'),
+        ('strato', 'STRATO Domain'),
+        ('custom', 'Benutzerdefinierte Domain'),
+    ]
+    
+    hosting_type = models.CharField(max_length=20, choices=HOSTING_TYPE_CHOICES, default='internal')
+    custom_domain = models.CharField(max_length=255, blank=True, db_index=True)
+    strato_subdomain = models.CharField(max_length=100, blank=True)
+    strato_main_domain = models.CharField(max_length=255, blank=True)
+    ssl_enabled = models.BooleanField(default=True)
+    dns_verified = models.BooleanField(default=False)
+    dns_verification_token = models.CharField(max_length=64, blank=True)
+    
     # Tracking
     published_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, related_name='created_pages',
@@ -69,6 +92,14 @@ class LandingPage(models.Model):
     def get_builder_url(self):
         """Builder URL for editing"""
         return reverse('pages:page-builder', kwargs={'slug': self.slug})
+    
+    def get_full_domain(self):
+        """Returns the full domain URL for this page"""
+        if self.hosting_type == 'strato' and self.strato_subdomain and self.strato_main_domain:
+            return f"{self.strato_subdomain}.{self.strato_main_domain}"
+        elif self.hosting_type == 'custom' and self.custom_domain:
+            return self.custom_domain
+        return None
 
 
 class PageVersion(models.Model):
@@ -168,3 +199,53 @@ class PageSubmission(models.Model):
     
     def __str__(self):
         return f"Submission for {self.landing_page.title} at {self.created_at}"
+
+
+class UploadedFile(models.Model):
+    """Individual files uploaded for a landing page"""
+    
+    landing_page = models.ForeignKey(LandingPage, related_name='uploaded_files',
+                                     on_delete=models.CASCADE)
+    file = models.FileField(upload_to='landing_pages/uploads/%Y/%m/')
+    original_filename = models.CharField(max_length=255)
+    relative_path = models.CharField(max_length=500, 
+                                    help_text="Path relative to site root (e.g., 'css/style.css')")
+    file_type = models.CharField(max_length=50, blank=True,
+                                help_text="MIME type or file extension")
+    file_size = models.PositiveIntegerField(default=0, help_text="File size in bytes")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['relative_path']
+        unique_together = ['landing_page', 'relative_path']
+        verbose_name = 'Uploaded File'
+        verbose_name_plural = 'Uploaded Files'
+    
+    def __str__(self):
+        return f"{self.landing_page.slug}/{self.relative_path}"
+
+
+class DomainConfiguration(models.Model):
+    """STRATO/Custom domain configuration and DNS records"""
+    
+    landing_page = models.OneToOneField(LandingPage, related_name='domain_config',
+                                        on_delete=models.CASCADE)
+    strato_customer_id = models.CharField(max_length=100, blank=True)
+    strato_api_key_encrypted = models.TextField(blank=True)
+    required_a_record = models.GenericIPAddressField(null=True, blank=True)
+    required_cname = models.CharField(max_length=255, blank=True)
+    required_txt_record = models.TextField(blank=True)
+    last_dns_check = models.DateTimeField(null=True, blank=True)
+    dns_check_result = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Domain Configuration'
+        verbose_name_plural = 'Domain Configurations'
+    
+    def __str__(self):
+        return f"Domain Config for {self.landing_page.slug}"
+
