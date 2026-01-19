@@ -1,0 +1,133 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Email-Flows - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500 mx-2">/</span>
+<span class="text-primary">Automationen</span>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">Email-Flows</h1>
+            <p class="text-gray-400 mt-1">Automatisierte Email-Kampagnen und Workflows</p>
+        </div>
+        <a href="{% url 'email_templates:flow-builder-new' %}" 
+           class="bg-primary hover:bg-cyan-600 text-white px-6 py-3 rounded-lg transition duration-150 flex items-center">
+            <span class="mr-2 text-xl">➕</span>
+            <span>Neuer Flow</span>
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-dark-800 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap gap-4">
+            <!-- Status Filter -->
+            <div>
+                <label class="text-sm text-gray-400 block mb-2">Status</label>
+                <div class="flex gap-2">
+                    <a href="?trigger={{ trigger_filter }}" 
+                       class="px-4 py-2 rounded {% if not status_filter %}bg-primary text-white{% else %}bg-dark-700 text-gray-300 hover:bg-dark-600{% endif %} transition duration-150">
+                        Alle
+                    </a>
+                    <a href="?status=active&trigger={{ trigger_filter }}" 
+                       class="px-4 py-2 rounded {% if status_filter == 'active' %}bg-primary text-white{% else %}bg-dark-700 text-gray-300 hover:bg-dark-600{% endif %} transition duration-150">
+                        Aktiv
+                    </a>
+                    <a href="?status=inactive&trigger={{ trigger_filter }}" 
+                       class="px-4 py-2 rounded {% if status_filter == 'inactive' %}bg-primary text-white{% else %}bg-dark-700 text-gray-300 hover:bg-dark-600{% endif %} transition duration-150">
+                        Inaktiv
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Trigger Filter -->
+            <div class="flex-1">
+                <label class="text-sm text-gray-400 block mb-2">Trigger-Typ</label>
+                <select onchange="window.location.href='?status={{ status_filter }}&trigger=' + this.value" 
+                        class="w-full bg-dark-700 border border-dark-600 rounded px-4 py-2 text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">Alle Trigger-Typen</option>
+                    {% for value, label in trigger_types %}
+                    <option value="{{ value }}" {% if trigger_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flows Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {% for flow in flows %}
+        <div class="bg-dark-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition duration-150">
+            <!-- Header -->
+            <div class="p-6 border-b border-dark-700">
+                <div class="flex justify-between items-start mb-3">
+                    <h3 class="text-xl font-semibold text-gray-100">
+                        {{ flow.name }}
+                    </h3>
+                    <div class="flex items-center space-x-2">
+                        {% if flow.is_active %}
+                        <span class="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">✓ Aktiv</span>
+                        {% else %}
+                        <span class="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded-full">○ Inaktiv</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if flow.description %}
+                <p class="text-gray-400 text-sm mb-3">{{ flow.description|truncatewords:15 }}</p>
+                {% endif %}
+                
+                <div class="flex items-center text-sm text-gray-500">
+                    <span class="mr-2">{{ flow.get_trigger_type_display }}</span>
+                </div>
+            </div>
+            
+            <!-- Stats -->
+            <div class="px-6 py-4 bg-dark-900/50 grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Steps</div>
+                    <div class="text-lg font-semibold text-gray-200">{{ flow.steps.count }}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-500 mb-1">Ausführungen</div>
+                    <div class="text-lg font-semibold text-gray-200">{{ flow.execution_count }}</div>
+                </div>
+            </div>
+            
+            {% if flow.last_executed_at %}
+            <div class="px-6 py-2 text-xs text-gray-500">
+                Zuletzt: {{ flow.last_executed_at|date:"d.m.Y H:i" }}
+            </div>
+            {% endif %}
+            
+            <!-- Actions -->
+            <div class="p-4 border-t border-dark-700 flex gap-2">
+                <a href="{% url 'email_templates:flow-detail' flow.slug %}" 
+                   class="flex-1 bg-dark-700 hover:bg-dark-600 text-center py-2 rounded text-gray-300 transition duration-150">
+                    Details
+                </a>
+                <a href="{% url 'email_templates:flow-builder-edit' flow.slug %}" 
+                   class="flex-1 bg-primary/20 hover:bg-primary/30 text-center py-2 rounded text-primary transition duration-150">
+                    Bearbeiten
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-3 text-center py-12">
+            <div class="text-6xl mb-4">🔄</div>
+            <h3 class="text-xl font-semibold text-gray-300 mb-2">Noch keine Flows erstellt</h3>
+            <p class="text-gray-500 mb-6">Erstelle deinen ersten automatisierten Email-Flow</p>
+            <a href="{% url 'email_templates:flow-builder-new' %}" 
+               class="inline-flex items-center bg-primary hover:bg-cyan-600 text-white px-6 py-3 rounded-lg transition duration-150">
+                <span class="mr-2 text-xl">➕</span>
+                <span>Ersten Flow erstellen</span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
