@@ -325,65 +325,7 @@ python manage.py collectstatic --noinput --clear
 # Make sure Whitenoise is configured correctly
 ```
 
-#### 3. Database Migration Errors
-
-**Problem:** `django.db.utils.OperationalError`
-
-**Solution:**
-```bash
-# Reset migrations (CAUTION: This deletes all data!)
-rm telis_recruitment/db.sqlite3
-python manage.py migrate
-
-# Or fake migrations if schema is correct
-python manage.py migrate --fake
-```
-
-#### 4. Permission Denied on install.sh
-
-**Problem:** Cannot execute install script.
-
-**Solution:**
-```bash
-chmod +x install.sh
-./install.sh
-```
-
-#### 5. Docker Container Fails to Start
-
-**Problem:** Container exits immediately.
-
-**Solution:**
-```bash
-# Check logs
-docker-compose logs web
-
-# Common fixes:
-# - Ensure .env file exists
-# - Check if SECRET_KEY is set
-# - Verify requirements are properly installed
-docker-compose up --build
-```
-
-#### 6. "DisallowedHost" Error
-
-**Problem:** `Invalid HTTP_HOST header: 'example.com'`
-
-**Solution:**
-Add your domain to `ALLOWED_HOSTS` in `.env`:
-```bash
-ALLOWED_HOSTS=localhost,127.0.0.1,example.com,www.example.com
-```
-
-#### 7. CSRF Token Issues
-
-**Problem:** CSRF verification failed.
-
-**Solution:**
-Add your domain to `CSRF_TRUSTED_ORIGINS` in `.env`:
-```bash
-CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
-```
+For more issues, see the [Troubleshooting Guide](TROUBLESHOOTING.md).
 
 ### Database Commands
 
@@ -417,17 +359,69 @@ python manage.py runserver
 
 ## Next Steps
 
-- Read [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment guides
-- Configure AI providers in the admin panel
-- Import existing leads if you have them
-- Set up automated scraper runs
-- Configure Brevo integration for email automation
+After successful installation:
+
+1. **🚀 Get Started:** Follow the [QUICKSTART Guide](QUICKSTART.md) for your first scraper run (20 minutes)
+2. **⚙️ Optimize Configuration:** Check [Configuration Profiles](CONFIGURATION_PROFILES.md) (Safe/Balanced/Aggressive modes)
+3. **🔧 Fine-tune Settings:** Configure AI providers in the admin panel
+4. **📊 Import Leads:** Import existing leads if you have them
+5. **🤖 Automate:** Set up automated scraper runs
+6. **🚀 Deploy:** For production, read [DEPLOYMENT.md](DEPLOYMENT.md)
+
+### Configuration Profiles
+
+Choose the right profile for your use case:
+- **Safe Mode (QPI=6):** First tests, no API keys needed → [Details](CONFIGURATION_PROFILES.md#safe-mode)
+- **Balanced Mode (QPI=12):** Daily production use → [Details](CONFIGURATION_PROFILES.md#balanced-mode)
+- **Aggressive Mode (QPI=20):** Maximum throughput, proxy recommended → [Details](CONFIGURATION_PROFILES.md#aggressive-mode)
+
+---
+
+## Troubleshooting
+
+For detailed troubleshooting by symptoms, see the **[🆘 Troubleshooting Guide](TROUBLESHOOTING.md)**.
+
+The guide includes solutions for:
+- [I'm getting 0 leads](TROUBLESHOOTING.md#ich-bekomme-0-leads)
+- [Login/Session not working](TROUBLESHOOTING.md#loginsession-klappt-nicht)
+- [Too many 403/blocks](TROUBLESHOOTING.md#zu-viele-403blockaden)
+- [CRM shows nothing](TROUBLESHOOTING.md#crm-zeigt-nichts-an)
+- [Scraper runs but doesn't save](TROUBLESHOOTING.md#scraper-läuft-aber-speichert-nicht)
+
+### Common Installation Issues
+
+#### 1. Port 8000 Already in Use
+
+**Problem:** `Error: That port is already in use.`
+
+**Solution:**
+```bash
+# Find and kill the process using port 8000
+# Linux/Mac
+lsof -ti:8000 | xargs kill -9
+
+# Windows
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+
+# Or use a different port
+python manage.py runserver 0.0.0.0:8080
+```
+
+#### 2. Static Files Not Loading
+
+See [Troubleshooting Guide](TROUBLESHOOTING.md#static-files-not-loading) for full details.
+
+#### 3. Docker Container Fails
+
+See [Troubleshooting Guide](TROUBLESHOOTING.md#docker-container-fails) for full details.
 
 ---
 
 ## Support
 
 For issues and questions:
+- **[🆘 Troubleshooting Guide](TROUBLESHOOTING.md)** - Solve problems by symptoms
 - Check existing [GitHub Issues](https://github.com/sundsoffice-tech/luca-nrw-scraper/issues)
 - Create a new issue with detailed information
 - Review the [README.md](../README.md) for feature documentation
