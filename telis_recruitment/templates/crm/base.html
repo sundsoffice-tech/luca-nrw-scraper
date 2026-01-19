@@ -97,7 +97,7 @@
                 </a>
                 
                 <!-- Email Templates -->
-                <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if 'email_templates' in request.resolver_match.namespace and 'flow' not in request.resolver_match.url_name and 'send-logs' not in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}">
                     <span class="text-lg mr-3">📝</span>
                     <span>Templates</span>
                 </a>

@@ -26,8 +26,11 @@ def unread_email_count(request):
             ).exclude(
                 status='trash'
             ).count()
-        except Exception:
-            # Silently fail if mailbox app not fully configured
+        except (ImportError, AttributeError, Exception):
+            # Silently fail if:
+            # - mailbox app not installed (ImportError)
+            # - models not properly configured (AttributeError)
+            # - database issues (Exception as fallback)
             pass
     
     return {'unread_email_count': count}
