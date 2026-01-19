@@ -1,0 +1,198 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Support Bundle - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-500">›</span>
+<span class="text-primary">Support Bundle</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="bg-dark-800 rounded-lg p-6 mb-6 border border-dark-700">
+        <div class="flex items-center space-x-4">
+            <div class="text-5xl">📦</div>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-100">Support Bundle</h1>
+                <p class="text-gray-400 mt-1">Erstellen Sie ein Diagnose-Paket für Support und Fehleranalyse</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="bg-blue-900/20 border border-blue-700/50 rounded-lg p-5 mb-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <span class="text-2xl">ℹ️</span>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-blue-300 font-semibold mb-2">Was ist ein Support Bundle?</h3>
+                <p class="text-gray-300 text-sm leading-relaxed mb-2">
+                    Ein Support Bundle ist eine ZIP-Datei mit Systeminformationen, die bei der Fehleranalyse hilft:
+                </p>
+                <ul class="text-gray-300 text-sm space-y-1 ml-4">
+                    <li>✓ Systemkonfiguration (ohne Geheimnisse)</li>
+                    <li>✓ Datenbankstatistiken</li>
+                    <li>✓ Versions- und Umgebungsinformationen</li>
+                    <li>✓ Django System Checks</li>
+                    <li>✓ Optional: Log-Dateien (letzte 1000 Zeilen)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Warning -->
+    <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-5 mb-6">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <span class="text-2xl">⚠️</span>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-yellow-300 font-semibold mb-2">Sicherheitshinweis</h3>
+                <p class="text-gray-300 text-sm leading-relaxed">
+                    Das Bundle wurde automatisch bereinigt, um sensible Daten (API-Keys, Passwörter) zu entfernen.
+                    <strong>Bitte überprüfen Sie den Inhalt trotzdem vor dem Teilen!</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Form -->
+    <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+        <form method="post" id="bundle-form">
+            {% csrf_token %}
+            
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-100 mb-4">Optionen</h3>
+                
+                <div class="flex items-start space-x-3">
+                    <input 
+                        type="checkbox" 
+                        id="include_logs" 
+                        name="include_logs"
+                        class="mt-1 h-4 w-4 text-primary bg-dark-700 border-dark-600 rounded focus:ring-primary focus:ring-offset-dark-800"
+                    >
+                    <label for="include_logs" class="text-gray-300">
+                        <span class="font-medium">Log-Dateien einbeziehen</span>
+                        <p class="text-sm text-gray-400 mt-1">
+                            Fügt die letzten 1000 Zeilen jeder Log-Datei hinzu (kann die Bundle-Größe erhöhen)
+                        </p>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-100 mb-3">Was wird einbezogen?</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Systeminformationen</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Versionsinformationen</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Konfigurationsstatus</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Datenbankstatistiken</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Django System Checks</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-green-400">✓</span>
+                        <span>Python Umgebung</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-100 mb-3">Was wird NICHT einbezogen?</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-red-400">✗</span>
+                        <span>API Keys / Geheimnisse</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-red-400">✗</span>
+                        <span>Passwörter</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-red-400">✗</span>
+                        <span>Lead-Daten / Persönliche Daten</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-gray-300 text-sm">
+                        <span class="text-red-400">✗</span>
+                        <span>Datenbank-Inhalte</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <button 
+                    type="submit" 
+                    id="generate-btn"
+                    class="flex items-center px-6 py-3 bg-primary hover:bg-primary/80 text-dark-900 font-bold rounded-lg transition shadow-lg shadow-primary/20"
+                >
+                    <span class="mr-2">📦</span>
+                    <span>Support Bundle erstellen</span>
+                </button>
+                
+                <button 
+                    type="button" 
+                    id="cancel-btn"
+                    onclick="window.history.back()"
+                    class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-gray-300 font-medium rounded-lg transition"
+                >
+                    Abbrechen
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Additional Info -->
+    <div class="mt-6 bg-dark-800 rounded-lg p-6 border border-dark-700">
+        <h3 class="text-lg font-semibold text-gray-100 mb-3">💡 Wie verwenden Sie das Bundle?</h3>
+        <ol class="text-gray-300 text-sm space-y-2 ml-4 list-decimal">
+            <li>Erstellen Sie das Support Bundle mit dem Button oben</li>
+            <li>Die ZIP-Datei wird automatisch heruntergeladen</li>
+            <li>Überprüfen Sie den Inhalt auf sensible Informationen</li>
+            <li>Teilen Sie das Bundle mit Ihrem Support-Team oder hängen Sie es an ein GitHub Issue an</li>
+        </ol>
+    </div>
+
+    <!-- Version Info -->
+    <div class="mt-6 text-center text-gray-500 text-sm">
+        <p>LUCA NRW Scraper v{{ version }}</p>
+        <p class="mt-1">
+            <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper" target="_blank" class="text-primary hover:underline">
+                Dokumentation & Support ↗
+            </a>
+        </p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('bundle-form').addEventListener('submit', function(e) {
+        const btn = document.getElementById('generate-btn');
+        const originalHtml = btn.innerHTML;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="mr-2">⏳</span><span>Wird erstellt...</span>';
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+        
+        // Re-enable after 5 seconds (in case download completes)
+        setTimeout(function() {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+        }, 5000);
+    });
+</script>
+{% endblock %}

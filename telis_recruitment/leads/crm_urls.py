@@ -7,12 +7,17 @@ from django.urls import path
 from . import views
 from . import views_scraper
 from . import views_export
+from . import views_support
 
 urlpatterns = [
     # Main views
     path('', views.crm_dashboard, name='crm-dashboard'),
     path('leads/', views.crm_leads, name='crm-leads'),
     path('leads/<int:pk>/', views.crm_lead_detail, name='crm-lead-detail'),
+    
+    # Support tools
+    path('support/bundle/', views_support.support_bundle_view, name='support-bundle'),
+    path('support/health/', views_support.system_health_view, name='system-health'),
     
     # Scraper control (Admin only) - DISABLED - now handled by scraper_control app
     # path('scraper/', views_scraper.scraper_page, name='crm-scraper'),
