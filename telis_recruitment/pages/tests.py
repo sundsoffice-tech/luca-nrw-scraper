@@ -191,3 +191,101 @@ class FormSubmissionTest(TestCase):
         self.assertIsNotNone(lead)
         self.assertEqual(lead.name, 'Test User')
         self.assertEqual(lead.source, Lead.Source.LANDING_PAGE)
+
+
+class EditorViewTest(TestCase):
+    """Test code editor views"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.staff_user = User.objects.create_user(
+            username='staffuser',
+            password='staffpass',
+            is_staff=True
+        )
+        self.page = LandingPage.objects.create(
+            slug='test',
+            title='Test Page',
+            status='draft',
+            is_uploaded_site=True,
+            created_by=self.staff_user
+        )
+    
+    def test_editor_requires_staff(self):
+        """Test editor view requires staff access"""
+        response = self.client.get(reverse('pages:website-editor', kwargs={'slug': 'test'}))
+        self.assertEqual(response.status_code, 302)  # Redirect to login
+    
+    def test_editor_view_loads(self):
+        """Test editor view loads correctly"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:website-editor', kwargs={'slug': 'test'}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'monaco-editor')
+
+
+class FileVersionTest(TestCase):
+    """Test FileVersion model"""
+    
+    def setUp(self):
+        from .models import FileVersion
+        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.page = LandingPage.objects.create(
+            slug='test',
+            title='Test Page',
+            is_uploaded_site=True,
+            created_by=self.user
+        )
+        self.uploaded_file = UploadedFile.objects.create(
+            landing_page=self.page,
+            original_filename='test.html',
+            relative_path='test.html',
+            file_type='text/html',
+            file_size=100
+        )
+    
+    def test_file_version_creation(self):
+        """Test creating a file version"""
+        from .models import FileVersion
+        version = FileVersion.objects.create(
+            uploaded_file=self.uploaded_file,
+            content='<html>Test</html>',
+            version=1,
+            created_by=self.user,
+            note='Initial version'
+        )
+        self.assertEqual(version.version, 1)
+        self.assertEqual(version.note, 'Initial version')
+
+
+class ProjectTemplateTest(TestCase):
+    """Test ProjectTemplate model"""
+    
+    def test_project_template_creation(self):
+        """Test creating a project template"""
+        from .models import ProjectTemplate
+        template = ProjectTemplate.objects.create(
+            name='Test Template',
+            slug='test-template',
+            category='basic',
+            description='A test template',
+            files_data={'index.html': '<html></html>'},
+            is_active=True
+        )
+        self.assertEqual(template.slug, 'test-template')
+        self.assertTrue(template.is_active)
+        self.assertEqual(template.usage_count, 0)
+    
+    def test_increment_usage(self):
+        """Test incrementing template usage count"""
+        from .models import ProjectTemplate
+        template = ProjectTemplate.objects.create(
+            name='Test Template',
+            slug='test-template',
+            category='basic',
+            files_data={}
+        )
+        initial_count = template.usage_count
+        template.increment_usage()
+        template.refresh_from_db()
+        self.assertEqual(template.usage_count, initial_count + 1)

@@ -1,0 +1,987 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Code Editor - {{ page.title }} - TELIS CRM{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Full-height layout */
+    #editor-container {
+        height: calc(100vh - 120px);
+    }
+    
+    /* File tree styles */
+    .file-tree {
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+    }
+    .file-tree-item {
+        cursor: pointer;
+        padding: 0.375rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+    }
+    .file-tree-item:hover {
+        background-color: rgba(6, 182, 212, 0.1);
+    }
+    .file-tree-item.active {
+        background-color: rgba(6, 182, 212, 0.2);
+        border-left: 3px solid #06b6d4;
+    }
+    .folder-item {
+        font-weight: 600;
+    }
+    
+    /* Tab styles */
+    .editor-tab {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background-color: #1e293b;
+        border-right: 1px solid #334155;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+    }
+    .editor-tab:hover {
+        background-color: #334155;
+    }
+    .editor-tab.active {
+        background-color: #0f172a;
+        border-bottom: 2px solid #06b6d4;
+    }
+    .editor-tab .close-btn {
+        margin-left: 0.5rem;
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+    .editor-tab .close-btn:hover {
+        opacity: 1;
+        color: #ef4444;
+    }
+    
+    /* Monaco container */
+    #monaco-container {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #334155;
+        border-radius: 0.25rem;
+        overflow: hidden;
+    }
+    
+    /* Preview iframe */
+    #preview-frame {
+        width: 100%;
+        height: 100%;
+        border: 1px solid #334155;
+        border-radius: 0.25rem;
+        background: white;
+    }
+    
+    /* Resizer */
+    .resizer {
+        width: 10px;
+        cursor: col-resize;
+        background: #1e293b;
+        border-left: 1px solid #334155;
+        border-right: 1px solid #334155;
+        position: relative;
+    }
+    .resizer:hover {
+        background: #334155;
+    }
+    .resizer::after {
+        content: '⋮';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #64748b;
+        font-size: 1.5rem;
+        line-height: 0.5;
+    }
+    
+    /* Context menu */
+    .context-menu {
+        position: absolute;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.375rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        padding: 0.25rem 0;
+        min-width: 180px;
+        z-index: 1000;
+        display: none;
+    }
+    .context-menu.show {
+        display: block;
+    }
+    .context-menu-item {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+    }
+    .context-menu-item:hover {
+        background-color: rgba(6, 182, 212, 0.1);
+    }
+    .context-menu-item.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .context-menu-item .icon {
+        margin-right: 0.5rem;
+        width: 1.25rem;
+    }
+    
+    /* Status bar */
+    .status-bar {
+        background: #1e293b;
+        border-top: 1px solid #334155;
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    /* Toolbar */
+    .toolbar {
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+        padding: 0.5rem 1rem;
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+    }
+    .modal-overlay.show {
+        display: flex;
+    }
+    .modal {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        max-width: 500px;
+        width: 90%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="bg-dark-800 border-b border-dark-700 px-4 py-3">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <a href="{% url 'pages:builder-list' %}" 
+                   class="text-gray-400 hover:text-white transition">
+                    ← Back
+                </a>
+                <div class="text-gray-500">|</div>
+                <div>
+                    <h1 class="text-lg font-bold text-white">Code Editor</h1>
+                    <p class="text-sm text-gray-400">{{ page.title }}</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="btn-preview" onclick="togglePreview()" 
+                        class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm">
+                    👁️ Preview
+                </button>
+                <a href="{% url 'pages:upload-manager' slug=page.slug %}" 
+                   class="px-3 py-1.5 bg-dark-700 text-white rounded hover:bg-dark-600 transition text-sm border border-dark-600">
+                    📦 Upload Manager
+                </a>
+                <a href="{% url 'pages:export-project' slug=page.slug %}" 
+                   class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition text-sm">
+                    ⬇️ Export ZIP
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Editor Layout -->
+    <div id="editor-container" class="flex overflow-hidden">
+        <!-- Left Panel: File Tree -->
+        <div id="file-tree-panel" class="w-64 bg-dark-800 border-r border-dark-700 flex flex-col">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <button onclick="showCreateFileDialog()" 
+                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="New File">
+                    📄
+                </button>
+                <button onclick="showCreateFolderDialog()" 
+                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="New Folder">
+                    📁
+                </button>
+                <button onclick="showSearchDialog()" 
+                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="Search">
+                    🔍
+                </button>
+                <button onclick="refreshFileTree()" 
+                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="Refresh">
+                    🔄
+                </button>
+            </div>
+            
+            <!-- File Tree -->
+            <div id="file-tree" class="flex-1 overflow-auto p-2 file-tree">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+        
+        <!-- Center Panel: Editor -->
+        <div id="editor-panel" class="flex-1 flex flex-col">
+            <!-- Tabs -->
+            <div id="editor-tabs" class="bg-dark-800 border-b border-dark-700 flex overflow-x-auto">
+                <!-- Tabs populated by JavaScript -->
+            </div>
+            
+            <!-- Monaco Editor -->
+            <div id="monaco-container" class="flex-1"></div>
+            
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="flex items-center space-x-4">
+                    <span id="status-file">No file open</span>
+                    <span id="status-language" class="text-gray-500"></span>
+                    <span id="status-position" class="text-gray-500"></span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="status-encoding" class="text-gray-500">UTF-8</span>
+                    <span id="status-save" class="text-green-500"></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Preview (Initially Hidden) -->
+        <div id="preview-panel" class="hidden w-1/2 border-l border-dark-700 bg-dark-900">
+            <div class="toolbar">
+                <span class="text-sm text-gray-400">Preview</span>
+                <div class="flex-1"></div>
+                <button onclick="refreshPreview()" 
+                        class="p-1 hover:bg-dark-700 rounded transition text-sm" title="Refresh">
+                    🔄
+                </button>
+                <button onclick="togglePreview()" 
+                        class="p-1 hover:bg-dark-700 rounded transition text-sm ml-2" title="Close">
+                    ✕
+                </button>
+            </div>
+            <iframe id="preview-frame"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="context-menu">
+    <div class="context-menu-item" onclick="openFile()">
+        <span class="icon">📂</span> Open
+    </div>
+    <div class="context-menu-item" onclick="showRenameDialog()">
+        <span class="icon">✏️</span> Rename
+    </div>
+    <div class="context-menu-item" onclick="showDuplicateDialog()">
+        <span class="icon">📋</span> Duplicate
+    </div>
+    <div class="context-menu-item" onclick="showDeleteDialog()">
+        <span class="icon">🗑️</span> Delete
+    </div>
+</div>
+
+<!-- Modal for dialogs -->
+<div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+        <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+        <div id="modal-content" class="mb-4"></div>
+        <div class="flex justify-end space-x-2">
+            <button onclick="closeModal()" 
+                    class="px-4 py-2 bg-dark-700 text-white rounded hover:bg-dark-600 transition">
+                Cancel
+            </button>
+            <button id="modal-confirm" onclick="confirmModal()" 
+                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+                OK
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed bottom-4 right-4 hidden">
+    <div class="bg-dark-800 border border-dark-700 rounded-lg shadow-xl p-4 max-w-sm">
+        <div class="flex items-start">
+            <div id="toast-icon" class="flex-shrink-0 mr-3"></div>
+            <div>
+                <p id="toast-text" class="text-white text-sm"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Load Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+<script>
+// Global state
+const state = {
+    currentFile: null,
+    openTabs: [],
+    activeTab: null,
+    editor: null,
+    fileTree: null,
+    contextTarget: null,
+    unsavedChanges: {},
+    modalCallback: null
+};
+
+const pageSlug = '{{ page.slug }}';
+const csrfToken = '{{ csrf_token }}';
+
+// Initialize Monaco Editor
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+require(['vs/editor/editor.main'], function() {
+    state.editor = monaco.editor.create(document.getElementById('monaco-container'), {
+        value: '// Select a file to start editing',
+        language: 'javascript',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        fontSize: 14,
+        minimap: { enabled: true },
+        scrollBeyondLastLine: false,
+        lineNumbers: 'on',
+        folding: true,
+        wordWrap: 'on'
+    });
+    
+    // Listen for content changes
+    state.editor.onDidChangeModelContent(() => {
+        if (state.currentFile) {
+            state.unsavedChanges[state.currentFile] = true;
+            updateStatusBar();
+            updateTabTitle(state.currentFile);
+        }
+    });
+    
+    // Listen for cursor position changes
+    state.editor.onDidChangeCursorPosition((e) => {
+        updateStatusBar();
+    });
+    
+    // Register keyboard shortcuts
+    state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        saveCurrentFile();
+    });
+    
+    // Load initial file tree
+    refreshFileTree();
+});
+
+// File Tree Functions
+function refreshFileTree() {
+    fetch(`/crm/pages/api/${pageSlug}/upload/list/`, {
+        headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            state.fileTree = data.data;
+            renderFileTree();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading file tree:', error);
+        showToast('Error loading file tree', 'error');
+    });
+}
+
+function renderFileTree() {
+    const treeDiv = document.getElementById('file-tree');
+    treeDiv.innerHTML = renderTreeNode(state.fileTree, 0);
+}
+
+function renderTreeNode(node, level) {
+    if (!node) return '';
+    
+    let html = '';
+    const indent = level * 12;
+    
+    if (node.type === 'directory') {
+        html += `<div style="padding-left: ${indent}px" class="folder-item text-blue-400 py-1">
+            📁 ${node.name}/
+        </div>`;
+        if (node.children) {
+            node.children.forEach(child => {
+                html += renderTreeNode(child, level + 1);
+            });
+        }
+    } else if (node.type === 'file') {
+        const isActive = state.currentFile === node.path;
+        html += `<div style="padding-left: ${indent}px" 
+                     class="file-tree-item ${isActive ? 'active' : ''}"
+                     data-path="${node.path}"
+                     onclick="loadFile('${node.path}')"
+                     oncontextmenu="showContextMenu(event, '${node.path}')">
+            📄 ${node.name}
+        </div>`;
+    }
+    
+    return html;
+}
+
+// File Operations
+function loadFile(path) {
+    // Check for unsaved changes
+    if (state.currentFile && state.unsavedChanges[state.currentFile]) {
+        if (!confirm('You have unsaved changes. Continue without saving?')) {
+            return;
+        }
+    }
+    
+    fetch(`/crm/pages/api/${pageSlug}/editor/file/?path=${encodeURIComponent(path)}`, {
+        headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const fileData = data.data;
+            state.currentFile = path;
+            
+            // Update editor content
+            state.editor.setValue(fileData.content);
+            monaco.editor.setModelLanguage(state.editor.getModel(), fileData.language);
+            
+            // Add to tabs
+            addTab(path);
+            
+            // Update UI
+            renderFileTree();
+            updateStatusBar();
+            
+            // Clear unsaved flag
+            delete state.unsavedChanges[path];
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading file:', error);
+        showToast('Error loading file', 'error');
+    });
+}
+
+function saveCurrentFile() {
+    if (!state.currentFile) {
+        showToast('No file open', 'error');
+        return;
+    }
+    
+    const content = state.editor.getValue();
+    
+    fetch(`/crm/pages/api/${pageSlug}/editor/file/save/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            path: state.currentFile,
+            content: content,
+            create_version: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            delete state.unsavedChanges[state.currentFile];
+            updateStatusBar();
+            updateTabTitle(state.currentFile);
+            showToast('File saved successfully', 'success');
+            
+            // Refresh preview if open
+            if (!document.getElementById('preview-panel').classList.contains('hidden')) {
+                refreshPreview();
+            }
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving file:', error);
+        showToast('Error saving file', 'error');
+    });
+}
+
+// Tab Management
+function addTab(path) {
+    if (!state.openTabs.includes(path)) {
+        state.openTabs.push(path);
+    }
+    state.activeTab = path;
+    renderTabs();
+}
+
+function closeTab(path, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    // Check for unsaved changes
+    if (state.unsavedChanges[path]) {
+        if (!confirm('Close without saving?')) {
+            return;
+        }
+    }
+    
+    const index = state.openTabs.indexOf(path);
+    if (index > -1) {
+        state.openTabs.splice(index, 1);
+        delete state.unsavedChanges[path];
+    }
+    
+    // Switch to another tab or clear editor
+    if (state.currentFile === path) {
+        if (state.openTabs.length > 0) {
+            const newTab = index > 0 ? state.openTabs[index - 1] : state.openTabs[0];
+            loadFile(newTab);
+        } else {
+            state.currentFile = null;
+            state.editor.setValue('// Select a file to start editing');
+            updateStatusBar();
+        }
+    }
+    
+    renderTabs();
+}
+
+function renderTabs() {
+    const tabsDiv = document.getElementById('editor-tabs');
+    tabsDiv.innerHTML = state.openTabs.map(path => {
+        const fileName = path.split('/').pop();
+        const isActive = path === state.activeTab;
+        const hasChanges = state.unsavedChanges[path];
+        
+        return `<div class="editor-tab ${isActive ? 'active' : ''}" 
+                     onclick="loadFile('${path}')">
+            <span>${fileName}${hasChanges ? ' •' : ''}</span>
+            <span class="close-btn" onclick="closeTab('${path}', event)">✕</span>
+        </div>`;
+    }).join('');
+}
+
+function updateTabTitle(path) {
+    renderTabs();
+}
+
+// Status Bar
+function updateStatusBar() {
+    const fileSpan = document.getElementById('status-file');
+    const langSpan = document.getElementById('status-language');
+    const posSpan = document.getElementById('status-position');
+    const saveSpan = document.getElementById('status-save');
+    
+    if (state.currentFile) {
+        fileSpan.textContent = state.currentFile;
+        langSpan.textContent = state.editor.getModel().getLanguageId();
+        
+        const position = state.editor.getPosition();
+        posSpan.textContent = `Ln ${position.lineNumber}, Col ${position.column}`;
+        
+        if (state.unsavedChanges[state.currentFile]) {
+            saveSpan.textContent = '● Modified';
+            saveSpan.className = 'text-yellow-500';
+        } else {
+            saveSpan.textContent = '✓ Saved';
+            saveSpan.className = 'text-green-500';
+        }
+    } else {
+        fileSpan.textContent = 'No file open';
+        langSpan.textContent = '';
+        posSpan.textContent = '';
+        saveSpan.textContent = '';
+    }
+}
+
+// Context Menu
+function showContextMenu(event, path) {
+    event.preventDefault();
+    state.contextTarget = path;
+    
+    const menu = document.getElementById('context-menu');
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+    menu.classList.add('show');
+    
+    // Close on click outside
+    setTimeout(() => {
+        document.addEventListener('click', closeContextMenu);
+    }, 0);
+}
+
+function closeContextMenu() {
+    const menu = document.getElementById('context-menu');
+    menu.classList.remove('show');
+    document.removeEventListener('click', closeContextMenu);
+}
+
+function openFile() {
+    if (state.contextTarget) {
+        loadFile(state.contextTarget);
+    }
+    closeContextMenu();
+}
+
+// Dialogs
+function showCreateFileDialog() {
+    showModal('Create New File', `
+        <label class="block text-sm text-gray-400 mb-2">File path (e.g., js/app.js)</label>
+        <input type="text" id="modal-input" 
+               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+               placeholder="path/to/file.js">
+    `, () => {
+        const path = document.getElementById('modal-input').value.trim();
+        if (path) {
+            createFile(path);
+        }
+    });
+}
+
+function showCreateFolderDialog() {
+    showModal('Create New Folder', `
+        <label class="block text-sm text-gray-400 mb-2">Folder path (e.g., css/components)</label>
+        <input type="text" id="modal-input" 
+               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+               placeholder="path/to/folder">
+    `, () => {
+        const path = document.getElementById('modal-input').value.trim();
+        if (path) {
+            createFolder(path);
+        }
+    });
+}
+
+function showRenameDialog() {
+    if (!state.contextTarget) return;
+    
+    showModal('Rename File', `
+        <label class="block text-sm text-gray-400 mb-2">New path</label>
+        <input type="text" id="modal-input" 
+               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+               value="${state.contextTarget}">
+    `, () => {
+        const newPath = document.getElementById('modal-input').value.trim();
+        if (newPath && newPath !== state.contextTarget) {
+            renameFile(state.contextTarget, newPath);
+        }
+    });
+    closeContextMenu();
+}
+
+function showDuplicateDialog() {
+    if (!state.contextTarget) return;
+    
+    const baseName = state.contextTarget.replace(/\.[^/.]+$/, '');
+    const ext = state.contextTarget.split('.').pop();
+    const defaultName = `${baseName}_copy.${ext}`;
+    
+    showModal('Duplicate File', `
+        <label class="block text-sm text-gray-400 mb-2">New file path</label>
+        <input type="text" id="modal-input" 
+               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+               value="${defaultName}">
+    `, () => {
+        const destPath = document.getElementById('modal-input').value.trim();
+        if (destPath) {
+            duplicateFile(state.contextTarget, destPath);
+        }
+    });
+    closeContextMenu();
+}
+
+function showDeleteDialog() {
+    if (!state.contextTarget) return;
+    
+    showModal('Delete File', `
+        <p class="text-gray-400">Are you sure you want to delete:</p>
+        <p class="text-white font-mono mt-2">${state.contextTarget}</p>
+        <p class="text-red-500 text-sm mt-2">This action cannot be undone.</p>
+    `, () => {
+        deleteFile(state.contextTarget);
+    });
+    closeContextMenu();
+}
+
+function showSearchDialog() {
+    showModal('Search Files', `
+        <label class="block text-sm text-gray-400 mb-2">Search query</label>
+        <input type="text" id="modal-input" 
+               class="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+               placeholder="Enter search term...">
+        <div class="mt-2">
+            <label class="flex items-center text-sm text-gray-400">
+                <input type="checkbox" id="search-content" checked class="mr-2">
+                Search file contents
+            </label>
+        </div>
+    `, () => {
+        const query = document.getElementById('modal-input').value.trim();
+        const searchContent = document.getElementById('search-content').checked;
+        if (query) {
+            searchFiles(query, searchContent);
+        }
+    });
+}
+
+function showModal(title, content, callback) {
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-content').innerHTML = content;
+    document.getElementById('modal-overlay').classList.add('show');
+    state.modalCallback = callback;
+    
+    // Focus input if exists
+    setTimeout(() => {
+        const input = document.getElementById('modal-input');
+        if (input) input.focus();
+    }, 100);
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('show');
+    state.modalCallback = null;
+}
+
+function confirmModal() {
+    if (state.modalCallback) {
+        state.modalCallback();
+    }
+    closeModal();
+}
+
+// File Operations API Calls
+function createFile(path) {
+    fetch(`/crm/pages/api/${pageSlug}/editor/file/create/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ path: path, content: '' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('File created successfully', 'success');
+            refreshFileTree();
+            loadFile(path);
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating file:', error);
+        showToast('Error creating file', 'error');
+    });
+}
+
+function createFolder(path) {
+    fetch(`/crm/pages/api/${pageSlug}/editor/folder/create/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ path: path })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Folder created successfully', 'success');
+            refreshFileTree();
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating folder:', error);
+        showToast('Error creating folder', 'error');
+    });
+}
+
+function renameFile(oldPath, newPath) {
+    fetch(`/crm/pages/api/${pageSlug}/editor/file/rename/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ old_path: oldPath, new_path: newPath })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('File renamed successfully', 'success');
+            refreshFileTree();
+            
+            // Update tabs if file is open
+            const index = state.openTabs.indexOf(oldPath);
+            if (index > -1) {
+                state.openTabs[index] = newPath;
+            }
+            if (state.currentFile === oldPath) {
+                state.currentFile = newPath;
+            }
+            renderTabs();
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error renaming file:', error);
+        showToast('Error renaming file', 'error');
+    });
+}
+
+function duplicateFile(sourcePath, destPath) {
+    fetch(`/crm/pages/api/${pageSlug}/editor/file/duplicate/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ source_path: sourcePath, dest_path: destPath })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('File duplicated successfully', 'success');
+            refreshFileTree();
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error duplicating file:', error);
+        showToast('Error duplicating file', 'error');
+    });
+}
+
+function deleteFile(path) {
+    fetch(`/crm/pages/api/${pageSlug}/upload/delete/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ path: path })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('File deleted successfully', 'success');
+            refreshFileTree();
+            
+            // Close tab if open
+            if (state.openTabs.includes(path)) {
+                closeTab(path);
+            }
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting file:', error);
+        showToast('Error deleting file', 'error');
+    });
+}
+
+function searchFiles(query, searchContent) {
+    fetch(`/crm/pages/api/${pageSlug}/editor/search/?query=${encodeURIComponent(query)}&search_content=${searchContent}`, {
+        headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Found ${data.count} results`, 'info');
+            // TODO: Show results in a panel
+            console.log('Search results:', data.results);
+        } else {
+            showToast(data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error searching files:', error);
+        showToast('Error searching files', 'error');
+    });
+}
+
+// Preview Functions
+function togglePreview() {
+    const previewPanel = document.getElementById('preview-panel');
+    previewPanel.classList.toggle('hidden');
+    
+    if (!previewPanel.classList.contains('hidden')) {
+        refreshPreview();
+    }
+}
+
+function refreshPreview() {
+    const iframe = document.getElementById('preview-frame');
+    iframe.src = `/p/${pageSlug}/?t=${Date.now()}`;
+}
+
+// Toast Notifications
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    const icon = document.getElementById('toast-icon');
+    const text = document.getElementById('toast-text');
+    
+    text.textContent = message;
+    
+    if (type === 'success') {
+        icon.innerHTML = '<span class="text-green-500 text-2xl">✓</span>';
+    } else if (type === 'error') {
+        icon.innerHTML = '<span class="text-red-500 text-2xl">✕</span>';
+    } else {
+        icon.innerHTML = '<span class="text-blue-500 text-2xl">ℹ</span>';
+    }
+    
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + P: Quick open
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        showSearchDialog();
+    }
+});
+
+// Prevent leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+    if (Object.keys(state.unsavedChanges).length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+</script>
+{% endblock %}

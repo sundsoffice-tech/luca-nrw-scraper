@@ -68,14 +68,27 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <a href="{% url 'pages:page-builder' page.slug %}" 
-                           class="text-primary hover:text-primary/80 mr-3">
-                            Edit
+                           class="text-primary hover:text-primary/80 mr-3"
+                           title="Visual Builder">
+                            🎨 Builder
                         </a>
+                        {% if page.is_uploaded_site %}
+                        <a href="{% url 'pages:website-editor' page.slug %}" 
+                           class="text-blue-400 hover:text-blue-300 mr-3"
+                           title="Code Editor">
+                            💻 Editor
+                        </a>
+                        <a href="{% url 'pages:upload-manager' page.slug %}" 
+                           class="text-green-400 hover:text-green-300 mr-3"
+                           title="Upload Manager">
+                            📦 Upload
+                        </a>
+                        {% endif %}
                         {% if page.status == 'published' %}
                         <a href="{% url 'pages_public:page-public' page.slug %}" 
                            target="_blank"
                            class="text-gray-400 hover:text-white">
-                            View
+                            👁️ View
                         </a>
                         {% endif %}
                     </td>

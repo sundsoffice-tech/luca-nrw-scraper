@@ -382,3 +382,67 @@ class PageTemplate(models.Model):
     def __str__(self):
         return f"{self.name} ({self.get_category_display()})"
 
+
+class FileVersion(models.Model):
+    """Version history for uploaded files"""
+    uploaded_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE, 
+                                     related_name='versions')
+    content = models.TextField(help_text="File content at this version")
+    version = models.PositiveIntegerField(help_text="Sequential version number")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    note = models.CharField(max_length=255, blank=True, 
+                          help_text="Optional note about changes")
+    
+    class Meta:
+        ordering = ['-version']
+        unique_together = ['uploaded_file', 'version']
+        verbose_name = 'File Version'
+        verbose_name_plural = 'File Versions'
+    
+    def __str__(self):
+        return f"{self.uploaded_file.relative_path} - v{self.version}"
+
+
+class ProjectTemplate(models.Model):
+    """Website project templates for quick start"""
+    CATEGORY_CHOICES = [
+        ('blank', 'Blank Template'),
+        ('basic', 'Basic HTML'),
+        ('bootstrap', 'Bootstrap'),
+        ('tailwind', 'Tailwind CSS'),
+        ('business', 'Business'),
+        ('portfolio', 'Portfolio'),
+        ('landing', 'Landing Page'),
+        ('blog', 'Blog'),
+        ('ecommerce', 'E-Commerce'),
+        ('other', 'Other'),
+    ]
+    
+    name = models.CharField(max_length=100, help_text="Template name")
+    slug = models.SlugField(unique=True, max_length=100)
+    description = models.TextField(blank=True, help_text="Template description")
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='other')
+    thumbnail = models.ImageField(upload_to='templates/thumbnails/', blank=True,
+                                 help_text="Preview thumbnail")
+    files_data = models.JSONField(default=dict, 
+                                 help_text="Serialized file structure and content")
+    is_active = models.BooleanField(default=True)
+    usage_count = models.PositiveIntegerField(default=0, 
+                                             help_text="Number of times used")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['category', 'name']
+        verbose_name = 'Project Template'
+        verbose_name_plural = 'Project Templates'
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_category_display()})"
+    
+    def increment_usage(self):
+        """Increment usage counter"""
+        self.usage_count += 1
+        self.save(update_fields=['usage_count'])
+

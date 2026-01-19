@@ -1,6 +1,6 @@
 """URL configuration for pages app"""
 from django.urls import path
-from . import views, views_upload
+from . import views, views_upload, views_editor
 
 app_name = 'pages'
 
@@ -41,4 +41,20 @@ urlpatterns = [
     path('api/<slug:slug>/domain/save/', views_upload.save_domain_settings, name='save-domain'),
     path('api/<slug:slug>/domain/verify/', views_upload.verify_dns, name='verify-dns'),
     path('api/<slug:slug>/domain/nginx/', views_upload.get_nginx_config, name='nginx-config'),
+    
+    # Website Editor (Staff Only)
+    path('editor/<slug:slug>/', views_editor.website_editor, name='website-editor'),
+    path('api/<slug:slug>/editor/file/', views_editor.get_file_content, name='editor-get-file'),
+    path('api/<slug:slug>/editor/file/save/', views_editor.save_file_content, name='editor-save-file'),
+    path('api/<slug:slug>/editor/file/create/', views_editor.create_file, name='editor-create-file'),
+    path('api/<slug:slug>/editor/file/rename/', views_editor.rename_file, name='editor-rename-file'),
+    path('api/<slug:slug>/editor/file/move/', views_editor.move_file, name='editor-move-file'),
+    path('api/<slug:slug>/editor/file/duplicate/', views_editor.duplicate_file, name='editor-duplicate-file'),
+    path('api/<slug:slug>/editor/folder/create/', views_editor.create_folder, name='editor-create-folder'),
+    path('api/<slug:slug>/editor/folder/delete/', views_editor.delete_folder, name='editor-delete-folder'),
+    path('api/<slug:slug>/editor/search/', views_editor.search_files, name='editor-search'),
+    path('api/<slug:slug>/editor/versions/', views_editor.file_versions, name='editor-versions'),
+    path('api/<slug:slug>/editor/restore/', views_editor.restore_version, name='editor-restore'),
+    path('api/<slug:slug>/export/', views_editor.export_project, name='export-project'),
+    path('api/<slug:slug>/import/', views_editor.import_project, name='import-project'),
 ]
