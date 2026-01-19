@@ -316,8 +316,26 @@ class BrandSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        verbose_name = 'Brand Settings'
-        verbose_name_plural = 'Brand Settings'
+        verbose_name = 'Marken-Einstellungen'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+    
+    def get_css_variables(self):
+        return f""":root {{ 
+    --color-primary: {self.primary_color}; 
+    --color-secondary: {self.secondary_color}; 
+    --color-accent: {self.accent_color}; 
+    --color-text: {self.text_color}; 
+    --color-text-light: {self.text_light_color}; 
+    --color-background: {self.background_color};
+}}"""
     
     def __str__(self):
         return f"Brand Settings (ID: {self.id})"

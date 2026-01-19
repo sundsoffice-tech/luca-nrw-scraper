@@ -23,7 +23,8 @@ urlpatterns = [
     path('brand-settings/css/', views.get_brand_css, name='brand_css'),
     
     # Templates
-    path('templates/', views.select_template, name='select_template'),
+    path('templates/', views.template_list, name='template-list'),
+    path('templates/select/', views.select_template, name='select_template'),
     path('templates/<int:template_id>/apply/', views.apply_template, name='apply_template'),
     
     # Upload Management (Staff Only)

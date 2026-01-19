@@ -400,6 +400,7 @@ class PageTemplateAdmin(ModelAdmin):
     search_fields = ['name', 'slug', 'description']
     prepopulated_fields = {'slug': ('name',)}
     readonly_fields = ['usage_count', 'created_at']
+    prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = [
         ('Template Information', {
