@@ -309,7 +309,8 @@
 <script>
     // Note: Responsive CSS is handled automatically by GrapesJS via the mediaQuery property
     // on style properties. When properties have mediaQuery: 'tablet' or 'mobile', GrapesJS
-    // automatically generates appropriate CSS media queries during CSS export.
+    // uses the deviceManager configuration and mediaCondition setting to generate appropriate
+    // CSS media queries (e.g., @media (max-width: 992px)) during CSS export.
     
     // Initialize GrapesJS Editor
     window.editor = grapesjs.init({
@@ -397,8 +398,8 @@
                             property: 'font-size',
                             label: 'Font Size (Tablet)',
                             type: 'select',
-                            // toRequire: 1 means this property requires at least 1 sub-property to be set
-                            // This is a GrapesJS property used for composite properties
+                            // toRequire: 1 specifies that at least 1 sub-property must have a value
+                            // for the composite property to be considered valid in GrapesJS
                             toRequire: 1,
                             defaults: '',
                             options: [
