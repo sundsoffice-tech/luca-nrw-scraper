@@ -526,6 +526,61 @@ def template_list(request):
     return render(request, 'pages/template_list.html', {'templates_by_category': templates_by_category})
 
 
+@staff_member_required
+def template_config(request, template_id):
+    """Get template layout configuration"""
+    try:
+        template = PageTemplate.objects.get(id=template_id, is_active=True)
+        
+        return JsonResponse({
+            'success': True,
+            'template': {
+                'id': template.id,
+                'name': template.name,
+                'slug': template.slug,
+                'category': template.category,
+                'category_display': template.get_category_display(),
+                'description': template.description,
+                'layout_config': template.layout_config,
+                'html_json': template.html_json,
+                'css': template.css,
+            }
+        })
+    except PageTemplate.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Template not found'}, status=404)
+    except Exception as e:
+        logger.error(f"Error getting template config {template_id}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@staff_member_required
+def templates_by_category(request, category):
+    """Get templates filtered by category"""
+    try:
+        templates = PageTemplate.objects.filter(is_active=True, category=category)
+        
+        templates_data = [
+            {
+                'id': t.id,
+                'name': t.name,
+                'slug': t.slug,
+                'category': t.category,
+                'description': t.description,
+                'layout_config': t.layout_config,
+                'usage_count': t.usage_count,
+                'thumbnail_url': t.thumbnail.url if t.thumbnail else None,
+            }
+            for t in templates
+        ]
+        
+        return JsonResponse({
+            'success': True,
+            'category': category,
+            'templates': templates_data
+        })
+    except Exception as e:
+        logger.error(f"Error getting templates for category {category}: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 
 
