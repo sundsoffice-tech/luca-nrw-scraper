@@ -1048,18 +1048,24 @@ function saveCurrentFile(silent = false) {
 let autoSaveDebounceTimer = null;
 
 function startAutoSave() {
-    // Clear existing timers
+    // Clear both existing timers to prevent memory leaks
     if (state.autoSaveTimer) {
         clearTimeout(state.autoSaveTimer);
+        state.autoSaveTimer = null;
     }
     if (autoSaveDebounceTimer) {
         clearTimeout(autoSaveDebounceTimer);
+        autoSaveDebounceTimer = null;
     }
     
     // Debounce: wait 2 seconds of inactivity before starting the auto-save timer
     autoSaveDebounceTimer = setTimeout(() => {
+        autoSaveDebounceTimer = null; // Clear reference after execution
+        
         // Set timer for 30 seconds after last change
         state.autoSaveTimer = setTimeout(() => {
+            state.autoSaveTimer = null; // Clear reference after execution
+            
             if (state.currentFile && state.unsavedChanges[state.currentFile]) {
                 saveCurrentFile(true);
                 showToast('Auto-saved', 'info');
@@ -1069,6 +1075,9 @@ function startAutoSave() {
 }
 
 // Save all unsaved files
+// Note: Currently only saves the file that is open in the editor
+// Files that are unsaved but not currently open cannot be saved
+// This is a known limitation - consider storing file contents in memory for full support
 function saveAllFiles() {
     const unsavedFiles = Object.keys(state.unsavedChanges).filter(path => state.unsavedChanges[path]);
     
@@ -1077,30 +1086,30 @@ function saveAllFiles() {
         return;
     }
     
+    // Check if there are unsaved files that are not currently open
+    const unopenedUnsaved = unsavedFiles.filter(path => path !== state.currentFile);
+    if (unopenedUnsaved.length > 0 && state.currentFile) {
+        showToast(
+            `Note: Only the current file will be saved. ${unopenedUnsaved.length} other file(s) are unsaved but not open.`,
+            'warning'
+        );
+    }
+    
     let savedCount = 0;
     let failedCount = 0;
     
-    showToast(`Saving ${unsavedFiles.length} file(s)...`, 'info');
-    
-    // Save each file
-    const savePromises = unsavedFiles.map(filePath => {
-        // Get content from editor if it's the current file, otherwise skip
-        let content;
-        if (filePath === state.currentFile && state.editor) {
-            content = state.editor.getValue();
-        } else {
-            // File is not currently open, skip it
-            return Promise.resolve();
-        }
+    // Save the current file if it has changes
+    if (state.currentFile && state.unsavedChanges[state.currentFile] && state.editor) {
+        const content = state.editor.getValue();
         
-        return fetch(`/crm/pages/api/${pageSlug}/editor/file/save/`, {
+        fetch(`/crm/pages/api/${pageSlug}/editor/file/save/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
-                path: filePath,
+                path: state.currentFile,
                 content: content,
                 create_version: true
             })
@@ -1108,30 +1117,23 @@ function saveAllFiles() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                state.unsavedChanges[filePath] = false;
-                savedCount++;
+                state.unsavedChanges[state.currentFile] = false;
+                showToast('File saved successfully', 'success');
             } else {
-                failedCount++;
-                console.error(`Failed to save ${filePath}:`, data.error);
+                showToast(data.error || 'Failed to save file', 'error');
             }
+            updateStatusBar();
+            updateSaveAllButton();
+            renderFileTree();
+            state.openTabs.forEach(path => updateTabTitle(path));
         })
         .catch(error => {
-            failedCount++;
-            console.error(`Error saving ${filePath}:`, error);
+            console.error('Error saving file:', error);
+            showToast('Error saving file', 'error');
         });
-    });
-    
-    Promise.all(savePromises).then(() => {
-        if (failedCount === 0) {
-            showToast(`Successfully saved ${savedCount} file(s)`, 'success');
-        } else {
-            showToast(`Saved ${savedCount} file(s), ${failedCount} failed`, 'warning');
-        }
-        updateStatusBar();
-        updateSaveAllButton();
-        renderFileTree();
-        state.openTabs.forEach(path => updateTabTitle(path));
-    });
+    } else {
+        showToast('No file to save', 'info');
+    }
 }
 
 // Update Save All button visibility
@@ -1461,8 +1463,8 @@ function validateFilePath(path) {
         return { valid: false, error: 'Path cannot contain ".." or "./"' };
     }
     
-    // Check for absolute paths
-    if (path.startsWith('/') || path.match(/^[a-zA-Z]:\\/)) {
+    // Check for absolute paths (Windows and Unix)
+    if (path.startsWith('/') || path.match(/^[a-zA-Z]:\\\\/)) {
         return { valid: false, error: 'Path must be relative (no leading slash or drive letter)' };
     }
     
@@ -1479,8 +1481,12 @@ function validateFilePath(path) {
     // Check that path has a valid extension for files
     const parts = path.split('/');
     const filename = parts[parts.length - 1];
-    if (filename.includes('.') && !filename.match(/\.[a-zA-Z0-9]+$/)) {
-        return { valid: false, error: 'Invalid file extension' };
+    if (filename.includes('.')) {
+        // Allow alphanumeric, hyphens, underscores in extensions
+        // Also allow multiple extensions like .tar.gz, .d.ts
+        if (!filename.match(/\.[a-zA-Z0-9_-]+$/)) {
+            return { valid: false, error: 'Invalid file extension' };
+        }
     }
     
     return { valid: true, path: path };
@@ -1689,12 +1695,16 @@ function displaySearchResults(results, query) {
             const contextDiv = document.createElement('div');
             contextDiv.className = 'text-xs text-gray-400 mt-1 ml-5 truncate';
             
-            // Highlight the query in context
-            const contextHtml = escapeHtml(result.context).replace(
-                new RegExp(escapeHtml(query), 'gi'),
-                match => `<mark class="bg-yellow-500 text-black px-1 rounded">${match}</mark>`
+            // Escape HTML first, then highlight the search term
+            const escapedContext = escapeHtml(result.context);
+            const escapedQuery = escapeHtml(query);
+            
+            // Use a safer highlighting approach
+            const highlightedContext = escapedContext.replace(
+                new RegExp(`(${escapedQuery})`, 'gi'),
+                '<mark class="bg-yellow-500 text-black px-1 rounded">$1</mark>'
             );
-            contextDiv.innerHTML = `...${contextHtml}...`;
+            contextDiv.innerHTML = `...${highlightedContext}...`;
             resultDiv.appendChild(contextDiv);
         }
         
