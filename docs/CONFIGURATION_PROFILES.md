@@ -252,6 +252,162 @@ ASYNC_PER_HOST=3  # Reduce from 5
 HTTP_TIMEOUT=15  # Increase from 10
 ```
 
+## 🗄️ Database Backend Configuration
+
+LUCA supports two database backends that can be switched via the `SCRAPER_DB_BACKEND` environment variable:
+
+### Available Backends
+
+#### 1. SQLite Backend (Default)
+
+**Configuration:**
+```env
+SCRAPER_DB_BACKEND=sqlite
+```
+
+**Characteristics:**
+- Lightweight, file-based database
+- No additional setup required
+- Single file storage (`scraper.db`)
+- Perfect for standalone operation
+- Automatic schema initialization
+- Thread-safe connection pooling
+
+**Best for:**
+- Standalone scraper usage
+- Development and testing
+- Single-user deployments
+- Small to medium data volumes
+- Quick setup and prototyping
+
+#### 2. Django ORM Backend
+
+**Configuration:**
+```env
+SCRAPER_DB_BACKEND=django
+```
+
+**Characteristics:**
+- Integrates with Django CRM database
+- Unified data management
+- Advanced querying capabilities
+- Multi-user support
+- Transaction management
+- Model-based data validation
+
+**Best for:**
+- Production CRM deployments
+- Team collaboration
+- Centralized data management
+- Advanced reporting needs
+- Integration with Django admin
+
+**Requirements:**
+- Django must be properly configured
+- Database migrations must be applied
+- CRM application must be running
+
+### Switching Between Backends
+
+#### From SQLite to Django
+
+1. **Backup your SQLite data:**
+   ```bash
+   cp scraper.db scraper.db.backup
+   ```
+
+2. **Set Django backend:**
+   ```env
+   SCRAPER_DB_BACKEND=django
+   ```
+
+3. **Ensure Django is configured:**
+   ```bash
+   cd telis_recruitment
+   python manage.py migrate
+   ```
+
+4. **Optional: Migrate existing data**
+   - Export from SQLite as CSV
+   - Import via Django admin or management command
+
+#### From Django to SQLite
+
+1. **Export your Django data:**
+   ```bash
+   cd telis_recruitment
+   python manage.py dumpdata leads --output=leads_backup.json
+   ```
+
+2. **Set SQLite backend:**
+   ```env
+   SCRAPER_DB_BACKEND=sqlite
+   ```
+
+3. **Run scraper to initialize SQLite schema:**
+   ```bash
+   python scriptname.py --once --industry recruiter --qpi 1
+   ```
+
+### Backend Validation
+
+The system automatically validates the backend setting and will raise an error if an invalid value is provided:
+
+```bash
+# Valid values (case-insensitive)
+SCRAPER_DB_BACKEND=sqlite   # ✅ Default
+SCRAPER_DB_BACKEND=SQLITE   # ✅ Case-insensitive
+SCRAPER_DB_BACKEND=django   # ✅ Django ORM
+SCRAPER_DB_BACKEND=Django   # ✅ Case-insensitive
+
+# Invalid values
+SCRAPER_DB_BACKEND=postgres  # ❌ ValueError
+SCRAPER_DB_BACKEND=mysql     # ❌ ValueError
+```
+
+### Backend-Specific Behavior
+
+#### SQLite Backend
+- `db()` function returns SQLite connection
+- Direct SQL queries supported
+- Thread-safe connection pooling
+- Automatic schema migrations
+
+#### Django Backend
+- `db()` function raises `NotImplementedError`
+- Use Django ORM models instead
+- Functions available: `upsert_lead()`, `get_lead_count()`, `lead_exists()`, etc.
+- Full Django model validation
+
+### Example Usage
+
+**SQLite Backend:**
+```python
+from luca_scraper.database import db
+
+# Get database connection
+conn = db()
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM leads LIMIT 10")
+results = cursor.fetchall()
+```
+
+**Django Backend:**
+```python
+from luca_scraper.database import upsert_lead, get_lead_count
+
+# Insert or update a lead
+lead_id, created = upsert_lead({
+    'name': 'Max Mustermann',
+    'email': 'max@example.com',
+    'telefon': '+49123456789',
+    'rolle': 'Sales Manager',
+})
+
+# Get total lead count
+total = get_lead_count()
+```
+
 ## 🔍 Profile Selection Decision Tree
 
 ```
@@ -267,6 +423,13 @@ Are you deploying to production?
    │  └─ Never deploy this to production!
    └─ No → Are you testing?
       └─ Use debug.env or production.env with LOG_LEVEL=DEBUG
+
+Database Backend Decision:
+├─ Standalone scraper? → Use SQLite (default)
+├─ CRM integration? → Use Django
+├─ Team collaboration? → Use Django
+└─ Not sure? → Start with SQLite
+
 ```
 
 ## 📈 Migration Between Profiles
