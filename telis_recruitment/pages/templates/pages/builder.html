@@ -308,6 +308,9 @@
         </div>
         
         <div class="toolbar-right">
+            <button class="toolbar-btn" onclick="openSocialMediaSettings()" title="Configure social media sharing">
+                🔗 <span>Social Media</span>
+            </button>
             <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
                 👁️ <span>Preview</span>
             </button>
@@ -1242,6 +1245,355 @@
                 }
             }, 300);
         }, 3000);
+    }
+    
+    // Social Media Settings Modal
+    function openSocialMediaSettings() {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('social-media-modal');
+        if (!modal) {
+            modal = createSocialMediaModal();
+        }
+        
+        // Load current page settings
+        loadSocialMediaSettings();
+        
+        // Show modal
+        modal.style.display = 'flex';
+    }
+    
+    function createSocialMediaModal() {
+        const modalHTML = `
+            <div id="social-media-modal" class="social-modal" style="display: none;">
+                <div class="social-modal-content">
+                    <div class="social-modal-header">
+                        <h3>🔗 Social Media Settings</h3>
+                        <button class="close-modal" onclick="closeSocialMediaModal()">&times;</button>
+                    </div>
+                    <div class="social-modal-body">
+                        <div class="social-tabs">
+                            <button class="social-tab active" onclick="switchSocialTab('meta-tags')">Meta Tags</button>
+                            <button class="social-tab" onclick="switchSocialTab('share-buttons')">Share Buttons</button>
+                            <button class="social-tab" onclick="switchSocialTab('preview')">Preview</button>
+                        </div>
+                        
+                        <div id="meta-tags-tab" class="social-tab-content active">
+                            <h4>OpenGraph / Facebook / WhatsApp</h4>
+                            <div class="social-form-group">
+                                <label>OG Title</label>
+                                <input type="text" id="og_title" placeholder="Defaults to SEO title" />
+                            </div>
+                            <div class="social-form-group">
+                                <label>OG Description</label>
+                                <textarea id="og_description" rows="3" placeholder="Defaults to SEO description"></textarea>
+                            </div>
+                            <div class="social-form-group">
+                                <label>OG Image URL</label>
+                                <input type="text" id="og_image" placeholder="https://example.com/image.jpg" />
+                                <small>Recommended: 1200x630px</small>
+                            </div>
+                            
+                            <h4 style="margin-top: 20px;">Twitter / X</h4>
+                            <div class="social-form-group">
+                                <label>Twitter Card Type</label>
+                                <select id="twitter_card">
+                                    <option value="summary_large_image">Summary Large Image</option>
+                                    <option value="summary">Summary</option>
+                                </select>
+                            </div>
+                            <div class="social-form-group">
+                                <label>Twitter Title</label>
+                                <input type="text" id="twitter_title" placeholder="Defaults to OG title" />
+                            </div>
+                            <div class="social-form-group">
+                                <label>Twitter Description</label>
+                                <textarea id="twitter_description" rows="3" placeholder="Defaults to OG description"></textarea>
+                            </div>
+                            <div class="social-form-group">
+                                <label>Twitter Image URL</label>
+                                <input type="text" id="twitter_image" placeholder="Defaults to OG image" />
+                                <small>Recommended: 1200x628px</small>
+                            </div>
+                        </div>
+                        
+                        <div id="share-buttons-tab" class="social-tab-content">
+                            <div class="social-form-group">
+                                <label>
+                                    <input type="checkbox" id="enable_share_buttons" />
+                                    Enable Share Buttons
+                                </label>
+                            </div>
+                            <div class="social-form-group">
+                                <label>Button Position</label>
+                                <select id="share_button_position">
+                                    <option value="bottom-right">Bottom Right</option>
+                                    <option value="bottom-left">Bottom Left</option>
+                                    <option value="top-right">Top Right</option>
+                                    <option value="top-left">Top Left</option>
+                                    <option value="inline">Inline in content</option>
+                                </select>
+                            </div>
+                            <div class="social-form-group">
+                                <label>Enabled Platforms</label>
+                                <div>
+                                    <label><input type="checkbox" class="platform-checkbox" value="facebook" checked /> Facebook</label>
+                                    <label><input type="checkbox" class="platform-checkbox" value="twitter" checked /> X (Twitter)</label>
+                                    <label><input type="checkbox" class="platform-checkbox" value="whatsapp" checked /> WhatsApp</label>
+                                    <label><input type="checkbox" class="platform-checkbox" value="linkedin" checked /> LinkedIn</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="preview-tab" class="social-tab-content">
+                            <p>Preview how your page will appear when shared on social media.</p>
+                            <a href="{% url 'pages:social-preview' page.slug %}" target="_blank" class="btn-preview">
+                                Open Social Media Preview
+                            </a>
+                        </div>
+                    </div>
+                    <div class="social-modal-footer">
+                        <button class="toolbar-btn" onclick="closeSocialMediaModal()">Cancel</button>
+                        <button class="toolbar-btn success" onclick="saveSocialMediaSettings()">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const container = document.createElement('div');
+        container.innerHTML = modalHTML;
+        document.body.appendChild(container.firstElementChild);
+        
+        // Add modal styles
+        const style = document.createElement('style');
+        style.textContent = `
+            .social-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            }
+            .social-modal-content {
+                background: #1a1a2e;
+                border-radius: 12px;
+                width: 90%;
+                max-width: 700px;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            }
+            .social-modal-header {
+                padding: 20px;
+                border-bottom: 1px solid #0f3460;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .social-modal-header h3 {
+                margin: 0;
+                color: white;
+            }
+            .close-modal {
+                background: none;
+                border: none;
+                color: white;
+                font-size: 28px;
+                cursor: pointer;
+                padding: 0;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .social-modal-body {
+                padding: 20px;
+                overflow-y: auto;
+                flex: 1;
+            }
+            .social-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #0f3460;
+            }
+            .social-tab {
+                background: transparent;
+                border: none;
+                color: #adb5bd;
+                padding: 10px 20px;
+                cursor: pointer;
+                border-bottom: 3px solid transparent;
+                transition: all 0.2s;
+            }
+            .social-tab.active {
+                color: white;
+                border-bottom-color: #007bff;
+            }
+            .social-tab-content {
+                display: none;
+            }
+            .social-tab-content.active {
+                display: block;
+            }
+            .social-form-group {
+                margin-bottom: 15px;
+            }
+            .social-form-group label {
+                display: block;
+                color: #adb5bd;
+                margin-bottom: 5px;
+                font-size: 14px;
+            }
+            .social-form-group input[type="text"],
+            .social-form-group textarea,
+            .social-form-group select {
+                width: 100%;
+                padding: 10px;
+                background: #0f3460;
+                border: 1px solid #16213e;
+                border-radius: 6px;
+                color: white;
+                font-size: 14px;
+            }
+            .social-form-group small {
+                color: #6c757d;
+                font-size: 12px;
+            }
+            .social-form-group h4 {
+                color: white;
+                margin-bottom: 10px;
+            }
+            .platform-checkbox {
+                margin-right: 8px;
+            }
+            .social-form-group > div > label {
+                display: inline-block;
+                margin-right: 15px;
+                margin-bottom: 10px;
+            }
+            .social-modal-footer {
+                padding: 15px 20px;
+                border-top: 1px solid #0f3460;
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            }
+            .btn-preview {
+                display: inline-block;
+                background: #007bff;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 6px;
+                text-decoration: none;
+                margin-top: 10px;
+            }
+            .btn-preview:hover {
+                background: #0056b3;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        return document.getElementById('social-media-modal');
+    }
+    
+    function closeSocialMediaModal() {
+        const modal = document.getElementById('social-media-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    function switchSocialTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.social-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Update tab content
+        document.querySelectorAll('.social-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(tabName + '-tab').classList.add('active');
+    }
+    
+    function loadSocialMediaSettings() {
+        // Load settings from server
+        fetch('{% url "pages:builder-load" page.slug %}')
+            .then(response => response.json())
+            .then(data => {
+                const page = data.page;
+                document.getElementById('og_title').value = page.og_title || '';
+                document.getElementById('og_description').value = page.og_description || '';
+                document.getElementById('og_image').value = page.og_image || '';
+                document.getElementById('twitter_card').value = page.twitter_card || 'summary_large_image';
+                document.getElementById('twitter_title').value = page.twitter_title || '';
+                document.getElementById('twitter_description').value = page.twitter_description || '';
+                document.getElementById('twitter_image').value = page.twitter_image || '';
+                document.getElementById('enable_share_buttons').checked = page.enable_share_buttons || false;
+                document.getElementById('share_button_position').value = page.share_button_position || 'bottom-right';
+                
+                // Load enabled platforms
+                const platforms = page.share_platforms || ['facebook', 'twitter', 'whatsapp', 'linkedin'];
+                document.querySelectorAll('.platform-checkbox').forEach(checkbox => {
+                    checkbox.checked = platforms.includes(checkbox.value);
+                });
+            })
+            .catch(error => console.error('Error loading social media settings:', error));
+    }
+    
+    function saveSocialMediaSettings() {
+        // Collect selected platforms
+        const platforms = Array.from(document.querySelectorAll('.platform-checkbox:checked'))
+            .map(cb => cb.value);
+        
+        const settings = {
+            og_title: document.getElementById('og_title').value,
+            og_description: document.getElementById('og_description').value,
+            og_image: document.getElementById('og_image').value,
+            twitter_card: document.getElementById('twitter_card').value,
+            twitter_title: document.getElementById('twitter_title').value,
+            twitter_description: document.getElementById('twitter_description').value,
+            twitter_image: document.getElementById('twitter_image').value,
+            enable_share_buttons: document.getElementById('enable_share_buttons').checked,
+            share_button_position: document.getElementById('share_button_position').value,
+            share_platforms: platforms
+        };
+        
+        // Save to server
+        fetch('{% url "pages:builder-save" page.slug %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                social_media: settings,
+                html: editor.getHtml(),
+                css: editor.getCss(),
+                html_json: editor.getComponents()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Social media settings saved!', 'success');
+                closeSocialMediaModal();
+            } else {
+                showToast('Error saving settings', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error saving settings', 'error');
+        });
     }
 </script>
 {% endblock %}

@@ -62,6 +62,21 @@ def builder_save(request, slug):
         page.html = data.get('html', '')
         page.css = data.get('css', '')
         page.updated_by = request.user
+        
+        # Update social media settings if provided
+        social_media = data.get('social_media', {})
+        if social_media:
+            page.og_title = social_media.get('og_title', '')
+            page.og_description = social_media.get('og_description', '')
+            page.og_image = social_media.get('og_image', '')
+            page.twitter_card = social_media.get('twitter_card', 'summary_large_image')
+            page.twitter_title = social_media.get('twitter_title', '')
+            page.twitter_description = social_media.get('twitter_description', '')
+            page.twitter_image = social_media.get('twitter_image', '')
+            page.enable_share_buttons = social_media.get('enable_share_buttons', False)
+            page.share_button_position = social_media.get('share_button_position', 'bottom-right')
+            page.share_platforms = social_media.get('share_platforms', ['facebook', 'twitter', 'whatsapp', 'linkedin'])
+        
         page.save()
         
         # Create version entry
@@ -101,6 +116,18 @@ def builder_load(request, slug):
         'html_json': page.html_json,
         'html': page.html,
         'css': page.css,
+        'page': {
+            'og_title': page.og_title,
+            'og_description': page.og_description,
+            'og_image': page.og_image,
+            'twitter_card': page.twitter_card,
+            'twitter_title': page.twitter_title,
+            'twitter_description': page.twitter_description,
+            'twitter_image': page.twitter_image,
+            'enable_share_buttons': page.enable_share_buttons,
+            'share_button_position': page.share_button_position,
+            'share_platforms': page.share_platforms,
+        }
     })
 
 
