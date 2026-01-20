@@ -307,13 +307,10 @@
 <script src="https://unpkg.com/grapesjs"></script>
 <script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
 <script>
-    // Responsive CSS Helper - Processes media queries for responsive properties
-    function processResponsiveCSS(css) {
-        // This function will be enhanced to properly handle device-specific styles
-        // GrapesJS 0.21+ has built-in support for media queries via the mediaQuery property
-        return css;
-    }
-
+    // Note: Responsive CSS is handled automatically by GrapesJS via the mediaQuery property
+    // on style properties. When properties have mediaQuery: 'tablet' or 'mobile', GrapesJS
+    // automatically generates appropriate CSS media queries during CSS export.
+    
     // Initialize GrapesJS Editor
     window.editor = grapesjs.init({
         container: '#gjs',
@@ -400,6 +397,8 @@
                             property: 'font-size',
                             label: 'Font Size (Tablet)',
                             type: 'select',
+                            // toRequire: 1 means this property requires at least 1 sub-property to be set
+                            // This is a GrapesJS property used for composite properties
                             toRequire: 1,
                             defaults: '',
                             options: [

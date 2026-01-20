@@ -2,6 +2,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
+import json
 from .models import LandingPage, PageVersion, PageComponent, PageSubmission, UploadedFile
 from leads.models import Lead
 
@@ -388,7 +389,6 @@ class ResponsiveEditingTest(TestCase):
     
     def test_save_page_with_responsive_css(self):
         """Test saving a page with responsive CSS"""
-        import json
         self.client.login(username='staffuser', password='staffpass')
         
         # Sample CSS with media queries
@@ -402,10 +402,15 @@ class ResponsiveEditingTest(TestCase):
         }
         """
         
+        # GrapesJS component structure
         data = {
             'html': '<div class="hero">Test</div>',
             'css': responsive_css,
-            'html_json': {'type': 'div', 'classes': ['hero'], 'content': 'Test'},
+            'html_json': {
+                'tagName': 'div',
+                'classes': ['hero'],
+                'components': [{'type': 'textnode', 'content': 'Test'}]
+            },
             'note': 'Test with responsive CSS'
         }
         
