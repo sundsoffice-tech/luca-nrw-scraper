@@ -238,6 +238,12 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       results_json TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    
+    -- Create indices for frequently queried columns
+    CREATE INDEX IF NOT EXISTS idx_queries_done_q ON queries_done(q);
+    CREATE INDEX IF NOT EXISTS idx_queries_done_ts ON queries_done(ts);
+    CREATE INDEX IF NOT EXISTS idx_urls_seen_url ON urls_seen(url);
+    CREATE INDEX IF NOT EXISTS idx_urls_seen_ts ON urls_seen(ts);
     """)
     con.commit()
 
