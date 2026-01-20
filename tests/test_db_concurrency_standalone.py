@@ -155,6 +155,7 @@ def test_retry_on_lock():
         
         retry_count = [0]
         success = [False]
+        unlock_thread = None
         
         @db_utils.with_db_retry(max_retries=3, delay=0.1)
         def try_write():
@@ -179,13 +180,18 @@ def test_retry_on_lock():
             conn1.commit()  # Release the lock
             conn1.close()
         
-        threading.Thread(target=delayed_unlock, daemon=True).start()
+        unlock_thread = threading.Thread(target=delayed_unlock)
+        unlock_thread.start()
         
         # This should eventually succeed after retries
         try:
             try_write()
         except Exception as e:
             pass  # Might still fail if timing is off
+        
+        # Wait for unlock thread to complete
+        if unlock_thread:
+            unlock_thread.join(timeout=2.0)
         
         if retry_count[0] > 1:
             print(f"  ✓ Retried {retry_count[0]} times")

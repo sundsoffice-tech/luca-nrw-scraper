@@ -72,14 +72,12 @@ def ensure_db_initialized(db_path: str, init_func: Optional[Callable] = None) ->
         db_path: Path to database file
         init_func: Optional initialization function to call on first access
     """
-    if db_path in _initialized_dbs:
-        return
-    
+    # Check with lock to avoid race condition
     with _init_lock:
-        # Double-check after acquiring lock
         if db_path in _initialized_dbs:
             return
         
+        # Initialize database
         conn = sqlite3.connect(db_path, timeout=DB_TIMEOUT)
         configure_connection(conn)
         
