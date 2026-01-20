@@ -14,9 +14,10 @@ def test_get_portal_urls_returns_list():
     """Test that get_portal_urls returns a list of URLs for known portals."""
     from luca_scraper.config import get_portal_urls
     
-    # Test known portals
+    # Test known portals (including new high-quality sources)
     for portal_name in ['kleinanzeigen', 'markt_de', 'quoka', 'kalaydo', 
-                        'meinestadt', 'dhd24', 'freelancermap', 'freelance_de']:
+                        'meinestadt', 'dhd24', 'freelancermap', 'freelance_de',
+                        'wlw', 'gelbe_seiten', 'das_oertliche', 'cylex', 'hotfrog']:
         urls = get_portal_urls(portal_name)
         assert isinstance(urls, list), f"{portal_name} should return a list"
         assert len(urls) > 0, f"{portal_name} should have at least one URL"
@@ -76,8 +77,9 @@ def test_get_all_portal_configs():
     # Should return a dict
     assert isinstance(configs, dict)
     
-    # Should have the main portals
-    expected_portals = {'kleinanzeigen', 'markt_de', 'quoka', 'meinestadt'}
+    # Should have the main portals (including new high-quality sources)
+    expected_portals = {'kleinanzeigen', 'markt_de', 'quoka', 'meinestadt',
+                       'wlw', 'gelbe_seiten', 'cylex'}
     assert expected_portals.issubset(set(configs.keys()))
     
     # Each config should have required keys

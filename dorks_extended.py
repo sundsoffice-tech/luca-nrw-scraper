@@ -75,6 +75,157 @@ HANDELSVERTRETER_REGISTRY_DORKS = [
 ]
 
 # ══════════════════════════════════════════════════════════════
+# IHK & CHAMBER OF COMMERCE DORKS (Hochqualitative Quellen)
+# ══════════════════════════════════════════════════════════════
+
+IHK_BUSINESS_DIRECTORY_DORKS = [
+    # IHK Firmendatenbanken
+    'site:ihk.de "Mitgliedsunternehmen" "Vertrieb" kontakt',
+    'site:ihk-nordwestfalen.de "Unternehmen" telefon',
+    'site:ihk-koeln.de "Firmenprofil" kontakt',
+    'site:ihk-duesseldorf.de "Unternehmensprofil" telefon',
+    'site:ihk-dortmund.de "Firmendatenbank" kontakt',
+    'site:ihk-bonn.de "Mitglied" "Ansprechpartner" telefon',
+    'site:ihk-aachen.de "Unternehmen" "Kontakt" telefon',
+    'site:ihk-muenster.de "Firmenprofil" kontakt',
+    'site:ihk-bielefeld.de "Mitgliedsunternehmen" telefon',
+    # Weitere IHK Regionen
+    'site:ihk-essen.de "Unternehmensprofil" kontakt',
+    'site:ihk-niederrhein.de "Firmenprofil" telefon',
+    'site:ihk-siegen.de "Mitglied" kontakt',
+    'site:ihk-bochum.de "Unternehmen" telefon',
+]
+
+BUSINESS_DIRECTORY_DORKS = [
+    # Unternehmensverzeichnisse
+    'site:wlw.de "Vertrieb" "NRW" kontakt',
+    'site:firmenabc.de "Ansprechpartner Vertrieb" telefon',
+    'site:unternehmensregister.de "Geschäftsführung" "NRW" kontakt',
+    'site:northdata.de "Vertriebsleiter" kontakt',
+    'site:bundesanzeiger.de "Handelsregister" "Vertrieb" NRW',
+    # Gelbe Seiten & Telefonbuch
+    'site:gelbeseiten.de "Vertrieb" "NRW" telefon',
+    'site:dasoertliche.de "Vertriebsleiter" kontakt',
+    'site:11880.com "Sales Manager" telefon NRW',
+    'site:telefonbuch.de "Account Manager" "NRW" telefon',
+    # Branchenbücher
+    'site:branchenbuch-deutschland.de "Vertrieb" telefon',
+    'site:hotfrog.de "Sales" "NRW" kontakt',
+    'site:cylex.de "Vertriebsleiter" telefon',
+]
+
+COMPANY_WEBSITE_DORKS = [
+    # Unternehmens-Teamseiten
+    'intitle:"Unser Team" "Vertriebsleiter" telefon NRW',
+    'intitle:"Team" "Sales Manager" kontakt -site:linkedin.com',
+    'intitle:"Ansprechpartner" "Vertrieb" telefon NRW',
+    'intitle:"Kontakt" "Account Manager" telefon -site:xing.com',
+    'inurl:team "Vertrieb" telefon NRW',
+    'inurl:kontakt "Sales" telefon NRW',
+    'inurl:impressum "Vertriebsleiter" telefon',
+    'inurl:mitarbeiter "Account Manager" kontakt',
+    'inurl:about "Vertrieb" telefon NRW',
+    '"Ihr Ansprechpartner" "Vertrieb" telefon NRW',
+    '"Ansprechpartner Vertrieb" kontakt -site:stepstone.de',
+]
+
+# ══════════════════════════════════════════════════════════════
+# INDUSTRY-SPECIFIC SOURCES (Branchenspezifische Quellen)
+# ══════════════════════════════════════════════════════════════
+
+INDUSTRY_ASSOCIATION_DORKS = [
+    # Branchenverbände
+    'site:bvmw.de "Mitglied" "NRW" kontakt',
+    'site:bdvb.de "Vertriebler" kontakt',
+    'site:bdi.eu "Vertrieb" "NRW" telefon',
+    'site:handelsverband-nrw.de "Mitgliedsunternehmen" kontakt',
+    'site:einzelhandel.de "Vertrieb" "NRW" telefon',
+    # Branchenportale
+    '"Branchenverzeichnis" "Vertrieb" "NRW" telefon',
+    '"Firmenverzeichnis" "Sales" kontakt NRW',
+]
+
+TRADE_FAIR_DORKS = [
+    # Messekontakte und Ausstellerverzeichnisse
+    'site:messe-duesseldorf.de "Aussteller" kontakt',
+    'site:koelnmesse.de "Ausstellerprofil" telefon',
+    'site:messe-essen.de "Unternehmen" kontakt',
+    'site:messe-dortmund.de "Aussteller" telefon',
+    '"Messekatalog" "Vertrieb" "NRW" kontakt',
+    '"Ausstellerverzeichnis" telefon NRW',
+]
+
+STARTUP_ECOSYSTEM_DORKS = [
+    # Startup-Szene (oft auf der Suche nach Sales-Talenten)
+    'site:startplatz.de "Team" "Sales" kontakt',
+    'site:startercenter-nrw.de "Gründer" "Vertrieb" telefon',
+    'site:gruenderwoche.de "Unternehmen" "NRW" kontakt',
+    '"Startup" "Sales Manager" "NRW" telefon',
+    '"Scale-up" "Vertriebsleiter" kontakt NRW',
+]
+
+# ══════════════════════════════════════════════════════════════
+# PROFESSIONAL NETWORKING SOURCES
+# ══════════════════════════════════════════════════════════════
+
+PROFESSIONAL_BLOG_DORKS = [
+    # Vertriebsblogs und Fachportale
+    'site:vertriebszeitung.de "Experte" kontakt',
+    'site:salesbusiness.de "Gastautor" telefon',
+    '"Vertriebsexperte" "NRW" kontakt -site:linkedin.com',
+    '"Sales Expert" telefon NRW -site:xing.com',
+    # Speaker und Trainer
+    '"Vertriebstrainer" "NRW" kontakt',
+    '"Sales Coach" telefon NRW',
+    '"Keynote Speaker Vertrieb" kontakt',
+]
+
+EXPERT_DIRECTORY_DORKS = [
+    # Expertenverzeichnisse
+    'site:speakerservice.de "Vertrieb" kontakt',
+    'site:trainerliste.de "Sales" telefon',
+    '"Vertriebsberater" "NRW" kontakt telefon',
+    '"Sales Consultant" "NRW" telefon',
+    '"Interim Manager Vertrieb" kontakt NRW',
+]
+
+# ══════════════════════════════════════════════════════════════
+# AUTOMOTIVE & REAL ESTATE (High-Value Industries)
+# ══════════════════════════════════════════════════════════════
+
+AUTOMOTIVE_SALES_DORKS = [
+    # Automobilbranche (hohe Qualität)
+    '"Autohaus" "Verkaufsberater" "NRW" telefon',
+    '"KFZ-Handel" "Vertrieb" kontakt NRW',
+    'site:mobile.de "Händler" "NRW" kontakt',
+    'site:autoscout24.de "Händlerprofil" "NRW" telefon',
+    '"Fahrzeugverkäufer" telefon NRW',
+]
+
+REAL_ESTATE_DORKS = [
+    # Immobilienbranche
+    'site:immobilienscout24.de "Makler" "NRW" telefon',
+    'site:immowelt.de "Ansprechpartner" "NRW" kontakt',
+    '"Immobilienmakler" telefon NRW',
+    '"Immobilienberater" kontakt NRW',
+    'site:ivd.net "Mitglied" "NRW" telefon',
+]
+
+# ══════════════════════════════════════════════════════════════
+# TECH & IT SALES (High-Growth Sector)
+# ══════════════════════════════════════════════════════════════
+
+IT_SALES_DORKS = [
+    # IT & Software Sales
+    'site:it-matchmaker.com "Sales" "NRW" kontakt',
+    '"IT-Vertrieb" telefon NRW',
+    '"Software Sales" "NRW" kontakt',
+    '"Cloud Sales" telefon "Deutschland"',
+    '"SaaS Sales" kontakt NRW',
+    '"Tech Sales" "NRW" telefon',
+]
+
+# ══════════════════════════════════════════════════════════════
 # MINIMIERTE JOB SEEKER DORKS (nur Top-Performer behalten)
 # ══════════════════════════════════════════════════════════════
 
@@ -190,6 +341,7 @@ def get_all_dorks() -> List[str]:
         Liste aller verfügbaren Dorks
     """
     return (
+        # Original Categories
         JOB_SEEKER_DORKS + 
         SITE_SPECIFIC_DORKS + 
         URL_PATTERN_DORKS + 
@@ -197,7 +349,19 @@ def get_all_dorks() -> List[str]:
         POWER_DORKS +
         JOB_PORTAL_DORKS +
         MOBILE_DORKS +
-        FREELANCER_DORKS
+        FREELANCER_DORKS +
+        # New High-Quality Categories
+        IHK_BUSINESS_DIRECTORY_DORKS +
+        BUSINESS_DIRECTORY_DORKS +
+        COMPANY_WEBSITE_DORKS +
+        INDUSTRY_ASSOCIATION_DORKS +
+        TRADE_FAIR_DORKS +
+        STARTUP_ECOSYSTEM_DORKS +
+        PROFESSIONAL_BLOG_DORKS +
+        EXPERT_DIRECTORY_DORKS +
+        AUTOMOTIVE_SALES_DORKS +
+        REAL_ESTATE_DORKS +
+        IT_SALES_DORKS
     )
 
 
@@ -212,6 +376,7 @@ def get_dorks_by_category(category: str) -> List[str]:
         Liste der Dorks der gewählten Kategorie
     """
     categories = {
+        # Original Categories
         "job_seeker": JOB_SEEKER_DORKS,
         "site_specific": SITE_SPECIFIC_DORKS,
         "url_pattern": URL_PATTERN_DORKS,
@@ -220,6 +385,18 @@ def get_dorks_by_category(category: str) -> List[str]:
         "job_portal": JOB_PORTAL_DORKS,
         "mobile": MOBILE_DORKS,
         "freelancer": FREELANCER_DORKS,
+        # New High-Quality Categories
+        "ihk_business": IHK_BUSINESS_DIRECTORY_DORKS,
+        "business_directory": BUSINESS_DIRECTORY_DORKS,
+        "company_website": COMPANY_WEBSITE_DORKS,
+        "industry_association": INDUSTRY_ASSOCIATION_DORKS,
+        "trade_fair": TRADE_FAIR_DORKS,
+        "startup_ecosystem": STARTUP_ECOSYSTEM_DORKS,
+        "professional_blog": PROFESSIONAL_BLOG_DORKS,
+        "expert_directory": EXPERT_DIRECTORY_DORKS,
+        "automotive": AUTOMOTIVE_SALES_DORKS,
+        "real_estate": REAL_ESTATE_DORKS,
+        "it_sales": IT_SALES_DORKS,
     }
     return categories.get(category, [])
 
@@ -266,6 +443,7 @@ def get_dorks_count() -> Dict[str, int]:
         Dictionary mit Kategorie-Namen und Anzahl
     """
     return {
+        # Original Categories
         "job_seeker": len(JOB_SEEKER_DORKS),
         "site_specific": len(SITE_SPECIFIC_DORKS),
         "url_pattern": len(URL_PATTERN_DORKS),
@@ -274,5 +452,17 @@ def get_dorks_count() -> Dict[str, int]:
         "job_portal": len(JOB_PORTAL_DORKS),
         "mobile": len(MOBILE_DORKS),
         "freelancer": len(FREELANCER_DORKS),
+        # New High-Quality Categories
+        "ihk_business": len(IHK_BUSINESS_DIRECTORY_DORKS),
+        "business_directory": len(BUSINESS_DIRECTORY_DORKS),
+        "company_website": len(COMPANY_WEBSITE_DORKS),
+        "industry_association": len(INDUSTRY_ASSOCIATION_DORKS),
+        "trade_fair": len(TRADE_FAIR_DORKS),
+        "startup_ecosystem": len(STARTUP_ECOSYSTEM_DORKS),
+        "professional_blog": len(PROFESSIONAL_BLOG_DORKS),
+        "expert_directory": len(EXPERT_DIRECTORY_DORKS),
+        "automotive": len(AUTOMOTIVE_SALES_DORKS),
+        "real_estate": len(REAL_ESTATE_DORKS),
+        "it_sales": len(IT_SALES_DORKS),
         "total": len(get_all_dorks()),
     }
