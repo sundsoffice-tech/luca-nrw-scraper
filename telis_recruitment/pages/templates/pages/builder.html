@@ -32,8 +32,34 @@
         display: flex;
         align-items: center;
         gap: 6px;
+        position: relative;
     }
-    .toolbar-btn:hover { background: #16213e; transform: translateY(-1px); }
+    .toolbar-btn:hover { 
+        background: #16213e; 
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+    }
+    .toolbar-btn:active { 
+        transform: translateY(0);
+        box-shadow: 0 1px 3px rgba(0, 123, 255, 0.1);
+    }
+    
+    /* Tooltip styles */
+    .toolbar-btn[title]:hover::after {
+        content: attr(title);
+        position: absolute;
+        bottom: -35px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 1000;
+        pointer-events: none;
+    }
     .toolbar-btn.primary { background: #007bff; }
     .toolbar-btn.primary:hover { background: #0056b3; }
     .toolbar-btn.success { background: #28a745; }
@@ -42,15 +68,24 @@
         background: transparent;
         border: 2px solid #0f3460;
         color: white;
-        padding: 6px 12px;
+        padding: 8px 12px;
         border-radius: 6px;
         cursor: pointer;
-        font-size: 20px;
         transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 70px;
     }
-    .device-btn.active, .device-btn:hover {
+    .device-btn.active {
         background: #0f3460;
         border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    }
+    .device-btn:hover {
+        background: #0f3460;
+        border-color: #007bff;
+        transform: translateY(-1px);
     }
     .builder-content {
         display: flex;
@@ -102,16 +137,28 @@
         border-radius: 6px;
         padding: 12px;
         margin-bottom: 10px;
-        cursor: pointer;
+        cursor: move;
         transition: all 0.2s;
         color: white;
         text-align: center;
+        position: relative;
     }
     .gjs-block:hover {
         background: #16213e;
         border-color: #007bff;
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+    }
+    .gjs-block:active {
+        cursor: grabbing;
+        transform: scale(0.98);
+    }
+    
+    /* Block dragging visual feedback */
+    .gjs-block.dragging {
+        opacity: 0.7;
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(0,123,255,0.4);
     }
     #gjs {
         height: 100%;
@@ -139,8 +186,42 @@
         margin: 10px 0 0 0;
         font-size: 14px;
     }
+    
+    /* Loading Indicator */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    }
+    .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 5px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #007bff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
     /* GrapesJS Customization */
-    .gjs-cv-canvas { background-color: #fff; }
+    .gjs-cv-canvas { 
+        background-color: #fff;
+        transition: background-color 0.3s;
+    }
+    .gjs-cv-canvas.drag-over {
+        background-color: #f0f8ff !important;
+        outline: 3px dashed #007bff !important;
+        outline-offset: -10px;
+    }
     .gjs-block-category { background: #0f3460; }
     .gjs-title { color: white; }
     
@@ -176,40 +257,52 @@
     <!-- Top Toolbar -->
     <div class="builder-toolbar">
         <div class="toolbar-left">
-            <button class="toolbar-btn" onclick="saveContent()" title="Save (Ctrl+S)">
-                💾 Save
+            <button class="toolbar-btn" onclick="saveContent()" title="Save your changes">
+                💾 <span>Save</span>
             </button>
-            <button class="toolbar-btn" onclick="editor.runCommand('core:undo')" title="Undo (Ctrl+Z)">
-                ⟲ Undo
+            <button class="toolbar-btn" onclick="undoAction()" title="Undo last change (Ctrl+Z)">
+                ↶ <span>Undo</span>
             </button>
-            <button class="toolbar-btn" onclick="editor.runCommand('core:redo')" title="Redo (Ctrl+Y)">
-                ⟳ Redo
+            <button class="toolbar-btn" onclick="redoAction()" title="Redo last undone change (Ctrl+Y)">
+                ↷ <span>Redo</span>
+            </button>
+            <button class="toolbar-btn" onclick="clearCanvas()" title="Clear all content">
+                🗑️ <span>Clear</span>
             </button>
         </div>
         
         <div class="toolbar-center">
             <span class="page-info">{{ page.title }}</span>
             <span class="page-info" style="color: #6c757d; margin-left: 10px;">/p/{{ page.slug }}/</span>
-            <button class="device-btn active" id="btn-desktop" onclick="setDevice('Desktop', this)" title="Desktop">
-                🖥️
-            </button>
-            <button class="device-btn" id="btn-tablet" onclick="setDevice('Tablet', this)" title="Tablet">
-                💻
-            </button>
-            <button class="device-btn" id="btn-mobile" onclick="setDevice('Mobile', this)" title="Mobile">
-                📱
-            </button>
+            <div style="display: flex; gap: 8px; margin-left: 20px; align-items: center;">
+                <span style="color: #adb5bd; font-size: 12px; margin-right: 5px;">Preview:</span>
+                <button class="device-btn active" id="btn-desktop" onclick="setDevice('Desktop', this)" title="Desktop view (default)">
+                    <span style="font-size: 20px;">🖥️</span>
+                    <span style="font-size: 11px; display: block; margin-top: 2px;">Desktop</span>
+                </button>
+                <button class="device-btn" id="btn-tablet" onclick="setDevice('Tablet', this)" title="Tablet view (768px)">
+                    <span style="font-size: 20px;">💻</span>
+                    <span style="font-size: 11px; display: block; margin-top: 2px;">Tablet</span>
+                </button>
+                <button class="device-btn" id="btn-mobile" onclick="setDevice('Mobile', this)" title="Mobile view (375px)">
+                    <span style="font-size: 20px;">📱</span>
+                    <span style="font-size: 11px; display: block; margin-top: 2px;">Mobile</span>
+                </button>
+            </div>
         </div>
         
         <div class="toolbar-right">
-            <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview">
-                👁️ Preview
+            <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
+                👁️ <span>Preview</span>
             </button>
-            <button class="toolbar-btn success" onclick="publishPage()" title="Publish">
-                🚀 Publish
+            <button class="toolbar-btn" onclick="showHelpGuide()" title="Show help guide">
+                ❓ <span>Help</span>
             </button>
-            <a href="{% url 'pages:builder-list' %}" class="toolbar-btn">
-                ← Back
+            <button class="toolbar-btn success" onclick="publishPage()" title="Publish page to make it live">
+                🚀 <span>Publish</span>
+            </button>
+            <a href="{% url 'pages:builder-list' %}" class="toolbar-btn" title="Return to pages list">
+                ← <span>Back</span>
             </a>
         </div>
     </div>
@@ -221,7 +314,10 @@
             <!-- Blocks Section -->
             <div class="panel-section">
                 <div class="panel-header" onclick="togglePanel('blocks-panel')">
-                    📦 BLOCKS
+                    <div>
+                        <div style="font-size: 16px;">📦 BLOCKS</div>
+                        <div style="font-size: 10px; text-transform: none; opacity: 0.7; margin-top: 2px;">Drag elements onto your page</div>
+                    </div>
                     <span id="blocks-toggle">▼</span>
                 </div>
                 <div id="blocks-panel" class="panel-content">
@@ -232,13 +328,17 @@
             <!-- Asset Manager Section -->
             <div class="panel-section">
                 <div class="panel-header" onclick="togglePanel('assets-panel')">
-                    🖼️ ASSETS
+                    <div>
+                        <div style="font-size: 16px;">🖼️ ASSETS</div>
+                        <div style="font-size: 10px; text-transform: none; opacity: 0.7; margin-top: 2px;">Upload and manage images</div>
+                    </div>
                     <span id="assets-toggle">▼</span>
                 </div>
                 <div id="assets-panel" class="panel-content">
                     <div class="asset-upload-zone" onclick="document.getElementById('asset-upload-input').click()">
                         <div style="font-size: 40px; margin-bottom: 10px;">📤</div>
-                        <p>Click or drag to upload</p>
+                        <p style="font-weight: 600; margin-bottom: 5px;">Upload Images</p>
+                        <p style="font-size: 12px;">Click or drag files here</p>
                         <input type="file" id="asset-upload-input" style="display: none;" accept="image/*" multiple onchange="uploadAssets(this.files)">
                     </div>
                     <div id="assets-container" style="margin-top: 15px;"></div>
@@ -256,7 +356,10 @@
             <!-- Style Manager Section -->
             <div class="panel-section">
                 <div class="panel-header" onclick="togglePanel('styles-panel')">
-                    🎨 STYLES
+                    <div>
+                        <div style="font-size: 16px;">🎨 STYLES</div>
+                        <div style="font-size: 10px; text-transform: none; opacity: 0.7; margin-top: 2px;">Customize selected element</div>
+                    </div>
                     <span id="styles-toggle">▼</span>
                 </div>
                 <div id="styles-panel" class="panel-content">
@@ -267,7 +370,10 @@
             <!-- Layer Manager Section -->
             <div class="panel-section">
                 <div class="panel-header" onclick="togglePanel('layers-panel')">
-                    📋 LAYERS
+                    <div>
+                        <div style="font-size: 16px;">📋 LAYERS</div>
+                        <div style="font-size: 10px; text-transform: none; opacity: 0.7; margin-top: 2px;">View page structure</div>
+                    </div>
                     <span id="layers-toggle">▼</span>
                 </div>
                 <div id="layers-panel" class="panel-content">
@@ -281,6 +387,12 @@
 <script src="https://unpkg.com/grapesjs"></script>
 <script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
 <script>
+    // Configuration constants
+    const MAX_FILE_SIZE_MB = 10;
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+    const WELCOME_GUIDE_DELAY_MS = 2000; // Increased from 1000ms for better accessibility
+    const AUTO_SAVE_INTERVAL_MS = 60000;
+    
     // Initialize GrapesJS Editor
     window.editor = grapesjs.init({
         container: '#gjs',
@@ -390,11 +502,18 @@
 
     // Load assets
     loadAssets();
+    
+    // Show welcome guide for first-time users (with accessible delay)
+    if (!localStorage.getItem('builder_guide_seen')) {
+        setTimeout(() => {
+            showWelcomeGuide();
+        }, WELCOME_GUIDE_DELAY_MS);
+    }
 
     // Auto-save every 60 seconds
     setInterval(() => {
         saveContent(false);
-    }, 60000);
+    }, AUTO_SAVE_INTERVAL_MS);
 
     // Save on Ctrl+S
     document.addEventListener('keydown', (e) => {
@@ -403,18 +522,54 @@
             saveContent(true);
         }
     });
+    
+    // Enhanced drag feedback for GrapesJS
+    window.editor.on('block:drag:start', (block) => {
+        showToast('Drag to canvas to add ' + (block.get('label') || 'element'), 'info');
+    });
+    
+    window.editor.on('block:drag:stop', (component) => {
+        if (component) {
+            showToast('Element added! Click to edit.', 'success');
+        }
+    });
+    
+    window.editor.on('component:selected', () => {
+        const rightPanel = document.querySelector('.right-panel');
+        if (rightPanel) {
+            rightPanel.style.border = '2px solid #007bff';
+            setTimeout(() => {
+                rightPanel.style.border = '2px solid #0f3460';
+            }, 1000);
+        }
+    });
 </script>
 
 <script>
     function togglePanel(panelId) {
         const panel = document.getElementById(panelId);
         const toggle = document.getElementById(panelId.replace('-panel', '-toggle'));
+        
         if (panel.style.display === 'none') {
             panel.style.display = 'block';
             toggle.textContent = '▼';
+            // Smooth expand animation
+            panel.style.maxHeight = '0';
+            panel.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                panel.style.transition = 'max-height 0.3s ease-out';
+                panel.style.maxHeight = '2000px';
+            });
         } else {
-            panel.style.display = 'none';
             toggle.textContent = '►';
+            // Smooth collapse animation
+            panel.style.transition = 'max-height 0.3s ease-out';
+            panel.style.maxHeight = '0';
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.style.maxHeight = '';
+                panel.style.overflow = '';
+            }, 300);
         }
     }
 
@@ -424,6 +579,182 @@
         btn.classList.add('active');
         // Set device in editor
         window.editor.setDevice(deviceName);
+        // Show feedback
+        showToast(`Preview mode: ${deviceName}`, 'info');
+    }
+    
+    function undoAction() {
+        window.editor.runCommand('core:undo');
+        showToast('Undone', 'info');
+    }
+    
+    function redoAction() {
+        window.editor.runCommand('core:redo');
+        showToast('Redone', 'info');
+    }
+    
+    function clearCanvas() {
+        if (confirm('Are you sure you want to clear all content? This cannot be undone.')) {
+            window.editor.setComponents('');
+            window.editor.setStyle('');
+            showToast('Canvas cleared', 'info');
+        }
+    }
+    
+    function showHelpGuide() {
+        const helpContent = `
+            <div style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+                <h2 style="margin-top: 0; color: #007bff;">🎯 Page Builder Quick Guide</h2>
+                
+                <div style="margin: 20px 0;">
+                    <h3>📦 Getting Started</h3>
+                    <ul style="line-height: 1.8;">
+                        <li><strong>Drag & Drop:</strong> Drag any block from the left panel onto your canvas</li>
+                        <li><strong>Click to Edit:</strong> Click any element to select it and see styling options on the right</li>
+                        <li><strong>Double-click Text:</strong> Double-click text to edit it directly</li>
+                    </ul>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h3>⌨️ Keyboard Shortcuts</h3>
+                    <ul style="line-height: 1.8;">
+                        <li><strong>Ctrl+S:</strong> Save your page</li>
+                        <li><strong>Ctrl+Z:</strong> Undo last action</li>
+                        <li><strong>Ctrl+Y:</strong> Redo last undone action</li>
+                        <li><strong>Delete:</strong> Remove selected element</li>
+                    </ul>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h3>🖼️ Working with Images</h3>
+                    <ul style="line-height: 1.8;">
+                        <li>Upload images in the Assets panel (left side, bottom)</li>
+                        <li>Click an uploaded asset to copy its URL</li>
+                        <li>Select an image element and paste the URL in the right panel</li>
+                        <li>Or drag the Image block and edit its source URL</li>
+                    </ul>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h3>📱 Responsive Design</h3>
+                    <ul style="line-height: 1.8;">
+                        <li>Use the device buttons (Desktop/Tablet/Mobile) to preview different screen sizes</li>
+                        <li>Adjust layouts and text sizes for better mobile experience</li>
+                        <li>Elements automatically stack on smaller screens</li>
+                    </ul>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h3>💡 Pro Tips</h3>
+                    <ul style="line-height: 1.8;">
+                        <li><strong>Use Pre-built Sections:</strong> LUCA Custom blocks include ready-made sections like Hero, Pricing, FAQ</li>
+                        <li><strong>Save Often:</strong> The page auto-saves every 60 seconds, but save manually for peace of mind</li>
+                        <li><strong>Preview Before Publishing:</strong> Click Preview to see your page as visitors will see it</li>
+                        <li><strong>Layers Panel:</strong> Use the Layers panel to navigate complex page structures</li>
+                    </ul>
+                </div>
+                
+                <div style="margin: 20px 0; padding: 15px; background: #f0f8ff; border-left: 4px solid #007bff; border-radius: 4px;">
+                    <strong>Need More Help?</strong><br>
+                    Check the documentation or contact support for assistance.
+                </div>
+            </div>
+        `;
+        
+        showModal('Help Guide', helpContent);
+    }
+    
+    function showModal(title, content) {
+        const modal = document.createElement('div');
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'modal-title');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            padding: 20px;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 12px; padding: 30px; position: relative; max-width: 700px; width: 100%;">
+                <button onclick="this.closest('div').parentElement.remove()" 
+                        aria-label="Close dialog"
+                        style="position: absolute; top: 15px; right: 15px; background: #f8f9fa; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1;">✕</button>
+                ${content}
+                <div style="margin-top: 20px; text-align: right;">
+                    <button onclick="this.closest('div').parentElement.remove()" 
+                            style="background: #007bff; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-weight: 600;">Got it!</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+        
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    }
+    
+    function showWelcomeGuide() {
+        const welcomeContent = `
+            <div style="text-align: center; max-width: 500px;">
+                <div style="font-size: 60px; margin-bottom: 20px;">🎨</div>
+                <h2 style="margin-top: 0; color: #007bff;">Welcome to the Page Builder!</h2>
+                
+                <div style="text-align: left; margin: 30px 0;">
+                    <div style="display: flex; align-items: start; margin-bottom: 20px;">
+                        <div style="font-size: 32px; margin-right: 15px;">1️⃣</div>
+                        <div>
+                            <strong style="display: block; margin-bottom: 5px;">Drag Blocks</strong>
+                            <span style="color: #6c757d;">Drag elements from the left panel onto your canvas</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; align-items: start; margin-bottom: 20px;">
+                        <div style="font-size: 32px; margin-right: 15px;">2️⃣</div>
+                        <div>
+                            <strong style="display: block; margin-bottom: 5px;">Click to Edit</strong>
+                            <span style="color: #6c757d;">Click any element to customize it in the right panel</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; align-items: start; margin-bottom: 20px;">
+                        <div style="font-size: 32px; margin-right: 15px;">3️⃣</div>
+                        <div>
+                            <strong style="display: block; margin-bottom: 5px;">Save & Publish</strong>
+                            <span style="color: #6c757d;">Save your work and click Publish when ready</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px; padding: 15px; background: #f0f8ff; border-radius: 8px;">
+                    <strong>💡 Tip:</strong> Use pre-built LUCA Custom sections for professional layouts in seconds!
+                </div>
+            </div>
+        `;
+        
+        showModal('', welcomeContent);
+        localStorage.setItem('builder_guide_seen', 'true');
     }
 
     function saveContent(showNotification = true) {
@@ -466,11 +797,11 @@
             saveContent(false);
             
             // Then publish
-            fetch(`/crm/pages/api/${pageSlug}/publish/`, {
+            fetch(`/crm/pages/api/{{ page.slug }}/publish/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': '{{ csrf_token }}'
                 },
                 body: JSON.stringify({ publish: true })
             })
@@ -499,7 +830,18 @@
     function uploadAssets(files) {
         if (!files || files.length === 0) return;
 
+        const fileCount = files.length;
+        let uploadedCount = 0;
+        
+        showToast(`Uploading ${fileCount} file(s)...`, 'info');
+
         Array.from(files).forEach(file => {
+            // Check file size (configurable limit)
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                showToast(`File too large: ${file.name} (max ${MAX_FILE_SIZE_MB}MB)`, 'error');
+                return;
+            }
+            
             const formData = new FormData();
             formData.append('file', file);
 
@@ -512,16 +854,17 @@
             })
             .then(response => response.json())
             .then(data => {
+                uploadedCount++;
                 if (data.success) {
                     loadAssets();
-                    showToast('Asset uploaded: ' + data.asset.filename, 'success');
+                    showToast(`✓ Uploaded: ${data.asset.filename} (${uploadedCount}/${fileCount})`, 'success');
                 } else {
-                    showToast(data.error || 'Error uploading asset', 'error');
+                    showToast(data.error || 'Error uploading ' + file.name, 'error');
                 }
             })
             .catch(error => {
                 console.error('Error uploading asset:', error);
-                showToast('Error uploading asset', 'error');
+                showToast('Error uploading ' + file.name, 'error');
             });
         });
     }
@@ -536,54 +879,99 @@
                 if (data.data && data.data.length > 0) {
                     data.data.forEach(asset => {
                         const assetEl = document.createElement('div');
-                        assetEl.style.cssText = 'margin-bottom: 10px; cursor: pointer; border: 1px solid #0f3460; border-radius: 4px; overflow: hidden;';
+                        assetEl.style.cssText = 'margin-bottom: 10px; cursor: grab; border: 1px solid #0f3460; border-radius: 4px; overflow: hidden; transition: all 0.2s;';
+                        assetEl.className = 'asset-item';
+                        assetEl.draggable = true;
                         assetEl.innerHTML = `
                             <img src="${asset.src}" alt="${asset.name}" style="width: 100%; height: auto; display: block;">
                             <div style="padding: 8px; background: #0f3460; color: white; font-size: 12px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                                 ${asset.name}
                             </div>
                         `;
-                        assetEl.onclick = () => {
-                            // Copy URL to clipboard
-                            navigator.clipboard.writeText(asset.src);
-                            showToast('Asset URL copied to clipboard!', 'success');
+                        
+                        // Drag to insert
+                        assetEl.ondragstart = (e) => {
+                            e.dataTransfer.setData('text/html', `<img src="${asset.src}" alt="${asset.name}" style="max-width: 100%; height: auto;">`);
+                            assetEl.style.opacity = '0.5';
+                            showToast('Drag image to canvas', 'info');
                         };
+                        
+                        assetEl.ondragend = () => {
+                            assetEl.style.opacity = '1';
+                        };
+                        
+                        // Click to copy URL
+                        assetEl.onclick = () => {
+                            navigator.clipboard.writeText(asset.src);
+                            showToast('Image URL copied! Select an image element and paste.', 'success');
+                        };
+                        
+                        // Hover effect
+                        assetEl.onmouseenter = () => {
+                            assetEl.style.borderColor = '#007bff';
+                            assetEl.style.transform = 'scale(1.02)';
+                        };
+                        assetEl.onmouseleave = () => {
+                            assetEl.style.borderColor = '#0f3460';
+                            assetEl.style.transform = 'scale(1)';
+                        };
+                        
                         container.appendChild(assetEl);
                     });
                 } else {
-                    container.innerHTML = '<p style="color: #6c757d; font-size: 13px; text-align: center;">No assets uploaded yet</p>';
+                    container.innerHTML = '<p style="color: #6c757d; font-size: 13px; text-align: center;">No assets uploaded yet<br><br>Upload images to use them in your page</p>';
                 }
             })
             .catch(error => console.error('Error loading assets:', error));
     }
     
-    // Drag & Drop for Asset Upload
+    // Drag & Drop for Asset Upload with enhanced feedback
     const uploadZone = document.querySelector('.asset-upload-zone');
     
     if (uploadZone) {
         uploadZone.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             uploadZone.style.borderColor = '#007bff';
             uploadZone.style.background = 'rgba(0, 123, 255, 0.15)';
+            uploadZone.style.transform = 'scale(1.02)';
         });
 
         uploadZone.addEventListener('dragleave', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             uploadZone.style.borderColor = '#0f3460';
             uploadZone.style.background = 'rgba(15, 52, 96, 0.2)';
+            uploadZone.style.transform = 'scale(1)';
         });
 
         uploadZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadZone.style.borderColor = '#0f3460';
-            uploadZone.style.background = 'rgba(15, 52, 96, 0.2)';
+            e.stopPropagation();
+            uploadZone.style.borderColor = '#28a745';
+            uploadZone.style.background = 'rgba(40, 167, 69, 0.1)';
+            uploadZone.style.transform = 'scale(1)';
+            
+            // Reset style after a moment
+            setTimeout(() => {
+                uploadZone.style.borderColor = '#0f3460';
+                uploadZone.style.background = 'rgba(15, 52, 96, 0.2)';
+            }, 500);
+            
             const files = e.dataTransfer.files;
             if (files.length > 0) {
-                uploadAssets(files);
+                // Filter only image files
+                const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+                if (imageFiles.length > 0) {
+                    uploadAssets(imageFiles);
+                } else {
+                    showToast('Please upload image files only', 'warning');
+                }
             }
         });
     }
     
+    // Toast notification system
     // Toast notification system
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
@@ -594,7 +982,10 @@
         setTimeout(() => {
             toast.style.opacity = '0';
             setTimeout(() => {
-                document.body.removeChild(toast);
+                // Safely remove toast if it's still in the DOM
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
             }, 300);
         }, 3000);
     }
