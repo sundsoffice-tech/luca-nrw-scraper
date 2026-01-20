@@ -11,6 +11,8 @@ let perPage = 25;
 let sortField = 'created_at';
 let sortDirection = 'desc';
 let selectedLeads = new Set();
+let totalCount = 0;  // Total number of leads from server
+let useServerPagination = true;  // Use server-side pagination
 
 // Status badges
 const STATUS_BADGES = {
@@ -35,15 +37,73 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Load leads from API
+ * Load leads from API with server-side pagination and filtering
  */
 async function loadLeads() {
     try {
-        const response = await fetch('/api/leads/');
+        // Build query parameters for server-side filtering and pagination
+        const params = new URLSearchParams();
+        params.append('page', currentPage);
+        params.append('page_size', perPage);
+        
+        // Add filter parameters
+        const searchTerm = document.getElementById('search-input')?.value || '';
+        const statusValue = document.getElementById('status-filter')?.value || '';
+        const sourceValue = document.getElementById('source-filter')?.value || '';
+        const scoreValue = document.getElementById('score-filter')?.value || '';
+        
+        if (searchTerm) {
+            params.append('search', searchTerm);
+        }
+        if (statusValue) {
+            params.append('status', statusValue);
+        }
+        if (sourceValue) {
+            params.append('source', sourceValue);
+        }
+        if (scoreValue) {
+            // Convert score filter to min_score parameter
+            if (scoreValue === 'hot') {
+                params.append('min_score', '80');
+            } else if (scoreValue === 'medium') {
+                params.append('min_score', '50');
+            }
+            // For 'low' we don't filter by min_score, handled client-side if needed
+        }
+        
+        const response = await fetch(`/api/leads/?${params.toString()}`);
         if (!response.ok) throw new Error('Failed to load leads');
         
-        allLeads = await response.json();
-        filteredLeads = [...allLeads];
+        const data = await response.json();
+        
+        // Handle both paginated response and direct array response
+        if (Array.isArray(data)) {
+            // Direct array response (backward compatibility)
+            allLeads = data;
+            filteredLeads = [...allLeads];
+            totalCount = allLeads.length;
+            useServerPagination = false;
+        } else if (data && typeof data === 'object' && Array.isArray(data.results)) {
+            // Paginated response
+            allLeads = data.results;
+            filteredLeads = [...allLeads];
+            totalCount = data.count || 0;
+            useServerPagination = true;
+        } else {
+            // Unexpected format, use empty array
+            allLeads = [];
+            filteredLeads = [];
+            totalCount = 0;
+            useServerPagination = false;
+        }
+        
+        // Apply additional client-side filtering for 'low' score if needed
+        if (scoreValue === 'low') {
+            filteredLeads = filteredLeads.filter(lead => {
+                const score = lead.quality_score || 0;
+                return score < 50;
+            });
+        }
         
         applySorting();
         renderLeads();
@@ -100,48 +160,14 @@ function initializeFilters() {
 }
 
 /**
- * Apply filters to leads
+ * Apply filters to leads by reloading from server
  */
 function applyFilters() {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
-    const statusValue = document.getElementById('status-filter').value;
-    const sourceValue = document.getElementById('source-filter').value;
-    const scoreValue = document.getElementById('score-filter').value;
-    
-    filteredLeads = allLeads.filter(lead => {
-        // Search filter
-        if (searchTerm) {
-            const searchableText = [
-                lead.name,
-                lead.email,
-                lead.telefon,
-                lead.company
-            ].filter(Boolean).join(' ').toLowerCase();
-            
-            if (!searchableText.includes(searchTerm)) return false;
-        }
-        
-        // Status filter
-        if (statusValue && lead.status !== statusValue) return false;
-        
-        // Source filter
-        if (sourceValue && lead.source !== sourceValue) return false;
-        
-        // Score filter
-        if (scoreValue) {
-            const score = lead.quality_score || 0;
-            if (scoreValue === 'hot' && score < 80) return false;
-            if (scoreValue === 'medium' && (score < 50 || score >= 80)) return false;
-            if (scoreValue === 'low' && score >= 50) return false;
-        }
-        
-        return true;
-    });
-    
+    // Reset to page 1 when filters change
     currentPage = 1;
-    applySorting();
-    renderLeads();
-    updatePagination();
+    
+    // Reload leads with new filters from server
+    loadLeads();
 }
 
 /**
@@ -184,9 +210,9 @@ function applySorting() {
  */
 function renderLeads() {
     const tbody = document.getElementById('leads-tbody');
-    const start = (currentPage - 1) * perPage;
-    const end = start + perPage;
-    const leadsToShow = filteredLeads.slice(start, end);
+    
+    // For server-side pagination, all leads are already the correct page
+    const leadsToShow = useServerPagination ? filteredLeads : filteredLeads.slice((currentPage - 1) * perPage, currentPage * perPage);
     
     if (leadsToShow.length === 0) {
         tbody.innerHTML = `
@@ -264,25 +290,39 @@ function initializePagination() {
     document.getElementById('prev-page').addEventListener('click', () => {
         if (currentPage > 1) {
             currentPage--;
-            renderLeads();
-            updatePagination();
+            if (useServerPagination) {
+                loadLeads();
+            } else {
+                renderLeads();
+                updatePagination();
+            }
         }
     });
     
     document.getElementById('next-page').addEventListener('click', () => {
-        const totalPages = Math.ceil(filteredLeads.length / perPage);
+        const totalPages = useServerPagination 
+            ? Math.ceil(totalCount / perPage)
+            : Math.ceil(filteredLeads.length / perPage);
         if (currentPage < totalPages) {
             currentPage++;
-            renderLeads();
-            updatePagination();
+            if (useServerPagination) {
+                loadLeads();
+            } else {
+                renderLeads();
+                updatePagination();
+            }
         }
     });
     
     document.getElementById('per-page').addEventListener('change', function() {
         perPage = parseInt(this.value);
         currentPage = 1;
-        renderLeads();
-        updatePagination();
+        if (useServerPagination) {
+            loadLeads();
+        } else {
+            renderLeads();
+            updatePagination();
+        }
     });
 }
 
@@ -290,7 +330,7 @@ function initializePagination() {
  * Update pagination display
  */
 function updatePagination() {
-    const total = filteredLeads.length;
+    const total = useServerPagination ? totalCount : filteredLeads.length;
     const totalPages = Math.ceil(total / perPage);
     const start = Math.min((currentPage - 1) * perPage + 1, total);
     const end = Math.min(currentPage * perPage, total);
@@ -326,8 +366,12 @@ function updatePagination() {
         }`;
         btn.onclick = () => {
             currentPage = i;
-            renderLeads();
-            updatePagination();
+            if (useServerPagination) {
+                loadLeads();
+            } else {
+                renderLeads();
+                updatePagination();
+            }
         };
         pageNumbers.appendChild(btn);
     }
@@ -540,32 +584,69 @@ function callLead(leadId) {
 /**
  * Export leads to CSV
  */
-function exportLeads() {
-    // Create CSV content
-    const headers = ['Name', 'Email', 'Telefon', 'Firma', 'Status', 'Score', 'Quelle', 'Erstellt'];
-    const rows = filteredLeads.map(lead => [
-        lead.name,
-        lead.email || '',
-        lead.telefon || '',
-        lead.company || '',
-        lead.status,
-        lead.quality_score,
-        lead.source,
-        lead.created_at
-    ]);
-    
-    let csv = headers.join(',') + '\n';
-    rows.forEach(row => {
-        csv += row.map(cell => `"${cell}"`).join(',') + '\n';
-    });
-    
-    // Download
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `telis_leads_${new Date().toISOString().split('T')[0]}.csv`);
-    link.click();
+async function exportLeads() {
+    try {
+        // If using server pagination, fetch all filtered leads for export
+        let leadsToExport = filteredLeads;
+        
+        if (useServerPagination && totalCount > filteredLeads.length) {
+            // Fetch all pages for export
+            const params = new URLSearchParams();
+            params.append('page_size', totalCount); // Get all results in one page
+            
+            // Add current filter parameters
+            const searchTerm = document.getElementById('search-input')?.value || '';
+            const statusValue = document.getElementById('status-filter')?.value || '';
+            const sourceValue = document.getElementById('source-filter')?.value || '';
+            const scoreValue = document.getElementById('score-filter')?.value || '';
+            
+            if (searchTerm) params.append('search', searchTerm);
+            if (statusValue) params.append('status', statusValue);
+            if (sourceValue) params.append('source', sourceValue);
+            if (scoreValue === 'hot') params.append('min_score', '80');
+            else if (scoreValue === 'medium') params.append('min_score', '50');
+            
+            const response = await fetch(`/api/leads/?${params.toString()}`);
+            if (response.ok) {
+                const data = await response.json();
+                leadsToExport = Array.isArray(data) ? data : (data.results || []);
+                
+                // Apply client-side 'low' filter if needed
+                if (scoreValue === 'low') {
+                    leadsToExport = leadsToExport.filter(lead => (lead.quality_score || 0) < 50);
+                }
+            }
+        }
+        
+        // Create CSV content
+        const headers = ['Name', 'Email', 'Telefon', 'Firma', 'Status', 'Score', 'Quelle', 'Erstellt'];
+        const rows = leadsToExport.map(lead => [
+            lead.name,
+            lead.email || '',
+            lead.telefon || '',
+            lead.company || '',
+            lead.status,
+            lead.quality_score,
+            lead.source,
+            lead.created_at
+        ]);
+        
+        let csv = headers.join(',') + '\n';
+        rows.forEach(row => {
+            csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+        });
+        
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `telis_leads_${new Date().toISOString().split('T')[0]}.csv`);
+        link.click();
+    } catch (error) {
+        console.error('Error exporting leads:', error);
+        alert('Fehler beim Exportieren der Leads');
+    }
 }
 
 // Helper functions
