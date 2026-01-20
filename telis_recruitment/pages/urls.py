@@ -9,6 +9,9 @@ urlpatterns = [
     path('', views.builder_list, name='builder-list'),
     path('builder/<slug:slug>/', views.builder_view, name='page-builder'),
     
+    # Social Media Preview
+    path('preview/<slug:slug>/social/', views.social_preview, name='social-preview'),
+    
     # Quick Create Interface
     path('quick-create/', views.quick_create, name='quick-create'),
     

@@ -1129,3 +1129,28 @@ def project_build_view(request, slug):
         'pages': pages,
         'assets': assets
     })
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def social_preview(request, slug):
+    """Preview how the page will appear on social media platforms"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    # Get the full URL for the page
+    page_url = request.build_absolute_uri(page.get_absolute_url())
+    
+    # Prepare preview data for different platforms
+    preview_data = {
+        'page': page,
+        'page_url': page_url,
+        'og_title': page.get_og_title(),
+        'og_description': page.get_og_description(),
+        'og_image': page.get_og_image(),
+        'twitter_card': page.twitter_card,
+        'twitter_title': page.get_twitter_title(),
+        'twitter_description': page.get_twitter_description(),
+        'twitter_image': page.get_twitter_image(),
+    }
+    
+    return render(request, 'pages/social_preview.html', preview_data)
