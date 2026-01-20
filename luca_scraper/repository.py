@@ -114,6 +114,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
     This keeps the local SQLite DB aware of which leads were already acted upon
     so the scraper can avoid reprocessing them.
+    
+    Performance: Uses bulk operations instead of row-by-row updates to avoid O(N) loop overhead.
     """
     from .connection import transaction
     
@@ -130,6 +132,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
         rows = cur.fetchall()
         stats["checked"] = len(rows)
 
+        # Collect all updates in a batch for bulk execution
+        updates = []
         for row in rows:
             new_status = None
             if row["email"]:
@@ -137,8 +141,12 @@ def sync_status_to_scraper() -> Dict[str, int]:
             if not new_status and row["telefon"]:
                 new_status = phone_index.get(_normalize_phone(row["telefon"]))
             if new_status and new_status != row["crm_status"]:
-                cur.execute("UPDATE leads SET crm_status = ? WHERE id = ?", (new_status, row["id"]))
-                stats["updated"] += 1
+                updates.append((new_status, row["id"]))
+        
+        # Execute bulk update if there are any changes
+        if updates:
+            cur.executemany("UPDATE leads SET crm_status = ? WHERE id = ?", updates)
+            stats["updated"] = len(updates)
 
     logger.debug("sync_status_to_scraper updated %d rows (checked %d)", stats["updated"], stats["checked"])
     return stats

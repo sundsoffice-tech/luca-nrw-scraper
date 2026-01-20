@@ -160,11 +160,13 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
     """
     Insert or update a lead using Django ORM.
     
-    Deduplication logic:
-    1. First check by email (if provided and not empty)
-    2. Then check by phone (if provided and not empty)
+    Deduplication logic (optimized with indexed lookups):
+    1. First check by email (if provided and not empty) - uses email index
+    2. Then check by phone (if provided and not empty) - uses telefon index
     3. If found, update existing lead
     4. Otherwise, create new lead
+    
+    Performance: O(log N) lookups using database indexes instead of O(N) full table scans.
     
     Args:
         data: Dictionary with lead data (scraper field names)
@@ -183,7 +185,7 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
         # Try to find existing lead
         existing_lead = None
         
-        # Priority 1: Search by email
+        # Priority 1: Search by email using indexed field
         if normalized_email:
             try:
                 existing_lead = Lead.objects.filter(
@@ -193,18 +195,30 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
                 logger.debug("Error searching by email: %s", exc)
         
         # Priority 2: Search by phone if not found by email
-        # Note: We use a custom lookup that checks if normalized phone digits
-        # are contained in the stored phone number to handle different formats
-        # (e.g., +49123456789, 0049123456789, 0123456789)
-        if not existing_lead and normalized_phone:
+        # Use indexed lookup by exact match on telefon field
+        # Note: This assumes phone numbers are stored in a consistent format
+        # For fuzzy matching, we'd need to normalize all existing phones (one-time migration)
+        if not existing_lead and telefon:
             try:
-                # Query all leads and filter in Python for normalized phone match
-                # This is more flexible than DB regex but may be less efficient for very large datasets
-                for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
-                    stored_normalized = _normalize_phone(lead.telefon)
-                    if stored_normalized and stored_normalized == normalized_phone:
-                        existing_lead = lead
-                        break
+                # Try exact match first (uses index)
+                existing_lead = Lead.objects.filter(telefon=telefon).first()
+                
+                # If no exact match, try normalized digit-only match
+                # This is a fallback for different formats but still more efficient
+                # than iterating all records
+                if not existing_lead and normalized_phone:
+                    # Use Q objects for OR condition with indexed fields
+                    from django.db.models import Q
+                    # Check common phone number formats
+                    phone_variations = [
+                        normalized_phone,
+                        f"+49{normalized_phone.lstrip('0')}",
+                        f"0{normalized_phone.lstrip('0')}",
+                        f"0049{normalized_phone.lstrip('0')}",
+                    ]
+                    existing_lead = Lead.objects.filter(
+                        Q(telefon__in=phone_variations)
+                    ).first()
             except Exception as exc:
                 logger.debug("Error searching by phone: %s", exc)
         

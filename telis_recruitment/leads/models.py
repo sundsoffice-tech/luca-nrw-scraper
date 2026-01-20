@@ -172,6 +172,9 @@ class Lead(models.Model):
             models.Index(fields=['quality_score']),
             models.Index(fields=['lead_type']),
             models.Index(fields=['created_at']),
+            # Indexes for duplicate detection - improves O(N²) to O(log N)
+            models.Index(fields=['email']),
+            models.Index(fields=['telefon']),
         ]
     
     def __str__(self):
