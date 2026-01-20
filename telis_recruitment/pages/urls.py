@@ -18,6 +18,21 @@ urlpatterns = [
     path('projects/<slug:slug>/delete/', views.project_delete, name='project-delete'),
     path('upload-project/', views.upload_project, name='upload-project'),
     
+    # Project Settings (NEW)
+    path('projects/<slug:slug>/settings/', views.project_settings_view, name='project-settings'),
+    
+    # Project Navigation (NEW)
+    path('projects/<slug:slug>/navigation/', views.project_navigation_view, name='project-navigation'),
+    path('projects/<slug:slug>/navigation/save/', views.save_navigation, name='save-navigation'),
+    
+    # Project Build & Export (NEW)
+    path('projects/<slug:slug>/build-page/', views.project_build_view, name='project-build-page'),
+    path('projects/<slug:slug>/build/', views.build_project, name='project-build'),
+    path('projects/<slug:slug>/export/', views.export_project, name='project-export'),
+    
+    # Project Deployments (NEW)
+    path('projects/<slug:slug>/deployments/', views.project_deployments, name='project-deployments'),
+    
     # Builder API endpoints
     path('api/<slug:slug>/save/', views.builder_save, name='builder-save'),
     path('api/<slug:slug>/load/', views.builder_load, name='builder-load'),

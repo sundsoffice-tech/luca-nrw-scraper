@@ -4,6 +4,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
 from unfold.admin import ModelAdmin, TabularInline
+from . import models
 from .models import (
     Project, LandingPage, PageVersion, PageComponent, PageSubmission, 
     UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate,
@@ -562,3 +563,168 @@ class ProjectAdmin(ModelAdmin):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+# ============================================================================
+# Project Navigation, Assets, Settings, and Deployment Admin
+# ============================================================================
+
+class ProjectNavigationInline(TabularInline):
+    """Inline display of project navigation items"""
+    model = models.ProjectNavigation
+    extra = 0
+    fields = ['title', 'page', 'external_url', 'icon', 'order', 'is_visible', 'open_in_new_tab', 'parent']
+    readonly_fields = []
+
+
+@admin.register(models.ProjectNavigation)
+class ProjectNavigationAdmin(ModelAdmin):
+    """Admin interface for project navigation"""
+    
+    list_display = ['title', 'project', 'page', 'external_url', 'order', 'is_visible', 'parent']
+    list_filter = ['project', 'is_visible']
+    search_fields = ['title', 'project__name']
+    list_editable = ['order', 'is_visible']
+    ordering = ['project', 'order']
+    
+    fieldsets = [
+        ('Navigation Item', {
+            'fields': ['project', 'parent', 'title', 'icon', 'order']
+        }),
+        ('Link Target', {
+            'fields': ['page', 'external_url', 'open_in_new_tab']
+        }),
+        ('Visibility', {
+            'fields': ['is_visible']
+        }),
+    ]
+
+
+@admin.register(models.ProjectAsset)
+class ProjectAssetAdmin(ModelAdmin):
+    """Admin interface for project assets"""
+    
+    list_display = ['name', 'asset_type', 'project', 'include_globally', 'load_order', 'created_at']
+    list_filter = ['project', 'asset_type', 'include_globally']
+    search_fields = ['name', 'project__name', 'relative_path']
+    list_editable = ['load_order', 'include_globally']
+    ordering = ['project', 'load_order', 'name']
+    
+    fieldsets = [
+        ('Asset Information', {
+            'fields': ['project', 'name', 'asset_type', 'file', 'relative_path']
+        }),
+        ('Loading Options', {
+            'fields': ['include_globally', 'load_order']
+        }),
+        ('Metadata', {
+            'fields': ['created_at'],
+            'classes': ['collapse'],
+        }),
+    ]
+    
+    readonly_fields = ['created_at']
+
+
+class ProjectSettingsInline(TabularInline):
+    """Inline display of project settings in ProjectAdmin"""
+    model = models.ProjectSettings
+    can_delete = False
+    extra = 0
+    max_num = 1
+    
+    fields = ['primary_color', 'secondary_color', 'font_family', 'google_analytics_id']
+    readonly_fields = []
+
+
+@admin.register(models.ProjectSettings)
+class ProjectSettingsAdmin(ModelAdmin):
+    """Admin interface for project settings"""
+    
+    list_display = ['project', 'primary_color', 'secondary_color', 'google_analytics_id', 'facebook_pixel_id']
+    search_fields = ['project__name']
+    
+    fieldsets = [
+        ('Project', {
+            'fields': ['project']
+        }),
+        ('SEO Defaults', {
+            'fields': ['default_seo_title_suffix', 'default_seo_description', 'default_seo_image']
+        }),
+        ('Analytics', {
+            'fields': ['google_analytics_id', 'facebook_pixel_id', 'custom_head_code', 'custom_body_code']
+        }),
+        ('Design', {
+            'fields': ['primary_color', 'secondary_color', 'font_family', 'favicon']
+        }),
+        ('Error Pages', {
+            'fields': ['custom_404_page']
+        }),
+    ]
+    
+    def has_delete_permission(self, request, obj=None):
+        # Don't allow deletion - settings should always exist for a project
+        return False
+
+
+@admin.register(models.ProjectDeployment)
+class ProjectDeploymentAdmin(ModelAdmin):
+    """Admin interface for project deployments (read-only)"""
+    
+    list_display = ['project', 'version', 'status_badge', 'started_at', 'completed_at', 
+                   'deployed_files_count', 'deployed_size_mb', 'deployed_by']
+    list_filter = ['status', 'project', 'started_at']
+    search_fields = ['project__name', 'version', 'target_domain']
+    readonly_fields = ['project', 'status', 'version', 'target_domain', 'target_path',
+                      'build_log', 'deployed_files_count', 'deployed_size_bytes',
+                      'started_at', 'completed_at', 'deployed_by']
+    ordering = ['-started_at']
+    
+    fieldsets = [
+        ('Deployment Information', {
+            'fields': ['project', 'version', 'status', 'deployed_by']
+        }),
+        ('Target', {
+            'fields': ['target_domain', 'target_path']
+        }),
+        ('Build Results', {
+            'fields': ['deployed_files_count', 'deployed_size_bytes', 'build_log']
+        }),
+        ('Timestamps', {
+            'fields': ['started_at', 'completed_at']
+        }),
+    ]
+    
+    def status_badge(self, obj):
+        """Show status as colored badge"""
+        colors = {
+            'pending': '#6b7280',
+            'building': '#f59e0b',
+            'deploying': '#3b82f6',
+            'success': '#22c55e',
+            'failed': '#ef4444',
+        }
+        color = colors.get(obj.status, '#6b7280')
+        
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">{}</span>',
+            color, obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+    
+    def deployed_size_mb(self, obj):
+        """Show size in MB"""
+        if obj.deployed_size_bytes:
+            size_mb = obj.deployed_size_bytes / (1024 * 1024)
+            return f"{size_mb:.2f} MB"
+        return "0 MB"
+    deployed_size_mb.short_description = 'Size'
+    
+    def has_add_permission(self, request):
+        # Deployments are created programmatically
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        # Allow deletion of old deployments
+        return True
