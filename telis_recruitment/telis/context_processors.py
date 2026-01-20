@@ -14,3 +14,14 @@ def version_context(request):
     return {
         'APP_VERSION': settings.APP_VERSION,
     }
+
+
+def tinymce_api_key(request):
+    """
+    Add TinyMCE API key to template context.
+    
+    Makes TINYMCE_API_KEY available in all templates for TinyMCE initialization.
+    """
+    return {
+        'TINYMCE_API_KEY': getattr(settings, 'TINYMCE_API_KEY', 'no-api-key')
+    }

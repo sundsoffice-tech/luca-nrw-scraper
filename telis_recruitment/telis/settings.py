@@ -118,6 +118,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'mailbox.context_processors.unread_email_count',
                 'telis.context_processors.version_context',
+                'telis.context_processors.tinymce_api_key',
             ],
         },
     },
@@ -247,6 +248,12 @@ BREVO_WELCOME_TEMPLATE_ID = _get_optional_int('BREVO_WELCOME_TEMPLATE_ID')
 
 # Brevo Webhook Security
 BREVO_WEBHOOK_SECRET = os.getenv('BREVO_WEBHOOK_SECRET', None)
+
+
+# ==========================
+# TinyMCE Configuration
+# ==========================
+TINYMCE_API_KEY = os.getenv('TINYMCE_API_KEY', 'no-api-key')
 
 
 # ==========================
