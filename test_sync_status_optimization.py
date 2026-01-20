@@ -14,10 +14,9 @@ from pathlib import Path
 def test_sync_status_to_scraper_bulk_update():
     """Test that the optimized bulk update works correctly."""
     
-    # Create a temporary database
-    temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
-    temp_db.close()
-    db_path = temp_db.name
+    # Create a temporary database file path
+    fd, db_path = tempfile.mkstemp(suffix='.db')
+    os.close(fd)  # Close the file descriptor, SQLite will handle the file
     
     try:
         # Set up the database with test data
@@ -112,10 +111,9 @@ def test_sync_status_to_scraper_bulk_update():
 def test_empty_updates():
     """Test that the function handles empty update list correctly."""
     
-    # Create a temporary database
-    temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
-    temp_db.close()
-    db_path = temp_db.name
+    # Create a temporary database file path
+    fd, db_path = tempfile.mkstemp(suffix='.db')
+    os.close(fd)  # Close the file descriptor, SQLite will handle the file
     
     try:
         conn = sqlite3.connect(db_path)
@@ -175,10 +173,9 @@ def test_empty_updates():
 def test_large_batch_update():
     """Test that bulk update works with many records."""
     
-    # Create a temporary database
-    temp_db = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.db')
-    temp_db.close()
-    db_path = temp_db.name
+    # Create a temporary database file path
+    fd, db_path = tempfile.mkstemp(suffix='.db')
+    os.close(fd)  # Close the file descriptor, SQLite will handle the file
     
     try:
         conn = sqlite3.connect(db_path)

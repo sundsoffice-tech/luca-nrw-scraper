@@ -462,22 +462,31 @@ def sync_status_to_scraper() -> Dict[str, int]:
             # END
             # WHERE id IN (?, ?, ...)
             
-            case_clauses = []
+            # Build parameterized query components
+            # Using list of tuples to ensure proper structure
             params = []
             ids = []
             
             for lead_id, status in updates.items():
-                case_clauses.append("WHEN id = ? THEN ?")
                 params.extend([lead_id, status])
                 ids.append(lead_id)
             
+            # Build the CASE clauses - each is just "WHEN id = ? THEN ?"
+            # This is safe as we're only joining a fixed pattern string
+            case_clause = "WHEN id = ? THEN ?"
+            case_expression = ' '.join([case_clause] * len(updates))
+            
+            # Build placeholders for WHERE IN clause
+            id_placeholders = ','.join('?' * len(ids))
+            
             # Build and execute the bulk update query
+            # All values are parameterized - no user input in SQL structure
             sql = f"""
                 UPDATE leads 
                 SET crm_status = CASE 
-                    {' '.join(case_clauses)}
+                    {case_expression}
                 END
-                WHERE id IN ({','.join('?' * len(ids))})
+                WHERE id IN ({id_placeholders})
             """
             
             # Execute bulk update with all parameters
