@@ -129,6 +129,22 @@
         50% { opacity: 0.5; }
     }
     
+    /* Search Results Panel */
+    .search-result-item {
+        border-left: 2px solid transparent;
+    }
+    .search-result-item:hover {
+        border-left-color: #06b6d4;
+        background-color: rgba(6, 182, 212, 0.1);
+    }
+    .search-result-item mark {
+        background-color: #fbbf24;
+        color: #000;
+        padding: 0 0.25rem;
+        border-radius: 0.125rem;
+        font-weight: 500;
+    }
+    
     /* Monaco container */
     #monaco-container {
         width: 100%;
@@ -372,6 +388,11 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2">
+                <button id="btn-save-all" onclick="saveAllFiles()" 
+                        class="px-3 py-1.5 bg-cyan-600 text-white rounded hover:bg-cyan-700 transition text-sm hidden"
+                        title="Save all unsaved files">
+                    💾 Save All
+                </button>
                 <button id="btn-preview" onclick="togglePreview()" 
                         class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm">
                     👁️ Preview
@@ -426,9 +447,34 @@
                 </button>
             </div>
             
+            <!-- File Tree Filter -->
+            <div class="px-2 pb-2">
+                <input type="text" 
+                       id="file-tree-filter" 
+                       placeholder="Filter files..." 
+                       onkeyup="filterFileTree(this.value)"
+                       class="w-full px-2 py-1.5 text-sm bg-dark-700 border border-dark-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500">
+            </div>
+            
             <!-- File Tree -->
             <div id="file-tree" class="flex-1 overflow-auto p-2 file-tree">
                 <!-- Populated by JavaScript -->
+            </div>
+            
+            <!-- Search Results Panel (initially hidden) -->
+            <div id="search-results-panel" class="hidden border-t border-dark-700 bg-dark-800 overflow-auto" style="max-height: 300px;">
+                <div class="p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-semibold text-cyan-400">
+                            <span class="icon">🔍</span>
+                            <span id="search-results-count">Search Results</span>
+                        </h3>
+                        <button onclick="closeSearchResults()" class="text-gray-400 hover:text-white text-lg">×</button>
+                    </div>
+                    <div id="search-results-list" class="space-y-1">
+                        <!-- Results populated by JavaScript -->
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -659,42 +705,79 @@ function getFileIcon(filename) {
 
 // Initialize Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-require(['vs/editor/editor.main'], function() {
-    state.editor = monaco.editor.create(document.getElementById('monaco-container'), {
-        value: '// Select a file to start editing\n// Use Ctrl+P to open files quickly\n// Press Ctrl+S to save\n// Click the keyboard icon in the status bar for more shortcuts',
-        language: 'javascript',
-        theme: 'vs-dark',
-        automaticLayout: true,
-        fontSize: 14,
-        minimap: { enabled: true },
-        scrollBeyondLastLine: false,
-        lineNumbers: 'on',
-        folding: true,
-        wordWrap: 'on',
-        formatOnPaste: true,
-        formatOnType: true
-    });
-    
-    // Listen for content changes
-    state.editor.onDidChangeModelContent(() => {
-        if (state.currentFile) {
-            state.unsavedChanges[state.currentFile] = true;
-            updateStatusBar();
-            updateTabTitle(state.currentFile);
-            renderFileTree(); // Update file tree to show unsaved indicator
-            startAutoSave();
+
+// Wrap Monaco initialization in try-catch for better error handling
+try {
+    require(['vs/editor/editor.main'], function() {
+        try {
+            state.editor = monaco.editor.create(document.getElementById('monaco-container'), {
+                value: '// Select a file to start editing\n// Use Ctrl+P to open files quickly\n// Press Ctrl+S to save\n// Click the keyboard icon in the status bar for more shortcuts',
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                fontSize: 14,
+                minimap: { enabled: true },
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+                folding: true,
+                wordWrap: 'on',
+                formatOnPaste: true,
+                formatOnType: true
+            });
+            
+            // Listen for content changes
+            state.editor.onDidChangeModelContent(() => {
+                if (state.currentFile) {
+                    state.unsavedChanges[state.currentFile] = true;
+                    updateStatusBar();
+                    updateTabTitle(state.currentFile);
+                    renderFileTree(); // Update file tree to show unsaved indicator
+                    startAutoSave();
+                }
+            });
+            
+            // Listen for cursor position changes
+            state.editor.onDidChangeCursorPosition((e) => {
+                updateStatusBar();
+            });
+            
+            // Register keyboard shortcuts
+            state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                saveCurrentFile();
+            });
+        } catch (error) {
+            console.error('Error creating Monaco editor:', error);
+            showToast('Failed to initialize code editor. Please refresh the page.', 'error');
+            // Show error message in container
+            document.getElementById('monaco-container').innerHTML = `
+                <div class="flex items-center justify-center h-full text-center p-8">
+                    <div class="text-red-400">
+                        <div class="text-4xl mb-4">⚠️</div>
+                        <div class="text-lg font-semibold mb-2">Editor Initialization Failed</div>
+                        <div class="text-sm text-gray-400">Please refresh the page to try again.</div>
+                        <div class="text-xs text-gray-500 mt-4">${error.message}</div>
+                    </div>
+                </div>
+            `;
         }
+    }, function(error) {
+        console.error('Error loading Monaco editor:', error);
+        showToast('Failed to load code editor. Please check your internet connection.', 'error');
+        document.getElementById('monaco-container').innerHTML = `
+            <div class="flex items-center justify-center h-full text-center p-8">
+                <div class="text-red-400">
+                    <div class="text-4xl mb-4">⚠️</div>
+                    <div class="text-lg font-semibold mb-2">Editor Loading Failed</div>
+                    <div class="text-sm text-gray-400">Unable to load Monaco Editor from CDN.</div>
+                    <div class="text-xs text-gray-500 mt-4">Please check your internet connection and refresh the page.</div>
+                </div>
+            </div>
+        `;
     });
-    
-    // Listen for cursor position changes
-    state.editor.onDidChangeCursorPosition((e) => {
-        updateStatusBar();
-    });
-    
-    // Register keyboard shortcuts
-    state.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        saveCurrentFile();
-    });
+} catch (error) {
+    console.error('Error configuring RequireJS:', error);
+    showToast('Failed to configure editor loader', 'error');
+}
     
     // Load initial file tree
     refreshFileTree();
@@ -754,9 +837,15 @@ function renderTreeNode(node, level) {
         const fileIcon = getFileIcon(node.name);
         const hasChanges = state.unsavedChanges[node.path];
         
+        // Create tooltip with file info
+        const fileSize = node.size ? formatFileSize(node.size) : 'unknown size';
+        const fileType = node.type_name || 'unknown type';
+        const tooltip = `${node.path}\nSize: ${fileSize}\nType: ${fileType}`;
+        
         html += `<div style="padding-left: ${indent}px" 
                      class="file-tree-item ${isActive ? 'active' : ''}"
                      data-path="${node.path}"
+                     title="${tooltip}"
                      onclick="loadFile('${node.path}')"
                      oncontextmenu="showContextMenu(event, '${node.path}')">
             <span class="file-icon">${fileIcon}</span>
@@ -810,6 +899,51 @@ function toggleFileTreeCollapse() {
     });
     
     renderFileTree();
+}
+
+// Filter file tree by search term
+function filterFileTree(searchTerm) {
+    searchTerm = searchTerm.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        // Show all files if no search term
+        document.querySelectorAll('.file-tree-item, .folder-item').forEach(item => {
+            item.style.display = '';
+        });
+        return;
+    }
+    
+    // Hide all items initially
+    document.querySelectorAll('.file-tree-item').forEach(item => {
+        const path = item.getAttribute('data-path') || '';
+        if (path.toLowerCase().includes(searchTerm)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // Show/hide folders based on whether they have visible children
+    document.querySelectorAll('.folder-item').forEach(folder => {
+        const folderId = folder.getAttribute('data-folder-id');
+        const childrenDiv = document.getElementById(`${folderId}-children`);
+        
+        if (childrenDiv) {
+            const visibleChildren = childrenDiv.querySelectorAll('.file-tree-item:not([style*="display: none"])');
+            if (visibleChildren.length > 0) {
+                folder.style.display = '';
+                // Auto-expand folders with matches
+                if (state.collapsedFolders.has(folderId)) {
+                    state.collapsedFolders.delete(folderId);
+                    folder.classList.remove('collapsed');
+                    childrenDiv.classList.remove('collapsed');
+                    childrenDiv.style.maxHeight = 'none';
+                }
+            } else {
+                folder.style.display = 'none';
+            }
+        }
+    });
 }
 
 // File Operations
@@ -910,20 +1044,109 @@ function saveCurrentFile(silent = false) {
     });
 }
 
-// Auto-save functionality
+// Auto-save functionality with debouncing
+let autoSaveDebounceTimer = null;
+
 function startAutoSave() {
-    // Clear existing timer
+    // Clear both existing timers to prevent memory leaks
     if (state.autoSaveTimer) {
         clearTimeout(state.autoSaveTimer);
+        state.autoSaveTimer = null;
+    }
+    if (autoSaveDebounceTimer) {
+        clearTimeout(autoSaveDebounceTimer);
+        autoSaveDebounceTimer = null;
     }
     
-    // Set new timer for 30 seconds
-    state.autoSaveTimer = setTimeout(() => {
-        if (state.currentFile && state.unsavedChanges[state.currentFile]) {
-            saveCurrentFile(true);
-            showToast('Auto-saved', 'info');
-        }
-    }, 30000); // 30 seconds
+    // Debounce: wait 2 seconds of inactivity before starting the auto-save timer
+    autoSaveDebounceTimer = setTimeout(() => {
+        autoSaveDebounceTimer = null; // Clear reference after execution
+        
+        // Set timer for 30 seconds after last change
+        state.autoSaveTimer = setTimeout(() => {
+            state.autoSaveTimer = null; // Clear reference after execution
+            
+            if (state.currentFile && state.unsavedChanges[state.currentFile]) {
+                saveCurrentFile(true);
+                showToast('Auto-saved', 'info');
+            }
+        }, 30000); // 30 seconds
+    }, 2000); // 2 seconds debounce
+}
+
+// Save all unsaved files
+// Note: Currently only saves the file that is open in the editor
+// Files that are unsaved but not currently open cannot be saved
+// This is a known limitation - consider storing file contents in memory for full support
+function saveAllFiles() {
+    const unsavedFiles = Object.keys(state.unsavedChanges).filter(path => state.unsavedChanges[path]);
+    
+    if (unsavedFiles.length === 0) {
+        showToast('No unsaved files', 'info');
+        return;
+    }
+    
+    // Check if there are unsaved files that are not currently open
+    const unopenedUnsaved = unsavedFiles.filter(path => path !== state.currentFile);
+    if (unopenedUnsaved.length > 0 && state.currentFile) {
+        showToast(
+            `Note: Only the current file will be saved. ${unopenedUnsaved.length} other file(s) are unsaved but not open.`,
+            'warning'
+        );
+    }
+    
+    let savedCount = 0;
+    let failedCount = 0;
+    
+    // Save the current file if it has changes
+    if (state.currentFile && state.unsavedChanges[state.currentFile] && state.editor) {
+        const content = state.editor.getValue();
+        
+        fetch(`/crm/pages/api/${pageSlug}/editor/file/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                path: state.currentFile,
+                content: content,
+                create_version: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                state.unsavedChanges[state.currentFile] = false;
+                showToast('File saved successfully', 'success');
+            } else {
+                showToast(data.error || 'Failed to save file', 'error');
+            }
+            updateStatusBar();
+            updateSaveAllButton();
+            renderFileTree();
+            state.openTabs.forEach(path => updateTabTitle(path));
+        })
+        .catch(error => {
+            console.error('Error saving file:', error);
+            showToast('Error saving file', 'error');
+        });
+    } else {
+        showToast('No file to save', 'info');
+    }
+}
+
+// Update Save All button visibility
+function updateSaveAllButton() {
+    const unsavedCount = Object.keys(state.unsavedChanges).filter(path => state.unsavedChanges[path]).length;
+    const btn = document.getElementById('btn-save-all');
+    
+    if (unsavedCount > 0) {
+        btn.classList.remove('hidden');
+        btn.textContent = `💾 Save All (${unsavedCount})`;
+    } else {
+        btn.classList.add('hidden');
+    }
 }
 
 // Update breadcrumb navigation
@@ -1057,6 +1280,9 @@ function updateStatusBar() {
         posSpan.textContent = '';
         saveSpan.textContent = '';
     }
+    
+    // Update Save All button
+    updateSaveAllButton();
 }
 
 // Context Menu
@@ -1215,21 +1441,79 @@ function confirmModal() {
 }
 
 // File Operations API Calls
+
+// Validate file path before sending to server
+function validateFilePath(path) {
+    // Check for empty path
+    if (!path || path.trim() === '') {
+        return { valid: false, error: 'Path cannot be empty' };
+    }
+    
+    // Remove leading/trailing slashes and whitespace
+    path = path.trim().replace(/^\/+|\/+$/g, '');
+    
+    // Check for invalid characters
+    const invalidChars = /[<>:"|?*\x00-\x1F]/;
+    if (invalidChars.test(path)) {
+        return { valid: false, error: 'Path contains invalid characters' };
+    }
+    
+    // Check for directory traversal attempts
+    if (path.includes('..') || path.includes('./')) {
+        return { valid: false, error: 'Path cannot contain ".." or "./"' };
+    }
+    
+    // Check for absolute paths (Windows and Unix)
+    if (path.startsWith('/') || path.match(/^[a-zA-Z]:\\\\/)) {
+        return { valid: false, error: 'Path must be relative (no leading slash or drive letter)' };
+    }
+    
+    // Check for double slashes
+    if (path.includes('//')) {
+        return { valid: false, error: 'Path cannot contain double slashes' };
+    }
+    
+    // Check maximum length
+    if (path.length > 255) {
+        return { valid: false, error: 'Path is too long (max 255 characters)' };
+    }
+    
+    // Check that path has a valid extension for files
+    const parts = path.split('/');
+    const filename = parts[parts.length - 1];
+    if (filename.includes('.')) {
+        // Allow alphanumeric, hyphens, underscores in extensions
+        // Also allow multiple extensions like .tar.gz, .d.ts
+        if (!filename.match(/\.[a-zA-Z0-9_-]+$/)) {
+            return { valid: false, error: 'Invalid file extension' };
+        }
+    }
+    
+    return { valid: true, path: path };
+}
+
 function createFile(path) {
+    // Validate path
+    const validation = validateFilePath(path);
+    if (!validation.valid) {
+        showToast(validation.error, 'error');
+        return;
+    }
+    
     fetch(`/crm/pages/api/${pageSlug}/editor/file/create/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfToken
         },
-        body: JSON.stringify({ path: path, content: '' })
+        body: JSON.stringify({ path: validation.path, content: '' })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
             showToast('File created successfully', 'success');
             refreshFileTree();
-            loadFile(path);
+            loadFile(validation.path);
         } else {
             showToast(data.error, 'error');
         }
@@ -1358,9 +1642,8 @@ function searchFiles(query, searchContent) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            displaySearchResults(data.results, query);
             showToast(`Found ${data.count} results`, 'info');
-            // TODO: Show results in a panel
-            console.log('Search results:', data.results);
         } else {
             showToast(data.error, 'error');
         }
@@ -1369,6 +1652,91 @@ function searchFiles(query, searchContent) {
         console.error('Error searching files:', error);
         showToast('Error searching files', 'error');
     });
+}
+
+function displaySearchResults(results, query) {
+    const panel = document.getElementById('search-results-panel');
+    const list = document.getElementById('search-results-list');
+    const count = document.getElementById('search-results-count');
+    
+    // Update count
+    count.textContent = `Search Results (${results.length})`;
+    
+    // Clear previous results
+    list.innerHTML = '';
+    
+    if (results.length === 0) {
+        list.innerHTML = '<div class="text-gray-500 text-sm py-2">No results found</div>';
+        panel.classList.remove('hidden');
+        return;
+    }
+    
+    // Populate results
+    results.forEach(result => {
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'search-result-item p-2 rounded hover:bg-dark-700 cursor-pointer transition-colors';
+        resultDiv.onclick = () => {
+            openFile(result.path);
+            closeSearchResults();
+        };
+        
+        const pathDiv = document.createElement('div');
+        pathDiv.className = 'text-sm font-medium text-cyan-400 flex items-center gap-2';
+        pathDiv.innerHTML = `
+            <span class="text-xs">📄</span>
+            <span>${escapeHtml(result.path)}</span>
+            <span class="text-xs text-gray-500">(${result.match_type})</span>
+        `;
+        
+        resultDiv.appendChild(pathDiv);
+        
+        // Add context if available
+        if (result.context) {
+            const contextDiv = document.createElement('div');
+            contextDiv.className = 'text-xs text-gray-400 mt-1 ml-5 truncate';
+            
+            // Escape HTML first, then highlight the search term
+            const escapedContext = escapeHtml(result.context);
+            const escapedQuery = escapeHtml(query);
+            
+            // Use a safer highlighting approach
+            const highlightedContext = escapedContext.replace(
+                new RegExp(`(${escapedQuery})`, 'gi'),
+                '<mark class="bg-yellow-500 text-black px-1 rounded">$1</mark>'
+            );
+            contextDiv.innerHTML = `...${highlightedContext}...`;
+            resultDiv.appendChild(contextDiv);
+        }
+        
+        // Add file info
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'text-xs text-gray-500 mt-1 ml-5';
+        infoDiv.textContent = `${formatFileSize(result.size)} • ${result.type || 'unknown'}`;
+        resultDiv.appendChild(infoDiv);
+        
+        list.appendChild(resultDiv);
+    });
+    
+    // Show panel
+    panel.classList.remove('hidden');
+}
+
+function closeSearchResults() {
+    document.getElementById('search-results-panel').classList.add('hidden');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Preview Functions

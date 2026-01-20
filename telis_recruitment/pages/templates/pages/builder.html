@@ -462,9 +462,37 @@
 
     function publishPage() {
         if (confirm('Publish this page? It will be visible to the public.')) {
+            // First save the content
             saveContent(false);
-            // TODO: Add publish endpoint
-            showToast('Publish feature coming soon', 'info');
+            
+            // Then publish
+            fetch(`/crm/pages/api/${pageSlug}/publish/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ publish: true })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    if (data.public_url) {
+                        setTimeout(() => {
+                            if (confirm('Page published! Do you want to view it?')) {
+                                window.open(data.public_url, '_blank');
+                            }
+                        }, 500);
+                    }
+                } else {
+                    showToast(data.error || 'Failed to publish page', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error publishing page:', error);
+                showToast('Error publishing page', 'error');
+            });
         }
     }
 

@@ -104,6 +104,43 @@ def builder_load(request, slug):
     })
 
 
+@staff_member_required
+@require_POST
+def publish_page(request, slug):
+    """Publish or unpublish a landing page"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    try:
+        data = json.loads(request.body)
+        publish = data.get('publish', True)
+        
+        if publish:
+            page.status = 'published'
+            page.published_at = timezone.now()
+            message = 'Page published successfully'
+        else:
+            page.status = 'draft'
+            page.published_at = None
+            message = 'Page unpublished successfully'
+        
+        page.updated_by = request.user
+        page.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'status': page.status,
+            'published_at': page.published_at.isoformat() if page.published_at else None,
+            'public_url': page.get_absolute_url() if page.status == 'published' else None
+        })
+    except Exception as e:
+        logger.error(f"Error publishing page {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
 def public_page(request, slug):
     """Public rendering of a landing page"""
     page = get_object_or_404(LandingPage, slug=slug, status='published')
