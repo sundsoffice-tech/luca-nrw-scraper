@@ -459,7 +459,13 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
 def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
     """
-    Insert or update a lead in SQLite.
+    Insert or update a lead in SQLite using optimized INSERT OR IGNORE + UPDATE.
+    
+    This implementation avoids N+1 queries by using a two-step approach:
+    1. Try INSERT OR IGNORE (succeeds if no conflict)
+    2. If no insert happened (rowcount=0), do UPDATE
+    
+    This is more efficient than SELECT + INSERT/UPDATE as it reduces roundtrips.
     
     Args:
         data: Dictionary with lead data (scraper field names)
@@ -471,24 +477,41 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
     cur = con.cursor()
     
     try:
-        # Extract search fields
+        # Extract search fields for lookup
         email = data.get('email')
         telefon = data.get('telefon')
         
         normalized_email = _normalize_email(email)
         normalized_phone = _normalize_phone(telefon)
         
-        # Try to find existing lead
+        # Prepare data for insertion
+        columns = list(data.keys())
+        placeholders = ['?'] * len(columns)
+        values = [data[col] for col in columns]
+        
+        # Step 1: Try INSERT OR IGNORE
+        # This will succeed if no unique constraint is violated
+        sql = f"INSERT OR IGNORE INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        cur.execute(sql, values)
+        
+        # Check if insert succeeded
+        if cur.rowcount > 0:
+            # Insert succeeded - new lead created
+            new_id = cur.lastrowid
+            con.commit()
+            return (new_id, True)
+        
+        # Step 2: Insert failed due to unique constraint, find and update existing lead
         existing_id = None
         
-        # Search by email first
+        # Priority 1: Search by email
         if normalized_email:
             cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
             row = cur.fetchone()
             if row:
                 existing_id = row[0]
         
-        # Search by phone if not found by email
+        # Priority 2: Search by phone if not found by email
         if not existing_id and telefon:
             cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
             row = cur.fetchone()
@@ -497,32 +520,23 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         
         if existing_id:
             # Update existing lead
-            set_clauses = []
-            values = []
-            for key, value in data.items():
-                if key != 'id':
-                    set_clauses.append(f"{key} = ?")
-                    values.append(value)
+            set_clauses = [f"{key} = ?" for key in data.keys() if key != 'id']
+            update_values = [data[key] for key in data.keys() if key != 'id']
+            update_values.append(existing_id)
             
-            if set_clauses:
-                values.append(existing_id)
-                sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
-                cur.execute(sql, values)
-                con.commit()
-            
+            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+            cur.execute(sql, update_values)
+            con.commit()
             return (existing_id, False)
         else:
-            # Insert new lead
-            columns = list(data.keys())
-            placeholders = ['?'] * len(columns)
-            values = [data[col] for col in columns]
-            
+            # This shouldn't happen, but handle gracefully
+            # Try one more INSERT without IGNORE to get the error
             sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
             cur.execute(sql, values)
             new_id = cur.lastrowid
             con.commit()
-            
             return (new_id, True)
+            
     finally:
         con.close()
 
