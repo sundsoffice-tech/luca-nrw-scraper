@@ -790,3 +790,62 @@ class BlacklistEntry(models.Model):
     
     def __str__(self):
         return f"[{self.entry_type}] {self.value}"
+
+
+class UrlSeen(models.Model):
+    """
+    Track URLs that have been seen/processed by the scraper.
+    Used for deduplication.
+    """
+    url = models.URLField(max_length=1000, unique=True, verbose_name="URL")
+    first_run = models.ForeignKey(
+        ScraperRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='urls_seen',
+        verbose_name="Erster Scraper-Lauf"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstmals gesehen am")
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Gesehene URL"
+        verbose_name_plural = "Gesehene URLs"
+        indexes = [
+            models.Index(fields=['url']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.url[:50]}..."
+
+
+class QueryDone(models.Model):
+    """
+    Track search queries that have been executed.
+    Used to avoid reprocessing the same queries.
+    """
+    query = models.TextField(unique=True, verbose_name="Such-Query")
+    last_run = models.ForeignKey(
+        ScraperRun,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='queries_done',
+        verbose_name="Letzter Scraper-Lauf"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Erstmals ausgeführt am")
+    last_executed_at = models.DateTimeField(auto_now=True, verbose_name="Zuletzt ausgeführt am")
+    
+    class Meta:
+        ordering = ['-last_executed_at']
+        verbose_name = "Ausgeführte Query"
+        verbose_name_plural = "Ausgeführte Queries"
+        indexes = [
+            models.Index(fields=['query']),
+            models.Index(fields=['last_executed_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.query[:50]}..."

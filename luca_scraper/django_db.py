@@ -315,6 +315,165 @@ def update_lead(lead_id: int, data: Dict) -> bool:
         return False
 
 
+def is_url_seen(url: str) -> bool:
+    """
+    Check if a URL has been seen before.
+    
+    Args:
+        url: URL to check
+        
+    Returns:
+        True if URL has been seen, False otherwise
+    """
+    from telis_recruitment.scraper_control.models import UrlSeen
+    return UrlSeen.objects.filter(url=url).exists()
+
+
+def mark_url_seen(url: str, run_id: Optional[int] = None) -> None:
+    """
+    Mark a URL as seen.
+    
+    Args:
+        url: URL to mark as seen
+        run_id: Optional scraper run ID
+    """
+    from telis_recruitment.scraper_control.models import UrlSeen, ScraperRun
+    
+    # Check if URL already exists
+    if UrlSeen.objects.filter(url=url).exists():
+        return
+    
+    # Get ScraperRun if run_id is provided
+    scraper_run = None
+    if run_id:
+        try:
+            scraper_run = ScraperRun.objects.get(id=run_id)
+        except ScraperRun.DoesNotExist:
+            logger.warning(f"ScraperRun with id {run_id} not found")
+    
+    # Create UrlSeen entry
+    UrlSeen.objects.create(url=url, first_run=scraper_run)
+
+
+def is_query_done(query: str) -> bool:
+    """
+    Check if a query has been executed before.
+    
+    Args:
+        query: Search query to check
+        
+    Returns:
+        True if query has been executed, False otherwise
+    """
+    from telis_recruitment.scraper_control.models import QueryDone
+    return QueryDone.objects.filter(query=query).exists()
+
+
+def mark_query_done(query: str, run_id: Optional[int] = None) -> None:
+    """
+    Mark a query as executed.
+    
+    Args:
+        query: Search query to mark as done
+        run_id: Optional scraper run ID
+    """
+    from telis_recruitment.scraper_control.models import QueryDone, ScraperRun
+    
+    # Get or create QueryDone entry
+    query_done, created = QueryDone.objects.get_or_create(query=query)
+    
+    # Update last_run if run_id is provided
+    if run_id:
+        try:
+            scraper_run = ScraperRun.objects.get(id=run_id)
+            query_done.last_run = scraper_run
+            query_done.save()
+        except ScraperRun.DoesNotExist:
+            logger.warning(f"ScraperRun with id {run_id} not found")
+
+
+def start_scraper_run() -> int:
+    """
+    Start a new scraper run.
+    
+    Returns:
+        ID of the created scraper run
+    """
+    from telis_recruitment.scraper_control.models import ScraperRun
+    
+    run = ScraperRun.objects.create(
+        status='running',
+        links_checked=0,
+        leads_found=0
+    )
+    return run.id
+
+
+def finish_scraper_run(
+    run_id: int,
+    links_checked: Optional[int] = None,
+    leads_new: Optional[int] = None,
+    status: str = "completed",
+    metrics: Optional[Dict] = None
+) -> None:
+    """
+    Finish a scraper run and update its metrics.
+    
+    Args:
+        run_id: ID of the scraper run to finish
+        links_checked: Number of links checked
+        leads_new: Number of new leads found
+        status: Status of the run (completed, failed, stopped, etc.)
+        metrics: Optional dictionary of additional metrics
+    """
+    from telis_recruitment.scraper_control.models import ScraperRun
+    from django.utils import timezone
+    
+    try:
+        run = ScraperRun.objects.get(id=run_id)
+        
+        # Update basic fields
+        run.finished_at = timezone.now()
+        run.status = status
+        
+        if links_checked is not None:
+            run.links_checked = links_checked
+        
+        if leads_new is not None:
+            run.leads_found = leads_new
+        
+        # Update metrics if provided
+        if metrics:
+            # Map metrics to ScraperRun fields
+            if 'links_successful' in metrics:
+                run.links_successful = metrics['links_successful']
+            if 'links_failed' in metrics:
+                run.links_failed = metrics['links_failed']
+            if 'leads_accepted' in metrics:
+                run.leads_accepted = metrics['leads_accepted']
+            if 'leads_rejected' in metrics:
+                run.leads_rejected = metrics['leads_rejected']
+            if 'avg_request_time_ms' in metrics:
+                run.avg_request_time_ms = metrics['avg_request_time_ms']
+            if 'block_rate' in metrics:
+                run.block_rate = metrics['block_rate']
+            if 'timeout_rate' in metrics:
+                run.timeout_rate = metrics['timeout_rate']
+            if 'error_rate' in metrics:
+                run.error_rate = metrics['error_rate']
+            if 'circuit_breaker_triggered' in metrics:
+                run.circuit_breaker_triggered = metrics['circuit_breaker_triggered']
+            if 'circuit_breaker_count' in metrics:
+                run.circuit_breaker_count = metrics['circuit_breaker_count']
+            if 'portal_stats' in metrics:
+                run.portal_stats = metrics['portal_stats']
+        
+        run.save()
+        
+    except ScraperRun.DoesNotExist:
+        logger.error(f"ScraperRun with id {run_id} not found")
+
+
 # Export public API
 __all__ = [
     'upsert_lead',
@@ -322,4 +481,10 @@ __all__ = [
     'lead_exists',
     'get_lead_by_id',
     'update_lead',
+    'is_url_seen',
+    'mark_url_seen',
+    'is_query_done',
+    'mark_query_done',
+    'start_scraper_run',
+    'finish_scraper_run',
 ]
