@@ -30,23 +30,6 @@
             <h1 class="text-3xl font-bold text-gray-100">Reports & Analysen</h1>
             <p class="text-gray-400 mt-1">Automatische Reports und Datenanalyse</p>
         </div>
-        <div class="flex space-x-3">
-            <!-- Zeitraum-Auswahl -->
-            <select id="periodSelect" class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg border border-dark-700 hover:bg-dark-700 transition duration-150 focus:outline-none focus:ring-2 focus:ring-primary">
-                <option value="7">Letzte 7 Tage</option>
-                <option value="30" selected>Letzte 30 Tage</option>
-                <option value="90">Letzte 90 Tage</option>
-            </select>
-            
-            <!-- Report-Typ Auswahl -->
-            <select id="reportTypeSelect" class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg border border-dark-700 hover:bg-dark-700 transition duration-150 focus:outline-none focus:ring-2 focus:ring-primary">
-                <option value="lead_overview">Lead-Übersicht</option>
-                <option value="scraper_performance">Scraper-Performance</option>
-                <option value="cost_analysis">Kosten-Analyse</option>
-                <option value="source_analysis">Quellen-Analyse</option>
-                <option value="conversion_funnel">Conversion-Funnel</option>
-            </select>
-        </div>
     </div>
 
     <!-- Filter Section -->
@@ -310,7 +293,15 @@ let trendChart, statusChart, sourceChart;
 // KPIs laden
 async function loadKPIs() {
     const filters = getFiltersFromUI();
-    const days = filters.days !== 'custom' ? filters.days : 30;
+    let days = filters.days !== 'custom' ? filters.days : 30;
+    
+    // Calculate actual days for custom date range
+    if (filters.days === 'custom' && filters.start_date && filters.end_date) {
+        const startDate = new Date(filters.start_date);
+        const endDate = new Date(filters.end_date);
+        const diffTime = Math.abs(endDate - startDate);
+        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
     
     try {
         const response = await fetch(`/crm/reports/api/kpis/?days=${days}`);
@@ -320,7 +311,9 @@ async function loadKPIs() {
         document.getElementById('kpi-total-leads').textContent = data.total_leads.toLocaleString();
         document.getElementById('kpi-with-phone').textContent = data.with_phone.toLocaleString();
         document.getElementById('kpi-phone-rate').textContent = data.phone_rate + '%';
-        document.getElementById('kpi-period').textContent = data.period_days;
+        
+        // Update period display based on selected filter
+        document.getElementById('kpi-period').textContent = days;
         
         // Update Changes mit Farbe
         updateChangeDisplay('kpi-total-change', data.total_leads_change);
@@ -656,24 +649,6 @@ function exportReport(format) {
     window.location.href = `/crm/reports/export/${reportType}/${format}/?${queryString}`;
 }
 
-// Event Listeners - Synchronize old controls with filter section
-document.getElementById('periodSelect').addEventListener('change', function() {
-    // Update filter section to match
-    document.getElementById('filter-days').value = this.value;
-    // Reload all data (loadReport is called last as it already handles filter application)
-    loadKPIs();
-    loadTrend();
-    loadReport();
-});
-
-document.getElementById('reportTypeSelect').addEventListener('change', function() {
-    // Update filter section to match
-    document.getElementById('filter-report-type').value = this.value;
-    updateFilterVisibility();
-    // Apply filters which will reload everything
-    loadReport();
-});
-
 // Custom Datum Toggle
 document.getElementById('filter-days')?.addEventListener('change', function() {
     const customContainer = document.getElementById('custom-date-container');
@@ -699,10 +674,6 @@ document.getElementById('reset-filters')?.addEventListener('click', function() {
     document.getElementById('filter-with-email').checked = false;
     document.getElementById('custom-date-container')?.classList.add('hidden');
     
-    // Sync old controls
-    document.getElementById('periodSelect').value = '30';
-    document.getElementById('reportTypeSelect').value = 'lead_overview';
-    
     updateFilterVisibility();
     // Reload all data
     loadKPIs();
@@ -712,19 +683,6 @@ document.getElementById('reset-filters')?.addEventListener('click', function() {
 
 // Apply Filters Button
 document.getElementById('apply-filters')?.addEventListener('click', function() {
-    // Update old controls to match filter section
-    const filterDays = document.getElementById('filter-days').value;
-    const filterReportType = document.getElementById('filter-report-type').value;
-    
-    // Sync period select (except for custom date ranges which use date inputs)
-    if (filterDays !== 'custom') {
-        document.getElementById('periodSelect').value = filterDays;
-    }
-    // Note: When custom is selected, old control keeps last selected preset value
-    // as it doesn't support custom date ranges
-    
-    document.getElementById('reportTypeSelect').value = filterReportType;
-    
     // Reload all data
     loadKPIs();
     loadTrend();
