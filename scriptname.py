@@ -261,6 +261,18 @@ try:
         init_db as _init_db,
         migrate_db_unique_indexes as _migrate_db_unique_indexes,
     )
+    # Import db_router for unified database operations
+    from luca_scraper.db_router import (
+        upsert_lead as _upsert_lead_router,
+        lead_exists as _lead_exists_router,
+        get_lead_count as _get_lead_count_router,
+        is_url_seen as _is_url_seen_router,
+        mark_url_seen as _mark_url_seen_router,
+        is_query_done as _is_query_done_router,
+        mark_query_done as _mark_query_done_router,
+        start_scraper_run as _start_scraper_run_router,
+        finish_scraper_run as _finish_scraper_run_router,
+    )
     # Phase 3 imports
     from luca_scraper.search import (
         DEFAULT_QUERIES as _DEFAULT_QUERIES,
@@ -1676,6 +1688,10 @@ def migrate_db_unique_indexes():
         con.close()
 
 def is_query_done(q: str) -> bool:
+    """Check if query has been done. Uses db_router for backend abstraction."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _is_query_done_router(q)
+    # Fallback: Direct SQLite implementation
     con = db(); cur = con.cursor()
     cur.execute("SELECT 1 FROM queries_done WHERE q=?", (q,))
     hit = cur.fetchone()
@@ -1683,6 +1699,11 @@ def is_query_done(q: str) -> bool:
     return bool(hit)
 
 def mark_query_done(q: str, run_id: int):
+    """Mark query as done. Uses db_router for backend abstraction."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        _mark_query_done_router(q, run_id)
+        return
+    # Fallback: Direct SQLite implementation
     con = db(); cur = con.cursor()
     cur.execute(
         "INSERT OR REPLACE INTO queries_done(q,last_run_id,ts) VALUES(?,?,datetime('now'))",
@@ -1693,7 +1714,13 @@ def mark_query_done(q: str, run_id: int):
 _seen_urls_cache: set[str] = set()
 
 def mark_url_seen(url: str, run_id: int):
+    """Mark URL as seen. Uses db_router for backend abstraction."""
     global _seen_urls_cache
+    if _LUCA_SCRAPER_AVAILABLE:
+        _mark_url_seen_router(url, run_id)
+        _seen_urls_cache.add(_normalize_for_dedupe(url))
+        return
+    # Fallback: Direct SQLite implementation
     con = db(); cur = con.cursor()
     cur.execute(
         "INSERT OR IGNORE INTO urls_seen(url,first_run_id,ts) VALUES(?,?,datetime('now'))",
@@ -1703,9 +1730,16 @@ def mark_url_seen(url: str, run_id: int):
     _seen_urls_cache.add(_normalize_for_dedupe(url))
 
 def url_seen(url: str) -> bool:
+    """Check if URL has been seen. Uses db_router for backend abstraction."""
     norm = _normalize_for_dedupe(url)
     if norm in _seen_urls_cache:
         return True
+    if _LUCA_SCRAPER_AVAILABLE:
+        seen = _is_url_seen_router(url)
+        if seen:
+            _seen_urls_cache.add(norm)
+        return seen
+    # Fallback: Direct SQLite implementation
     con = db(); cur = con.cursor()
     cur.execute("SELECT 1 FROM urls_seen WHERE url=?", (url,))
     hit = cur.fetchone()
@@ -2366,6 +2400,10 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return new_rows
 
 def start_run() -> int:
+    """Start a scraper run. Uses db_router for backend abstraction."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        return _start_scraper_run_router()
+    # Fallback: Direct SQLite implementation
     con = db(); cur = con.cursor()
     cur.execute(
         "INSERT INTO runs(started_at,status,links_checked,leads_new) VALUES(datetime('now'),'running',0,0)"
@@ -2375,14 +2413,19 @@ def start_run() -> int:
     return run_id
 
 def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Optional[int] = None, status: str = "ok", metrics: Optional[Dict[str, int]] = None):
-    con = db(); cur = con.cursor()
-    cur.execute(
-        "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
-        (status, links_checked or 0, leads_new or 0, run_id)
-    )
-    con.commit(); con.close()
-    if metrics:
-        log("info", "Run metrics", **metrics)
+    """Finish a scraper run. Uses db_router for backend abstraction."""
+    if _LUCA_SCRAPER_AVAILABLE:
+        _finish_scraper_run_router(run_id, links_checked, leads_new, status, metrics)
+    else:
+        # Fallback: Direct SQLite implementation
+        con = db(); cur = con.cursor()
+        cur.execute(
+            "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
+            (status, links_checked or 0, leads_new or 0, run_id)
+        )
+        con.commit(); con.close()
+        if metrics:
+            log("info", "Run metrics", **metrics)
     
     # Log lead rejection statistics
     log_rejection_stats()
