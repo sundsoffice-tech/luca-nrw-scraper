@@ -447,6 +447,15 @@
                 </button>
             </div>
             
+            <!-- File Tree Filter -->
+            <div class="px-2 pb-2">
+                <input type="text" 
+                       id="file-tree-filter" 
+                       placeholder="Filter files..." 
+                       onkeyup="filterFileTree(this.value)"
+                       class="w-full px-2 py-1.5 text-sm bg-dark-700 border border-dark-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500">
+            </div>
+            
             <!-- File Tree -->
             <div id="file-tree" class="flex-1 overflow-auto p-2 file-tree">
                 <!-- Populated by JavaScript -->
@@ -828,9 +837,15 @@ function renderTreeNode(node, level) {
         const fileIcon = getFileIcon(node.name);
         const hasChanges = state.unsavedChanges[node.path];
         
+        // Create tooltip with file info
+        const fileSize = node.size ? formatFileSize(node.size) : 'unknown size';
+        const fileType = node.type_name || 'unknown type';
+        const tooltip = `${node.path}\nSize: ${fileSize}\nType: ${fileType}`;
+        
         html += `<div style="padding-left: ${indent}px" 
                      class="file-tree-item ${isActive ? 'active' : ''}"
                      data-path="${node.path}"
+                     title="${tooltip}"
                      onclick="loadFile('${node.path}')"
                      oncontextmenu="showContextMenu(event, '${node.path}')">
             <span class="file-icon">${fileIcon}</span>
@@ -884,6 +899,51 @@ function toggleFileTreeCollapse() {
     });
     
     renderFileTree();
+}
+
+// Filter file tree by search term
+function filterFileTree(searchTerm) {
+    searchTerm = searchTerm.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        // Show all files if no search term
+        document.querySelectorAll('.file-tree-item, .folder-item').forEach(item => {
+            item.style.display = '';
+        });
+        return;
+    }
+    
+    // Hide all items initially
+    document.querySelectorAll('.file-tree-item').forEach(item => {
+        const path = item.getAttribute('data-path') || '';
+        if (path.toLowerCase().includes(searchTerm)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // Show/hide folders based on whether they have visible children
+    document.querySelectorAll('.folder-item').forEach(folder => {
+        const folderId = folder.getAttribute('data-folder-id');
+        const childrenDiv = document.getElementById(`${folderId}-children`);
+        
+        if (childrenDiv) {
+            const visibleChildren = childrenDiv.querySelectorAll('.file-tree-item:not([style*="display: none"])');
+            if (visibleChildren.length > 0) {
+                folder.style.display = '';
+                // Auto-expand folders with matches
+                if (state.collapsedFolders.has(folderId)) {
+                    state.collapsedFolders.delete(folderId);
+                    folder.classList.remove('collapsed');
+                    childrenDiv.classList.remove('collapsed');
+                    childrenDiv.style.maxHeight = 'none';
+                }
+            } else {
+                folder.style.display = 'none';
+            }
+        }
+    });
 }
 
 // File Operations
@@ -984,20 +1044,28 @@ function saveCurrentFile(silent = false) {
     });
 }
 
-// Auto-save functionality
+// Auto-save functionality with debouncing
+let autoSaveDebounceTimer = null;
+
 function startAutoSave() {
-    // Clear existing timer
+    // Clear existing timers
     if (state.autoSaveTimer) {
         clearTimeout(state.autoSaveTimer);
     }
+    if (autoSaveDebounceTimer) {
+        clearTimeout(autoSaveDebounceTimer);
+    }
     
-    // Set new timer for 30 seconds
-    state.autoSaveTimer = setTimeout(() => {
-        if (state.currentFile && state.unsavedChanges[state.currentFile]) {
-            saveCurrentFile(true);
-            showToast('Auto-saved', 'info');
-        }
-    }, 30000); // 30 seconds
+    // Debounce: wait 2 seconds of inactivity before starting the auto-save timer
+    autoSaveDebounceTimer = setTimeout(() => {
+        // Set timer for 30 seconds after last change
+        state.autoSaveTimer = setTimeout(() => {
+            if (state.currentFile && state.unsavedChanges[state.currentFile]) {
+                saveCurrentFile(true);
+                showToast('Auto-saved', 'info');
+            }
+        }, 30000); // 30 seconds
+    }, 2000); // 2 seconds debounce
 }
 
 // Save all unsaved files
