@@ -1431,6 +1431,13 @@
     }
     
     function switchCodeTab(tab, clickEvent) {
+        // Validate tab parameter to prevent DOM manipulation vulnerabilities
+        const allowedTabs = ['html', 'css', 'json'];
+        if (!allowedTabs.includes(tab)) {
+            console.error('Invalid tab name:', tab);
+            return;
+        }
+        
         // Update tab buttons
         document.querySelectorAll('.code-tab').forEach(btn => btn.classList.remove('active'));
         if (clickEvent && clickEvent.target) {
@@ -1439,7 +1446,10 @@
         
         // Update editor panes
         document.querySelectorAll('.code-editor-pane').forEach(pane => pane.classList.remove('active'));
-        document.getElementById(tab + '-editor').classList.add('active');
+        const editorPane = document.getElementById(tab + '-editor');
+        if (editorPane) {
+            editorPane.classList.add('active');
+        }
     }
 
 </script>
