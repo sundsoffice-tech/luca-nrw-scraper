@@ -11,33 +11,28 @@ This module supports two backends:
 - 'django': Django ORM adapter
 
 Set via SCRAPER_DB_BACKEND environment variable.
+
+REFACTORING NOTE:
+-----------------
+This module has been refactored into three separate modules:
+- connection.py: SQLite connections, context managers, thread-safety
+- schema.py: Schema definitions and migrations
+- repository.py: CRUD operations and queries
+
+This file now serves as a backward compatibility layer, re-exporting
+functions from the new modules.
 """
 
 import logging
-import sqlite3
-import threading
-from pathlib import Path
-from contextlib import contextmanager
-from typing import Dict, Optional, Tuple
 
 # Import DB_PATH and DATABASE_BACKEND from config
-from .config import DB_PATH as _DB_PATH_STR, DATABASE_BACKEND
-
-# Convert to Path object
-DB_PATH = Path(_DB_PATH_STR)
-
-# Thread-local storage for database connections
-_db_local = threading.local()
-
-# Global flag for schema initialization with thread lock
-_DB_READY = False
-_DB_READY_LOCK = threading.Lock()
+from .config import DATABASE_BACKEND
 
 logger = logging.getLogger(__name__)
 
 
 # =========================
-# BACKEND SELECTION LOGIC
+# RE-EXPORT FROM NEW MODULES
 # =========================
 
 # Conditionally import Django backend functions if 'django' backend is selected
@@ -134,6 +129,22 @@ def init_db():
     # Reset the thread-local connection
     if hasattr(_db_local, "conn"):
         _db_local.conn = None
+
+
+def close_db():
+    """
+    Close the thread-local database connection.
+    
+    Should be called at program shutdown to properly clean up resources.
+    This function is safe to call even if no connection exists.
+    """
+    if hasattr(_db_local, "conn") and _db_local.conn is not None:
+        try:
+            _db_local.conn.close()
+        except Exception as exc:
+            logger.debug("Error closing database connection: %s", exc)
+        finally:
+            _db_local.conn = None
 
 
 @contextmanager
@@ -238,6 +249,11 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       results_json TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    
+    -- Create indices for frequently queried timestamp columns
+    -- Note: q and url columns don't need explicit indices as they are PRIMARY KEYs
+    CREATE INDEX IF NOT EXISTS idx_queries_done_ts ON queries_done(ts);
+    CREATE INDEX IF NOT EXISTS idx_urls_seen_ts ON urls_seen(ts);
     """)
     con.commit()
 
@@ -346,53 +362,9 @@ def migrate_db_unique_indexes():
     con = db()
     cur = con.cursor()
     
-    try:
-        # Test if we can insert with duplicate handling
-        cur.execute(
-            "INSERT OR IGNORE INTO leads (name,email,telefon) VALUES (?,?,?)",
-            ("_probe_", "", "")
-        )
-        con.commit()
-    except Exception:
-        # Need to migrate - recreate table
-        cur.executescript("""
-        BEGIN TRANSACTION;
-        CREATE TABLE leads_new(
-          id INTEGER PRIMARY KEY,
-          name TEXT, rolle TEXT, email TEXT, telefon TEXT, quelle TEXT,
-          score INT, tags TEXT, region TEXT, role_guess TEXT, salary_hint TEXT,
-          commission_hint TEXT, opening_line TEXT, ssl_insecure TEXT,
-          company_name TEXT, company_size TEXT, hiring_volume TEXT, industry TEXT,
-          recency_indicator TEXT, location_specific TEXT, confidence_score INT,
-          last_updated TEXT, data_quality INT, phone_type TEXT, whatsapp_link TEXT,
-          private_address TEXT, social_profile_url TEXT, ai_category TEXT,
-          ai_summary TEXT, crm_status TEXT, lead_type TEXT, experience_years INTEGER, skills TEXT,
-          availability TEXT, current_status TEXT, industries TEXT, location TEXT,
-          profile_text TEXT, candidate_status TEXT, mobility TEXT,
-          industries_experience TEXT, source_type TEXT, profile_url TEXT,
-          cv_url TEXT, contact_preference TEXT, last_activity TEXT,
-          name_validated INTEGER
-        );
-        INSERT INTO leads_new SELECT * FROM leads;
-        DROP TABLE leads;
-        ALTER TABLE leads_new RENAME TO leads;
-        
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_email
-        ON leads(email) WHERE email IS NOT NULL AND email <> '';
-        
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
-        ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> '';
-        
-        COMMIT;
-        """)
-        print("Successfully migrated database schema")
-
-
-def _normalize_email(value: Optional[str]) -> Optional[str]:
-    """Normalize emails for matching by trimming and lower-casing."""
-    if not value:
-        return None
-    return value.strip().lower()
+    # Sync function
+    sync_status_to_scraper,
+)
 
 
 def _normalize_phone(value: Optional[str]) -> Optional[str]:
@@ -440,6 +412,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
     This keeps the local SQLite DB aware of which leads were already acted upon
     so the scraper can avoid reprocessing them.
+    
+    Optimized to use bulk UPDATE with CASE expression instead of individual updates.
     """
     index = _build_crm_status_index()
     if not index:
@@ -454,6 +428,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
         rows = cur.fetchall()
         stats["checked"] = len(rows)
 
+        # Build a mapping of lead_id -> new_status for all leads that need updating
+        updates = {}
         for row in rows:
             new_status = None
             if row["email"]:
@@ -461,15 +437,55 @@ def sync_status_to_scraper() -> Dict[str, int]:
             if not new_status and row["telefon"]:
                 new_status = phone_index.get(_normalize_phone(row["telefon"]))
             if new_status and new_status != row["crm_status"]:
-                cur.execute("UPDATE leads SET crm_status = ? WHERE id = ?", (new_status, row["id"]))
-                stats["updated"] += 1
+                updates[row["id"]] = new_status
+
+        # Perform bulk update using CASE expression if there are updates
+        if updates:
+            # Build CASE expression for bulk update
+            # UPDATE leads SET crm_status = CASE 
+            #   WHEN id = ? THEN ?
+            #   WHEN id = ? THEN ?
+            #   ...
+            # END
+            # WHERE id IN (?, ?, ...)
+            
+            # Build parameterized query components
+            # Using list of tuples to ensure proper structure
+            params = []
+            ids = []
+            
+            for lead_id, status in updates.items():
+                params.extend([lead_id, status])
+                ids.append(lead_id)
+            
+            # Build the CASE clauses - each is just "WHEN id = ? THEN ?"
+            # This is safe as we're only joining a fixed pattern string
+            case_clause = "WHEN id = ? THEN ?"
+            case_expression = ' '.join([case_clause] * len(updates))
+            
+            # Build placeholders for WHERE IN clause
+            id_placeholders = ','.join('?' * len(ids))
+            
+            # Build and execute the bulk update query
+            # All values are parameterized - no user input in SQL structure
+            sql = f"""
+                UPDATE leads 
+                SET crm_status = CASE 
+                    {case_expression}
+                END
+                WHERE id IN ({id_placeholders})
+            """
+            
+            # Execute bulk update with all parameters
+            cur.execute(sql, params + ids)
+            stats["updated"] = len(updates)
 
     logger.debug("sync_status_to_scraper updated %d rows (checked %d)", stats["updated"], stats["checked"])
     return stats
 
 
 # =========================
-# SQLite-specific implementations for routing layer
+# EXPORTS
 # =========================
 
 def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
@@ -564,6 +580,58 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
             
     finally:
         con.close()
+    # Extract search fields
+    email = data.get('email')
+    telefon = data.get('telefon')
+    
+    normalized_email = _normalize_email(email)
+    normalized_phone = _normalize_phone(telefon)
+    
+    # Try to find existing lead
+    existing_id = None
+    
+    # Search by email first
+    if normalized_email:
+        cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
+        row = cur.fetchone()
+        if row:
+            existing_id = row[0]
+    
+    # Search by phone if not found by email
+    if not existing_id and telefon:
+        cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
+        row = cur.fetchone()
+        if row:
+            existing_id = row[0]
+    
+    if existing_id:
+        # Update existing lead
+        set_clauses = []
+        values = []
+        for key, value in data.items():
+            if key != 'id':
+                set_clauses.append(f"{key} = ?")
+                values.append(value)
+        
+        if set_clauses:
+            values.append(existing_id)
+            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+            cur.execute(sql, values)
+            con.commit()
+        
+        return (existing_id, False)
+    else:
+        # Insert new lead
+        columns = list(data.keys())
+        placeholders = ['?'] * len(columns)
+        values = [data[col] for col in columns]
+        
+        sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        cur.execute(sql, values)
+        new_id = cur.lastrowid
+        con.commit()
+        
+        return (new_id, True)
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:
@@ -583,22 +651,19 @@ def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = Non
     con = db()
     cur = con.cursor()
     
-    try:
-        # Check by email first
-        if email:
-            cur.execute("SELECT 1 FROM leads WHERE email = ?", (email,))
-            if cur.fetchone():
-                return True
-        
-        # Check by phone
-        if telefon:
-            cur.execute("SELECT 1 FROM leads WHERE telefon = ?", (telefon,))
-            if cur.fetchone():
-                return True
-        
-        return False
-    finally:
-        con.close()
+    # Check by email first
+    if email:
+        cur.execute("SELECT 1 FROM leads WHERE email = ?", (email,))
+        if cur.fetchone():
+            return True
+    
+    # Check by phone
+    if telefon:
+        cur.execute("SELECT 1 FROM leads WHERE telefon = ?", (telefon,))
+        if cur.fetchone():
+            return True
+    
+    return False
 
 
 def is_url_seen_sqlite(url: str) -> bool:
@@ -613,11 +678,8 @@ def is_url_seen_sqlite(url: str) -> bool:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute("SELECT 1 FROM urls_seen WHERE url = ?", (url,))
-        return bool(cur.fetchone())
-    finally:
-        con.close()
+    cur.execute("SELECT 1 FROM urls_seen WHERE url = ?", (url,))
+    return bool(cur.fetchone())
 
 
 def mark_url_seen_sqlite(url: str, run_id: Optional[int] = None) -> None:
@@ -630,14 +692,11 @@ def mark_url_seen_sqlite(url: str, run_id: Optional[int] = None) -> None:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute(
-            "INSERT OR IGNORE INTO urls_seen(url, first_run_id, ts) VALUES(?, ?, datetime('now'))",
-            (url, run_id)
-        )
-        con.commit()
-    finally:
-        con.close()
+    cur.execute(
+        "INSERT OR IGNORE INTO urls_seen(url, first_run_id, ts) VALUES(?, ?, datetime('now'))",
+        (url, run_id)
+    )
+    con.commit()
 
 
 def is_query_done_sqlite(query: str) -> bool:
@@ -652,11 +711,8 @@ def is_query_done_sqlite(query: str) -> bool:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute("SELECT 1 FROM queries_done WHERE q = ?", (query,))
-        return bool(cur.fetchone())
-    finally:
-        con.close()
+    cur.execute("SELECT 1 FROM queries_done WHERE q = ?", (query,))
+    return bool(cur.fetchone())
 
 
 def mark_query_done_sqlite(query: str, run_id: Optional[int] = None) -> None:
@@ -669,14 +725,11 @@ def mark_query_done_sqlite(query: str, run_id: Optional[int] = None) -> None:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute(
-            "INSERT OR REPLACE INTO queries_done(q, last_run_id, ts) VALUES(?, ?, datetime('now'))",
-            (query, run_id)
-        )
-        con.commit()
-    finally:
-        con.close()
+    cur.execute(
+        "INSERT OR REPLACE INTO queries_done(q, last_run_id, ts) VALUES(?, ?, datetime('now'))",
+        (query, run_id)
+    )
+    con.commit()
 
 
 def start_scraper_run_sqlite() -> int:
@@ -688,15 +741,12 @@ def start_scraper_run_sqlite() -> int:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute(
-            "INSERT INTO runs(started_at, status, links_checked, leads_new) VALUES(datetime('now'), 'running', 0, 0)"
-        )
-        run_id = cur.lastrowid
-        con.commit()
-        return run_id
-    finally:
-        con.close()
+    cur.execute(
+        "INSERT INTO runs(started_at, status, links_checked, leads_new) VALUES(datetime('now'), 'running', 0, 0)"
+    )
+    run_id = cur.lastrowid
+    con.commit()
+    return run_id
 
 
 def finish_scraper_run_sqlite(
@@ -718,17 +768,14 @@ def finish_scraper_run_sqlite(
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute(
-            "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
-            (status, links_checked or 0, leads_new or 0, run_id)
-        )
-        con.commit()
-        
-        if metrics:
-            logger.debug("Run metrics: %s", metrics)
-    finally:
-        con.close()
+    cur.execute(
+        "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
+        (status, links_checked or 0, leads_new or 0, run_id)
+    )
+    con.commit()
+    
+    if metrics:
+        logger.debug("Run metrics: %s", metrics)
 
 
 def get_lead_count_sqlite() -> int:
@@ -740,18 +787,15 @@ def get_lead_count_sqlite() -> int:
     """
     con = db()
     cur = con.cursor()
-    try:
-        cur.execute("SELECT COUNT(*) FROM leads")
-        count = cur.fetchone()[0]
-        return count
-    finally:
-        con.close()
+    cur.execute("SELECT COUNT(*) FROM leads")
+    count = cur.fetchone()[0]
+    return count
 
 
 # Export the global ready flag for external access
 # Base exports available for all backends
 _BASE_EXPORTS = [
-    'db', 'init_db', 'transaction', 'DB_PATH', 
+    'db', 'init_db', 'close_db', 'transaction', 'DB_PATH', 
     'migrate_db_unique_indexes', 'sync_status_to_scraper',
     'DATABASE_BACKEND',
     # SQLite-specific functions
