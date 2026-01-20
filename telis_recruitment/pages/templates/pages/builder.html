@@ -6,6 +6,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/grapesjs/dist/css/grapes.min.css">
 <link rel="stylesheet" href="{% static 'pages/css/builder.css' %}">
+<link rel="stylesheet" href="{% static 'pages/css/seo-panel.css' %}">
 <style>
     body { margin: 0; overflow: hidden; }
     .builder-wrapper { display: flex; flex-direction: column; height: 100vh; }
@@ -410,6 +411,7 @@
 
 <script src="https://unpkg.com/grapesjs"></script>
 <script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
+<script src="{% static 'pages/js/seo-panel.js' %}"></script>
 <script>
     // Note: Responsive CSS is handled automatically by GrapesJS via the mediaQuery property
     // on style properties. When properties have mediaQuery: 'tablet' or 'mobile', GrapesJS

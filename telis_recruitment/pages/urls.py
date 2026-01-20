@@ -41,6 +41,11 @@ urlpatterns = [
     path('api/<slug:slug>/load/', views.builder_load, name='builder-load'),
     path('api/<slug:slug>/publish/', views.publish_page, name='publish-page'),
     
+    # SEO Tools API (NEW)
+    path('api/<slug:slug>/seo/analyze/', views.analyze_page_seo, name='analyze-seo'),
+    path('api/<slug:slug>/seo/update/', views.update_page_seo, name='update-seo'),
+    path('api/<slug:slug>/slug/update/', views.update_page_slug, name='update-slug'),
+    
     # Asset Manager
     path('api/assets/upload/', views.upload_asset, name='upload-asset'),
     path('api/assets/', views.list_assets, name='list-assets'),

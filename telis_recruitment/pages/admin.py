@@ -51,7 +51,18 @@ class LandingPageAdmin(ModelAdmin):
             'classes': ['collapse'],
         }),
         ('SEO Settings', {
-            'fields': ['seo_title', 'seo_description', 'seo_image'],
+            'fields': ['seo_title', 'seo_description', 'seo_keywords', 'seo_image', 'canonical_url', 'robots_meta'],
+        }),
+        ('Open Graph / Social Media', {
+            'fields': ['og_title', 'og_description', 'og_image', 'og_type'],
+            'classes': ['collapse'],
+        }),
+        ('Twitter Card', {
+            'fields': ['twitter_card', 'twitter_site', 'twitter_creator'],
+            'classes': ['collapse'],
+        }),
+        ('Sitemap Settings', {
+            'fields': ['sitemap_priority', 'sitemap_changefreq'],
             'classes': ['collapse'],
         }),
         ('Form Integration', {

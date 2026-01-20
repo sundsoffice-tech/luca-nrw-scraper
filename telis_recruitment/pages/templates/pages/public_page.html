@@ -5,7 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="TELIS">
+    
+    <!-- SEO Title -->
     <title>{{ seo_title }}</title>
+    
+    <!-- Meta Description -->
     {% if seo_description %}
     <meta name="description" content="{{ seo_description }}">
     {% endif %}
@@ -30,6 +34,48 @@
     <meta name="twitter:title" content="{{ page.get_twitter_title }}">
     {% if page.get_twitter_description %}
     <meta name="twitter:description" content="{{ page.get_twitter_description }}">
+    <!-- Keywords -->
+    {% if page.seo_keywords %}
+    <meta name="keywords" content="{{ page.seo_keywords }}">
+    {% endif %}
+    
+    <!-- Canonical URL -->
+    {% if page.canonical_url %}
+    <link rel="canonical" href="{{ page.canonical_url }}">
+    {% else %}
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+    {% endif %}
+    
+    <!-- Robots -->
+    <meta name="robots" content="{{ page.robots_meta|default:'index, follow' }}">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{{ page.og_type|default:'website' }}">
+    <meta property="og:site_name" content="TELIS Recruitment">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:title" content="{{ page.og_title|default:seo_title }}">
+    {% if page.og_description or seo_description %}
+    <meta property="og:description" content="{{ page.og_description|default:seo_description }}">
+    {% endif %}
+    {% if page.og_image or seo_image %}
+    <meta property="og:image" content="{{ page.og_image|default:seo_image }}">
+    <meta property="og:image:alt" content="{{ seo_title }}">
+    {% endif %}
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="{{ page.twitter_card|default:'summary_large_image' }}">
+    {% if page.twitter_site %}
+    <meta name="twitter:site" content="{{ page.twitter_site }}">
+    {% endif %}
+    {% if page.twitter_creator %}
+    <meta name="twitter:creator" content="{{ page.twitter_creator }}">
+    {% endif %}
+    <meta name="twitter:title" content="{{ page.og_title|default:seo_title }}">
+    {% if page.og_description or seo_description %}
+    <meta name="twitter:description" content="{{ page.og_description|default:seo_description }}">
+    {% endif %}
+    {% if page.og_image or seo_image %}
+    <meta name="twitter:image" content="{{ page.og_image|default:seo_image }}">
     {% endif %}
     {% if page.get_twitter_image %}
     <meta name="twitter:image" content="{{ page.get_twitter_image }}">

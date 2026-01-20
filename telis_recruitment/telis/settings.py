@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'reports',
     'mailbox.apps.MailboxConfig',
     'app_settings.apps.AppSettingsConfig',
+    'forms.apps.FormsConfig',
 ]
 
 MIDDLEWARE = [
