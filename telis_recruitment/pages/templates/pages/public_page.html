@@ -4,15 +4,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="TELIS">
     <title>{{ seo_title }}</title>
     {% if seo_description %}
     <meta name="description" content="{{ seo_description }}">
+    <meta property="og:description" content="{{ seo_description }}">
     {% endif %}
     {% if seo_image %}
     <meta property="og:image" content="{{ seo_image }}">
     {% endif %}
+    <meta property="og:type" content="website">
     <meta property="og:title" content="{{ seo_title }}">
-    <meta property="og:description" content="{{ seo_description }}">
+    <meta property="og:site_name" content="TELIS">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#06b6d4',
+                        dark: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
         /* Reset */
         * {
@@ -29,7 +51,6 @@
         /* Page-specific CSS from builder */
         {{ page.css|sanitize_page_css }}
     </style>
-    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
     <!-- Rendered HTML from builder -->
