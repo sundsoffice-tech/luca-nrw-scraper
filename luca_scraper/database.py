@@ -321,6 +321,21 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.commit()
 
 
+# Define allowed column names for security - whitelist approach
+ALLOWED_LEAD_COLUMNS = frozenset({
+    'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 'tags', 'region',
+    'role_guess', 'lead_type', 'salary_hint', 'commission_hint', 'opening_line',
+    'ssl_insecure', 'company_name', 'company_size', 'hiring_volume', 'industry',
+    'recency_indicator', 'location_specific', 'confidence_score', 'last_updated',
+    'data_quality', 'phone_type', 'whatsapp_link', 'private_address',
+    'social_profile_url', 'ai_category', 'ai_summary', 'crm_status',
+    'experience_years', 'skills', 'availability', 'current_status', 'industries',
+    'location', 'profile_text', 'candidate_status', 'mobility',
+    'industries_experience', 'source_type', 'profile_url', 'cv_url',
+    'contact_preference', 'last_activity', 'name_validated'
+})
+
+
 def migrate_db_unique_indexes():
     """
     Fallback migration for very old schemas with hard UNIQUE constraints.
@@ -472,6 +487,9 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         
     Returns:
         Tuple of (lead_id, created) where created is True if new lead was created
+        
+    Raises:
+        ValueError: If data contains invalid column names (security measure)
     """
     con = db()
     cur = con.cursor()
@@ -484,6 +502,11 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         normalized_email = _normalize_email(email)
         normalized_phone = _normalize_phone(telefon)
         
+        # Validate column names against whitelist to prevent SQL injection
+        invalid_columns = set(data.keys()) - ALLOWED_LEAD_COLUMNS
+        if invalid_columns:
+            raise ValueError(f"Invalid column names: {invalid_columns}")
+        
         # Prepare data for insertion
         columns = list(data.keys())
         placeholders = ['?'] * len(columns)
@@ -491,6 +514,7 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         
         # Step 1: Try INSERT OR IGNORE
         # This will succeed if no unique constraint is violated
+        # Column names are validated above, safe to use in f-string
         sql = f"INSERT OR IGNORE INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
         cur.execute(sql, values)
         
@@ -520,6 +544,7 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         
         if existing_id:
             # Update existing lead
+            # Column names are validated above, safe to use in f-string
             set_clauses = [f"{key} = ?" for key in data.keys() if key != 'id']
             update_values = [data[key] for key in data.keys() if key != 'id']
             update_values.append(existing_id)

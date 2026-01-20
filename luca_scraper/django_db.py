@@ -204,18 +204,21 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
         if not existing_lead and normalized_phone:
             try:
                 # For phone matching, we need to handle different formats
-                # Query leads with non-null phones and check in application
-                # This is still more efficient than the old approach because
-                # we only do this if email didn't match
+                # Query leads with non-null phones
+                # Use ordering and limit to prevent full table scan on large datasets
+                # Order by last_updated DESC to prioritize recent leads
+                # Fetch all needed fields upfront to avoid additional query
                 candidates = Lead.objects.filter(
                     telefon__isnull=False
-                ).exclude(telefon='').only('id', 'telefon')[:100]  # Limit to prevent full table scan
+                ).exclude(
+                    telefon=''
+                ).order_by('-last_updated')[:200]  # Increased limit for better coverage
                 
                 for lead in candidates:
                     stored_normalized = _normalize_phone(lead.telefon)
                     if stored_normalized and stored_normalized == normalized_phone:
-                        # Re-fetch the full lead object
-                        existing_lead = Lead.objects.get(id=lead.id)
+                        # Found a match - no need to re-fetch since we already have the full object
+                        existing_lead = lead
                         break
             except Exception as exc:
                 logger.debug("Error searching by phone: %s", exc)
