@@ -599,6 +599,369 @@ class ProjectTemplate(models.Model):
         self.save(update_fields=['usage_count'])
 
 
+# ============================================================================
+# UNIFIED VERSION CONTROL & UNDO/REDO SYSTEM
+# ============================================================================
+# These models provide a comprehensive version control system with:
+# - Unified change tracking across all content types
+# - Transaction grouping for multi-file changes
+# - Undo/Redo stack management
+# - Snapshot/tagging support for releases
+# - Content integrity verification
+# ============================================================================
+
+import hashlib
+import uuid
+
+
+class ChangeLog(models.Model):
+    """Unified change tracking for all content modifications
+    
+    This model provides a comprehensive audit trail and version control system
+    that supports:
+    - Transaction grouping (multiple changes in one logical operation)
+    - Snapshots/tagging for releases
+    - Comprehensive audit trail
+    - Content integrity verification
+    - Delta storage capability for efficiency
+    """
+    
+    CHANGE_TYPE_CHOICES = [
+        ('page_content', 'Page Content Change'),
+        ('file_edit', 'File Edit'),
+        ('file_create', 'File Create'),
+        ('file_delete', 'File Delete'),
+        ('file_rename', 'File Rename'),
+        ('settings', 'Settings Change'),
+        ('asset_upload', 'Asset Upload'),
+        ('asset_delete', 'Asset Delete'),
+    ]
+    
+    # Relations
+    landing_page = models.ForeignKey(
+        'LandingPage',
+        on_delete=models.CASCADE,
+        related_name='changelogs',
+        help_text="Page this change belongs to"
+    )
+    
+    # Transaction grouping
+    transaction_id = models.UUIDField(
+        db_index=True,
+        default=uuid.uuid4,
+        help_text="Groups related changes together (e.g., multi-file save)"
+    )
+    
+    # Change metadata
+    change_type = models.CharField(max_length=20, choices=CHANGE_TYPE_CHOICES)
+    target_path = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="File path or component identifier affected by this change"
+    )
+    
+    # Version tracking
+    version = models.PositiveIntegerField(
+        help_text="Sequential version number within this page"
+    )
+    parent_version = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Previous version (for branching support)"
+    )
+    
+    # Content storage
+    content_before = models.TextField(
+        blank=True,
+        help_text="Content before the change (for undo)"
+    )
+    content_after = models.TextField(
+        blank=True,
+        help_text="Content after the change"
+    )
+    content_delta = models.TextField(
+        blank=True,
+        help_text="Delta/diff for efficient storage (optional)"
+    )
+    content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="SHA256 hash of content_after for integrity verification"
+    )
+    
+    # Metadata
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional metadata (file type, component type, etc.)"
+    )
+    
+    # User tracking
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='changelogs'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # Notes and tagging
+    note = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="User-provided note about this change"
+    )
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tags for categorizing changes (e.g., ['release', 'v1.0'])"
+    )
+    
+    # Snapshot/Release support
+    is_snapshot = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Mark this version as a snapshot/release point"
+    )
+    snapshot_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Name for this snapshot (e.g., 'Release 1.0', 'Backup before redesign')"
+    )
+    
+    class Meta:
+        ordering = ['-version']
+        verbose_name = 'Change Log'
+        verbose_name_plural = 'Change Logs'
+        indexes = [
+            models.Index(fields=['landing_page', '-version']),
+            models.Index(fields=['transaction_id']),
+            models.Index(fields=['landing_page', 'is_snapshot']),
+            models.Index(fields=['created_at']),
+        ]
+        unique_together = ['landing_page', 'version']
+    
+    def __str__(self):
+        return f"{self.landing_page.slug} - v{self.version} ({self.get_change_type_display()})"
+    
+    def save(self, *args, **kwargs):
+        """Auto-generate content hash on save"""
+        if self.content_after and not self.content_hash:
+            self.content_hash = hashlib.sha256(
+                self.content_after.encode('utf-8')
+            ).hexdigest()
+        super().save(*args, **kwargs)
+    
+    def verify_integrity(self) -> bool:
+        """Verify content integrity using hash"""
+        if not self.content_hash or not self.content_after:
+            return True  # No hash to verify
+        
+        computed_hash = hashlib.sha256(
+            self.content_after.encode('utf-8')
+        ).hexdigest()
+        
+        return computed_hash == self.content_hash
+    
+    def get_transaction_changes(self):
+        """Get all changes in the same transaction"""
+        return ChangeLog.objects.filter(
+            transaction_id=self.transaction_id
+        ).order_by('id')
+
+
+class UndoRedoStack(models.Model):
+    """Tracks undo/redo state for each user's editing session
+    
+    This enables proper undo/redo functionality with:
+    - Per-user, per-page undo stacks
+    - Redo support
+    - Session-based state management
+    """
+    
+    landing_page = models.ForeignKey(
+        'LandingPage',
+        on_delete=models.CASCADE,
+        related_name='undo_stacks'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='undo_stacks'
+    )
+    session_key = models.CharField(
+        max_length=255,
+        help_text="Browser session identifier"
+    )
+    
+    # Stack pointers
+    current_version = models.PositiveIntegerField(
+        help_text="Current position in the version history"
+    )
+    max_version = models.PositiveIntegerField(
+        help_text="Highest version number (for redo boundary)"
+    )
+    
+    # Stack state
+    undo_stack = models.JSONField(
+        default=list,
+        help_text="List of transaction IDs that can be undone"
+    )
+    redo_stack = models.JSONField(
+        default=list,
+        help_text="List of transaction IDs that can be redone"
+    )
+    
+    # Metadata
+    last_action = models.CharField(
+        max_length=20,
+        choices=[('undo', 'Undo'), ('redo', 'Redo'), ('edit', 'Edit')],
+        default='edit'
+    )
+    last_action_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'Undo/Redo Stack'
+        verbose_name_plural = 'Undo/Redo Stacks'
+        unique_together = ['landing_page', 'user', 'session_key']
+        indexes = [
+            models.Index(fields=['landing_page', 'user', 'session_key']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} @ {self.landing_page.slug} (v{self.current_version})"
+    
+    def can_undo(self) -> bool:
+        """Check if undo is available"""
+        return len(self.undo_stack) > 0
+    
+    def can_redo(self) -> bool:
+        """Check if redo is available"""
+        return len(self.redo_stack) > 0
+    
+    def push_transaction(self, transaction_id: str):
+        """Push a new transaction onto the undo stack"""
+        self.undo_stack.append(str(transaction_id))
+        self.redo_stack = []  # Clear redo stack on new action
+        self.last_action = 'edit'
+        self.save()
+    
+    def undo(self) -> str | None:
+        """Pop from undo stack, return transaction ID"""
+        if not self.can_undo():
+            return None
+        
+        transaction_id = self.undo_stack.pop()
+        self.redo_stack.append(transaction_id)
+        self.last_action = 'undo'
+        self.save()
+        return transaction_id
+    
+    def redo(self) -> str | None:
+        """Pop from redo stack, return transaction ID"""
+        if not self.can_redo():
+            return None
+        
+        transaction_id = self.redo_stack.pop()
+        self.undo_stack.append(transaction_id)
+        self.last_action = 'redo'
+        self.save()
+        return transaction_id
+
+
+class VersionSnapshot(models.Model):
+    """Named snapshots/tags for version history
+    
+    Enables semantic versioning and release management:
+    - Tag specific versions as releases
+    - Create restore points before major changes
+    - Compare between snapshots
+    """
+    
+    SNAPSHOT_TYPE_CHOICES = [
+        ('manual', 'Manual Snapshot'),
+        ('auto', 'Automatic Snapshot'),
+        ('release', 'Release'),
+        ('backup', 'Backup'),
+    ]
+    
+    landing_page = models.ForeignKey(
+        'LandingPage',
+        on_delete=models.CASCADE,
+        related_name='snapshots'
+    )
+    
+    # Snapshot metadata
+    name = models.CharField(
+        max_length=100,
+        help_text="Snapshot name (e.g., 'v1.0.0', 'Pre-redesign backup')"
+    )
+    snapshot_type = models.CharField(
+        max_length=20,
+        choices=SNAPSHOT_TYPE_CHOICES,
+        default='manual'
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Detailed description of this snapshot"
+    )
+    
+    # Version reference
+    changelog_version = models.ForeignKey(
+        ChangeLog,
+        on_delete=models.CASCADE,
+        related_name='snapshots',
+        help_text="ChangeLog entry this snapshot references"
+    )
+    
+    # Semantic versioning support
+    semver_major = models.PositiveIntegerField(null=True, blank=True)
+    semver_minor = models.PositiveIntegerField(null=True, blank=True)
+    semver_patch = models.PositiveIntegerField(null=True, blank=True)
+    semver_prerelease = models.CharField(max_length=50, blank=True)
+    
+    # Tags
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Additional tags for categorization"
+    )
+    
+    # User tracking
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Version Snapshot'
+        verbose_name_plural = 'Version Snapshots'
+        indexes = [
+            models.Index(fields=['landing_page', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.landing_page.slug} - {self.name}"
+    
+    @property
+    def semver(self) -> str:
+        """Get semantic version string"""
+        if all([
+            self.semver_major is not None,
+            self.semver_minor is not None,
+            self.semver_patch is not None
+        ]):
+            version = f"{self.semver_major}.{self.semver_minor}.{self.semver_patch}"
+            if self.semver_prerelease:
+                version += f"-{self.semver_prerelease}"
+            return version
+        return ""
+
+
 class ProjectNavigation(models.Model):
     """Navigationsstruktur für Multipage-Projekte"""
     
