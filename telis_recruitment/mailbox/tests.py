@@ -169,7 +169,7 @@ class EmailSenderServiceTest(TestCase):
             is_active=True
         )
     
-    @mock.patch('mailbox.services.email_sender.BREVO_AVAILABLE', False)
+    @mock.patch('telis_recruitment.mailbox.services.email_sender.BREVO_AVAILABLE', False)
     def test_brevo_raises_error_when_sdk_not_installed(self):
         """Test that _send_via_brevo raises ImproperlyConfigured when SDK is missing"""
         # Create a test email
@@ -179,7 +179,7 @@ class EmailSenderServiceTest(TestCase):
             subject='Test Subject',
             body_text='Test Body',
             to_emails=[{'email': 'recipient@example.com'}],
-            status='draft'
+            status=Email.Status.DRAFT
         )
         
         service = EmailSenderService(self.brevo_account)
