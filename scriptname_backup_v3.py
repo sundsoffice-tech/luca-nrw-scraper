@@ -4785,7 +4785,7 @@ async def crawl_portals_smart() -> List[Dict]:
     return await crawl_portals_sequential_with_learning(active_learning, current_run_id)
 
 
-async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
+async def crawl_all_portals_parallel_with_learning(learning_engine, run_id: int) -> List[Dict]:
     """
     Crawlt ALLE aktivierten Portale gleichzeitig mit Active Learning Integration.
     

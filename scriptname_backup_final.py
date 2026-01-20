@@ -4882,7 +4882,7 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[Act
     return unique_leads
 
 
-async def crawl_portals_sequential_with_learning(learning_engine: Optional[ActiveLearningEngine], run_id: int) -> List[Dict]:
+async def crawl_portals_sequential_with_learning(learning_engine: Optional[Any], run_id: int) -> List[Dict[str, Any]]:
     """
     Fallback: Sequentielles Crawling aller Portale mit Active Learning.
     

@@ -172,7 +172,7 @@ class EmailThreadingService:
         return conversation
     
     @staticmethod
-    def auto_link_lead(conversation: EmailConversation) -> Optional['Lead']:
+    def auto_link_lead(conversation: EmailConversation) -> Optional[object]:
         """
         Verknüpfe Konversation automatisch mit Lead basierend auf Email-Adresse.
         
