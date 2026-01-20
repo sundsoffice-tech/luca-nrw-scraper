@@ -8,7 +8,12 @@ export default function loadLayoutBlocks(editor) {
 
     // Full-width Section
     blockManager.add('section', {
-        label: '📦 Section',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">📦</div>
+                <div style="font-size: 11px;">Section</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <section class="section" style="padding: 60px 20px; background-color: #ffffff;">
@@ -17,12 +22,20 @@ export default function loadLayoutBlocks(editor) {
                 </div>
             </section>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Full-width section container - holds other elements'
+        }
     });
 
     // 2 Column Grid
     blockManager.add('2-columns', {
-        label: '📐 2 Columns',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">⬜⬜</div>
+                <div style="font-size: 11px;">2 Columns</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <div class="row-2-cols" style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -34,12 +47,20 @@ export default function loadLayoutBlocks(editor) {
                 </div>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Two equal-width columns - stacks on mobile'
+        }
     });
 
     // 3 Column Grid
     blockManager.add('3-columns', {
-        label: '📐 3 Columns',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 20px; margin-bottom: 5px;">⬜⬜⬜</div>
+                <div style="font-size: 11px;">3 Columns</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <div class="row-3-cols" style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -54,12 +75,20 @@ export default function loadLayoutBlocks(editor) {
                 </div>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Three equal-width columns - stacks on mobile'
+        }
     });
 
     // 4 Column Grid
     blockManager.add('4-columns', {
-        label: '📐 4 Columns',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 18px; margin-bottom: 5px;">⬜⬜⬜⬜</div>
+                <div style="font-size: 11px;">4 Columns</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <div class="row-4-cols" style="display: flex; gap: 20px; flex-wrap: wrap;">
@@ -77,26 +106,45 @@ export default function loadLayoutBlocks(editor) {
                 </div>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Four equal-width columns - stacks on mobile'
+        }
     });
 
     // Divider
     blockManager.add('divider', {
-        label: '➖ Divider',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">━━</div>
+                <div style="font-size: 11px;">Divider</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <hr style="border: none; border-top: 1px solid #dee2e6; margin: 40px 0;">
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Horizontal line to separate content'
+        }
     });
 
     // Spacer
     blockManager.add('spacer', {
-        label: '⬇️ Spacer',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">⬇️</div>
+                <div style="font-size: 11px;">Spacer</div>
+            </div>
+        `,
         category: 'Layout',
         content: `
             <div class="spacer" style="height: 60px;"></div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Add vertical space between elements'
+        }
     });
 }

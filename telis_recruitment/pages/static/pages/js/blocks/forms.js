@@ -8,19 +8,32 @@ export default function loadFormBlocks(editor) {
 
     // Form Container
     blockManager.add('form-container', {
-        label: '📋 Form',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">📋</div>
+                <div style="font-size: 11px;">Form</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <form class="form" style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <p style="font-family: var(--font-body, sans-serif); color: var(--brand-text, #212529);">Add form fields below</p>
             </form>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Form container - add input fields inside'
+        }
     });
 
     // Input Field
     blockManager.add('input-field', {
-        label: '📝 Input Field',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">📝</div>
+                <div style="font-size: 11px;">Text Input</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <div class="form-group" style="margin-bottom: 20px;">
@@ -30,12 +43,20 @@ export default function loadFormBlocks(editor) {
                 <input type="text" name="field" placeholder="Enter text..." style="width: 100%; padding: 12px; border: 1px solid #dee2e6; border-radius: 4px; font-family: var(--font-body, sans-serif); font-size: 16px;">
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Text input field with label'
+        }
     });
 
     // Textarea
     blockManager.add('textarea', {
-        label: '📝 Textarea',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">📄</div>
+                <div style="font-size: 11px;">Text Area</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <div class="form-group" style="margin-bottom: 20px;">
@@ -45,12 +66,20 @@ export default function loadFormBlocks(editor) {
                 <textarea name="message" rows="5" placeholder="Enter your message..." style="width: 100%; padding: 12px; border: 1px solid #dee2e6; border-radius: 4px; font-family: var(--font-body, sans-serif); font-size: 16px; resize: vertical;"></textarea>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Multi-line text area for longer messages'
+        }
     });
 
     // Select/Dropdown
     blockManager.add('select', {
-        label: '📋 Select',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">▼</div>
+                <div style="font-size: 11px;">Dropdown</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <div class="form-group" style="margin-bottom: 20px;">
@@ -65,12 +94,20 @@ export default function loadFormBlocks(editor) {
                 </select>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Dropdown select menu'
+        }
     });
 
     // Checkbox
     blockManager.add('checkbox', {
-        label: '☑️ Checkbox',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">☑️</div>
+                <div style="font-size: 11px;">Checkbox</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <div class="form-group" style="margin-bottom: 15px;">
@@ -80,12 +117,20 @@ export default function loadFormBlocks(editor) {
                 </label>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Checkbox for yes/no or agree options'
+        }
     });
 
     // Radio Buttons
     blockManager.add('radio', {
-        label: '🔘 Radio',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">◉</div>
+                <div style="font-size: 11px;">Radio</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <div class="form-group" style="margin-bottom: 20px;">
@@ -106,18 +151,29 @@ export default function loadFormBlocks(editor) {
                 </div>
             </div>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Radio buttons - choose one option'
+        }
     });
 
     // Submit Button
     blockManager.add('submit-button', {
-        label: '✅ Submit Button',
+        label: `
+            <div style="text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 5px;">✅</div>
+                <div style="font-size: 11px;">Submit</div>
+            </div>
+        `,
         category: 'Forms',
         content: `
             <button type="submit" style="display: inline-block; padding: 14px 40px; background-color: var(--brand-primary, #007bff); color: white; border: none; border-radius: 5px; font-weight: 600; font-family: var(--font-body, sans-serif); font-size: 16px; cursor: pointer; transition: all 0.3s;">
                 Submit
             </button>
         `,
-        attributes: { class: 'gjs-block-section' }
+        attributes: { 
+            class: 'gjs-block-section',
+            title: 'Submit button for forms'
+        }
     });
 }
