@@ -1,0 +1,322 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Quick Create - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:builder-list' %}" class="text-gray-400 hover:text-white">Landing Pages</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Quick Create</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-white mb-2">Quick Create</h1>
+        <p class="text-gray-400">Schnell neue Seiten oder Projekte erstellen</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="mb-6">
+        <div class="border-b border-dark-700">
+            <nav class="-mb-px flex space-x-8">
+                <button onclick="switchTab('code')" 
+                        id="tab-code"
+                        class="tab-button active border-b-2 border-primary py-4 px-1 text-sm font-medium text-white">
+                    📝 Code einfügen
+                </button>
+                <button onclick="switchTab('zip')" 
+                        id="tab-zip"
+                        class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-300">
+                    📦 ZIP hochladen
+                </button>
+                <button onclick="switchTab('template')" 
+                        id="tab-template"
+                        class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-300">
+                    🎨 Template wählen
+                </button>
+                <button onclick="switchTab('ai')" 
+                        id="tab-ai"
+                        class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-400 hover:text-white hover:border-gray-300">
+                    🤖 KI-Prompt (Coming Soon)
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Tab Contents -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <!-- Tab 1: Code einfügen -->
+        <div id="content-code" class="tab-content">
+            <h2 class="text-xl font-bold text-white mb-4">HTML/CSS/JS direkt einfügen</h2>
+            <p class="text-gray-400 mb-6">Füge deinen Code direkt ein, um schnell eine neue Landing Page zu erstellen.</p>
+            
+            <form id="code-form" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Seitentitel</label>
+                    <input type="text" name="title" required
+                           class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                           placeholder="Meine neue Seite">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Slug</label>
+                    <input type="text" name="slug" required
+                           class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                           placeholder="meine-neue-seite">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">HTML Code</label>
+                    <textarea name="html" rows="10" required
+                              class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                              placeholder="<html>...</html>"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">CSS (optional)</label>
+                    <textarea name="css" rows="6"
+                              class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                              placeholder="body { ... }"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" 
+                            class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition">
+                        Seite erstellen
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tab 2: ZIP hochladen -->
+        <div id="content-zip" class="tab-content hidden">
+            <h2 class="text-xl font-bold text-white mb-4">Komplettes Projekt als ZIP hochladen</h2>
+            <p class="text-gray-400 mb-6">Lade ein vollständiges HTML/CSS/JS-Projekt als ZIP-Datei hoch. Maximale Größe: 50MB.</p>
+            
+            <form id="zip-form" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Projektname</label>
+                    <input type="text" name="name" id="project-name" required
+                           class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                           placeholder="Mein Website-Projekt">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Projekttyp</label>
+                    <select name="type" 
+                            class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="website">Multi-Page Website</option>
+                        <option value="game">Browser-Spiel</option>
+                        <option value="app">Web-App</option>
+                        <option value="landing">Landing Page Sammlung</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Beschreibung (optional)</label>
+                    <textarea name="description" rows="3"
+                              class="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                              placeholder="Kurze Beschreibung des Projekts..."></textarea>
+                </div>
+                
+                <!-- Drag & Drop Zone -->
+                <div id="drop-zone" 
+                     class="border-2 border-dashed border-dark-600 rounded-lg p-8 text-center hover:border-primary transition cursor-pointer">
+                    <input type="file" id="zip-file" name="zip_file" accept=".zip" class="hidden">
+                    <div id="drop-zone-text">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-400">
+                            <span class="font-medium text-primary">Datei auswählen</span> oder hier ablegen
+                        </p>
+                        <p class="mt-1 text-xs text-gray-500">ZIP bis 50MB</p>
+                    </div>
+                    <div id="file-info" class="hidden">
+                        <p class="text-white font-medium" id="file-name"></p>
+                        <p class="text-sm text-gray-400" id="file-size"></p>
+                    </div>
+                </div>
+                
+                <div id="upload-progress" class="hidden">
+                    <div class="w-full bg-dark-900 rounded-full h-2">
+                        <div id="progress-bar" class="bg-primary h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2" id="progress-text">Hochladen...</p>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button type="submit" id="upload-btn"
+                            class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition disabled:opacity-50"
+                            disabled>
+                        Projekt hochladen
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tab 3: Template wählen -->
+        <div id="content-template" class="tab-content hidden">
+            <h2 class="text-xl font-bold text-white mb-4">Aus Template erstellen</h2>
+            <p class="text-gray-400 mb-6">Wähle ein vorgefertigtes Template als Ausgangspunkt.</p>
+            
+            {% if templates %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {% for template in templates %}
+                <div class="bg-dark-900 border border-dark-700 rounded-lg p-4 hover:border-primary transition cursor-pointer"
+                     onclick="selectTemplate({{ template.id }}, '{{ template.name }}')">
+                    {% if template.thumbnail %}
+                    <img src="{{ template.thumbnail.url }}" alt="{{ template.name }}" class="w-full h-32 object-cover rounded mb-3">
+                    {% endif %}
+                    <h3 class="text-white font-medium mb-1">{{ template.name }}</h3>
+                    <p class="text-sm text-gray-400 mb-2">{{ template.get_category_display }}</p>
+                    <p class="text-xs text-gray-500">{{ template.description|truncatewords:15 }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-400 text-center py-8">Keine Templates verfügbar.</p>
+            {% endif %}
+        </div>
+
+        <!-- Tab 4: KI-Prompt -->
+        <div id="content-ai" class="tab-content hidden">
+            <h2 class="text-xl font-bold text-white mb-4">KI-generierte Landing Page</h2>
+            <p class="text-gray-400 mb-6">Beschreibe deine gewünschte Landing Page und lass sie von KI generieren.</p>
+            
+            <div class="bg-dark-900 border border-dark-700 rounded-lg p-8 text-center">
+                <p class="text-gray-400 mb-4">🚧 Feature in Entwicklung</p>
+                <p class="text-sm text-gray-500">KI-Integration für automatische Landing Page Generierung kommt bald!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchTab(tab) {
+    // Hide all content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Deactivate all tabs
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active', 'border-primary', 'text-white');
+        button.classList.add('border-transparent', 'text-gray-400');
+    });
+    
+    // Show selected content
+    document.getElementById('content-' + tab).classList.remove('hidden');
+    
+    // Activate selected tab
+    const activeTab = document.getElementById('tab-' + tab);
+    activeTab.classList.add('active', 'border-primary', 'text-white');
+    activeTab.classList.remove('border-transparent', 'text-gray-400');
+}
+
+// Drag & Drop functionality
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('zip-file');
+const uploadBtn = document.getElementById('upload-btn');
+
+dropZone.addEventListener('click', () => {
+    fileInput.click();
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-primary');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('border-primary');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary');
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.endsWith('.zip')) {
+        fileInput.files = files;
+        updateFileInfo(files[0]);
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        updateFileInfo(e.target.files[0]);
+    }
+});
+
+function updateFileInfo(file) {
+    const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = `${fileSize} MB`;
+    document.getElementById('drop-zone-text').classList.add('hidden');
+    document.getElementById('file-info').classList.remove('hidden');
+    uploadBtn.disabled = false;
+}
+
+// ZIP Upload Form
+document.getElementById('zip-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const uploadProgress = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    uploadProgress.classList.remove('hidden');
+    uploadBtn.disabled = true;
+    
+    try {
+        const response = await fetch("{% url 'pages:upload-project' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            progressText.textContent = result.message;
+            progressBar.style.width = '100%';
+            
+            setTimeout(() => {
+                window.location.href = result.data.project.url;
+            }, 1500);
+        } else {
+            alert('Fehler: ' + result.error);
+            uploadProgress.classList.add('hidden');
+            uploadBtn.disabled = false;
+        }
+    } catch (error) {
+        alert('Fehler beim Hochladen: ' + error.message);
+        uploadProgress.classList.add('hidden');
+        uploadBtn.disabled = false;
+    }
+});
+
+// Code Form
+document.getElementById('code-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    
+    // Create page via admin API (simplified)
+    alert('Code-Einfügen Feature: In Entwicklung');
+});
+
+function selectTemplate(templateId, templateName) {
+    // Redirect to template application
+    alert('Template: ' + templateName + ' - Feature in Entwicklung');
+}
+</script>
+
+<style>
+.tab-button.active {
+    border-color: var(--color-primary, #6366f1);
+}
+</style>
+{% endblock %}

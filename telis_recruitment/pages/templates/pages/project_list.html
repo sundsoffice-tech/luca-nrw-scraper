@@ -1,0 +1,129 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}Projects - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:builder-list' %}" class="text-gray-400 hover:text-white">Landing Pages</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Projects</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Multipage-Projekte</h1>
+            <p class="text-gray-400">Übersicht aller hochgeladenen Projekte</p>
+        </div>
+        <a href="{% url 'pages:quick-create' %}" 
+           class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition">
+            + Neues Projekt
+        </a>
+    </div>
+
+    {% if projects %}
+    <!-- Projects Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for project in projects %}
+        <div class="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden hover:border-primary transition">
+            <!-- Project Header -->
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-3">
+                    <h3 class="text-lg font-bold text-white">{{ project.name }}</h3>
+                    <span class="px-2 py-1 text-xs font-medium bg-primary/20 text-primary rounded">
+                        {{ project.get_project_type_display }}
+                    </span>
+                </div>
+                
+                {% if project.description %}
+                <p class="text-sm text-gray-400 mb-4">{{ project.description|truncatewords:20 }}</p>
+                {% endif %}
+                
+                <!-- Stats -->
+                <div class="flex items-center space-x-4 text-sm mb-4">
+                    <div class="flex items-center text-gray-400">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        {{ project.page_count }} Seite{{ project.page_count|pluralize:"n" }}
+                    </div>
+                    
+                    {% if project.is_deployed %}
+                    <div class="flex items-center text-green-500">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Deployed
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Metadata -->
+                <div class="text-xs text-gray-500 mb-4">
+                    <p>Erstellt: {{ project.created_at|date:"d.m.Y H:i" }}</p>
+                    {% if project.created_by %}
+                    <p>Von: {{ project.created_by.get_full_name|default:project.created_by.username }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="border-t border-dark-700 px-6 py-3 bg-dark-900 flex justify-between">
+                <a href="{% url 'pages:project-detail' project.slug %}" 
+                   class="text-sm text-primary hover:text-primary/80 font-medium">
+                    Details →
+                </a>
+                <button onclick="deleteProject('{{ project.slug }}', '{{ project.name }}')" 
+                        class="text-sm text-red-500 hover:text-red-400 font-medium">
+                    Löschen
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+        <h3 class="text-lg font-medium text-white mb-2">Keine Projekte vorhanden</h3>
+        <p class="text-gray-400 mb-6">Lade dein erstes Projekt als ZIP-Datei hoch.</p>
+        <a href="{% url 'pages:quick-create' %}" 
+           class="inline-block px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/80 transition">
+            Erstes Projekt hochladen
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+async function deleteProject(slug, name) {
+    if (!confirm(`Projekt "${name}" wirklich löschen? Alle zugehörigen Seiten werden ebenfalls gelöscht.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/pages/projects/${slug}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Fehler beim Löschen: ' + result.error);
+        }
+    } catch (error) {
+        alert('Fehler: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
