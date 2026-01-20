@@ -14,6 +14,7 @@ Features:
 - Seamless fallback to SQLite
 - Consistent API across both backends
 - Performance optimization via caching
+- Thread-safe database operations with retry logic
 """
 
 import sqlite3
@@ -24,6 +25,19 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import List, Dict, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
+
+# Import thread-safe database utilities
+try:
+    from luca_scraper.db_utils import (
+        get_db_connection,
+        with_db_retry,
+        configure_connection,
+        ensure_db_initialized
+    )
+    DB_UTILS_AVAILABLE = True
+except ImportError:
+    logger.warning("db_utils not available, using basic SQLite without retry logic")
+    DB_UTILS_AVAILABLE = False
 
 # Detect Django availability
 DJANGO_AVAILABLE = False
@@ -53,71 +67,79 @@ def _get_db_path() -> str:
 
 
 def _ensure_sqlite_tables(db_path: str) -> None:
-    """Ensure SQLite tables exist (fallback mode only)"""
-    conn = sqlite3.connect(db_path)
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS learning_dork_performance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query TEXT NOT NULL,
-            query_hash TEXT UNIQUE NOT NULL,
-            times_used INTEGER DEFAULT 0,
-            leads_found INTEGER DEFAULT 0,
-            phone_leads INTEGER DEFAULT 0,
-            success_rate REAL DEFAULT 0.0,
-            pool TEXT DEFAULT 'explore',
-            last_used TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS learning_source_performance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            domain TEXT UNIQUE NOT NULL,
-            leads_found INTEGER DEFAULT 0,
-            leads_with_phone INTEGER DEFAULT 0,
-            avg_quality REAL DEFAULT 0.5,
-            is_blocked INTEGER DEFAULT 0,
-            blocked_reason TEXT DEFAULT '',
-            total_visits INTEGER DEFAULT 0,
-            last_visit TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS learning_pattern_success (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pattern_type TEXT NOT NULL,
-            pattern_value TEXT NOT NULL,
-            pattern_hash TEXT NOT NULL,
-            occurrences INTEGER DEFAULT 0,
-            confidence REAL DEFAULT 0.0,
-            metadata TEXT DEFAULT '{}',
-            last_success TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(pattern_type, pattern_hash)
-        );
-        
-        CREATE TABLE IF NOT EXISTS learning_telefonbuch_cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query_hash TEXT UNIQUE NOT NULL,
-            query_text TEXT NOT NULL,
-            results_json TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            hits INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_dork_perf_success ON learning_dork_performance(success_rate DESC, phone_leads DESC);
-        CREATE INDEX IF NOT EXISTS idx_dork_perf_pool ON learning_dork_performance(pool, success_rate DESC);
-        CREATE INDEX IF NOT EXISTS idx_source_perf_quality ON learning_source_performance(avg_quality DESC, leads_with_phone DESC);
-        CREATE INDEX IF NOT EXISTS idx_source_perf_blocked ON learning_source_performance(is_blocked);
-        CREATE INDEX IF NOT EXISTS idx_pattern_type_conf ON learning_pattern_success(pattern_type, confidence DESC);
-        CREATE INDEX IF NOT EXISTS idx_cache_expires ON learning_telefonbuch_cache(expires_at);
-    """)
-    conn.commit()
-    conn.close()
+    """Ensure SQLite tables exist (fallback mode only) - thread-safe with retry logic."""
+    def _init_tables(conn):
+        """Initialize tables - called by ensure_db_initialized."""
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS learning_dork_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                query_hash TEXT UNIQUE NOT NULL,
+                times_used INTEGER DEFAULT 0,
+                leads_found INTEGER DEFAULT 0,
+                phone_leads INTEGER DEFAULT 0,
+                success_rate REAL DEFAULT 0.0,
+                pool TEXT DEFAULT 'explore',
+                last_used TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE TABLE IF NOT EXISTS learning_source_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain TEXT UNIQUE NOT NULL,
+                leads_found INTEGER DEFAULT 0,
+                leads_with_phone INTEGER DEFAULT 0,
+                avg_quality REAL DEFAULT 0.5,
+                is_blocked INTEGER DEFAULT 0,
+                blocked_reason TEXT DEFAULT '',
+                total_visits INTEGER DEFAULT 0,
+                last_visit TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE TABLE IF NOT EXISTS learning_pattern_success (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_type TEXT NOT NULL,
+                pattern_value TEXT NOT NULL,
+                pattern_hash TEXT NOT NULL,
+                occurrences INTEGER DEFAULT 0,
+                confidence REAL DEFAULT 0.0,
+                metadata TEXT DEFAULT '{}',
+                last_success TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(pattern_type, pattern_hash)
+            );
+            
+            CREATE TABLE IF NOT EXISTS learning_telefonbuch_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query_hash TEXT UNIQUE NOT NULL,
+                query_text TEXT NOT NULL,
+                results_json TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                hits INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_dork_perf_success ON learning_dork_performance(success_rate DESC, phone_leads DESC);
+            CREATE INDEX IF NOT EXISTS idx_dork_perf_pool ON learning_dork_performance(pool, success_rate DESC);
+            CREATE INDEX IF NOT EXISTS idx_source_perf_quality ON learning_source_performance(avg_quality DESC, leads_with_phone DESC);
+            CREATE INDEX IF NOT EXISTS idx_source_perf_blocked ON learning_source_performance(is_blocked);
+            CREATE INDEX IF NOT EXISTS idx_pattern_type_conf ON learning_pattern_success(pattern_type, confidence DESC);
+            CREATE INDEX IF NOT EXISTS idx_cache_expires ON learning_telefonbuch_cache(expires_at);
+        """)
+        conn.commit()
+    
+    if DB_UTILS_AVAILABLE:
+        ensure_db_initialized(db_path, _init_tables)
+    else:
+        # Fallback without thread-safety
+        conn = sqlite3.connect(db_path)
+        _init_tables(conn)
+        conn.close()
 
 
 def _hash_query(query: str) -> str:
@@ -141,7 +163,7 @@ def record_dork_usage(
     db_path: Optional[str] = None
 ) -> None:
     """
-    Record or update dork/query performance.
+    Record or update dork/query performance (thread-safe with retry logic).
     
     Args:
         query: The search query
@@ -180,32 +202,57 @@ def record_dork_usage(
         except Exception as e:
             logger.error(f"Failed to record dork usage in Django: {e}")
     else:
-        # SQLite fallback
+        # SQLite fallback with retry logic
         db_path = db_path or _get_db_path()
         _ensure_sqlite_tables(db_path)
         
-        conn = sqlite3.connect(db_path)
+        @with_db_retry()
+        def _record():
+            if DB_UTILS_AVAILABLE:
+                with get_db_connection(db_path) as conn:
+                    conn.execute("""
+                        INSERT INTO learning_dork_performance 
+                        (query, query_hash, times_used, leads_found, phone_leads, success_rate, pool, last_used)
+                        VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+                        ON CONFLICT(query_hash) DO UPDATE SET
+                            times_used = times_used + 1,
+                            leads_found = leads_found + excluded.leads_found,
+                            phone_leads = phone_leads + excluded.phone_leads,
+                            success_rate = CAST(phone_leads + excluded.phone_leads AS REAL) / 
+                                           MAX(1, leads_found + excluded.leads_found),
+                            pool = CASE WHEN phone_leads + excluded.phone_leads > 0 THEN 'core' ELSE pool END,
+                            last_used = excluded.last_used,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (query, query_hash, leads_found, phone_leads, success_rate, pool, 
+                          datetime.now(dt_timezone.utc).isoformat()))
+                    conn.commit()
+            else:
+                # Fallback without db_utils
+                conn = sqlite3.connect(db_path)
+                try:
+                    conn.execute("""
+                        INSERT INTO learning_dork_performance 
+                        (query, query_hash, times_used, leads_found, phone_leads, success_rate, pool, last_used)
+                        VALUES (?, ?, 1, ?, ?, ?, ?, ?)
+                        ON CONFLICT(query_hash) DO UPDATE SET
+                            times_used = times_used + 1,
+                            leads_found = leads_found + excluded.leads_found,
+                            phone_leads = phone_leads + excluded.phone_leads,
+                            success_rate = CAST(phone_leads + excluded.phone_leads AS REAL) / 
+                                           MAX(1, leads_found + excluded.leads_found),
+                            pool = CASE WHEN phone_leads + excluded.phone_leads > 0 THEN 'core' ELSE pool END,
+                            last_used = excluded.last_used,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (query, query_hash, leads_found, phone_leads, success_rate, pool, 
+                          datetime.now(dt_timezone.utc).isoformat()))
+                    conn.commit()
+                finally:
+                    conn.close()
+        
         try:
-            conn.execute("""
-                INSERT INTO learning_dork_performance 
-                (query, query_hash, times_used, leads_found, phone_leads, success_rate, pool, last_used)
-                VALUES (?, ?, 1, ?, ?, ?, ?, ?)
-                ON CONFLICT(query_hash) DO UPDATE SET
-                    times_used = times_used + 1,
-                    leads_found = leads_found + excluded.leads_found,
-                    phone_leads = phone_leads + excluded.phone_leads,
-                    success_rate = CAST(phone_leads + excluded.phone_leads AS REAL) / 
-                                   MAX(1, leads_found + excluded.leads_found),
-                    pool = CASE WHEN phone_leads + excluded.phone_leads > 0 THEN 'core' ELSE pool END,
-                    last_used = excluded.last_used,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (query, query_hash, leads_found, phone_leads, success_rate, pool, 
-                  datetime.now(dt_timezone.utc).isoformat()))
-            conn.commit()
+            _record()
         except Exception as e:
             logger.error(f"Failed to record dork usage in SQLite: {e}")
-        finally:
-            conn.close()
 
 
 def get_top_dorks(

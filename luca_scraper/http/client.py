@@ -2,6 +2,7 @@
 HTTP client functionality with retry, circuit breaker, and SSL fallback support.
 """
 
+import asyncio
 import os
 import random
 import time
@@ -27,9 +28,10 @@ DENY_CT_EXACT = {
 }
 PDF_CT = "application/pdf"
 
-# Global client instances
+# Global client instances with asyncio lock for thread-safe access
 _CLIENT_SECURE: Optional[AsyncSession] = None
 _CLIENT_INSECURE: Optional[AsyncSession] = None
+_CLIENT_LOCK = asyncio.Lock()
 
 # Rotation pools
 _env_list = lambda val, sep: [x.strip() for x in (val or "").split(sep) if x.strip()]
@@ -64,7 +66,7 @@ def log(level: str, msg: str, **ctx):
 
 async def get_client(secure: bool = True) -> AsyncSession:
     """
-    Get a global async HTTP client instance.
+    Get a global async HTTP client instance (thread-safe with asyncio lock).
     
     Args:
         secure: If True, use secure client with SSL verification
@@ -73,27 +75,30 @@ async def get_client(secure: bool = True) -> AsyncSession:
         AsyncSession instance
     """
     global _CLIENT_SECURE, _CLIENT_INSECURE
-    proxy_cfg = {"http://": "socks5://127.0.0.1:9050", "https://": "socks5://127.0.0.1:9050"} if USE_TOR else None
-    if secure:
-        if _CLIENT_SECURE is None:
-            _CLIENT_SECURE = AsyncSession(
-                impersonate="chrome120",
-                headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
-                verify=True,
-                timeout=HTTP_TIMEOUT,
-                proxies=proxy_cfg,
-            )
-        return _CLIENT_SECURE
-    else:
-        if _CLIENT_INSECURE is None:
-            _CLIENT_INSECURE = AsyncSession(
-                impersonate="chrome120",
-                headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
-                verify=False,
-                timeout=HTTP_TIMEOUT,
-                proxies=proxy_cfg,
-            )
-        return _CLIENT_INSECURE
+    
+    # Use asyncio lock to prevent race conditions when creating clients
+    async with _CLIENT_LOCK:
+        proxy_cfg = {"http://": "socks5://127.0.0.1:9050", "https://": "socks5://127.0.0.1:9050"} if USE_TOR else None
+        if secure:
+            if _CLIENT_SECURE is None:
+                _CLIENT_SECURE = AsyncSession(
+                    impersonate="chrome120",
+                    headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
+                    verify=True,
+                    timeout=HTTP_TIMEOUT,
+                    proxies=proxy_cfg,
+                )
+            return _CLIENT_SECURE
+        else:
+            if _CLIENT_INSECURE is None:
+                _CLIENT_INSECURE = AsyncSession(
+                    impersonate="chrome120",
+                    headers={"User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"},
+                    verify=False,
+                    timeout=HTTP_TIMEOUT,
+                    proxies=proxy_cfg,
+                )
+            return _CLIENT_INSECURE
 
 
 def _make_client(secure: bool, ua: str, proxy_url: Optional[str], force_http1: bool, timeout_s: int) -> AsyncSession:
