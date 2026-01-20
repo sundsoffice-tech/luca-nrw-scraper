@@ -715,8 +715,9 @@ class ProjectDeploymentAdmin(ModelAdmin):
     
     def deployed_size_mb(self, obj):
         """Show size in MB"""
+        BYTES_TO_MB = 1024 * 1024
         if obj.deployed_size_bytes:
-            size_mb = obj.deployed_size_bytes / (1024 * 1024)
+            size_mb = obj.deployed_size_bytes / BYTES_TO_MB
             return f"{size_mb:.2f} MB"
         return "0 MB"
     deployed_size_mb.short_description = 'Size'

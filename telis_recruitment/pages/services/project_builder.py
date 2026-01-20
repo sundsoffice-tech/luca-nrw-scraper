@@ -221,7 +221,7 @@ class ProjectBuilder:
     <title>{seo_title}</title>
     {f'<meta name="description" content="{seo_description}">' if seo_description else ''}
     {f'<meta property="og:image" content="{seo_image}">' if seo_image else ''}
-    {f'<link rel="icon" href="{settings.favicon.url}">' if settings and settings.favicon else ''}
+    {f'<link rel="icon" href="{settings.favicon.url}">' if settings and settings.favicon and hasattr(settings.favicon, 'url') else ''}
     
     <style>
     {page.css or ''}

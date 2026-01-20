@@ -937,17 +937,19 @@ def export_project(request, slug):
         # Export as ZIP
         zip_path = builder.export_zip()
         
-        # Send file as download
-        response = FileResponse(
-            open(zip_path, 'rb'),
-            as_attachment=True,
-            filename=zip_path.name
-        )
+        # Send file as download with proper resource management
+        with open(zip_path, 'rb') as zip_file:
+            response = FileResponse(
+                zip_file,
+                as_attachment=True,
+                filename=zip_path.name
+            )
+            # Note: FileResponse will handle closing the file
+            return response
         
         # Cleanup build directory after sending (optional)
         # builder.cleanup()
         
-        return response
     except Exception as e:
         logger.error(f"Error exporting project {slug}: {e}")
         return JsonResponse({

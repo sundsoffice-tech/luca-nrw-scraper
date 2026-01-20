@@ -52,7 +52,7 @@
                     {% else %}
                     {% for item in nav_items %}
                         {% if not item.parent %}
-                        <div class="nav-item" data-id="{{ item.id }}" data-item='{{ item|safe }}'>
+                        <div class="nav-item" data-id="{{ item.id }}">
                             <div class="bg-dark-700 rounded p-3 cursor-move hover:bg-dark-600 transition">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center space-x-2">
