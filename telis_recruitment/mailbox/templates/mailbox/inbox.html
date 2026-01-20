@@ -402,10 +402,7 @@
                 </div>
             </div>
             {% empty %}
-            <div class="text-center py-5 text-muted">
-                <p style="font-size: 48px;">📭</p>
-                <p>Keine Emails in diesem Ordner</p>
-            </div>
+            {% include "mailbox/partials/empty_state.html" with icon="📭" title="All caught up!" message="Keine Emails in diesem Ordner" %}
             {% endfor %}
         </div>
         
