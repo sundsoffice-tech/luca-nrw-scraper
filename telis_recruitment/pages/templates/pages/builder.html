@@ -290,8 +290,6 @@
                 </button>
             </div>
         </div>
-            </button>
-        </div>
         
         <div class="toolbar-right">
             <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
@@ -389,6 +387,12 @@
 <script src="https://unpkg.com/grapesjs"></script>
 <script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
 <script>
+    // Configuration constants
+    const MAX_FILE_SIZE_MB = 10;
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+    const WELCOME_GUIDE_DELAY_MS = 2000; // Increased from 1000ms for better accessibility
+    const AUTO_SAVE_INTERVAL_MS = 60000;
+    
     // Initialize GrapesJS Editor
     window.editor = grapesjs.init({
         container: '#gjs',
@@ -499,17 +503,17 @@
     // Load assets
     loadAssets();
     
-    // Show welcome guide for first-time users
+    // Show welcome guide for first-time users (with accessible delay)
     if (!localStorage.getItem('builder_guide_seen')) {
         setTimeout(() => {
             showWelcomeGuide();
-        }, 1000);
+        }, WELCOME_GUIDE_DELAY_MS);
     }
 
     // Auto-save every 60 seconds
     setInterval(() => {
         saveContent(false);
-    }, 60000);
+    }, AUTO_SAVE_INTERVAL_MS);
 
     // Save on Ctrl+S
     document.addEventListener('keydown', (e) => {
@@ -662,6 +666,9 @@
     
     function showModal(title, content) {
         const modal = document.createElement('div');
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'modal-title');
         modal.style.cssText = `
             position: fixed;
             top: 0;
@@ -678,10 +685,13 @@
         
         modal.innerHTML = `
             <div style="background: white; border-radius: 12px; padding: 30px; position: relative; max-width: 700px; width: 100%;">
-                <button onclick="this.closest('div').parentElement.remove()" style="position: absolute; top: 15px; right: 15px; background: #f8f9fa; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1;">✕</button>
+                <button onclick="this.closest('div').parentElement.remove()" 
+                        aria-label="Close dialog"
+                        style="position: absolute; top: 15px; right: 15px; background: #f8f9fa; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1;">✕</button>
                 ${content}
                 <div style="margin-top: 20px; text-align: right;">
-                    <button onclick="this.closest('div').parentElement.remove()" style="background: #007bff; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-weight: 600;">Got it!</button>
+                    <button onclick="this.closest('div').parentElement.remove()" 
+                            style="background: #007bff; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-weight: 600;">Got it!</button>
                 </div>
             </div>
         `;
@@ -694,6 +704,15 @@
                 modal.remove();
             }
         });
+        
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
     }
     
     function showWelcomeGuide() {
@@ -817,9 +836,9 @@
         showToast(`Uploading ${fileCount} file(s)...`, 'info');
 
         Array.from(files).forEach(file => {
-            // Check file size (10MB limit)
-            if (file.size > 10 * 1024 * 1024) {
-                showToast(`File too large: ${file.name} (max 10MB)`, 'error');
+            // Check file size (configurable limit)
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                showToast(`File too large: ${file.name} (max ${MAX_FILE_SIZE_MB}MB)`, 'error');
                 return;
             }
             
