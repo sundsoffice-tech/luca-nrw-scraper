@@ -1598,6 +1598,16 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
         ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> ''
     """)
+    
+    # Performance indexes for frequently queried columns
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_crm_status
+        ON leads(crm_status) WHERE crm_status IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_lead_type
+        ON leads(lead_type) WHERE lead_type IS NOT NULL
+    """)
     con.commit()
 
 def db():
