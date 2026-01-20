@@ -273,25 +273,61 @@ try:
     from phone_extractor import extract_phones_advanced, normalize_phone
     _HAVE_PHONE_EXTRACTOR = True
 except ImportError:
-    _HAVE_PHONE_EXTRACTOR = False
+    try:
+        import sys
+        import os
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from phone_extractor import extract_phones_advanced, normalize_phone
+        _HAVE_PHONE_EXTRACTOR = True
+    except ImportError:
+        _HAVE_PHONE_EXTRACTOR = False
 
 try:
     from lead_validation import validate_lead, is_valid_phone
     _HAVE_LEAD_VALIDATION = True
 except ImportError:
-    _HAVE_LEAD_VALIDATION = False
+    try:
+        import sys
+        import os
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from lead_validation import validate_lead, is_valid_phone
+        _HAVE_LEAD_VALIDATION = True
+    except ImportError:
+        _HAVE_LEAD_VALIDATION = False
 
 try:
     from deduplication import LeadDeduplicator
     _HAVE_DEDUPLICATION = True
 except ImportError:
-    _HAVE_DEDUPLICATION = False
+    try:
+        import sys
+        import os
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from deduplication import LeadDeduplicator
+        _HAVE_DEDUPLICATION = True
+    except ImportError:
+        _HAVE_DEDUPLICATION = False
 
 try:
     from cache import TTLCache, URLSeenSet
     _HAVE_CACHE = True
 except ImportError:
-    _HAVE_CACHE = False
+    try:
+        import sys
+        import os
+        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if _root not in sys.path:
+            sys.path.insert(0, _root)
+        from cache import TTLCache, URLSeenSet
+        _HAVE_CACHE = True
+    except ImportError:
+        _HAVE_CACHE = False
 
 # =========================
 # __all__ Export
