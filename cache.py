@@ -6,7 +6,6 @@ Implements TTL-based caching for cost and performance optimization.
 
 import os
 import time
-from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Set
 
 
@@ -26,7 +25,8 @@ class TTLCache:
         """
         self.ttl = ttl_seconds
         self.max_size = max_size
-        self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
+        # Python 3.7+ dicts maintain insertion order
+        self._cache: Dict[str, tuple[Any, float]] = {}
     
     def get(self, key: str) -> Optional[Any]:
         """
@@ -48,8 +48,9 @@ class TTLCache:
             del self._cache[key]
             return None
         
-        # Move to end (LRU)
-        self._cache.move_to_end(key)
+        # Move to end (for LRU behavior - dicts maintain insertion order since Python 3.7)
+        # Re-insert to move to end
+        self._cache[key] = self._cache.pop(key)
         return value
     
     def set(self, key: str, value: Any):
@@ -62,7 +63,9 @@ class TTLCache:
         """
         # Evict oldest if at capacity
         while len(self._cache) >= self.max_size:
-            self._cache.popitem(last=False)
+            # Pop the first item (oldest in insertion order)
+            first_key = next(iter(self._cache))
+            del self._cache[first_key]
         
         self._cache[key] = (value, time.time())
     
@@ -81,12 +84,11 @@ class TTLCache:
     def clear_expired(self):
         """Remove all expired entries."""
         now = time.time()
-        expired_keys = [
-            k for k, (v, ts) in self._cache.items()
-            if now - ts > self.ttl
-        ]
-        for k in expired_keys:
-            del self._cache[k]
+        # Use dict comprehension for more efficient bulk deletion
+        self._cache = {
+            k: v for k, v in self._cache.items()
+            if now - v[1] <= self.ttl
+        }
     
     def clear(self):
         """Clear all entries."""
@@ -163,12 +165,11 @@ class URLSeenSet:
     def clear_expired(self):
         """Remove all expired entries."""
         now = time.time()
-        expired_urls = [
-            url for url, ts in self._seen.items()
-            if now - ts > self.ttl
-        ]
-        for url in expired_urls:
-            del self._seen[url]
+        # Use dict comprehension for more efficient bulk deletion
+        self._seen = {
+            url: ts for url, ts in self._seen.items()
+            if now - ts <= self.ttl
+        }
     
     def clear(self):
         """Clear all entries."""

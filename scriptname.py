@@ -1570,6 +1570,16 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
         ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> ''
     """)
+    
+    # Performance indexes for frequently queried columns
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_crm_status
+        ON leads(crm_status) WHERE crm_status IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_lead_type
+        ON leads(lead_type) WHERE lead_type IS NOT NULL
+    """)
     con.commit()
 
 def db():
@@ -2723,8 +2733,13 @@ def _jitter(a=0.2,b=0.8): return a + random.random()*(b-a)
 
 GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
-GCS_KEYS = [k.strip() for k in os.getenv("GCS_KEYS","").split(",") if k.strip()] or ([GCS_API_KEY] if GCS_API_KEY else [])
-GCS_CXS  = [_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",") if _normalize_cx(x)] or ([GCS_CX] if GCS_CX else [])
+# Use generator to avoid double .strip() calls for performance
+_stripped_keys = (x.strip() for x in os.getenv("GCS_KEYS","").split(","))
+GCS_KEYS = [k for k in _stripped_keys if k] or ([GCS_API_KEY] if GCS_API_KEY else [])
+
+_normalized_cxs = (_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(","))
+GCS_CXS = [cx for cx in _normalized_cxs if cx] or ([GCS_CX] if GCS_CX else [])
+
 MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 für Cost & Rate-Limit Control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
@@ -3195,15 +3210,6 @@ def is_denied(url: str) -> bool:
     # NEU: Im talent_hunt Modus Social-Profile und Team-Seiten ERLAUBEN
     if _is_talent_hunt_mode():
         url_lower = url.lower()
-        talent_hunt_allowed_patterns = [
-            "linkedin.com/in/",
-            "xing.com/profile/",
-            "xing.com/profiles/",
-            "/team",
-            "/unser-team",
-            "/mitarbeiter",
-            "/ansprechpartner",
-        ]
         talent_hunt_allowed_hosts = [
             "cdh.de",
             "ihk.de", 
@@ -3213,8 +3219,8 @@ def is_denied(url: str) -> bool:
             "twago.de",
         ]
         
-        # Prüfe URL-Patterns
-        if any(pattern in url_lower for pattern in talent_hunt_allowed_patterns):
+        # Prüfe URL-Patterns (using compiled regex for efficiency)
+        if _TALENT_HUNT_PATTERN_REGEX.search(url_lower):
             return False  # Nicht blockieren!
         
         # Prüfe spezielle Hosts für talent_hunt
@@ -5274,11 +5280,11 @@ def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
             return "active_salesperson"  # Aktiver Vertriebler
     
     # Team-Seiten von Firmen
-    if any(pattern in url_lower for pattern in ["/team", "/mitarbeiter", "/ansprechpartner", "/unser-team", "/about", "/ueber-uns"]):
+    if _TEAM_PAGE_REGEX.search(url_lower):
         return "team_member"
     
     # Freelancer-Portale
-    if any(portal in url_lower for portal in ["freelancermap.de", "gulp.de", "freelance.de", "twago.de"]):
+    if _FREELANCER_REGEX.search(url_lower):
         return "freelancer"
     
     # HR-Kontakte (wertvoll für Empfehlungen)
@@ -6327,6 +6333,28 @@ SOCIAL_PROFILE_PATTERNS = (
     "chat.whatsapp.com/",
 )
 
+# Compiled regex for efficient pattern matching (avoids O(n*m) substring searches)
+_SOCIAL_PROFILE_REGEX = re.compile('|'.join(re.escape(p) for p in SOCIAL_PROFILE_PATTERNS))
+
+# Additional compiled patterns for frequently used checks
+_TEAM_PAGE_PATTERNS = ["/team", "/mitarbeiter", "/ansprechpartner", "/unser-team", "/about", "/ueber-uns"]
+_TEAM_PAGE_REGEX = re.compile('|'.join(re.escape(p) for p in _TEAM_PAGE_PATTERNS))
+
+_FREELANCER_PORTALS = ["freelancermap.de", "gulp.de", "freelance.de", "twago.de"]
+_FREELANCER_REGEX = re.compile('|'.join(re.escape(p) for p in _FREELANCER_PORTALS))
+
+# Talent hunt patterns (for domain blocking logic)
+_TALENT_HUNT_ALLOWED_PATTERNS = [
+    "linkedin.com/in/",
+    "xing.com/profile/",
+    "xing.com/profiles/",
+    "/team",
+    "/unser-team",
+    "/mitarbeiter",
+    "/ansprechpartner",
+]
+_TALENT_HUNT_PATTERN_REGEX = re.compile('|'.join(re.escape(p) for p in _TALENT_HUNT_ALLOWED_PATTERNS))
+
 
 def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") -> Tuple[bool, str]:
     """Detect obvious non-candidate contexts (blogs, shops, company imprint, job ads)."""
@@ -6334,7 +6362,8 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     # NEU: Im Candidates-Modus - Social-Profile NIEMALS als Garbage markieren!
     if _is_candidates_mode():
         url_lower = (url or "").lower()
-        if any(pattern in url_lower for pattern in SOCIAL_PROFILE_PATTERNS):
+        # Use compiled regex for faster matching
+        if _SOCIAL_PROFILE_REGEX.search(url_lower):
             return False, ""  # Social-Profile durchlassen!
     
     t = (text or "").lower()
@@ -7373,7 +7402,8 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     
     # NEU: Im Candidates-Modus - Titel-Guard für Social-Profile überspringen
     url_lower = url.lower()
-    is_social_profile = any(p in url_lower for p in SOCIAL_PROFILE_PATTERNS)
+    # Use compiled regex for faster matching
+    is_social_profile = bool(_SOCIAL_PROFILE_REGEX.search(url_lower))
     
     if _is_candidates_mode():
         # Social-Profile überspringen den Titel-Guard
