@@ -180,3 +180,13 @@ try:
     CONFIG_REFRESH_INTERVAL_SECONDS = max(1, int(os.getenv("CONFIG_REFRESH_INTERVAL_SECONDS", "30")))
 except ValueError:
     CONFIG_REFRESH_INTERVAL_SECONDS = 30
+
+
+# =========================
+# HELPER FUNCTIONS
+# =========================
+
+def _jitter(a=0.2, b=0.8):
+    """Generate random jitter value."""
+    import random
+    return a + random.random() * (b - a)

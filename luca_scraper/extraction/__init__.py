@@ -2,11 +2,7 @@
 Extraction Module
 =================
 Data extraction and processing utilities.
-"""
 
-from .lead_builder import build_lead_data
-
-__all__ = ["build_lead_data"]
 Contact information extraction utilities.
 
 This module provides centralized extraction logic for:
@@ -18,6 +14,7 @@ Extracted from luca_scraper/crawlers/generic.py and luca_scraper/crawlers/kleina
 to eliminate code duplication and provide reusable extraction functions.
 """
 
+from .lead_builder import build_lead_data
 from .phone_email_extraction import (
     extract_phone_numbers,
     extract_email_address,
@@ -25,6 +22,7 @@ from .phone_email_extraction import (
 )
 
 __all__ = [
+    "build_lead_data",
     "extract_phone_numbers",
     "extract_email_address", 
     "extract_whatsapp_number",
