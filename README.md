@@ -104,6 +104,27 @@ cp configs/debug.env .env
 Each profile is optimized for specific use cases with appropriate security and performance settings.
 See [configs/README.md](configs/README.md) for detailed profile documentation.
 
+### 🗄️ Database Backend Configuration
+
+LUCA supports two database backends that can be switched via environment variable:
+
+- **SQLite** (default): Lightweight, file-based database suitable for standalone usage
+- **Django ORM**: Integration with Django CRM system for unified data management
+
+```bash
+# Use SQLite backend (default)
+export SCRAPER_DB_BACKEND=sqlite
+
+# Use Django ORM backend (for CRM integration)
+export SCRAPER_DB_BACKEND=django
+```
+
+**When to use each backend:**
+- **SQLite**: Standalone scraper, development, testing, small-scale deployments
+- **Django**: Production CRM deployments, centralized data management, team collaboration
+
+See [docs/CONFIGURATION_PROFILES.md](docs/CONFIGURATION_PROFILES.md) for detailed backend configuration.
+
 ### Command-Line Scraper
 For standalone scraper operations without the CRM interface:
 ```bash

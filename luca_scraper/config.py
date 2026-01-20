@@ -98,6 +98,19 @@ BING_API_KEY = os.getenv("BING_API_KEY", "")
 # Database
 DB_PATH = os.getenv("SCRAPER_DB", "scraper.db")
 
+# Database Backend Selection
+# Valid options: 'sqlite' (default) or 'django'
+_DATABASE_BACKEND_RAW = os.getenv('SCRAPER_DB_BACKEND', 'sqlite').lower()
+if _DATABASE_BACKEND_RAW not in ('sqlite', 'django'):
+    raise ValueError(
+        f"Invalid SCRAPER_DB_BACKEND value: '{_DATABASE_BACKEND_RAW}'. "
+        f"Must be 'sqlite' or 'django'."
+    )
+DATABASE_BACKEND = _DATABASE_BACKEND_RAW
+
+# Log the active backend on module import
+logger.info(f"Database backend: {DATABASE_BACKEND}")
+
 # =========================
 # CENTRALIZED CONFIGURATION LOADER
 # =========================

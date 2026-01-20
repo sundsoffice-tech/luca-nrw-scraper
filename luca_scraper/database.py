@@ -3,6 +3,14 @@ LUCA NRW Scraper - Database Layer
 ==================================
 SQLite Connection und Schema Management
 Phase 1 der Modularisierung.
+
+Database Backend Selection:
+---------------------------
+This module supports two backends:
+- 'sqlite' (default): Direct SQLite connection
+- 'django': Django ORM adapter
+
+Set via SCRAPER_DB_BACKEND environment variable.
 """
 
 import logging
@@ -12,8 +20,8 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import Dict, Optional, Tuple
 
-# Import DB_PATH from config
-from .config import DB_PATH as _DB_PATH_STR
+# Import DB_PATH and DATABASE_BACKEND from config
+from .config import DB_PATH as _DB_PATH_STR, DATABASE_BACKEND
 
 # Convert to Path object
 DB_PATH = Path(_DB_PATH_STR)
@@ -28,6 +36,32 @@ _DB_READY_LOCK = threading.Lock()
 logger = logging.getLogger(__name__)
 
 
+# =========================
+# BACKEND SELECTION LOGIC
+# =========================
+
+# Conditionally import Django backend functions if 'django' backend is selected
+if DATABASE_BACKEND == 'django':
+    logger.info("Using Django ORM backend")
+    try:
+        from . import django_db
+        # Import functions from django_db module
+        upsert_lead = django_db.upsert_lead
+        get_lead_count = django_db.get_lead_count
+        lead_exists = django_db.lead_exists
+        get_lead_by_id = django_db.get_lead_by_id
+        update_lead = django_db.update_lead
+        _DJANGO_BACKEND_AVAILABLE = True
+    except ImportError as exc:
+        logger.error(f"Failed to import Django backend: {exc}")
+        logger.error("Django backend requires Django to be properly configured")
+        _DJANGO_BACKEND_AVAILABLE = False
+        raise
+else:
+    logger.info("Using SQLite backend")
+    _DJANGO_BACKEND_AVAILABLE = False
+
+
 def db() -> sqlite3.Connection:
     """
     Thread-safe database connection.
@@ -35,7 +69,16 @@ def db() -> sqlite3.Connection:
     Returns a connection with row factory set.
     Ensures schema is initialized on first access.
     Validates that cached connection is still open before returning it.
+    
+    Note: When DATABASE_BACKEND is 'django', this function raises NotImplementedError.
+    Use Django ORM directly instead.
     """
+    if DATABASE_BACKEND == 'django':
+        raise NotImplementedError(
+            "db() function is not available when using Django ORM backend. "
+            "Use Django ORM directly via the Lead model."
+        )
+    
     global _DB_READY
     
     # Check if connection exists AND is still open/valid
@@ -398,4 +441,19 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
 
 # Export the global ready flag for external access
-__all__ = ['db', 'init_db', 'transaction', 'DB_PATH', 'migrate_db_unique_indexes', 'sync_status_to_scraper']
+# When using Django backend, also export Django adapter functions
+if DATABASE_BACKEND == 'django':
+    __all__ = [
+        'db', 'init_db', 'transaction', 'DB_PATH', 
+        'migrate_db_unique_indexes', 'sync_status_to_scraper',
+        'DATABASE_BACKEND',
+        # Django backend functions
+        'upsert_lead', 'get_lead_count', 'lead_exists', 
+        'get_lead_by_id', 'update_lead'
+    ]
+else:
+    __all__ = [
+        'db', 'init_db', 'transaction', 'DB_PATH', 
+        'migrate_db_unique_indexes', 'sync_status_to_scraper',
+        'DATABASE_BACKEND'
+    ]
