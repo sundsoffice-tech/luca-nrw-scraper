@@ -60,6 +60,19 @@ if DATABASE_BACKEND == 'django':
 else:
     logger.info("Using SQLite backend")
     _DJANGO_BACKEND_AVAILABLE = False
+    # Define placeholder functions that raise NotImplementedError if called
+    # This prevents NameError while making it clear these functions are not available
+    def _not_available_in_sqlite(*args, **kwargs):
+        raise NotImplementedError(
+            "This function is only available when DATABASE_BACKEND is set to 'django'. "
+            "Currently using SQLite backend."
+        )
+    
+    upsert_lead = _not_available_in_sqlite
+    get_lead_count = _not_available_in_sqlite
+    lead_exists = _not_available_in_sqlite
+    get_lead_by_id = _not_available_in_sqlite
+    update_lead = _not_available_in_sqlite
 
 
 def db() -> sqlite3.Connection:
@@ -441,19 +454,19 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
 
 # Export the global ready flag for external access
+# Base exports available for all backends
+_BASE_EXPORTS = [
+    'db', 'init_db', 'transaction', 'DB_PATH', 
+    'migrate_db_unique_indexes', 'sync_status_to_scraper',
+    'DATABASE_BACKEND'
+]
+
 # When using Django backend, also export Django adapter functions
 if DATABASE_BACKEND == 'django':
-    __all__ = [
-        'db', 'init_db', 'transaction', 'DB_PATH', 
-        'migrate_db_unique_indexes', 'sync_status_to_scraper',
-        'DATABASE_BACKEND',
+    __all__ = _BASE_EXPORTS + [
         # Django backend functions
         'upsert_lead', 'get_lead_count', 'lead_exists', 
         'get_lead_by_id', 'update_lead'
     ]
 else:
-    __all__ = [
-        'db', 'init_db', 'transaction', 'DB_PATH', 
-        'migrate_db_unique_indexes', 'sync_status_to_scraper',
-        'DATABASE_BACKEND'
-    ]
+    __all__ = _BASE_EXPORTS
