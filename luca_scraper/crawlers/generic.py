@@ -12,11 +12,7 @@ from typing import Any, Dict, Optional
 
 from bs4 import BeautifulSoup
 
-from luca_scraper.extraction.phone_email_extraction import (
-    extract_phone_numbers,
-    extract_email_address,
-    extract_whatsapp_number,
-)
+from luca_scraper.extraction.lead_builder import build_lead_data
 
 
 async def extract_generic_detail_async(
@@ -40,7 +36,7 @@ async def extract_generic_detail_async(
     """
     Generic function to extract contact information from any ad detail page.
     Similar to extract_kleinanzeigen_detail_async but works for multiple sites.
-    
+
     Args:
         url: URL of the ad detail page
         source_tag: Tag to identify the source (e.g., "markt_de", "quoka")
@@ -58,7 +54,7 @@ async def extract_generic_detail_async(
         HTTP_TIMEOUT: HTTP request timeout
         EMAIL_RE: Email regex pattern
         MOBILE_RE: Mobile phone regex pattern
-        
+
     Returns:
         Dict with lead data or None if extraction failed
     """
@@ -68,10 +64,10 @@ async def extract_generic_detail_async(
             if log_func:
                 log_func("debug", f"{source_tag}: Failed to fetch detail", url=url, status=r.status_code if r else "None")
             return None
-        
+
         html = r.text or ""
         soup = BeautifulSoup(html, "html.parser")
-        
+
         # Extract title - try multiple selectors
         title = ""
         for selector in ["h1", "h1.title", ".ad-title", ".listing-title"]:
@@ -79,57 +75,113 @@ async def extract_generic_detail_async(
             if title_elem:
                 title = title_elem.get_text(" ", strip=True)
                 break
-        
+
         # Extract description - get all text from body
         description = soup.get_text(" ", strip=True)
-        
+
         # Combine text for extraction
         full_text = f"{title} {description}"
-        
+
         # ========================================
         # PHONE EXTRACTION - Using centralized extraction module
         # ========================================
-        phones, phone_sources = extract_phone_numbers(
-            html=html,
-            text=full_text,
-            normalize_phone_func=normalize_phone_func,
-            validate_phone_func=validate_phone_func,
-            is_mobile_number_func=is_mobile_number_func,
-            MOBILE_RE=MOBILE_RE,
-            extract_all_phone_patterns_func=extract_all_phone_patterns_func,
-            get_best_phone_number_func=get_best_phone_number_func,
-            learning_engine=learning_engine,
-            portal_tag=source_tag,
-            log_func=log_func,
-        )
-        
-        # EMAIL EXTRACTION - Using centralized extraction module
-        email = extract_email_address(
-            text=full_text,
-            EMAIL_RE=EMAIL_RE,
-        )
-        
-        # WHATSAPP EXTRACTION - Using centralized extraction module
-        whatsapp, wa_sources = extract_whatsapp_number(
-            html=html,
-            normalize_phone_func=normalize_phone_func,
-            validate_phone_func=validate_phone_func,
-            is_mobile_number_func=is_mobile_number_func,
-            extract_whatsapp_number_func=extract_whatsapp_number_func,
-            portal_tag=source_tag,
-            log_func=log_func,
-        )
-        
-        # Merge WhatsApp results into phones list
-        if whatsapp and whatsapp not in phones:
-            phones.append(whatsapp)
-            phone_sources.update(wa_sources)
-        
+        phones = []
+        phone_sources = {}  # Track where each phone was found for scoring
+
+        # 1. Standard regex extraction (runs in parallel with advanced)
+        if MOBILE_RE:
+            phone_matches = MOBILE_RE.findall(full_text)
+            for phone_match in phone_matches:
+                normalized = normalize_phone_func(phone_match)
+                if normalized:
+                    is_valid, phone_type = validate_phone_func(normalized)
+                    if is_valid and is_mobile_number_func(normalized):
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "regex_standard"
+
+        # 2. Advanced pattern extraction (runs in parallel, not as fallback)
+        if extract_all_phone_patterns_func and get_best_phone_number_func:
+            try:
+                extraction_results = extract_all_phone_patterns_func(html, full_text)
+                # Process all results from advanced extraction, not just best
+                for category, numbers in extraction_results.items():
+                    if isinstance(numbers, list):
+                        for num in numbers:
+                            normalized = normalize_phone_func(num) if num else None
+                            if normalized and is_mobile_number_func(normalized):
+                                if normalized not in phones:
+                                    phones.append(normalized)
+                                    phone_sources[normalized] = f"advanced_{category}"
+                                    if log_func:
+                                        log_func("info", f"{source_tag}: Advanced extraction ({category}) found phone", 
+                                            url=url, phone=normalized[:8]+"...")
+
+                # Also get best phone if not already included
+                best_phone = get_best_phone_number_func(extraction_results)
+                if best_phone:
+                    normalized = normalize_phone_func(best_phone)
+                    if normalized and is_mobile_number_func(normalized):
+                        if normalized not in phones:
+                            phones.append(normalized)
+                            phone_sources[normalized] = "advanced_best"
+                        if learning_engine:
+                            learning_engine.record_phone_pattern(
+                                pattern="advanced_extraction",
+                                pattern_type=f"{source_tag}_enhanced",
+                                example=normalized[:8]+"..."
+                            )
+                        # Learn phone pattern for AI Learning Engine
+                        try:
+                            from ai_learning_engine import ActiveLearningEngine
+                            learning = ActiveLearningEngine()
+                            learning.learn_phone_pattern(best_phone, normalized, source_tag)
+                        except Exception:
+                            pass  # Learning is optional
+            except Exception as e:
+                if log_func:
+                    log_func("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
+
+        # Extract email
+        email = ""
+        if EMAIL_RE:
+            email_matches = EMAIL_RE.findall(full_text)
+            if email_matches:
+                email = email_matches[0]
+
+        # 3. WhatsApp extraction (parallel with other methods)
+        if extract_whatsapp_number_func:
+            try:
+                wa_number = extract_whatsapp_number_func(html)
+                if wa_number:
+                    normalized_wa = normalize_phone_func(wa_number)
+                    if normalized_wa and is_mobile_number_func(normalized_wa):
+                        if normalized_wa not in phones:
+                            phones.append(normalized_wa)
+                            phone_sources[normalized_wa] = "whatsapp_enhanced"
+                            if log_func:
+                                log_func("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
+            except Exception:
+                pass
+
+        # 4. Fallback WhatsApp link extraction
+        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
+        if wa_link:
+            wa_href = wa_link.get("href", "")
+            wa_phone = re.sub(r'\D', '', wa_href)
+            if wa_phone:
+                wa_normalized = "+" + wa_phone
+                is_valid, phone_type = validate_phone_func(wa_normalized)
+                if is_valid and is_mobile_number_func(wa_normalized):
+                    if wa_normalized not in phones:
+                        phones.append(wa_normalized)
+                        phone_sources[wa_normalized] = "whatsapp_link"
+
         # Extract name
         name = ""
         if extract_name_enhanced_func:
             name = extract_name_enhanced_func(full_text)
-        
+
         # 5. Browser extraction as last resort (only if no phones found)
         if not phones:
             if log_func:
@@ -153,7 +205,7 @@ async def extract_generic_detail_async(
                 except Exception as e:
                     if log_func:
                         log_func("debug", f"{source_tag}: Browser extraction failed", url=url, error=str(e))
-            
+
             # If still no phones found, return None
             if not phones:
                 if learning_engine:
@@ -164,59 +216,23 @@ async def extract_generic_detail_async(
                         visible_phones=[]
                     )
                 return None
-        
-        # Use first mobile number found
-        main_phone = phones[0]
-        
-        # ========================================
-        # DYNAMIC SCORING: Use centralized scoring module
-        # ========================================
-        phone_source = phone_sources.get(main_phone, "unknown")
-        
-        try:
-            from luca_scraper.scoring.dynamic_scoring import calculate_dynamic_score
-            dynamic_score, data_quality_score, confidence_score = calculate_dynamic_score(
-                has_phone=bool(main_phone),
-                has_email=bool(email),
-                has_name=bool(name),
-                has_title=bool(title),
-                has_location=False,  # Generic crawler doesn't extract location
-                phones_count=len(phones),
-                has_whatsapp=False,  # Will be checked separately
-                phone_source=phone_source,
-                portal=source_tag,
-            )
-        except ImportError:
-            # Fallback to default scores if module not available
-            dynamic_score = 85
-            data_quality_score = 0.80
-            confidence_score = 0.85
-        
-        # Build lead data with dynamic scores
-        lead = {
-            "name": name or "",
-            "rolle": "Vertrieb",
-            "email": email,
-            "telefon": main_phone,
-            "quelle": url,
-            "score": dynamic_score,
-            "tags": f"{source_tag},candidate,mobile,direct_crawl",
-            "lead_type": "candidate",
-            "phone_type": "mobile",
-            "opening_line": title[:200] if title else "",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": "",
-            "frische": "neu",
-            "confidence": confidence_score,
-            "data_quality": data_quality_score,
-            "phone_source": phone_source,
-            "phones_found": len(phones),
-        }
-        
+
+        # Build lead data using centralized function
+        lead = build_lead_data(
+            name=name,
+            phones=phones,
+            email=email,
+            location="",  # Generic crawler doesn't extract location
+            title=title,
+            url=url,
+            phone_sources=phone_sources,
+            portal=source_tag,
+            has_whatsapp=False,  # Will be checked separately
+            tags=f"{source_tag},candidate,mobile,direct_crawl",
+        )
+
         return lead
-        
+
     except Exception as e:
         if log_func:
             log_func("error", f"{source_tag}: Error extracting detail", url=url, error=str(e))
@@ -226,7 +242,7 @@ async def extract_generic_detail_async(
 def _mark_url_seen(url: str, source: str = "", db_func=None, log_func=None, seen_cache=None, normalize_func=None):
     """
     Helper function to mark a URL as seen in the database.
-    
+
     Args:
         url: The URL to mark as seen
         source: Optional source name for logging (e.g., "Markt.de", "Quoka")
