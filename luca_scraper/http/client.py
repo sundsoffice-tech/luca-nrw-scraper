@@ -33,6 +33,13 @@ _CLIENT_SECURE: Optional[AsyncSession] = None
 _CLIENT_INSECURE: Optional[AsyncSession] = None
 _CLIENT_LOCK = asyncio.Lock()
 
+# Connection pool for better connection reuse
+# Maps (host, secure) -> AsyncSession
+_CONNECTION_POOL: Dict[Tuple[str, bool], AsyncSession] = {}
+_CONNECTION_POOL_LOCK = asyncio.Lock()
+_CONNECTION_POOL_SIZE = int(os.getenv("HTTP_POOL_SIZE", "10"))
+_CONNECTION_POOL_ENABLED = os.getenv("HTTP_POOL_ENABLED", "1") == "1"
+
 # Rotation pools
 _env_list = lambda val, sep: [x.strip() for x in (val or "").split(sep) if x.strip()]
 PROXY_POOL = _env_list(os.getenv("PROXY_POOL", ""), ",")
@@ -134,6 +141,70 @@ def _make_client(secure: bool, ua: str, proxy_url: Optional[str], force_http1: b
         timeout=timeout_s,
         proxies=proxies,
     )
+
+
+async def get_pooled_client(host: str, secure: bool = True, ua: Optional[str] = None, 
+                           proxy_url: Optional[str] = None, timeout_s: int = HTTP_TIMEOUT) -> AsyncSession:
+    """
+    Get or create a pooled HTTP client for the given host.
+    Reuses connections to reduce overhead and improve performance.
+    
+    Args:
+        host: Host name (for connection pooling)
+        secure: Enable SSL verification
+        ua: User-Agent string
+        proxy_url: Proxy URL (optional)
+        timeout_s: Request timeout in seconds
+        
+    Returns:
+        AsyncSession instance from pool or newly created
+    """
+    if not _CONNECTION_POOL_ENABLED:
+        return _make_client(secure, ua or USER_AGENT, proxy_url, False, timeout_s)
+    
+    pool_key = (host, secure)
+    
+    async with _CONNECTION_POOL_LOCK:
+        # Return existing connection if available
+        if pool_key in _CONNECTION_POOL:
+            return _CONNECTION_POOL[pool_key]
+        
+        # Create new connection if pool not full
+        if len(_CONNECTION_POOL) < _CONNECTION_POOL_SIZE:
+            client = _make_client(secure, ua or USER_AGENT, proxy_url, False, timeout_s)
+            _CONNECTION_POOL[pool_key] = client
+            log("debug", f"Created pooled connection for {host} (pool size: {len(_CONNECTION_POOL)})")
+            return client
+        
+        # Pool is full, evict least recently used and create new
+        if _CONNECTION_POOL:
+            evict_key = next(iter(_CONNECTION_POOL))
+            old_client = _CONNECTION_POOL.pop(evict_key)
+            try:
+                await old_client.close()
+            except Exception:
+                pass
+            log("debug", f"Evicted connection for {evict_key[0]} from pool")
+        
+        # Create and add new connection
+        client = _make_client(secure, ua or USER_AGENT, proxy_url, False, timeout_s)
+        _CONNECTION_POOL[pool_key] = client
+        return client
+
+
+async def cleanup_connection_pool():
+    """
+    Clean up and close all connections in the pool.
+    Should be called on application shutdown.
+    """
+    async with _CONNECTION_POOL_LOCK:
+        for client in _CONNECTION_POOL.values():
+            try:
+                await client.close()
+            except Exception:
+                pass
+        _CONNECTION_POOL.clear()
+        log("info", "Connection pool cleaned up")
 
 
 def _acceptable_by_headers(hdrs: Dict[str, str]) -> Tuple[bool, str]:

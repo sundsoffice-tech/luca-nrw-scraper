@@ -257,9 +257,139 @@ class QueryCache:
         return self._cache.stats()
 
 
+class AIResultCache:
+    """
+    Cache for AI query results (e.g., content analysis, contact extraction).
+    Caches expensive AI API calls to reduce costs and latency.
+    """
+    
+    def __init__(self, ttl_seconds: int = 604800):  # 7 days default
+        """
+        Initialize AI result cache.
+        
+        Args:
+            ttl_seconds: Time to live for cache entries (default 7 days)
+        """
+        self._cache = TTLCache(ttl_seconds=ttl_seconds, max_size=5000)
+    
+    def get_result(self, query_type: str, content_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Get cached AI result.
+        
+        Args:
+            query_type: Type of query (e.g., "analyze_content", "extract_contacts")
+            content_hash: Hash of the input content
+        
+        Returns:
+            Cached result or None if not found/expired
+        """
+        cache_key = f"{query_type}:{content_hash}"
+        return self._cache.get(cache_key)
+    
+    def set_result(self, query_type: str, content_hash: str, result: Dict[str, Any]):
+        """
+        Cache AI result.
+        
+        Args:
+            query_type: Type of query
+            content_hash: Hash of the input content
+            result: AI query result to cache
+        """
+        cache_key = f"{query_type}:{content_hash}"
+        self._cache.set(cache_key, result)
+    
+    def has_cached(self, query_type: str, content_hash: str) -> bool:
+        """
+        Check if result is cached.
+        
+        Args:
+            query_type: Type of query
+            content_hash: Hash of the input content
+        
+        Returns:
+            True if cached result exists and is not expired
+        """
+        cache_key = f"{query_type}:{content_hash}"
+        return self._cache.has(cache_key)
+    
+    def clear(self):
+        """Clear all cached AI results."""
+        self._cache.clear()
+    
+    def stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        return self._cache.stats()
+
+
+class DomainRatingCache:
+    """
+    Cache for domain/host ratings and scores.
+    Reduces redundant scoring calculations for frequently accessed domains.
+    """
+    
+    def __init__(self, ttl_seconds: int = 86400):  # 24 hours default
+        """
+        Initialize domain rating cache.
+        
+        Args:
+            ttl_seconds: Time to live for cache entries (default 24 hours)
+        """
+        self._cache = TTLCache(ttl_seconds=ttl_seconds, max_size=10000)
+    
+    def get_score(self, domain: str, score_type: str = "default") -> Optional[float]:
+        """
+        Get cached domain score.
+        
+        Args:
+            domain: Domain name
+            score_type: Type of score (e.g., "portal_reputation", "quality")
+        
+        Returns:
+            Cached score or None if not found/expired
+        """
+        cache_key = f"{domain}:{score_type}"
+        return self._cache.get(cache_key)
+    
+    def set_score(self, domain: str, score: float, score_type: str = "default"):
+        """
+        Cache domain score.
+        
+        Args:
+            domain: Domain name
+            score: Score value
+            score_type: Type of score
+        """
+        cache_key = f"{domain}:{score_type}"
+        self._cache.set(cache_key, score)
+    
+    def has_cached(self, domain: str, score_type: str = "default") -> bool:
+        """
+        Check if domain score is cached.
+        
+        Args:
+            domain: Domain name
+            score_type: Type of score
+        
+        Returns:
+            True if cached score exists and is not expired
+        """
+        cache_key = f"{domain}:{score_type}"
+        return self._cache.has(cache_key)
+    
+    def clear(self):
+        """Clear all cached domain scores."""
+        self._cache.clear()
+    
+    def stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        return self._cache.stats()
+
+
 # Global cache instances
 _QUERY_CACHE: Optional[QueryCache] = None
 _URL_SEEN_SET: Optional[URLSeenSet] = None
+_AI_RESULT_CACHE: Optional[AIResultCache] = None
+_DOMAIN_RATING_CACHE: Optional[DomainRatingCache] = None
 
 
 def get_query_cache(ttl_seconds: int = 86400) -> QueryCache:
@@ -276,3 +406,19 @@ def get_url_seen_set(ttl_seconds: int = 604800) -> URLSeenSet:
     if _URL_SEEN_SET is None:
         _URL_SEEN_SET = URLSeenSet(ttl_seconds=ttl_seconds)
     return _URL_SEEN_SET
+
+
+def get_ai_result_cache(ttl_seconds: int = 604800) -> AIResultCache:
+    """Get or create global AI result cache."""
+    global _AI_RESULT_CACHE
+    if _AI_RESULT_CACHE is None:
+        _AI_RESULT_CACHE = AIResultCache(ttl_seconds=ttl_seconds)
+    return _AI_RESULT_CACHE
+
+
+def get_domain_rating_cache(ttl_seconds: int = 86400) -> DomainRatingCache:
+    """Get or create global domain rating cache."""
+    global _DOMAIN_RATING_CACHE
+    if _DOMAIN_RATING_CACHE is None:
+        _DOMAIN_RATING_CACHE = DomainRatingCache(ttl_seconds=ttl_seconds)
+    return _DOMAIN_RATING_CACHE

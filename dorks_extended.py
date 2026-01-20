@@ -9,9 +9,13 @@ Diese Datei enthält spezialisierte Google Dorks für:
 - URL-Pattern Suchen
 - Kontakt-Pattern Suchen
 - Power-Dorks (kombinierte Suchen)
+
+Lazy Loading: Dork-Listen werden beim ersten Zugriff gecacht,
+um Speicher und Startup-Zeit zu optimieren.
 """
 
 import random
+from functools import lru_cache
 from typing import List, Dict
 
 
@@ -182,9 +186,10 @@ FREELANCER_DORKS = [
 ]
 
 
+@lru_cache(maxsize=1)
 def get_all_dorks() -> List[str]:
     """
-    Gibt alle Dorks zurück
+    Gibt alle Dorks zurück (lazy loaded und gecacht)
     
     Returns:
         Liste aller verfügbaren Dorks

@@ -21,7 +21,7 @@ from reporting import ReportGenerator
 # Falls back gracefully when Django is not available or configured
 try:
     from telis_recruitment.ai_config.loader import (
-        get_ai_config,
+        get_ai_config as _get_ai_config_django,
         get_prompt,
         log_usage,
         check_budget
@@ -30,7 +30,7 @@ try:
 except (ImportError, Exception):
     AI_CONFIG_AVAILABLE = False
     # Fallback defaults when ai_config is not available
-    def get_ai_config():
+    def _get_ai_config_django():
         return {
             'temperature': 0.3,
             'top_p': 1.0,
@@ -62,6 +62,28 @@ except (ImportError, Exception):
         }
 
 logger = logging.getLogger(__name__)
+
+
+# Cached AI config loader (lazy loading)
+_AI_CONFIG_CACHE: Optional[Dict] = None
+
+
+def get_ai_config() -> Dict:
+    """
+    Get AI configuration with lazy loading and caching.
+    Only loads the config once on first access.
+    
+    Returns:
+        AI configuration dictionary
+    """
+    global _AI_CONFIG_CACHE
+    if _AI_CONFIG_CACHE is None:
+        _AI_CONFIG_CACHE = _get_ai_config_django()
+        if AI_CONFIG_AVAILABLE:
+            logger.info(f"AI config loaded and cached: "
+                       f"provider={_AI_CONFIG_CACHE.get('default_provider')}, "
+                       f"model={_AI_CONFIG_CACHE.get('default_model')}")
+    return _AI_CONFIG_CACHE
 
 
 class AdaptiveSearchSystem:
