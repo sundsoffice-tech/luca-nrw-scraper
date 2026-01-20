@@ -17,6 +17,7 @@ urlpatterns = [
     # Support tools
     path('support/bundle/', views_support.support_bundle_view, name='support-bundle'),
     path('support/health/', views_support.system_health_view, name='system-health'),
+    path('support/design-system/', views_support.design_system_demo_view, name='design-system-demo'),
     
     # Scraper control (Admin only) - DISABLED - now handled by scraper_control app
     # path('scraper/', views_scraper.scraper_page, name='crm-scraper'),

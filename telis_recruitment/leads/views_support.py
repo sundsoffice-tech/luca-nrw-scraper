@@ -107,3 +107,24 @@ def system_health_view(request):
     }
     
     return render(request, 'support/health.html', context)
+
+
+@login_required
+def design_system_demo_view(request):
+    """
+    View to showcase the design system components.
+    
+    Displays all design system components including:
+    - Colors
+    - Typography
+    - Buttons
+    - Cards
+    - Forms
+    - Badges
+    """
+    context = {
+        'page_title': 'Design System Demo',
+    }
+    
+    return render(request, 'support/design_system.html', context)
+
