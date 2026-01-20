@@ -68,7 +68,7 @@ This directory contains pre-configured environment profiles for different deploy
    - `SECRET_KEY` - Generate a unique key
    - `ALLOWED_HOSTS` - Set your domain
    - `CSRF_TRUSTED_ORIGINS` - Set your URLs
-   - API keys if needed
+   - API keys if needed (OpenAI, Perplexity, Brevo, TinyMCE, etc.)
 
 4. **Start your application**:
    ```bash
