@@ -1689,44 +1689,18 @@ def migrate_db_unique_indexes():
 
 def is_query_done(q: str) -> bool:
     """Check if query has been done. Uses db_router for backend abstraction."""
-    if _LUCA_SCRAPER_AVAILABLE:
-        return _is_query_done_router(q)
-    # Fallback: Direct SQLite implementation
-    con = db(); cur = con.cursor()
-    cur.execute("SELECT 1 FROM queries_done WHERE q=?", (q,))
-    hit = cur.fetchone()
-    con.close()
-    return bool(hit)
+    return _is_query_done_router(q)
 
 def mark_query_done(q: str, run_id: int):
     """Mark query as done. Uses db_router for backend abstraction."""
-    if _LUCA_SCRAPER_AVAILABLE:
-        _mark_query_done_router(q, run_id)
-        return
-    # Fallback: Direct SQLite implementation
-    con = db(); cur = con.cursor()
-    cur.execute(
-        "INSERT OR REPLACE INTO queries_done(q,last_run_id,ts) VALUES(?,?,datetime('now'))",
-        (q, run_id)
-    )
-    con.commit(); con.close()
+    _mark_query_done_router(q, run_id)
 
 _seen_urls_cache: set[str] = set()
 
 def mark_url_seen(url: str, run_id: int):
     """Mark URL as seen. Uses db_router for backend abstraction."""
     global _seen_urls_cache
-    if _LUCA_SCRAPER_AVAILABLE:
-        _mark_url_seen_router(url, run_id)
-        _seen_urls_cache.add(_normalize_for_dedupe(url))
-        return
-    # Fallback: Direct SQLite implementation
-    con = db(); cur = con.cursor()
-    cur.execute(
-        "INSERT OR IGNORE INTO urls_seen(url,first_run_id,ts) VALUES(?,?,datetime('now'))",
-        (url, run_id)
-    )
-    con.commit(); con.close()
+    _mark_url_seen_router(url, run_id)
     _seen_urls_cache.add(_normalize_for_dedupe(url))
 
 def url_seen(url: str) -> bool:
@@ -1734,19 +1708,10 @@ def url_seen(url: str) -> bool:
     norm = _normalize_for_dedupe(url)
     if norm in _seen_urls_cache:
         return True
-    if _LUCA_SCRAPER_AVAILABLE:
-        seen = _is_url_seen_router(url)
-        if seen:
-            _seen_urls_cache.add(norm)
-        return seen
-    # Fallback: Direct SQLite implementation
-    con = db(); cur = con.cursor()
-    cur.execute("SELECT 1 FROM urls_seen WHERE url=?", (url,))
-    hit = cur.fetchone()
-    con.close()
-    if hit:
+    seen = _is_url_seen_router(url)
+    if seen:
         _seen_urls_cache.add(norm)
-    return bool(hit)
+    return seen
 
 def _url_seen_fast(url: str) -> bool:
     return _normalize_for_dedupe(url) in _seen_urls_cache
@@ -2169,7 +2134,7 @@ async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dic
 
 def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Führt INSERT OR IGNORE aus. Zieht Schema automatisch nach (fehlende Spalten).
+    Insert or update leads using db_router API.
     Phone hardfilter: Re-validates phone before insert to ensure no invalid phones slip through.
     STRICT RULE: Only mobile numbers allowed - landline numbers are rejected.
     NEW: Uses lead_validation module for comprehensive quality filtering.
@@ -2177,157 +2142,108 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not leads:
         return []
 
-    con = db(); cur = con.cursor()
-
-    cols = ",".join(LEAD_FIELDS)
-    placeholders = ",".join(["?"] * len(LEAD_FIELDS))
-    sql = f"INSERT OR IGNORE INTO leads ({cols}) VALUES ({placeholders})"
-
     new_rows = []
     learning_engine = get_learning_engine()
     
-    try:
-        for r in leads:
-            # STEP 1: Apply comprehensive validation from lead_validation module
-            is_valid, reason = validate_lead_before_insert(r)
-            if not is_valid:
-                log("debug", "Lead abgelehnt", reason=reason, url=r.get('quelle'))
-                increment_rejection_stat(reason)
-                continue
+    for r in leads:
+        # STEP 1: Apply comprehensive validation from lead_validation module
+        is_valid, reason = validate_lead_before_insert(r)
+        if not is_valid:
+            log("debug", "Lead abgelehnt", reason=reason, url=r.get('quelle'))
+            increment_rejection_stat(reason)
+            continue
+        
+        # STEP 2: Normalize phone number to international format
+        phone = r.get('telefon')
+        if phone:
+            normalized = normalize_phone_number(phone)
+            if normalized:
+                r['telefon'] = normalized
+        
+        # STEP 2.5: Reverse phonebook lookup for leads with phone but no/invalid name
+        # This enriches leads where we have a phone number but the name is missing or invalid
+        if enrich_lead_with_phonebook is not None:
+            current_name = r.get('name', '')
+            # Use shared bad names list from phonebook_lookup module
+            needs_enrichment = (
+                not current_name or 
+                current_name in BAD_NAMES or 
+                len(current_name) < 3 or
+                not any(c.isalpha() for c in current_name)
+            )
             
-            # STEP 2: Normalize phone number to international format
-            phone = r.get('telefon')
-            if phone:
-                normalized = normalize_phone_number(phone)
-                if normalized:
-                    r['telefon'] = normalized
-            
-            # STEP 2.5: Reverse phonebook lookup for leads with phone but no/invalid name
-            # This enriches leads where we have a phone number but the name is missing or invalid
-            if enrich_lead_with_phonebook is not None:
-                current_name = r.get('name', '')
-                # Use shared bad names list from phonebook_lookup module
-                needs_enrichment = (
-                    not current_name or 
-                    current_name in BAD_NAMES or 
-                    len(current_name) < 3 or
-                    not any(c.isalpha() for c in current_name)
-                )
+            if needs_enrichment and r.get('telefon'):
+                try:
+                    r = enrich_lead_with_phonebook(r)
+                    if r.get('name'):
+                        log("info", "Lead enriched via reverse phonebook", 
+                            phone=r.get('telefon', '')[:8]+"...", name=r['name'])
+                except Exception as e:
+                    log("warn", "Phonebook reverse lookup failed", error=str(e))
+        
+        # STEP 3: Extract real person name from raw text
+        name = r.get('name')
+        if name:
+            extracted_name = extract_person_name(name)
+            if extracted_name:
+                r['name'] = extracted_name
                 
-                if needs_enrichment and r.get('telefon'):
-                    try:
-                        r = enrich_lead_with_phonebook(r)
-                        if r.get('name'):
-                            log("info", "Lead enriched via reverse phonebook", 
-                                phone=r.get('telefon', '')[:8]+"...", name=r['name'])
-                    except Exception as e:
-                        log("warn", "Phonebook reverse lookup failed", error=str(e))
-            
-            # STEP 3: Extract real person name from raw text
-            name = r.get('name')
-            if name:
-                extracted_name = extract_person_name(name)
-                if extracted_name:
-                    r['name'] = extracted_name
-                    
-                    # Validate extracted name again
-                    if not validate_lead_name(extracted_name):
-                        log("debug", "Lead abgelehnt nach Name-Extraktion", name=extracted_name)
-                        increment_rejection_stat("Ungültiger Name nach Extraktion")
-                        continue
-            
-            # STEP 4: Additional validation using existing logic for backwards compatibility
-            source_url = r.get("quelle", "")
-            
-            # Check for job postings
-            if is_job_posting(url=source_url, title=r.get("name", ""), 
-                             snippet=r.get("opening_line", ""), content=r.get("tags", "")):
-                log("debug", "Lead dropped at insert (job posting)", url=source_url)
-                increment_rejection_stat("Job posting detected")
+                # Validate extracted name again
+                if not validate_lead_name(extracted_name):
+                    log("debug", "Lead abgelehnt nach Name-Extraktion", name=extracted_name)
+                    increment_rejection_stat("Ungültiger Name nach Extraktion")
+                    continue
+        
+        # STEP 4: Additional validation using existing logic for backwards compatibility
+        source_url = r.get("quelle", "")
+        
+        # Check for job postings
+        if is_job_posting(url=source_url, title=r.get("name", ""), 
+                         snippet=r.get("opening_line", ""), content=r.get("tags", "")):
+            log("debug", "Lead dropped at insert (job posting)", url=source_url)
+            increment_rejection_stat("Job posting detected")
+            continue
+        
+        # Validate name with heuristics
+        name = (r.get("name") or "").strip()
+        if name:
+            is_real, confidence, reason_heuristic = _validate_name_heuristic(name)
+            if not is_real:
+                log("debug", "Lead dropped at insert (invalid name heuristic)", name=name, reason=reason_heuristic, url=source_url)
+                increment_rejection_stat(f"Invalid name: {reason_heuristic}")
+                continue
+            r["name_validated"] = 1  # Mark as validated
+        else:
+            log("debug", "Lead dropped at insert (no name)", url=source_url)
+            increment_rejection_stat("No name")
+            continue
+        
+        # Phone validation - already done by validate_lead_before_insert, but double-check
+        phone = (r.get("telefon") or "").strip()
+        if phone:
+            is_valid_phone, phone_type = validate_phone(phone)
+            if not is_valid_phone:
+                log("debug", "Lead dropped at insert (invalid phone secondary check)", phone=phone, url=source_url)
+                increment_rejection_stat("Invalid phone (secondary)")
                 continue
             
-            # Validate name with heuristics
-            name = (r.get("name") or "").strip()
-            if name:
-                is_real, confidence, reason_heuristic = _validate_name_heuristic(name)
-                if not is_real:
-                    log("debug", "Lead dropped at insert (invalid name heuristic)", name=name, reason=reason_heuristic, url=source_url)
-                    increment_rejection_stat(f"Invalid name: {reason_heuristic}")
-                    continue
-                r["name_validated"] = 1  # Mark as validated
-            else:
-                log("debug", "Lead dropped at insert (no name)", url=source_url)
-                increment_rejection_stat("No name")
+            # Ensure it's a mobile number
+            normalized_phone = normalize_phone(phone)
+            if not is_mobile_number(normalized_phone):
+                log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
+                increment_rejection_stat("Not mobile number")
                 continue
             
-            # Phone validation - already done by validate_lead_before_insert, but double-check
-            phone = (r.get("telefon") or "").strip()
-            if phone:
-                is_valid_phone, phone_type = validate_phone(phone)
-                if not is_valid_phone:
-                    log("debug", "Lead dropped at insert (invalid phone secondary check)", phone=phone, url=source_url)
-                    increment_rejection_stat("Invalid phone (secondary)")
-                    continue
-                
-                # Ensure it's a mobile number
-                normalized_phone = normalize_phone(phone)
-                if not is_mobile_number(normalized_phone):
-                    log("debug", "Lead dropped at insert (not mobile number)", phone=phone, url=source_url)
-                    increment_rejection_stat("Not mobile number")
-                    continue
-                
-                r["phone_type"] = "mobile"
-            else:
-                log("debug", "Lead dropped at insert (no phone)", url=source_url)
-                increment_rejection_stat("No phone")
-                continue
-            vals = [
-                r.get("name",""),
-                r.get("rolle",""),
-                r.get("email",""),
-                r.get("telefon",""),
-                r.get("quelle",""),
-                r.get("score",0),
-                r.get("tags",""),
-                r.get("region",""),
-                r.get("role_guess",""),
-                r.get("lead_type",""),
-                r.get("salary_hint",""),
-                r.get("commission_hint",""),
-                r.get("opening_line",""),
-                r.get("ssl_insecure","no"),
-                r.get("company_name",""),
-                r.get("company_size","unbekannt"),
-                r.get("hiring_volume","niedrig"),
-                r.get("industry","unbekannt"),
-                r.get("recency_indicator","unbekannt"),
-                r.get("location_specific",""),
-                r.get("confidence_score",0),
-                r.get("last_updated",""),
-                r.get("data_quality",0),
-                r.get("phone_type",""),
-                r.get("whatsapp_link",""),
-                r.get("private_address",""),
-                r.get("social_profile_url",""),
-                r.get("ai_category",""),
-                r.get("ai_summary",""),
-                r.get("crm_status",""),
-                # New candidate fields
-                r.get("candidate_status",""),
-                r.get("experience_years",0),
-                r.get("availability",""),
-                r.get("mobility",""),
-                r.get("skills",""),
-                r.get("industries_experience",""),
-                r.get("source_type",""),
-                r.get("profile_url",""),
-                r.get("cv_url",""),
-                r.get("contact_preference",""),
-                r.get("last_activity",""),
-                r.get("name_validated",0)
-            ]
-            cur.execute(sql, vals)
-            if cur.rowcount > 0:
+            r["phone_type"] = "mobile"
+        else:
+            log("debug", "Lead dropped at insert (no phone)", url=source_url)
+            increment_rejection_stat("No phone")
+            continue
+        
+        # Use upsert_lead from db_router
+        try:
+            lead_id, created = _upsert_lead_router(r)
+            if created:
                 new_rows.append(r)
                 # Learn from successful lead (with mobile number)
                 if learning_engine:
@@ -2338,94 +2254,19 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     except Exception as e:
                         # Don't fail lead insertion if learning fails
                         log("debug", "Learning failed", error=str(e))
-        con.commit()
-    except sqlite3.OperationalError as e:
-        # Fallback: sehr alte DB migrieren (harte UNIQUE/fehlende Spalten)
-        con.rollback(); con.close()
-        migrate_db_unique_indexes()
-        con = db(); cur = con.cursor()
-        for r in leads:
-            vals = [
-                r.get("name",""),
-                r.get("rolle",""),
-                r.get("email",""),
-                r.get("telefon",""),
-                r.get("quelle",""),
-                r.get("score",0),
-                r.get("tags",""),
-                r.get("region",""),
-                r.get("role_guess",""),
-                r.get("lead_type",""),
-                r.get("salary_hint",""),
-                r.get("commission_hint",""),
-                r.get("opening_line",""),
-                r.get("ssl_insecure","no"),
-                r.get("company_name",""),
-                r.get("company_size","unbekannt"),
-                r.get("hiring_volume","niedrig"),
-                r.get("industry","unbekannt"),
-                r.get("recency_indicator","unbekannt"),
-                r.get("location_specific",""),
-                r.get("confidence_score",0),
-                r.get("last_updated",""),
-                r.get("data_quality",0),
-                r.get("phone_type",""),
-                r.get("whatsapp_link",""),
-                r.get("private_address",""),
-                r.get("social_profile_url",""),
-                r.get("ai_category",""),
-                r.get("ai_summary",""),
-                r.get("crm_status",""),
-                # New candidate fields
-                r.get("candidate_status",""),
-                r.get("experience_years",0),
-                r.get("availability",""),
-                r.get("mobility",""),
-                r.get("skills",""),
-                r.get("industries_experience",""),
-                r.get("source_type",""),
-                r.get("profile_url",""),
-                r.get("cv_url",""),
-                r.get("contact_preference",""),
-                r.get("last_activity",""),
-                r.get("name_validated",0)
-            ]
-            cur.execute(sql, vals)
-            if cur.rowcount > 0:
-                new_rows.append(r)
-        con.commit()
-    finally:
-        con.close()
+        except Exception as e:
+            log("error", "Failed to upsert lead", error=str(e), lead=r.get("name", ""))
+            continue
 
     return new_rows
 
 def start_run() -> int:
     """Start a scraper run. Uses db_router for backend abstraction."""
-    if _LUCA_SCRAPER_AVAILABLE:
-        return _start_scraper_run_router()
-    # Fallback: Direct SQLite implementation
-    con = db(); cur = con.cursor()
-    cur.execute(
-        "INSERT INTO runs(started_at,status,links_checked,leads_new) VALUES(datetime('now'),'running',0,0)"
-    )
-    run_id = cur.lastrowid
-    con.commit(); con.close()
-    return run_id
+    return _start_scraper_run_router()
 
 def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Optional[int] = None, status: str = "ok", metrics: Optional[Dict[str, int]] = None):
     """Finish a scraper run. Uses db_router for backend abstraction."""
-    if _LUCA_SCRAPER_AVAILABLE:
-        _finish_scraper_run_router(run_id, links_checked, leads_new, status, metrics)
-    else:
-        # Fallback: Direct SQLite implementation
-        con = db(); cur = con.cursor()
-        cur.execute(
-            "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
-            (status, links_checked or 0, leads_new or 0, run_id)
-        )
-        con.commit(); con.close()
-        if metrics:
-            log("info", "Run metrics", **metrics)
+    _finish_scraper_run_router(run_id, links_checked, leads_new, status, metrics)
     
     # Log lead rejection statistics
     log_rejection_stats()
