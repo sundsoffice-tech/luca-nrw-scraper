@@ -103,7 +103,9 @@ class ProcessLauncher:
         if params.get('force', False):
             cmd.append('--force')
 
-        if params.get('once', True):  # Default True for single-run execution
+        # Once flag - default False for continuous mode, True for single-run
+        # Only add if explicitly True (UI controls this)
+        if params.get('once', False):
             cmd.append('--once')
 
         if params.get('dry_run', False):
