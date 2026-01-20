@@ -425,6 +425,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
     This keeps the local SQLite DB aware of which leads were already acted upon
     so the scraper can avoid reprocessing them.
+    
+    Optimized to use bulk UPDATE with CASE expression instead of individual updates.
     """
     index = _build_crm_status_index()
     if not index:
@@ -439,6 +441,8 @@ def sync_status_to_scraper() -> Dict[str, int]:
         rows = cur.fetchall()
         stats["checked"] = len(rows)
 
+        # Build a mapping of lead_id -> new_status for all leads that need updating
+        updates = {}
         for row in rows:
             new_status = None
             if row["email"]:
@@ -446,8 +450,39 @@ def sync_status_to_scraper() -> Dict[str, int]:
             if not new_status and row["telefon"]:
                 new_status = phone_index.get(_normalize_phone(row["telefon"]))
             if new_status and new_status != row["crm_status"]:
-                cur.execute("UPDATE leads SET crm_status = ? WHERE id = ?", (new_status, row["id"]))
-                stats["updated"] += 1
+                updates[row["id"]] = new_status
+
+        # Perform bulk update using CASE expression if there are updates
+        if updates:
+            # Build CASE expression for bulk update
+            # UPDATE leads SET crm_status = CASE 
+            #   WHEN id = ? THEN ?
+            #   WHEN id = ? THEN ?
+            #   ...
+            # END
+            # WHERE id IN (?, ?, ...)
+            
+            case_clauses = []
+            params = []
+            ids = []
+            
+            for lead_id, status in updates.items():
+                case_clauses.append("WHEN id = ? THEN ?")
+                params.extend([lead_id, status])
+                ids.append(lead_id)
+            
+            # Build and execute the bulk update query
+            sql = f"""
+                UPDATE leads 
+                SET crm_status = CASE 
+                    {' '.join(case_clauses)}
+                END
+                WHERE id IN ({','.join('?' * len(ids))})
+            """
+            
+            # Execute bulk update with all parameters
+            cur.execute(sql, params + ids)
+            stats["updated"] = len(updates)
 
     logger.debug("sync_status_to_scraper updated %d rows (checked %d)", stats["updated"], stats["checked"])
     return stats
