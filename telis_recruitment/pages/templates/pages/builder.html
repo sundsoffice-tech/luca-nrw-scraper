@@ -266,6 +266,69 @@
     .notification.error { background: #dc3545; }
     .notification.info { background: #17a2b8; }
     .notification.warning { background: #ffc107; color: #212529; }
+    
+    /* Code Editor Styles */
+    #code-editor-container {
+        display: none;
+        flex-direction: column;
+        height: 100%;
+        background: #1e1e1e;
+    }
+    #code-editor-container.active {
+        display: flex;
+    }
+    .code-editor-tabs {
+        display: flex;
+        background: #252526;
+        border-bottom: 1px solid #3e3e42;
+        padding: 0 10px;
+    }
+    .code-tab {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        color: #969696;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+    }
+    .code-tab:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .code-tab.active {
+        color: #ffffff;
+        border-bottom-color: #007bff;
+    }
+    .code-editor-pane {
+        flex: 1;
+        display: none;
+        overflow: auto;
+    }
+    .code-editor-pane.active {
+        display: block;
+    }
+    .code-textarea {
+        width: 100%;
+        height: 100%;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border: none;
+        padding: 15px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        resize: none;
+        outline: none;
+    }
+    .code-textarea:focus {
+        outline: none;
+    }
+    .toolbar-btn.code-mode-active { 
+        background: #28a745;
+    }
 </style>
 {% endblock %}
 
@@ -309,8 +372,10 @@
         </div>
         
         <div class="toolbar-right">
-            <button class="toolbar-btn" onclick="openSocialMediaSettings()" title="Configure social media sharing">
-                🔗 <span>Social Media</span>
+            <button class="toolbar-btn" id="mode-toggle-btn" onclick="toggleEditorMode()" 
+                    aria-pressed="false"
+                    aria-label="Switch between visual and code editor modes">
+                📝 <span id="mode-toggle-text">Code Mode</span>
             </button>
             <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
                 👁️ <span>Preview</span>
@@ -369,6 +434,24 @@
         <!-- Center: Canvas -->
         <div class="center-canvas">
             <div id="gjs"></div>
+            
+            <!-- Code Editor Mode -->
+            <div id="code-editor-container">
+                <div class="code-editor-tabs" role="tablist" aria-label="Code editor tabs">
+                    <button id="html-tab" class="code-tab active" role="tab" aria-selected="true" aria-controls="html-editor" onclick="switchCodeTab('html', event)">HTML</button>
+                    <button id="css-tab" class="code-tab" role="tab" aria-selected="false" aria-controls="css-editor" onclick="switchCodeTab('css', event)">CSS</button>
+                    <button id="json-tab" class="code-tab" role="tab" aria-selected="false" aria-controls="json-editor" onclick="switchCodeTab('json', event)">Components (JSON)</button>
+                </div>
+                <div id="html-editor" class="code-editor-pane active" role="tabpanel" aria-labelledby="html-tab">
+                    <textarea id="html-code" class="code-textarea" placeholder="HTML code will appear here..." aria-label="HTML code editor"></textarea>
+                </div>
+                <div id="css-editor" class="code-editor-pane" role="tabpanel" aria-labelledby="css-tab">
+                    <textarea id="css-code" class="code-textarea" placeholder="CSS code will appear here..." aria-label="CSS code editor"></textarea>
+                </div>
+                <div id="json-editor" class="code-editor-pane" role="tabpanel" aria-labelledby="json-tab">
+                    <textarea id="json-code" class="code-textarea" placeholder="GrapesJS component JSON will appear here..." aria-label="Component JSON editor"></textarea>
+                </div>
+            </div>
         </div>
 
         <!-- Right Panel: Styles & Layers -->
@@ -1017,6 +1100,11 @@
     }
 
     function saveContent(showNotification = true) {
+        // If in code mode, sync to visual first
+        if (currentEditorMode === 'code') {
+            syncCodeToVisual();
+        }
+        
         const html = window.editor.getHtml();
         const css = window.editor.getCss();
         const components = window.editor.getComponents();
@@ -1249,356 +1337,163 @@
         }, 3000);
     }
     
-    // Social Media Settings Modal
-    function openSocialMediaSettings() {
-        // Create modal if it doesn't exist
-        let modal = document.getElementById('social-media-modal');
-        if (!modal) {
-            modal = createSocialMediaModal();
-        }
-        
-        // Load current page settings
-        loadSocialMediaSettings();
-        
-        // Show modal
-        modal.style.display = 'flex';
-    }
+    // Editor Mode Toggle Functions
+    let currentEditorMode = 'visual'; // 'visual' or 'code'
     
-    function createSocialMediaModal() {
-        const modalHTML = `
-            <div id="social-media-modal" class="social-modal" style="display: none;">
-                <div class="social-modal-content">
-                    <div class="social-modal-header">
-                        <h3>🔗 Social Media Settings</h3>
-                        <button class="close-modal" onclick="closeSocialMediaModal()">&times;</button>
-                    </div>
-                    <div class="social-modal-body">
-                        <div class="social-tabs">
-                            <button class="social-tab active" onclick="switchSocialTab('meta-tags')">Meta Tags</button>
-                            <button class="social-tab" onclick="switchSocialTab('share-buttons')">Share Buttons</button>
-                            <button class="social-tab" onclick="switchSocialTab('preview')">Preview</button>
-                        </div>
-                        
-                        <div id="meta-tags-tab" class="social-tab-content active">
-                            <h4>OpenGraph / Facebook / WhatsApp</h4>
-                            <div class="social-form-group">
-                                <label>OG Title</label>
-                                <input type="text" id="og_title" placeholder="Defaults to SEO title" />
-                            </div>
-                            <div class="social-form-group">
-                                <label>OG Description</label>
-                                <textarea id="og_description" rows="3" placeholder="Defaults to SEO description"></textarea>
-                            </div>
-                            <div class="social-form-group">
-                                <label>OG Image URL</label>
-                                <input type="text" id="og_image" placeholder="https://example.com/image.jpg" />
-                                <small>Recommended: 1200x630px</small>
-                            </div>
-                            
-                            <h4 style="margin-top: 20px;">Twitter / X</h4>
-                            <div class="social-form-group">
-                                <label>Twitter Card Type</label>
-                                <select id="twitter_card">
-                                    <option value="summary_large_image">Summary Large Image</option>
-                                    <option value="summary">Summary</option>
-                                </select>
-                            </div>
-                            <div class="social-form-group">
-                                <label>Twitter Title</label>
-                                <input type="text" id="twitter_title" placeholder="Defaults to OG title" />
-                            </div>
-                            <div class="social-form-group">
-                                <label>Twitter Description</label>
-                                <textarea id="twitter_description" rows="3" placeholder="Defaults to OG description"></textarea>
-                            </div>
-                            <div class="social-form-group">
-                                <label>Twitter Image URL</label>
-                                <input type="text" id="twitter_image" placeholder="Defaults to OG image" />
-                                <small>Recommended: 1200x628px</small>
-                            </div>
-                        </div>
-                        
-                        <div id="share-buttons-tab" class="social-tab-content">
-                            <div class="social-form-group">
-                                <label>
-                                    <input type="checkbox" id="enable_share_buttons" />
-                                    Enable Share Buttons
-                                </label>
-                            </div>
-                            <div class="social-form-group">
-                                <label>Button Position</label>
-                                <select id="share_button_position">
-                                    <option value="bottom-right">Bottom Right</option>
-                                    <option value="bottom-left">Bottom Left</option>
-                                    <option value="top-right">Top Right</option>
-                                    <option value="top-left">Top Left</option>
-                                    <option value="inline">Inline in content</option>
-                                </select>
-                            </div>
-                            <div class="social-form-group">
-                                <label>Enabled Platforms</label>
-                                <div>
-                                    <label><input type="checkbox" class="platform-checkbox" value="facebook" checked /> Facebook</label>
-                                    <label><input type="checkbox" class="platform-checkbox" value="twitter" checked /> X (Twitter)</label>
-                                    <label><input type="checkbox" class="platform-checkbox" value="whatsapp" checked /> WhatsApp</label>
-                                    <label><input type="checkbox" class="platform-checkbox" value="linkedin" checked /> LinkedIn</label>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="preview-tab" class="social-tab-content">
-                            <p>Preview how your page will appear when shared on social media.</p>
-                            <a href="{% url 'pages:social-preview' page.slug %}" target="_blank" rel="noopener noreferrer" class="btn-preview">
-                                Open Social Media Preview
-                            </a>
-                        </div>
-                    </div>
-                    <div class="social-modal-footer">
-                        <button class="toolbar-btn" onclick="closeSocialMediaModal()">Cancel</button>
-                        <button class="toolbar-btn success" onclick="saveSocialMediaSettings()">Save Settings</button>
-                    </div>
-                </div>
-            </div>
-        `;
+    function toggleEditorMode() {
+        const gjsContainer = document.getElementById('gjs');
+        const codeEditorContainer = document.getElementById('code-editor-container');
+        const modeToggleBtn = document.getElementById('mode-toggle-btn');
+        const modeToggleText = document.getElementById('mode-toggle-text');
+        const leftPanel = document.querySelector('.left-panel');
+        const rightPanel = document.querySelector('.right-panel');
         
-        const container = document.createElement('div');
-        container.innerHTML = modalHTML;
-        document.body.appendChild(container.firstElementChild);
-        
-        // Add modal styles
-        const style = document.createElement('style');
-        style.textContent = `
-            .social-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.7);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000;
+        if (currentEditorMode === 'visual') {
+            // Switch to code mode
+            currentEditorMode = 'code';
+            
+            // Sync content from GrapesJS to code editors
+            syncVisualToCode();
+            
+            // Hide visual editor, show code editor
+            if (gjsContainer) gjsContainer.style.display = 'none';
+            if (codeEditorContainer) codeEditorContainer.classList.add('active');
+            
+            // Hide side panels in code mode
+            if (leftPanel) leftPanel.style.display = 'none';
+            if (rightPanel) rightPanel.style.display = 'none';
+            
+            // Update button with CSS class instead of inline style
+            if (modeToggleText) modeToggleText.textContent = 'Visual Mode';
+            if (modeToggleBtn) {
+                modeToggleBtn.classList.add('code-mode-active');
+                modeToggleBtn.setAttribute('aria-pressed', 'true');
             }
-            .social-modal-content {
-                background: #1a1a2e;
-                border-radius: 12px;
-                width: 90%;
-                max-width: 700px;
-                max-height: 90vh;
-                display: flex;
-                flex-direction: column;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
+            showToast('Switched to Code Editor mode', 'info');
+        } else {
+            // Switch to visual mode
+            currentEditorMode = 'visual';
+            
+            // Sync content from code editors to GrapesJS
+            syncCodeToVisual();
+            
+            // Show visual editor, hide code editor
+            if (gjsContainer) gjsContainer.style.display = 'block';
+            if (codeEditorContainer) codeEditorContainer.classList.remove('active');
+            
+            // Show side panels in visual mode
+            if (leftPanel) leftPanel.style.display = 'block';
+            if (rightPanel) rightPanel.style.display = 'block';
+            
+            // Update button with CSS class instead of inline style
+            if (modeToggleText) modeToggleText.textContent = 'Code Mode';
+            if (modeToggleBtn) {
+                modeToggleBtn.classList.remove('code-mode-active');
+                modeToggleBtn.setAttribute('aria-pressed', 'false');
             }
-            .social-modal-header {
-                padding: 20px;
-                border-bottom: 1px solid #0f3460;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            .social-modal-header h3 {
-                margin: 0;
-                color: white;
-            }
-            .close-modal {
-                background: none;
-                border: none;
-                color: white;
-                font-size: 28px;
-                cursor: pointer;
-                padding: 0;
-                width: 32px;
-                height: 32px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .social-modal-body {
-                padding: 20px;
-                overflow-y: auto;
-                flex: 1;
-            }
-            .social-tabs {
-                display: flex;
-                gap: 10px;
-                margin-bottom: 20px;
-                border-bottom: 2px solid #0f3460;
-            }
-            .social-tab {
-                background: transparent;
-                border: none;
-                color: #adb5bd;
-                padding: 10px 20px;
-                cursor: pointer;
-                border-bottom: 3px solid transparent;
-                transition: all 0.2s;
-            }
-            .social-tab.active {
-                color: white;
-                border-bottom-color: #007bff;
-            }
-            .social-tab-content {
-                display: none;
-            }
-            .social-tab-content.active {
-                display: block;
-            }
-            .social-form-group {
-                margin-bottom: 15px;
-            }
-            .social-form-group label {
-                display: block;
-                color: #adb5bd;
-                margin-bottom: 5px;
-                font-size: 14px;
-            }
-            .social-form-group input[type="text"],
-            .social-form-group textarea,
-            .social-form-group select {
-                width: 100%;
-                padding: 10px;
-                background: #0f3460;
-                border: 1px solid #16213e;
-                border-radius: 6px;
-                color: white;
-                font-size: 14px;
-            }
-            .social-form-group small {
-                color: #6c757d;
-                font-size: 12px;
-            }
-            .social-form-group h4 {
-                color: white;
-                margin-bottom: 10px;
-            }
-            .platform-checkbox {
-                margin-right: 8px;
-            }
-            .social-form-group > div > label {
-                display: inline-block;
-                margin-right: 15px;
-                margin-bottom: 10px;
-            }
-            .social-modal-footer {
-                padding: 15px 20px;
-                border-top: 1px solid #0f3460;
-                display: flex;
-                justify-content: flex-end;
-                gap: 10px;
-            }
-            .btn-preview {
-                display: inline-block;
-                background: #007bff;
-                color: white;
-                padding: 12px 24px;
-                border-radius: 6px;
-                text-decoration: none;
-                margin-top: 10px;
-            }
-            .btn-preview:hover {
-                background: #0056b3;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        return document.getElementById('social-media-modal');
-    }
-    
-    function closeSocialMediaModal() {
-        const modal = document.getElementById('social-media-modal');
-        if (modal) {
-            modal.style.display = 'none';
+            
+            showToast('Switched to Visual Builder mode', 'info');
         }
     }
     
-    function switchSocialTab(tabName) {
-        // Update tab buttons
-        document.querySelectorAll('.social-tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        // Use event.currentTarget instead of event.target for better reliability
-        if (window.event && window.event.currentTarget) {
-            window.event.currentTarget.classList.add('active');
+    function syncVisualToCode() {
+        // Get content from GrapesJS
+        const html = window.editor.getHtml();
+        const css = window.editor.getCss();
+        const components = window.editor.getComponents();
+        
+        // Update code editors with null checks
+        const htmlCode = document.getElementById('html-code');
+        const cssCode = document.getElementById('css-code');
+        const jsonCode = document.getElementById('json-code');
+        
+        if (htmlCode) htmlCode.value = html;
+        if (cssCode) cssCode.value = css;
+        if (jsonCode) jsonCode.value = JSON.stringify(components, null, 2);
+    }
+    
+    function syncCodeToVisual() {
+        try {
+            // Get content from code editors with null checks
+            const htmlCodeEl = document.getElementById('html-code');
+            const cssCodeEl = document.getElementById('css-code');
+            const jsonCodeEl = document.getElementById('json-code');
+            
+            if (!htmlCodeEl || !cssCodeEl || !jsonCodeEl) {
+                console.error('Code editor elements not found');
+                return;
+            }
+            
+            const html = htmlCodeEl.value;
+            const css = cssCodeEl.value;
+            const jsonCode = jsonCodeEl.value;
+            
+            // Update CSS first
+            if (css) {
+                window.editor.setStyle(css);
+            }
+            
+            // Try to parse and set JSON components if valid, otherwise use HTML
+            if (jsonCode && jsonCode.trim()) {
+                try {
+                    const components = JSON.parse(jsonCode);
+                    window.editor.setComponents(components);
+                } catch (e) {
+                    console.warn('Could not parse JSON components, using HTML instead:', e);
+                    if (html) {
+                        window.editor.setComponents(html);
+                    }
+                }
+            } else if (html) {
+                // If no JSON, use HTML
+                window.editor.setComponents(html);
+            }
+            
+            showToast('Code synced to visual editor', 'success');
+        } catch (error) {
+            console.error('Error syncing code to visual:', error);
+            showToast('Error syncing code. Check console for details.', 'error');
+        }
+    }
+    
+    function switchCodeTab(tab, clickEvent) {
+        // Validate tab parameter to prevent DOM manipulation vulnerabilities
+        const allowedTabs = ['html', 'css', 'json'];
+        if (!allowedTabs.includes(tab)) {
+            console.error('Invalid tab name:', tab);
+            return;
         }
         
-        // Update tab content
-        document.querySelectorAll('.social-tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-        document.getElementById(tabName + '-tab').classList.add('active');
-    }
-    
-    function loadSocialMediaSettings() {
-        // Load settings from server
-        fetch('{% url "pages:builder-load" page.slug %}')
-            .then(response => response.json())
-            .then(data => {
-                const page = data.page;
-                document.getElementById('og_title').value = page.og_title || '';
-                document.getElementById('og_description').value = page.og_description || '';
-                document.getElementById('og_image').value = page.og_image || '';
-                document.getElementById('twitter_card').value = page.twitter_card || 'summary_large_image';
-                document.getElementById('twitter_title').value = page.twitter_title || '';
-                document.getElementById('twitter_description').value = page.twitter_description || '';
-                document.getElementById('twitter_image').value = page.twitter_image || '';
-                document.getElementById('enable_share_buttons').checked = page.enable_share_buttons || false;
-                document.getElementById('share_button_position').value = page.share_button_position || 'bottom-right';
-                
-                // Load enabled platforms
-                const platforms = page.share_platforms || ['facebook', 'twitter', 'whatsapp', 'linkedin'];
-                document.querySelectorAll('.platform-checkbox').forEach(checkbox => {
-                    checkbox.checked = platforms.includes(checkbox.value);
-                });
-            })
-            .catch(error => console.error('Error loading social media settings:', error));
-    }
-    
-    function saveSocialMediaSettings() {
-        // Collect selected platforms
-        const platforms = Array.from(document.querySelectorAll('.platform-checkbox:checked'))
-            .map(cb => cb.value);
-        
-        const settings = {
-            og_title: document.getElementById('og_title').value,
-            og_description: document.getElementById('og_description').value,
-            og_image: document.getElementById('og_image').value,
-            twitter_card: document.getElementById('twitter_card').value,
-            twitter_title: document.getElementById('twitter_title').value,
-            twitter_description: document.getElementById('twitter_description').value,
-            twitter_image: document.getElementById('twitter_image').value,
-            enable_share_buttons: document.getElementById('enable_share_buttons').checked,
-            share_button_position: document.getElementById('share_button_position').value,
-            share_platforms: platforms
+        // Map tab names to element IDs safely
+        const editorPaneIds = {
+            'html': 'html-editor',
+            'css': 'css-editor',
+            'json': 'json-editor'
         };
         
-        // Save to server
-        fetch('{% url "pages:builder-save" page.slug %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                social_media: settings,
-                html: editor.getHtml(),
-                css: editor.getCss(),
-                html_json: editor.getComponents()
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast('Social media settings saved!', 'success');
-                closeSocialMediaModal();
-            } else {
-                showToast('Error saving settings', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error saving settings', 'error');
+        // Update tab buttons with ARIA attributes
+        document.querySelectorAll('.code-tab').forEach(btn => {
+            btn.classList.remove('active');
+            btn.setAttribute('aria-selected', 'false');
         });
+        
+        // Get the actual button element (handle clicks on child elements)
+        if (clickEvent && clickEvent.target) {
+            const button = clickEvent.target.closest('.code-tab');
+            if (button) {
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+            }
+        }
+        
+        // Update editor panes
+        document.querySelectorAll('.code-editor-pane').forEach(pane => pane.classList.remove('active'));
+        const editorPane = document.getElementById(editorPaneIds[tab]);
+        if (editorPane) {
+            editorPane.classList.add('active');
+        }
     }
+
 </script>
 {% endblock %}
