@@ -178,6 +178,33 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
         ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> ''
     """)
+    
+    # Performance indexes for common queries
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_lead_type
+        ON leads(lead_type) WHERE lead_type IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_quality_score
+        ON leads(score) WHERE score IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_type_status
+        ON leads(lead_type, crm_status) WHERE lead_type IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_last_updated
+        ON leads(last_updated) WHERE last_updated IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_confidence
+        ON leads(confidence_score) WHERE confidence_score IS NOT NULL
+    """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_leads_data_quality
+        ON leads(data_quality) WHERE data_quality IS NOT NULL
+    """)
+    
     con.commit()
 
 
@@ -229,6 +256,25 @@ def migrate_db_unique_indexes():
         
         CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
         ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> '';
+        
+        -- Performance indexes for common queries
+        CREATE INDEX IF NOT EXISTS idx_leads_lead_type
+        ON leads(lead_type) WHERE lead_type IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_leads_quality_score
+        ON leads(score) WHERE score IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_leads_type_status
+        ON leads(lead_type, crm_status) WHERE lead_type IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_leads_last_updated
+        ON leads(last_updated) WHERE last_updated IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_leads_confidence
+        ON leads(confidence_score) WHERE confidence_score IS NOT NULL;
+        
+        CREATE INDEX IF NOT EXISTS idx_leads_data_quality
+        ON leads(data_quality) WHERE data_quality IS NOT NULL;
         
         COMMIT;
         """)

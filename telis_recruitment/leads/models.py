@@ -184,6 +184,7 @@ class Lead(models.Model):
         verbose_name = "Lead"
         verbose_name_plural = "Leads"
         indexes = [
+            # Single-column indexes for basic filtering
             models.Index(fields=['status']),
             models.Index(fields=['source']),
             models.Index(fields=['quality_score']),
@@ -191,6 +192,67 @@ class Lead(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['email_normalized']),
             models.Index(fields=['normalized_phone']),
+            
+            # Composite indexes for common query patterns
+            models.Index(fields=['lead_type', 'status'], name='idx_lead_type_status'),
+            models.Index(fields=['status', 'quality_score'], name='idx_status_quality'),
+            models.Index(fields=['source', 'created_at'], name='idx_source_created'),
+            models.Index(fields=['assigned_to', 'status'], name='idx_assigned_status'),
+            
+            # Indexes for sorting and filtering
+            models.Index(fields=['-quality_score', '-created_at'], name='idx_quality_created_desc'),
+            models.Index(fields=['updated_at'], name='idx_updated_at'),
+            models.Index(fields=['last_called_at'], name='idx_last_called'),
+            
+            # Indexes for data quality and scoring
+            models.Index(fields=['confidence_score'], name='idx_confidence'),
+            models.Index(fields=['data_quality'], name='idx_data_quality'),
+            models.Index(fields=['interest_level'], name='idx_interest_level'),
+        ]
+        constraints = [
+            # Data integrity constraints
+            models.CheckConstraint(
+                check=models.Q(quality_score__gte=0) & models.Q(quality_score__lte=100),
+                name='quality_score_range',
+            ),
+            models.CheckConstraint(
+                check=models.Q(confidence_score__isnull=True) | 
+                      (models.Q(confidence_score__gte=0) & models.Q(confidence_score__lte=100)),
+                name='confidence_score_range',
+            ),
+            models.CheckConstraint(
+                check=models.Q(data_quality__isnull=True) | 
+                      (models.Q(data_quality__gte=0) & models.Q(data_quality__lte=100)),
+                name='data_quality_range',
+            ),
+            models.CheckConstraint(
+                check=models.Q(interest_level__gte=0) & models.Q(interest_level__lte=5),
+                name='interest_level_range',
+            ),
+            models.CheckConstraint(
+                check=models.Q(experience_years__isnull=True) | models.Q(experience_years__gte=0),
+                name='experience_years_positive',
+            ),
+            models.CheckConstraint(
+                check=models.Q(hiring_volume__isnull=True) | models.Q(hiring_volume__gte=0),
+                name='hiring_volume_positive',
+            ),
+            models.CheckConstraint(
+                check=models.Q(call_count__gte=0),
+                name='call_count_positive',
+            ),
+            models.CheckConstraint(
+                check=models.Q(email_sent_count__gte=0),
+                name='email_sent_count_positive',
+            ),
+            models.CheckConstraint(
+                check=models.Q(email_opens__gte=0),
+                name='email_opens_positive',
+            ),
+            models.CheckConstraint(
+                check=models.Q(email_clicks__gte=0),
+                name='email_clicks_positive',
+            ),
         ]
     
     def __str__(self):
