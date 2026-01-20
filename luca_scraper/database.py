@@ -453,12 +453,251 @@ def sync_status_to_scraper() -> Dict[str, int]:
     return stats
 
 
+# =========================
+# SQLite-specific implementations for routing layer
+# =========================
+
+def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
+    """
+    Insert or update a lead in SQLite.
+    
+    Args:
+        data: Dictionary with lead data (scraper field names)
+        
+    Returns:
+        Tuple of (lead_id, created) where created is True if new lead was created
+    """
+    con = db()
+    cur = con.cursor()
+    
+    # Extract search fields
+    email = data.get('email')
+    telefon = data.get('telefon')
+    
+    normalized_email = _normalize_email(email)
+    normalized_phone = _normalize_phone(telefon)
+    
+    # Try to find existing lead
+    existing_id = None
+    
+    # Search by email first
+    if normalized_email:
+        cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
+        row = cur.fetchone()
+        if row:
+            existing_id = row[0]
+    
+    # Search by phone if not found by email
+    if not existing_id and telefon:
+        cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
+        row = cur.fetchone()
+        if row:
+            existing_id = row[0]
+    
+    if existing_id:
+        # Update existing lead
+        set_clauses = []
+        values = []
+        for key, value in data.items():
+            if key != 'id':
+                set_clauses.append(f"{key} = ?")
+                values.append(value)
+        
+        if set_clauses:
+            values.append(existing_id)
+            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+            cur.execute(sql, values)
+            con.commit()
+        
+        return (existing_id, False)
+    else:
+        # Insert new lead
+        columns = list(data.keys())
+        placeholders = ['?'] * len(columns)
+        values = [data[col] for col in columns]
+        
+        sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        cur.execute(sql, values)
+        new_id = cur.lastrowid
+        con.commit()
+        
+        return (new_id, True)
+
+
+def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:
+    """
+    Check if a lead exists in SQLite by email or phone.
+    
+    Args:
+        email: Email address to search for
+        telefon: Phone number to search for
+        
+    Returns:
+        True if lead exists, False otherwise
+    """
+    if not email and not telefon:
+        return False
+    
+    con = db()
+    cur = con.cursor()
+    
+    # Check by email first
+    if email:
+        cur.execute("SELECT 1 FROM leads WHERE email = ?", (email,))
+        if cur.fetchone():
+            return True
+    
+    # Check by phone
+    if telefon:
+        cur.execute("SELECT 1 FROM leads WHERE telefon = ?", (telefon,))
+        if cur.fetchone():
+            return True
+    
+    return False
+
+
+def is_url_seen_sqlite(url: str) -> bool:
+    """
+    Check if a URL has been seen in SQLite.
+    
+    Args:
+        url: URL to check
+        
+    Returns:
+        True if URL has been seen, False otherwise
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM urls_seen WHERE url = ?", (url,))
+    return bool(cur.fetchone())
+
+
+def mark_url_seen_sqlite(url: str, run_id: Optional[int] = None) -> None:
+    """
+    Mark a URL as seen in SQLite.
+    
+    Args:
+        url: URL to mark as seen
+        run_id: Optional scraper run ID
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute(
+        "INSERT OR IGNORE INTO urls_seen(url, first_run_id, ts) VALUES(?, ?, datetime('now'))",
+        (url, run_id)
+    )
+    con.commit()
+
+
+def is_query_done_sqlite(query: str) -> bool:
+    """
+    Check if a query has been done in SQLite.
+    
+    Args:
+        query: Search query to check
+        
+    Returns:
+        True if query has been done, False otherwise
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT 1 FROM queries_done WHERE q = ?", (query,))
+    return bool(cur.fetchone())
+
+
+def mark_query_done_sqlite(query: str, run_id: Optional[int] = None) -> None:
+    """
+    Mark a query as done in SQLite.
+    
+    Args:
+        query: Search query to mark as done
+        run_id: Optional scraper run ID
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute(
+        "INSERT OR REPLACE INTO queries_done(q, last_run_id, ts) VALUES(?, ?, datetime('now'))",
+        (query, run_id)
+    )
+    con.commit()
+
+
+def start_scraper_run_sqlite() -> int:
+    """
+    Start a new scraper run in SQLite.
+    
+    Returns:
+        ID of the created scraper run
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute(
+        "INSERT INTO runs(started_at, status, links_checked, leads_new) VALUES(datetime('now'), 'running', 0, 0)"
+    )
+    run_id = cur.lastrowid
+    con.commit()
+    return run_id
+
+
+def finish_scraper_run_sqlite(
+    run_id: int,
+    links_checked: Optional[int] = None,
+    leads_new: Optional[int] = None,
+    status: str = "ok",
+    metrics: Optional[Dict] = None
+) -> None:
+    """
+    Finish a scraper run in SQLite.
+    
+    Args:
+        run_id: ID of the scraper run to finish
+        links_checked: Number of links checked
+        leads_new: Number of new leads found
+        status: Status of the run
+        metrics: Optional dictionary of additional metrics (currently logged but not stored)
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute(
+        "UPDATE runs SET finished_at=datetime('now'), status=?, links_checked=?, leads_new=? WHERE id=?",
+        (status, links_checked or 0, leads_new or 0, run_id)
+    )
+    con.commit()
+    
+    if metrics:
+        logger.debug("Run metrics: %s", metrics)
+
+
+def get_lead_count_sqlite() -> int:
+    """
+    Get total count of leads from SQLite.
+    
+    Returns:
+        Total number of leads
+    """
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM leads")
+    count = cur.fetchone()[0]
+    return count
+
+
 # Export the global ready flag for external access
 # Base exports available for all backends
 _BASE_EXPORTS = [
     'db', 'init_db', 'transaction', 'DB_PATH', 
     'migrate_db_unique_indexes', 'sync_status_to_scraper',
-    'DATABASE_BACKEND'
+    'DATABASE_BACKEND',
+    # SQLite-specific functions
+    'upsert_lead_sqlite',
+    'lead_exists_sqlite',
+    'is_url_seen_sqlite',
+    'mark_url_seen_sqlite',
+    'is_query_done_sqlite',
+    'mark_query_done_sqlite',
+    'start_scraper_run_sqlite',
+    'finish_scraper_run_sqlite',
+    'get_lead_count_sqlite',
 ]
 
 # When using Django backend, also export Django adapter functions
