@@ -48,8 +48,9 @@ class TTLCache:
             del self._cache[key]
             return None
         
-        # Move to end (LRU)
-        self._cache.move_to_end(key)
+        # Move to end (for LRU behavior - dicts maintain insertion order since Python 3.7)
+        # Re-insert to move to end
+        self._cache[key] = self._cache.pop(key)
         return value
     
     def set(self, key: str, value: Any):
@@ -62,7 +63,9 @@ class TTLCache:
         """
         # Evict oldest if at capacity
         while len(self._cache) >= self.max_size:
-            self._cache.popitem(last=False)
+            # Pop the first item (oldest in insertion order)
+            first_key = next(iter(self._cache))
+            del self._cache[first_key]
         
         self._cache[key] = (value, time.time())
     
