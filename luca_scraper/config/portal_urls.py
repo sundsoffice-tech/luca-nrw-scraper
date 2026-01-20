@@ -237,6 +237,58 @@ FREELANCE_DE_URLS: List[str] = [
     "https://www.freelance.de/Freiberufler/Account-Manager/",
 ]
 
+# WLW (Wer liefert was) - B2B Business Directory URLs
+WLW_URLS: List[str] = [
+    "https://www.wlw.de/de/suche?q=vertrieb&location=nordrhein-westfalen",
+    "https://www.wlw.de/de/suche?q=sales&location=nordrhein-westfalen",
+    "https://www.wlw.de/de/suche?q=handelsvertretung&location=nordrhein-westfalen",
+    "https://www.wlw.de/de/suche?q=vertriebspartner&location=nordrhein-westfalen",
+]
+
+# Gelbe Seiten (Yellow Pages) - Business Directory URLs
+GELBE_SEITEN_URLS: List[str] = [
+    "https://www.gelbeseiten.de/suche/vertrieb/nordrhein-westfalen",
+    "https://www.gelbeseiten.de/suche/sales/nordrhein-westfalen",
+    "https://www.gelbeseiten.de/suche/handelsvertreter/nordrhein-westfalen",
+    "https://www.gelbeseiten.de/suche/vertriebsleiter/koeln",
+    "https://www.gelbeseiten.de/suche/vertriebsleiter/duesseldorf",
+    "https://www.gelbeseiten.de/suche/vertriebsleiter/dortmund",
+]
+
+# Das Örtliche (Local Business Directory) URLs
+DAS_OERTLICHE_URLS: List[str] = [
+    "https://www.dasoertliche.de/Themen/vertrieb-nordrhein-westfalen.html",
+    "https://www.dasoertliche.de/Themen/sales-nordrhein-westfalen.html",
+    "https://www.dasoertliche.de/Themen/handelsvertreter-nordrhein-westfalen.html",
+]
+
+# Northdata - Company Register URLs
+# Note: Northdata requires API access or special search query handling
+# Currently disabled (DIRECT_CRAWL_SOURCES['northdata'] = False)
+# Future implementation should use their API or dynamic search queries
+NORTHDATA_URLS: List[str] = [
+    "https://www.northdata.de/",  # Main search - requires API or dynamic query implementation
+]
+
+# Firmen ABC - Business Directory URLs
+FIRMEN_ABC_URLS: List[str] = [
+    "https://www.firmenabc.de/nordrhein-westfalen/",
+]
+
+# Cylex - Local Business Directory URLs
+CYLEX_URLS: List[str] = [
+    "https://www.cylex.de/nordrhein-westfalen/vertrieb.html",
+    "https://www.cylex.de/nordrhein-westfalen/sales.html",
+    "https://www.cylex.de/koeln/vertrieb.html",
+    "https://www.cylex.de/duesseldorf/vertrieb.html",
+]
+
+# Hotfrog - Business Directory URLs
+HOTFROG_URLS: List[str] = [
+    "https://www.hotfrog.de/suche/nordrhein-westfalen/vertrieb",
+    "https://www.hotfrog.de/suche/nordrhein-westfalen/sales",
+]
+
 # Direct crawl URLs (alias for backward compatibility)
 DIRECT_CRAWL_URLS = KLEINANZEIGEN_URLS
 
@@ -304,6 +356,14 @@ PORTAL_DELAYS: Dict[str, float] = {
     "dhd24": 4.0,
     "freelancermap": 3.0,
     "freelance_de": 3.0,
+    # New business directories (conservative delays for professional sites)
+    "wlw": 4.0,
+    "gelbe_seiten": 3.0,
+    "das_oertliche": 3.0,
+    "northdata": 5.0,
+    "firmen_abc": 4.0,
+    "cylex": 3.0,
+    "hotfrog": 3.0,
 }
 
 # Direct crawl source configuration
@@ -317,6 +377,14 @@ DIRECT_CRAWL_SOURCES: Dict[str, bool] = {
     "dhd24": True,
     "freelancermap": True,
     "freelance_de": False,
+    # New high-quality sources (enabled for professional directories)
+    "wlw": True,
+    "gelbe_seiten": True,
+    "das_oertliche": True,
+    "northdata": False,  # Requires API or special handling
+    "firmen_abc": True,
+    "cylex": True,
+    "hotfrog": True,
 }
 
 # Max profiles per URL
@@ -376,6 +444,14 @@ def get_portal_urls(portal_name: str) -> List[str]:
         'freelancermap': FREELANCERMAP_URLS,
         'freelance_de': FREELANCE_DE_URLS,
         'freelancer_portals': FREELANCER_PORTAL_URLS,
+        # New High-Quality Business Directories
+        'wlw': WLW_URLS,
+        'gelbe_seiten': GELBE_SEITEN_URLS,
+        'das_oertliche': DAS_OERTLICHE_URLS,
+        'northdata': NORTHDATA_URLS,
+        'firmen_abc': FIRMEN_ABC_URLS,
+        'cylex': CYLEX_URLS,
+        'hotfrog': HOTFROG_URLS,
     }
     
     # Try to load from database first
@@ -452,7 +528,10 @@ def get_all_portal_configs() -> Dict[str, Dict[str, Any]]:
     # Start with hardcoded portal names
     all_portals = {
         'kleinanzeigen', 'markt_de', 'quoka', 'kalaydo', 'meinestadt',
-        'dhd24', 'freelancermap', 'freelance_de'
+        'dhd24', 'freelancermap', 'freelance_de',
+        # New high-quality business directories
+        'wlw', 'gelbe_seiten', 'das_oertliche', 'northdata',
+        'firmen_abc', 'cylex', 'hotfrog'
     }
     
     # Try to get additional portals from database

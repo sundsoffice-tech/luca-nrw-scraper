@@ -114,6 +114,132 @@ def test_mobile_sidebar_toggle_exists():
     print("✅ Mobile sidebar toggle exists")
 
 
+def test_navigation_has_aria_labels():
+    """Test that navigation elements have proper ARIA labels"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Check for ARIA attributes on navigation
+    assert 'role="navigation"' in content, "Navigation role not found"
+    assert 'aria-label="Hauptnavigation"' in content, "Main navigation aria-label not found"
+    
+    # Check for aria-current on active links
+    assert 'aria-current="page"' in content, "aria-current not found on active links"
+    
+    # Check for aria-hidden on decorative icons
+    assert 'aria-hidden="true"' in content, "aria-hidden not found on decorative icons"
+    
+    print("✅ Navigation has proper ARIA labels")
+
+
+def test_collapsible_section_is_accessible():
+    """Test that collapsible email section has proper accessibility attributes"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Find email section - search for the button and the section div
+    email_button_start = content.find('<!-- Email Module Section')
+    email_section_marker = 'id="email-section"'
+    email_section_div_start = content.find(email_section_marker, email_button_start)
+    # Find the next closing div after all the email links
+    email_logs_link = content.find('Logs</span>', email_section_div_start)
+    email_section_end = content.find('</div>', email_logs_link)
+    email_section = content[email_button_start:email_section_end]
+    
+    # Check for button element instead of div
+    assert '<button type="button"' in email_section, "Email section header should be a button"
+    
+    # Check for ARIA attributes
+    assert 'aria-expanded=' in email_section, "Email section should have aria-expanded"
+    assert 'aria-controls="email-section"' in email_section, "Email section should have aria-controls"
+    
+    # Check for keyboard handler
+    assert 'onkeydown="handleEmailSectionKeydown(event)"' in email_section, "Email section should have keyboard handler"
+    
+    print("✅ Collapsible section is accessible")
+
+
+def test_mobile_menu_has_accessibility():
+    """Test that mobile menu button has proper accessibility"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Find mobile menu button
+    mobile_button_start = content.find('<!-- Mobile menu button -->')
+    mobile_button_end = content.find('</button>', mobile_button_start) + 9
+    mobile_button = content[mobile_button_start:mobile_button_end]
+    
+    # Check for ARIA attributes
+    assert 'aria-label=' in mobile_button, "Mobile button should have aria-label"
+    assert 'aria-expanded=' in mobile_button, "Mobile button should have aria-expanded"
+    assert 'aria-controls="sidebar"' in mobile_button, "Mobile button should have aria-controls"
+    
+    print("✅ Mobile menu button has proper accessibility")
+
+
+def test_external_links_have_security():
+    """Test that external links have rel='noopener noreferrer'"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Count external links (those with target="_blank")
+    import re
+    external_links = re.findall(r'<a[^>]*target="_blank"[^>]*>', content)
+    noopener_links = [link for link in external_links if 'rel="noopener noreferrer"' in link]
+    
+    # All external links should have noopener noreferrer
+    assert len(external_links) == len(noopener_links), \
+        f"All {len(external_links)} external links should have rel='noopener noreferrer', but only {len(noopener_links)} do"
+    
+    print("✅ External links have security attributes")
+
+
+def test_toast_container_has_aria_live():
+    """Test that toast notification container has aria-live region"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Find toast container
+    toast_container_start = content.find('id="toast-container"')
+    toast_container_end = content.find('</div>', toast_container_start)
+    toast_container = content[toast_container_start:toast_container_end]
+    
+    # Check for ARIA live region
+    assert 'role="region"' in toast_container, "Toast container should have region role"
+    assert 'aria-live="polite"' in toast_container, "Toast container should have aria-live"
+    
+    print("✅ Toast container has aria-live region")
+
+
+def test_keyboard_navigation_handlers():
+    """Test that keyboard navigation handlers are present"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Check for keyboard event handlers
+    assert 'handleEmailSectionKeydown' in content, "Email section keyboard handler not found"
+    assert "event.key === 'Escape'" in content, "Escape key handler not found"
+    assert "event.key === 'Enter'" in content, "Enter key handler not found"
+    assert "event.key === ' '" in content, "Space key handler not found"
+    
+    print("✅ Keyboard navigation handlers are present")
+
+
+def test_mobile_sidebar_closes_on_link_click():
+    """Test that mobile sidebar closes when navigation links are clicked"""
+    template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
+    content = template_path.read_text()
+    
+    # Check for closeMobileSidebar function
+    assert 'closeMobileSidebar()' in content, "closeMobileSidebar function not found"
+    assert 'function closeMobileSidebar()' in content, "closeMobileSidebar function definition not found"
+    
+    # Check that navigation links call it
+    assert 'onclick="closeMobileSidebar()"' in content, "Navigation links should call closeMobileSidebar"
+    
+    print("✅ Mobile sidebar closes on link click")
+
+
 if __name__ == '__main__':
     print("Testing Navigation Improvements...\n")
     
@@ -125,6 +251,13 @@ if __name__ == '__main__':
         test_admin_base_site_has_back_to_crm_button()
         test_admin_link_opens_in_new_tab()
         test_mobile_sidebar_toggle_exists()
+        test_navigation_has_aria_labels()
+        test_collapsible_section_is_accessible()
+        test_mobile_menu_has_accessibility()
+        test_external_links_have_security()
+        test_toast_container_has_aria_live()
+        test_keyboard_navigation_handlers()
+        test_mobile_sidebar_closes_on_link_click()
         
         print("\n" + "="*50)
         print("✅ All tests passed!")

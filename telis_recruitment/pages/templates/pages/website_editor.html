@@ -16,47 +16,117 @@
     }
     .file-tree-item {
         cursor: pointer;
-        padding: 0.375rem 0.5rem;
-        border-radius: 0.25rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
         transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.125rem 0;
     }
     .file-tree-item:hover {
-        background-color: rgba(6, 182, 212, 0.1);
+        background-color: rgba(6, 182, 212, 0.15);
+        transform: translateX(2px);
     }
     .file-tree-item.active {
-        background-color: rgba(6, 182, 212, 0.2);
+        background-color: rgba(6, 182, 212, 0.25);
         border-left: 3px solid #06b6d4;
+        font-weight: 500;
+    }
+    .file-tree-item .file-icon {
+        font-size: 1rem;
+        width: 1.25rem;
+        text-align: center;
     }
     .folder-item {
         font-weight: 600;
+        color: #60a5fa;
+        cursor: pointer;
+        padding: 0.375rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        user-select: none;
+    }
+    .folder-item:hover {
+        background-color: rgba(96, 165, 250, 0.1);
+    }
+    .folder-item .folder-icon {
+        transition: transform 0.2s;
+    }
+    .folder-item.collapsed .folder-icon {
+        transform: rotate(-90deg);
+    }
+    .folder-children {
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+    .folder-children.collapsed {
+        max-height: 0 !important;
     }
     
     /* Tab styles */
     .editor-tab {
         display: inline-flex;
         align-items: center;
-        padding: 0.5rem 1rem;
-        background-color: #1e293b;
+        padding: 0.625rem 1.25rem;
+        background: linear-gradient(to bottom, #1e293b 0%, #1a2332 100%);
         border-right: 1px solid #334155;
+        border-top: 2px solid transparent;
         cursor: pointer;
         transition: all 0.2s;
         position: relative;
+        font-size: 0.875rem;
+        gap: 0.5rem;
     }
     .editor-tab:hover {
-        background-color: #334155;
+        background: linear-gradient(to bottom, #334155 0%, #2d3a4d 100%);
+        border-top-color: rgba(6, 182, 212, 0.3);
     }
     .editor-tab.active {
-        background-color: #0f172a;
-        border-bottom: 2px solid #06b6d4;
+        background: linear-gradient(to bottom, #0f172a 0%, #0a101c 100%);
+        border-bottom: 3px solid #06b6d4;
+        border-top-color: #06b6d4;
+        color: #fff;
+        font-weight: 500;
+    }
+    .editor-tab .tab-icon {
+        font-size: 0.875rem;
     }
     .editor-tab .close-btn {
-        margin-left: 0.5rem;
-        opacity: 0.5;
-        transition: opacity 0.2s;
+        opacity: 0;
+        transition: all 0.2s;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .editor-tab:hover .close-btn {
+        opacity: 0.6;
     }
     .editor-tab .close-btn:hover {
         opacity: 1;
         color: #ef4444;
+        background-color: rgba(239, 68, 68, 0.1);
+    }
+    .editor-tab.modified::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        right: 2.5rem;
+        transform: translateY(-50%);
+        width: 6px;
+        height: 6px;
+        background-color: #fbbf24;
+        border-radius: 50%;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
     
     /* Monaco container */
@@ -136,23 +206,126 @@
     
     /* Status bar */
     .status-bar {
-        background: #1e293b;
+        background: linear-gradient(to top, #1e293b 0%, #1a2332 100%);
         border-top: 1px solid #334155;
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+    }
+    .status-item:hover {
+        background-color: rgba(6, 182, 212, 0.1);
+    }
+    .status-item .icon {
+        font-size: 0.875rem;
+    }
+    
+    /* Breadcrumb navigation */
+    .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: rgba(6, 182, 212, 0.05);
+        border-bottom: 1px solid #334155;
+        font-size: 0.875rem;
+    }
+    .breadcrumb-item {
+        color: #64748b;
+        transition: all 0.2s;
+    }
+    .breadcrumb-item:hover {
+        color: #06b6d4;
+        cursor: pointer;
+    }
+    .breadcrumb-separator {
+        color: #475569;
+        user-select: none;
+    }
+    .breadcrumb-item.active {
+        color: #fff;
+        font-weight: 500;
+    }
+    
+    /* Loading state */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(15, 23, 42, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #334155;
+        border-top-color: #06b6d4;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
     
     /* Toolbar */
     .toolbar {
-        background: #1e293b;
+        background: linear-gradient(to bottom, #1e293b 0%, #1a2332 100%);
         border-bottom: 1px solid #334155;
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1rem;
         display: flex;
-        gap: 0.5rem;
+        gap: 0.25rem;
         align-items: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .toolbar-btn {
+        padding: 0.5rem;
+        border-radius: 0.375rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+    }
+    .toolbar-btn:hover {
+        background-color: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+        transform: translateY(-1px);
+    }
+    .toolbar-btn:active {
+        transform: translateY(0);
+    }
+    .toolbar-separator {
+        width: 1px;
+        height: 1.5rem;
+        background-color: #334155;
+        margin: 0 0.5rem;
+    }
+    .toolbar-label {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-left: 0.5rem;
     }
     
     /* Modal */
@@ -221,21 +394,35 @@
         <div id="file-tree-panel" class="w-64 bg-dark-800 border-r border-dark-700 flex flex-col">
             <!-- Toolbar -->
             <div class="toolbar">
+                <span class="toolbar-label">Files</span>
                 <button onclick="showCreateFileDialog()" 
-                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="New File">
-                    📄
+                        class="toolbar-btn" title="New File (Ctrl+N)">
+                    <span>📄</span>
+                    <span class="hidden md:inline">New File</span>
                 </button>
                 <button onclick="showCreateFolderDialog()" 
-                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="New Folder">
-                    📁
+                        class="toolbar-btn" title="New Folder">
+                    <span>📁</span>
+                    <span class="hidden md:inline">New Folder</span>
                 </button>
+                <div class="toolbar-separator"></div>
+                <span class="toolbar-label">Search</span>
                 <button onclick="showSearchDialog()" 
-                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="Search">
-                    🔍
+                        class="toolbar-btn" title="Search Files (Ctrl+P)">
+                    <span>🔍</span>
+                    <span class="hidden md:inline">Find</span>
                 </button>
+                <div class="toolbar-separator"></div>
+                <span class="toolbar-label">View</span>
                 <button onclick="refreshFileTree()" 
-                        class="p-1.5 hover:bg-dark-700 rounded transition text-sm" title="Refresh">
-                    🔄
+                        class="toolbar-btn" title="Refresh (F5)">
+                    <span>🔄</span>
+                    <span class="hidden md:inline">Refresh</span>
+                </button>
+                <button onclick="toggleFileTreeCollapse()" 
+                        class="toolbar-btn" title="Collapse All Folders">
+                    <span>📂</span>
+                    <span class="hidden md:inline">Collapse</span>
                 </button>
             </div>
             
@@ -247,24 +434,50 @@
         
         <!-- Center Panel: Editor -->
         <div id="editor-panel" class="flex-1 flex flex-col">
+            <!-- Breadcrumb Navigation -->
+            <div id="breadcrumb" class="breadcrumb hidden">
+                <!-- Populated by JavaScript -->
+            </div>
+            
             <!-- Tabs -->
             <div id="editor-tabs" class="bg-dark-800 border-b border-dark-700 flex overflow-x-auto">
                 <!-- Tabs populated by JavaScript -->
             </div>
             
             <!-- Monaco Editor -->
-            <div id="monaco-container" class="flex-1"></div>
+            <div id="monaco-container" class="flex-1 relative">
+                <!-- Loading overlay -->
+                <div id="loading-overlay" class="loading-overlay hidden">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
             
             <!-- Status Bar -->
             <div class="status-bar">
-                <div class="flex items-center space-x-4">
-                    <span id="status-file">No file open</span>
-                    <span id="status-language" class="text-gray-500"></span>
-                    <span id="status-position" class="text-gray-500"></span>
+                <div class="flex items-center space-x-2">
+                    <div class="status-item">
+                        <span class="icon">📄</span>
+                        <span id="status-file">No file open</span>
+                    </div>
+                    <div class="status-item">
+                        <span id="status-language" class="text-gray-500"></span>
+                    </div>
+                    <div class="status-item">
+                        <span id="status-position" class="text-gray-500"></span>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <span id="status-encoding" class="text-gray-500">UTF-8</span>
-                    <span id="status-save" class="text-green-500"></span>
+                <div class="flex items-center space-x-2">
+                    <div class="status-item">
+                        <span class="icon">🔤</span>
+                        <span id="status-encoding" class="text-gray-500">UTF-8</span>
+                    </div>
+                    <div class="status-item">
+                        <span id="status-save" class="text-green-500"></span>
+                    </div>
+                    <button onclick="showKeyboardShortcuts()" class="status-item hover:bg-dark-700" title="Keyboard Shortcuts">
+                        <span class="icon">⌨️</span>
+                        <span class="text-gray-500">Shortcuts</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -334,6 +547,63 @@
     </div>
 </div>
 
+<!-- Keyboard Shortcuts Modal -->
+<div id="shortcuts-modal" class="modal-overlay">
+    <div class="modal" style="max-width: 600px;">
+        <h3 class="text-xl font-bold mb-4 text-cyan-400">⌨️ Keyboard Shortcuts</h3>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+                <h4 class="text-sm font-semibold text-gray-400 mb-2">File Operations</h4>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Save File</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+S</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">New File</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+N</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Quick Open</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+P</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Refresh</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">F5</kbd>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-gray-400 mb-2">Editor</h4>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Find</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+F</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Replace</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+H</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Go to Line</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+G</kbd>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-300">Comment Line</span>
+                        <kbd class="px-2 py-1 bg-dark-700 rounded text-cyan-400">Ctrl+/</kbd>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button onclick="hideKeyboardShortcuts()" 
+                    class="px-4 py-2 bg-cyan-600 text-white rounded hover:bg-cyan-700 transition">
+                Got it!
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Load Monaco Editor -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 
@@ -347,17 +617,51 @@ const state = {
     fileTree: null,
     contextTarget: null,
     unsavedChanges: {},
-    modalCallback: null
+    modalCallback: null,
+    autoSaveTimer: null,
+    collapsedFolders: new Set()
 };
 
 const pageSlug = '{{ page.slug }}';
 const csrfToken = '{{ csrf_token }}';
 
+// File type icons mapping
+const fileIcons = {
+    'html': '📄',
+    'htm': '📄',
+    'css': '🎨',
+    'js': '⚡',
+    'json': '📊',
+    'md': '📝',
+    'txt': '📝',
+    'xml': '📋',
+    'svg': '🖼️',
+    'jpg': '🖼️',
+    'jpeg': '🖼️',
+    'png': '🖼️',
+    'gif': '🖼️',
+    'webp': '🖼️',
+    'ts': '📘',
+    'jsx': '⚛️',
+    'tsx': '⚛️',
+    'py': '🐍',
+    'php': '🐘',
+    'rb': '💎',
+    'java': '☕',
+    'default': '📄'
+};
+
+// Get file icon based on extension
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    return fileIcons[ext] || fileIcons.default;
+}
+
 // Initialize Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 require(['vs/editor/editor.main'], function() {
     state.editor = monaco.editor.create(document.getElementById('monaco-container'), {
-        value: '// Select a file to start editing',
+        value: '// Select a file to start editing\n// Use Ctrl+P to open files quickly\n// Press Ctrl+S to save\n// Click the keyboard icon in the status bar for more shortcuts',
         language: 'javascript',
         theme: 'vs-dark',
         automaticLayout: true,
@@ -366,7 +670,9 @@ require(['vs/editor/editor.main'], function() {
         scrollBeyondLastLine: false,
         lineNumbers: 'on',
         folding: true,
-        wordWrap: 'on'
+        wordWrap: 'on',
+        formatOnPaste: true,
+        formatOnType: true
     });
     
     // Listen for content changes
@@ -375,6 +681,8 @@ require(['vs/editor/editor.main'], function() {
             state.unsavedChanges[state.currentFile] = true;
             updateStatusBar();
             updateTabTitle(state.currentFile);
+            renderFileTree(); // Update file tree to show unsaved indicator
+            startAutoSave();
         }
     });
     
@@ -422,26 +730,86 @@ function renderTreeNode(node, level) {
     const indent = level * 12;
     
     if (node.type === 'directory') {
-        html += `<div style="padding-left: ${indent}px" class="folder-item text-blue-400 py-1">
-            📁 ${node.name}/
+        const folderId = `folder-${node.path || node.name}`.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const isCollapsed = state.collapsedFolders.has(folderId);
+        const folderIcon = isCollapsed ? '▶' : '▼';
+        
+        html += `<div style="padding-left: ${indent}px" 
+                     class="folder-item ${isCollapsed ? 'collapsed' : ''}"
+                     data-folder-id="${folderId}"
+                     onclick="toggleFolderById('${folderId}', event)">
+            <span class="folder-icon">${folderIcon}</span>
+            <span>📁 ${node.name}/</span>
         </div>`;
-        if (node.children) {
-            node.children.forEach(child => {
-                html += renderTreeNode(child, level + 1);
-            });
+        
+        if (node.children && node.children.length > 0) {
+            const childrenHtml = node.children.map(child => renderTreeNode(child, level + 1)).join('');
+            html += `<div id="${folderId}-children" class="folder-children ${isCollapsed ? 'collapsed' : ''}" 
+                         style="max-height: ${isCollapsed ? '0' : 'none'}">
+                ${childrenHtml}
+            </div>`;
         }
     } else if (node.type === 'file') {
         const isActive = state.currentFile === node.path;
+        const fileIcon = getFileIcon(node.name);
+        const hasChanges = state.unsavedChanges[node.path];
+        
         html += `<div style="padding-left: ${indent}px" 
                      class="file-tree-item ${isActive ? 'active' : ''}"
                      data-path="${node.path}"
                      onclick="loadFile('${node.path}')"
                      oncontextmenu="showContextMenu(event, '${node.path}')">
-            📄 ${node.name}
+            <span class="file-icon">${fileIcon}</span>
+            <span>${node.name}</span>
+            ${hasChanges ? '<span class="text-yellow-500 ml-auto">●</span>' : ''}
         </div>`;
     }
     
     return html;
+}
+
+// Toggle folder collapse/expand by ID
+function toggleFolderById(folderId, event) {
+    if (event) event.stopPropagation();
+    
+    const folderDiv = document.querySelector(`[data-folder-id="${folderId}"]`);
+    const childrenDiv = document.getElementById(`${folderId}-children`);
+    
+    if (!folderDiv || !childrenDiv) return;
+    
+    if (state.collapsedFolders.has(folderId)) {
+        state.collapsedFolders.delete(folderId);
+        folderDiv.classList.remove('collapsed');
+        childrenDiv.classList.remove('collapsed');
+        childrenDiv.style.maxHeight = 'none';
+    } else {
+        state.collapsedFolders.add(folderId);
+        folderDiv.classList.add('collapsed');
+        childrenDiv.classList.add('collapsed');
+        childrenDiv.style.maxHeight = '0';
+    }
+}
+
+// Legacy function for compatibility
+function toggleFolder(folderId, event) {
+    toggleFolderById(folderId, event);
+}
+
+// Collapse all folders
+function toggleFileTreeCollapse() {
+    const allFolders = document.querySelectorAll('[data-folder-id]');
+    const shouldCollapse = state.collapsedFolders.size === 0;
+    
+    allFolders.forEach(folder => {
+        const folderId = folder.getAttribute('data-folder-id');
+        if (shouldCollapse) {
+            state.collapsedFolders.add(folderId);
+        } else {
+            state.collapsedFolders.delete(folderId);
+        }
+    });
+    
+    renderFileTree();
 }
 
 // File Operations
@@ -452,6 +820,9 @@ function loadFile(path) {
             return;
         }
     }
+    
+    // Show loading
+    showLoading(true);
     
     fetch(`/crm/pages/api/${pageSlug}/editor/file/?path=${encodeURIComponent(path)}`, {
         headers: { 'X-CSRFToken': csrfToken }
@@ -472,9 +843,13 @@ function loadFile(path) {
             // Update UI
             renderFileTree();
             updateStatusBar();
+            updateBreadcrumb();
             
             // Clear unsaved flag
             delete state.unsavedChanges[path];
+            
+            // Start auto-save
+            startAutoSave();
         } else {
             showToast(data.error, 'error');
         }
@@ -482,16 +857,21 @@ function loadFile(path) {
     .catch(error => {
         console.error('Error loading file:', error);
         showToast('Error loading file', 'error');
+    })
+    .finally(() => {
+        showLoading(false);
     });
 }
 
-function saveCurrentFile() {
+function saveCurrentFile(silent = false) {
     if (!state.currentFile) {
-        showToast('No file open', 'error');
+        if (!silent) showToast('No file open', 'error');
         return;
     }
     
     const content = state.editor.getValue();
+    
+    if (!silent) showLoading(true);
     
     fetch(`/crm/pages/api/${pageSlug}/editor/file/save/`, {
         method: 'POST',
@@ -511,7 +891,7 @@ function saveCurrentFile() {
             delete state.unsavedChanges[state.currentFile];
             updateStatusBar();
             updateTabTitle(state.currentFile);
-            showToast('File saved successfully', 'success');
+            if (!silent) showToast('File saved successfully', 'success');
             
             // Refresh preview if open
             if (!document.getElementById('preview-panel').classList.contains('hidden')) {
@@ -524,7 +904,67 @@ function saveCurrentFile() {
     .catch(error => {
         console.error('Error saving file:', error);
         showToast('Error saving file', 'error');
+    })
+    .finally(() => {
+        if (!silent) showLoading(false);
     });
+}
+
+// Auto-save functionality
+function startAutoSave() {
+    // Clear existing timer
+    if (state.autoSaveTimer) {
+        clearTimeout(state.autoSaveTimer);
+    }
+    
+    // Set new timer for 30 seconds
+    state.autoSaveTimer = setTimeout(() => {
+        if (state.currentFile && state.unsavedChanges[state.currentFile]) {
+            saveCurrentFile(true);
+            showToast('Auto-saved', 'info');
+        }
+    }, 30000); // 30 seconds
+}
+
+// Update breadcrumb navigation
+function updateBreadcrumb() {
+    const breadcrumb = document.getElementById('breadcrumb');
+    
+    if (!state.currentFile) {
+        breadcrumb.classList.add('hidden');
+        return;
+    }
+    
+    breadcrumb.classList.remove('hidden');
+    
+    const parts = state.currentFile.split('/');
+    let html = '<span class="breadcrumb-item">📁 Root</span>';
+    
+    let currentPath = '';
+    parts.forEach((part, index) => {
+        currentPath += (currentPath ? '/' : '') + part;
+        const isLast = index === parts.length - 1;
+        
+        if (isLast) {
+            html += `<span class="breadcrumb-separator">›</span>
+                     <span class="breadcrumb-item active">${getFileIcon(part)} ${part}</span>`;
+        } else {
+            html += `<span class="breadcrumb-separator">›</span>
+                     <span class="breadcrumb-item">${part}</span>`;
+        }
+    });
+    
+    breadcrumb.innerHTML = html;
+}
+
+// Loading state
+function showLoading(show) {
+    const overlay = document.getElementById('loading-overlay');
+    if (show) {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
 }
 
 // Tab Management
@@ -573,12 +1013,14 @@ function renderTabs() {
     const tabsDiv = document.getElementById('editor-tabs');
     tabsDiv.innerHTML = state.openTabs.map(path => {
         const fileName = path.split('/').pop();
+        const fileIcon = getFileIcon(fileName);
         const isActive = path === state.activeTab;
         const hasChanges = state.unsavedChanges[path];
         
-        return `<div class="editor-tab ${isActive ? 'active' : ''}" 
+        return `<div class="editor-tab ${isActive ? 'active' : ''} ${hasChanges ? 'modified' : ''}" 
                      onclick="loadFile('${path}')">
-            <span>${fileName}${hasChanges ? ' •' : ''}</span>
+            <span class="tab-icon">${fileIcon}</span>
+            <span>${fileName}</span>
             <span class="close-btn" onclick="closeTab('${path}', event)">✕</span>
         </div>`;
     }).join('');
@@ -974,7 +1416,29 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         showSearchDialog();
     }
+    
+    // Ctrl/Cmd + N: New file
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+        e.preventDefault();
+        showCreateFileDialog();
+    }
+    
+    // F5: Refresh
+    if (e.key === 'F5') {
+        e.preventDefault();
+        refreshFileTree();
+    }
 });
+
+// Show keyboard shortcuts modal
+function showKeyboardShortcuts() {
+    document.getElementById('shortcuts-modal').classList.add('show');
+}
+
+// Hide keyboard shortcuts modal
+function hideKeyboardShortcuts() {
+    document.getElementById('shortcuts-modal').classList.remove('show');
+}
 
 // Prevent leaving with unsaved changes
 window.addEventListener('beforeunload', (e) => {
