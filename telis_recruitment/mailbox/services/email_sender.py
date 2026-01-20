@@ -12,6 +12,7 @@ from typing import List, Dict, Optional
 from datetime import datetime
 from django.utils import timezone
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 import logging
 
 from mailbox.models import Email, EmailAccount, EmailAttachment
@@ -102,10 +103,15 @@ class EmailSenderService:
             
         Returns:
             True on success, False on failure
+            
+        Raises:
+            ImproperlyConfigured: If sib-api-v3-sdk is not installed
         """
         if not BREVO_AVAILABLE:
-            logger.error("Brevo SDK not available")
-            return False
+            raise ImproperlyConfigured(
+                "Brevo SDK (sib-api-v3-sdk) is not installed. "
+                "Please install it using: pip install sib-api-v3-sdk"
+            )
         
         try:
             # Decrypt API key
