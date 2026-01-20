@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
 
 from bs4 import BeautifulSoup
 
+from luca_scraper.extraction.lead_builder import build_lead_data
+
 
 async def extract_generic_detail_async(
     url: str,
@@ -216,55 +218,19 @@ async def extract_generic_detail_async(
                     )
                 return None
         
-        # Use first mobile number found
-        main_phone = phones[0]
-        
-        # ========================================
-        # DYNAMIC SCORING: Use centralized scoring module
-        # ========================================
-        phone_source = phone_sources.get(main_phone, "unknown")
-        
-        try:
-            from luca_scraper.scoring.dynamic_scoring import calculate_dynamic_score
-            dynamic_score, data_quality_score, confidence_score = calculate_dynamic_score(
-                has_phone=bool(main_phone),
-                has_email=bool(email),
-                has_name=bool(name),
-                has_title=bool(title),
-                has_location=False,  # Generic crawler doesn't extract location
-                phones_count=len(phones),
-                has_whatsapp=False,  # Will be checked separately
-                phone_source=phone_source,
-                portal=source_tag,
-            )
-        except ImportError:
-            # Fallback to default scores if module not available
-            dynamic_score = 85
-            data_quality_score = 0.80
-            confidence_score = 0.85
-        
-        # Build lead data with dynamic scores
-        lead = {
-            "name": name or "",
-            "rolle": "Vertrieb",
-            "email": email,
-            "telefon": main_phone,
-            "quelle": url,
-            "score": dynamic_score,
-            "tags": f"{source_tag},candidate,mobile,direct_crawl",
-            "lead_type": "candidate",
-            "phone_type": "mobile",
-            "opening_line": title[:200] if title else "",
-            "firma": "",
-            "firma_groesse": "",
-            "branche": "",
-            "region": "",
-            "frische": "neu",
-            "confidence": confidence_score,
-            "data_quality": data_quality_score,
-            "phone_source": phone_source,
-            "phones_found": len(phones),
-        }
+        # Build lead data using centralized function
+        lead = build_lead_data(
+            name=name,
+            phones=phones,
+            email=email,
+            location="",  # Generic crawler doesn't extract location
+            title=title,
+            url=url,
+            phone_sources=phone_sources,
+            portal=source_tag,
+            has_whatsapp=False,  # Will be checked separately
+            tags=f"{source_tag},candidate,mobile,direct_crawl",
+        )
         
         return lead
         
