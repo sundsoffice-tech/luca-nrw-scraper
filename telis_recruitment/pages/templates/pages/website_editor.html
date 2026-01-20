@@ -730,22 +730,22 @@ function renderTreeNode(node, level) {
     const indent = level * 12;
     
     if (node.type === 'directory') {
-        const folderId = `folder-${node.path || node.name}`;
+        const folderId = `folder-${node.path || node.name}`.replace(/[^a-zA-Z0-9-_]/g, '_');
         const isCollapsed = state.collapsedFolders.has(folderId);
         const folderIcon = isCollapsed ? '▶' : '▼';
         
         html += `<div style="padding-left: ${indent}px" 
                      class="folder-item ${isCollapsed ? 'collapsed' : ''}"
-                     onclick="toggleFolder('${folderId}', event)">
+                     data-folder-id="${folderId}"
+                     onclick="toggleFolderById('${folderId}', event)">
             <span class="folder-icon">${folderIcon}</span>
             <span>📁 ${node.name}/</span>
         </div>`;
         
-        if (node.children) {
+        if (node.children && node.children.length > 0) {
             const childrenHtml = node.children.map(child => renderTreeNode(child, level + 1)).join('');
-            const maxHeight = isCollapsed ? '0' : `${node.children.length * 40}px`;
             html += `<div id="${folderId}-children" class="folder-children ${isCollapsed ? 'collapsed' : ''}" 
-                         style="max-height: ${maxHeight}">
+                         style="max-height: ${isCollapsed ? '0' : 'none'}">
                 ${childrenHtml}
             </div>`;
         }
@@ -768,18 +768,20 @@ function renderTreeNode(node, level) {
     return html;
 }
 
-// Toggle folder collapse/expand
-function toggleFolder(folderId, event) {
+// Toggle folder collapse/expand by ID
+function toggleFolderById(folderId, event) {
     if (event) event.stopPropagation();
     
-    const folderDiv = event.target.closest('.folder-item');
+    const folderDiv = document.querySelector(`[data-folder-id="${folderId}"]`);
     const childrenDiv = document.getElementById(`${folderId}-children`);
+    
+    if (!folderDiv || !childrenDiv) return;
     
     if (state.collapsedFolders.has(folderId)) {
         state.collapsedFolders.delete(folderId);
         folderDiv.classList.remove('collapsed');
         childrenDiv.classList.remove('collapsed');
-        childrenDiv.style.maxHeight = `${childrenDiv.scrollHeight}px`;
+        childrenDiv.style.maxHeight = 'none';
     } else {
         state.collapsedFolders.add(folderId);
         folderDiv.classList.add('collapsed');
@@ -788,13 +790,18 @@ function toggleFolder(folderId, event) {
     }
 }
 
+// Legacy function for compatibility
+function toggleFolder(folderId, event) {
+    toggleFolderById(folderId, event);
+}
+
 // Collapse all folders
 function toggleFileTreeCollapse() {
-    const allFolders = document.querySelectorAll('.folder-item');
+    const allFolders = document.querySelectorAll('[data-folder-id]');
     const shouldCollapse = state.collapsedFolders.size === 0;
     
     allFolders.forEach(folder => {
-        const folderId = folder.getAttribute('onclick').match(/'([^']+)'/)[1];
+        const folderId = folder.getAttribute('data-folder-id');
         if (shouldCollapse) {
             state.collapsedFolders.add(folderId);
         } else {
@@ -931,7 +938,7 @@ function updateBreadcrumb() {
     breadcrumb.classList.remove('hidden');
     
     const parts = state.currentFile.split('/');
-    let html = '<span class="breadcrumb-item" onclick="loadFile(\'\')">📁 Root</span>';
+    let html = '<span class="breadcrumb-item">📁 Root</span>';
     
     let currentPath = '';
     parts.forEach((part, index) => {
