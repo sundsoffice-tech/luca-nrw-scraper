@@ -797,11 +797,11 @@
             saveContent(false);
             
             // Then publish
-            fetch(`/crm/pages/api/${pageSlug}/publish/`, {
+            fetch(`/crm/pages/api/{{ page.slug }}/publish/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': '{{ csrf_token }}'
                 },
                 body: JSON.stringify({ publish: true })
             })
@@ -972,6 +972,7 @@
     }
     
     // Toast notification system
+    // Toast notification system
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = 'notification ' + type;
@@ -981,7 +982,10 @@
         setTimeout(() => {
             toast.style.opacity = '0';
             setTimeout(() => {
-                document.body.removeChild(toast);
+                // Safely remove toast if it's still in the DOM
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
             }, 300);
         }, 3000);
     }
