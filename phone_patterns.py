@@ -97,7 +97,10 @@ def extract_whatsapp_number(html: str) -> Optional[str]:
             if number.startswith('49') and len(number) == 13:
                 return '+' + number
             elif len(number) == 11:  # Might be German without country code (01761234567)
-                return '+49' + number[1:]  # Remove leading 0
+                if number.startswith('0'):
+                    return '+49' + number[1:]  # Remove leading 0
+                else:
+                    return '+49' + number  # Keep all digits if not starting with 0
             elif len(number) == 10:  # Might be missing leading 0 (1761234567)
                 return '+49' + number
     
