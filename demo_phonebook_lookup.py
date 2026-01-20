@@ -6,7 +6,7 @@ Manual demonstration of phonebook reverse lookup functionality.
 This script demonstrates how the phonebook_lookup module works with realistic examples.
 """
 
-from phonebook_lookup import PhonebookLookup, enrich_lead_with_phonebook
+from scripts.phonebook_lookup import PhonebookLookup, enrich_lead_with_phonebook
 import sqlite3
 import os
 

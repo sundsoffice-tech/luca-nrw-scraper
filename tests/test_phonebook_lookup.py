@@ -6,7 +6,7 @@ import pytest
 import sqlite3
 import os
 import tempfile
-from phonebook_lookup import (
+from scripts.phonebook_lookup import (
     PhonebookLookup,
     enrich_lead_with_phonebook,
     enrich_existing_leads,
@@ -302,7 +302,7 @@ def test_lookup_respects_negative_cache(lookup, temp_db):
 
 def test_cli_interface():
     """Test that CLI interface exists and doesn't crash."""
-    import phonebook_lookup
+    import scripts.phonebook_lookup as phonebook_lookup
     import sys
     
     # Test --help (just make sure it doesn't crash)
@@ -421,7 +421,7 @@ def test_company_enrichment_empty():
 
 def test_source_selectors_include_company():
     """Test that all source configurations include company selectors."""
-    from phonebook_lookup import PhonebookLookup
+    from scripts.phonebook_lookup import PhonebookLookup
     
     lookup = PhonebookLookup()
     
@@ -434,7 +434,7 @@ def test_cache_includes_company():
     """Test that the cache stores and retrieves company information."""
     import tempfile
     import os
-    from phonebook_lookup import PhonebookLookup
+    from scripts.phonebook_lookup import PhonebookLookup
     
     # Create a temporary database
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:

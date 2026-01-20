@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def test_phonebook_import():
     """Test that phonebook_lookup can be imported by scriptname."""
     try:
-        from phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup
+        from scripts.phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup
         assert enrich_lead_with_phonebook is not None
         assert PhonebookLookup is not None
     except ImportError as e:
@@ -26,7 +26,7 @@ def test_scriptname_imports_phonebook():
         content = f.read()
     
     # Check that phonebook_lookup is imported
-    assert "from phonebook_lookup import" in content or "import phonebook_lookup" in content
+    assert "from scripts.phonebook_lookup import" in content or "import scripts.phonebook_lookup" in content
 
 
 def test_insert_leads_with_phonebook_enrichment():
@@ -42,7 +42,7 @@ def test_insert_leads_with_phonebook_enrichment():
 
 def test_phonebook_enrichment_with_mock_lead():
     """Test phonebook enrichment with a mock lead."""
-    from phonebook_lookup import enrich_lead_with_phonebook
+    from scripts.phonebook_lookup import enrich_lead_with_phonebook
     
     # Create a mock lead with bad name but valid phone
     lead = {
@@ -72,7 +72,7 @@ def test_phonebook_enrichment_with_mock_lead():
 
 def test_phonebook_preserves_valid_names():
     """Test that phonebook doesn't overwrite valid names."""
-    from phonebook_lookup import enrich_lead_with_phonebook
+    from scripts.phonebook_lookup import enrich_lead_with_phonebook
     
     lead = {
         "name": "Max Mustermann",  # Valid name
@@ -97,7 +97,7 @@ def test_phonebook_preserves_valid_names():
 
 def test_bad_name_detection():
     """Test that bad names are correctly identified."""
-    from phonebook_lookup import enrich_lead_with_phonebook
+    from scripts.phonebook_lookup import enrich_lead_with_phonebook
     
     bad_names = [
         "_probe_",

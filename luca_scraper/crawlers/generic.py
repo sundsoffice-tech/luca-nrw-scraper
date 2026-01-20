@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 from luca_scraper.extraction.lead_builder import build_lead_data
 
 
-async def extract_generic_detail_async(
+async def extract_detail_generic(
     url: str,
     source_tag: str = "direct_crawl",
     http_get_func=None,
@@ -263,3 +263,8 @@ def _mark_url_seen(url: str, source: str = "", db_func=None, log_func=None, seen
         if log_func:
             log_prefix = f"{source}: " if source else ""
             log_func("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
+
+
+# Backward compatibility alias
+extract_generic_detail_async = extract_detail_generic
+

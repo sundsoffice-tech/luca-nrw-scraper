@@ -104,7 +104,7 @@ from phone_patterns import (
 )
 # Phonebook reverse lookup for leads with phone but no name
 try:
-    from phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup, BAD_NAMES
+    from scripts.phonebook_lookup import enrich_lead_with_phonebook, PhonebookLookup, BAD_NAMES
 except ImportError:
     enrich_lead_with_phonebook = None
     PhonebookLookup = None

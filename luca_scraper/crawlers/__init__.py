@@ -43,7 +43,8 @@ from .meinestadt import crawl_meinestadt_listings_async
 
 # Import generic functions
 from .generic import (
-    extract_generic_detail_async,
+    extract_detail_generic,
+    extract_generic_detail_async,  # Backward compatibility alias
     _mark_url_seen,
 )
 
@@ -66,6 +67,7 @@ __all__ = [
     "crawl_meinestadt_listings_async",
     
     # Generic
-    "extract_generic_detail_async",
+    "extract_detail_generic",
+    "extract_generic_detail_async",  # Backward compatibility alias
     "_mark_url_seen",
 ]
