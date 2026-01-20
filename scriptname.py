@@ -2761,8 +2761,13 @@ def _jitter(a=0.2,b=0.8): return a + random.random()*(b-a)
 
 GCS_CX = _normalize_cx(GCS_CX_RAW)
 # Multi-Key/CX Rotation + Limits
-GCS_KEYS = [k for k in (x.strip() for x in os.getenv("GCS_KEYS","").split(",")) if k] or ([GCS_API_KEY] if GCS_API_KEY else [])
-GCS_CXS  = [cx for cx in (_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(",")) if cx] or ([GCS_CX] if GCS_CX else [])
+# Use generator to avoid double .strip() calls for performance
+_stripped_keys = (x.strip() for x in os.getenv("GCS_KEYS","").split(","))
+GCS_KEYS = [k for k in _stripped_keys if k] or ([GCS_API_KEY] if GCS_API_KEY else [])
+
+_normalized_cxs = (_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(","))
+GCS_CXS = [cx for cx in _normalized_cxs if cx] or ([GCS_CX] if GCS_CX else [])
+
 MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 für Cost & Rate-Limit Control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
