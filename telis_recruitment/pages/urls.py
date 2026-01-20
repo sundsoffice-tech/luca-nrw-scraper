@@ -51,6 +51,8 @@ urlpatterns = [
     path('templates/', views.template_list, name='template-list'),
     path('templates/select/', views.select_template, name='select_template'),
     path('templates/<int:template_id>/apply/', views.apply_template, name='apply_template'),
+    path('templates/<int:template_id>/config/', views.template_config, name='template-config'),
+    path('templates/category/<str:category>/', views.templates_by_category, name='templates-by-category'),
     
     # Upload Management (Staff Only)
     path('upload/<slug:slug>/', views_upload.upload_manager, name='upload-manager'),
