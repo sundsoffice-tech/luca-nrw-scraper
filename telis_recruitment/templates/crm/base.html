@@ -182,7 +182,7 @@
                     <span>Leads</span>
                 </a>
                 
-                <a href="#" class="sidebar-link disabled flex items-center px-4 py-3 text-gray-300" onclick="return false;">
+                <a href="javascript:void(0);" class="sidebar-link disabled flex items-center px-4 py-3 text-gray-300">
                     <span class="text-xl mr-3">📞</span>
                     <span>Telefon</span>
                     <span class="ml-auto text-xs bg-gray-600/30 text-gray-400 px-2 py-1 rounded">Bald</span>
@@ -421,8 +421,9 @@
         
         function toggleEmailSection() {
             const section = document.getElementById('email-section');
-            const icon = document.querySelector('.sidebar-section-icon');
-            const header = document.querySelector('.sidebar-section-header');
+            const icon = document.querySelector('.sidebar-section-header .sidebar-section-icon');
+            
+            if (!section || !icon) return;
             
             if (section.classList.contains('collapsed')) {
                 section.classList.remove('collapsed');

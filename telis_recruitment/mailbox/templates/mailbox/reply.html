@@ -235,9 +235,12 @@ tinymce.init({
     skin: 'oxide-dark',
     content_css: 'dark',
     setup: function(editor) {
-        // Focus on editor after initialization
+        // Focus on editor after initialization (only if user hasn't interacted with page yet)
         editor.on('init', function() {
-            editor.focus();
+            // Only auto-focus on desktop devices and if no other element has focus
+            if (window.innerWidth >= 768 && document.activeElement === document.body) {
+                setTimeout(() => editor.focus(), 100);
+            }
         });
     }
 });
