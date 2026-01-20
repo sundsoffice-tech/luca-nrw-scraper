@@ -41,18 +41,46 @@ def test_missing_secret_key():
 
 def test_insecure_placeholder_key():
     """Test that settings raises ValueError for insecure placeholder keys"""
+    # This list matches INSECURE_KEYS in settings.py
     insecure_keys = [
         'django-insecure-please-change-me-in-production',
         'your-secret-key-here',
         'changeme',
         'insecure',
+    ]
+    
+    # Also test keys starting with 'django-insecure-'
+    additional_insecure = [
         'django-insecure-test123',
+        'django-insecure-another-key',
     ]
     
     # Save current SECRET_KEY
     original_key = os.environ.get('SECRET_KEY')
     
+    # Test explicit INSECURE_KEYS list
     for insecure_key in insecure_keys:
+        try:
+            # Set insecure key
+            os.environ['SECRET_KEY'] = insecure_key
+            
+            # Force reload of settings module
+            if 'telis.settings' in sys.modules:
+                del sys.modules['telis.settings']
+            
+            # Attempting to import settings should raise ValueError
+            with pytest.raises(ValueError, match="SECRET_KEY is set to an insecure value"):
+                import telis.settings
+        finally:
+            # Restore original SECRET_KEY
+            if original_key:
+                os.environ['SECRET_KEY'] = original_key
+            # Clean up module cache
+            if 'telis.settings' in sys.modules:
+                del sys.modules['telis.settings']
+    
+    # Test keys starting with 'django-insecure-'
+    for insecure_key in additional_insecure:
         try:
             # Set insecure key
             os.environ['SECRET_KEY'] = insecure_key
@@ -104,8 +132,9 @@ def test_valid_secret_key():
     original_key = os.environ.get('SECRET_KEY')
     
     try:
-        # Generate a valid key (50+ characters, not a placeholder)
-        valid_key = 'django-secure-' + 'a' * 50 + 'valid-production-key-12345'
+        # Generate a valid key (50+ characters, doesn't start with 'django-insecure-')
+        # Using a safe prefix that won't be rejected by future validation logic
+        valid_key = 'prod-secure-key-' + 'a' * 50 + '-valid-production-key-12345'
         os.environ['SECRET_KEY'] = valid_key
         
         # Force reload of settings module
