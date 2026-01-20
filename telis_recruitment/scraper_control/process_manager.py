@@ -819,7 +819,7 @@ class ProcessManager:
             if remaining == 0 and self.circuit_breaker_state == CircuitBreakerState.OPEN:
                 self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
                 logger.info("Circuit breaker auto-transitioning to HALF_OPEN (penalty expired)")
-                self._log_error("⚠️ Circuit breaker HALF_OPEN - bereit für Test-Operation")
+                self._log_error("⚠️ Circuit breaker HALF_OPEN - ready for test operation")
             
             status_info['circuit_breaker_penalty_seconds'] = penalty_seconds
             status_info['circuit_breaker_elapsed_seconds'] = elapsed
