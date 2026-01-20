@@ -372,9 +372,8 @@
         
         <div class="toolbar-right">
             <button class="toolbar-btn" id="mode-toggle-btn" onclick="toggleEditorMode()" 
-                    title="Switch between visual and code editor"
                     aria-pressed="false"
-                    aria-label="Toggle between visual and code editor modes">
+                    aria-label="Switch between visual and code editor modes">
                 📝 <span id="mode-toggle-text">Code Mode</span>
             </button>
             <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
@@ -438,18 +437,18 @@
             <!-- Code Editor Mode -->
             <div id="code-editor-container">
                 <div class="code-editor-tabs" role="tablist" aria-label="Code editor tabs">
-                    <button class="code-tab active" role="tab" aria-selected="true" aria-controls="html-editor" onclick="switchCodeTab('html', event)">HTML</button>
-                    <button class="code-tab" role="tab" aria-selected="false" aria-controls="css-editor" onclick="switchCodeTab('css', event)">CSS</button>
-                    <button class="code-tab" role="tab" aria-selected="false" aria-controls="json-editor" onclick="switchCodeTab('json', event)">Components (JSON)</button>
+                    <button id="html-tab" class="code-tab active" role="tab" aria-selected="true" aria-controls="html-editor" onclick="switchCodeTab('html', event)">HTML</button>
+                    <button id="css-tab" class="code-tab" role="tab" aria-selected="false" aria-controls="css-editor" onclick="switchCodeTab('css', event)">CSS</button>
+                    <button id="json-tab" class="code-tab" role="tab" aria-selected="false" aria-controls="json-editor" onclick="switchCodeTab('json', event)">Components (JSON)</button>
                 </div>
-                <div id="html-editor" class="code-editor-pane active">
-                    <textarea id="html-code" class="code-textarea" placeholder="HTML code will appear here..."></textarea>
+                <div id="html-editor" class="code-editor-pane active" role="tabpanel" aria-labelledby="html-tab">
+                    <textarea id="html-code" class="code-textarea" placeholder="HTML code will appear here..." aria-label="HTML code editor"></textarea>
                 </div>
-                <div id="css-editor" class="code-editor-pane">
-                    <textarea id="css-code" class="code-textarea" placeholder="CSS code will appear here..."></textarea>
+                <div id="css-editor" class="code-editor-pane" role="tabpanel" aria-labelledby="css-tab">
+                    <textarea id="css-code" class="code-textarea" placeholder="CSS code will appear here..." aria-label="CSS code editor"></textarea>
                 </div>
-                <div id="json-editor" class="code-editor-pane">
-                    <textarea id="json-code" class="code-textarea" placeholder="GrapesJS component JSON will appear here..."></textarea>
+                <div id="json-editor" class="code-editor-pane" role="tabpanel" aria-labelledby="json-tab">
+                    <textarea id="json-code" class="code-textarea" placeholder="GrapesJS component JSON will appear here..." aria-label="Component JSON editor"></textarea>
                 </div>
             </div>
         </div>
@@ -1477,9 +1476,13 @@
             btn.setAttribute('aria-selected', 'false');
         });
         
+        // Get the actual button element (handle clicks on child elements)
         if (clickEvent && clickEvent.target) {
-            clickEvent.target.classList.add('active');
-            clickEvent.target.setAttribute('aria-selected', 'true');
+            const button = clickEvent.target.closest('.code-tab');
+            if (button) {
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+            }
         }
         
         // Update editor panes
