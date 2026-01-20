@@ -270,22 +270,7 @@ try:
         mark_url_seen as _mark_url_seen_router,
         is_query_done as _is_query_done_router,
         mark_query_done as _mark_query_done_router,
-        start_scraper_run as _start_scraper_run_router,
-        finish_scraper_run as _finish_scraper_run_router,
     )
-    # === FIX:  Ensure db_router imports are available ===
-    try:
-        _test = _start_scraper_run_router
-    except NameError:
-        from luca_scraper.db_router import start_scraper_run as _start_scraper_run_router
-        print("[WARN] _start_scraper_run_router was not imported, re-importing...")
-
-    try:
-        _test = _finish_scraper_run_router
-    except NameError:
-        from luca_scraper.db_router import finish_scraper_run as _finish_scraper_run_router
-        print("[WARN] _finish_scraper_run_router was not imported, re-importing...")
-    # === END FIX ===
 
 
 
@@ -2301,11 +2286,13 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def start_run() -> int:
     """Start a scraper run. Uses db_router for backend abstraction."""
-    return _start_scraper_run_router()
+    from luca_scraper.db_router import start_scraper_run
+    return start_scraper_run()
 
 def finish_run(run_id: int, links_checked: Optional[int] = None, leads_new: Optional[int] = None, status: str = "ok", metrics: Optional[Dict[str, int]] = None):
     """Finish a scraper run. Uses db_router for backend abstraction."""
-    _finish_scraper_run_router(run_id, links_checked, leads_new, status, metrics)
+    from luca_scraper.db_router import finish_scraper_run
+    finish_scraper_run(run_id, links_checked, leads_new, status, metrics)
     
     # Log lead rejection statistics
     log_rejection_stats()
