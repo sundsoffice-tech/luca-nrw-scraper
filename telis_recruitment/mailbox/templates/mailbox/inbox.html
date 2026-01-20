@@ -266,6 +266,24 @@
             padding: 10px 12px;
         }
     }
+    
+    /* Additional mobile responsiveness for smaller screens */
+    @media (max-width: 640px) {
+        .conversation-item .meta {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        .conversation-item .time {
+            font-size: 11px;
+        }
+        .conversation-item .subject {
+            font-size: 15px;
+        }
+        .conversation-item .snippet {
+            font-size: 13px;
+        }
+    }
 </style>
 {% endblock %}
 
