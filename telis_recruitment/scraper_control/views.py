@@ -4,6 +4,7 @@ Handles scraper start/stop/status and live logs via SSE.
 """
 
 import json
+import re
 import time
 import psutil
 from django.conf import settings
@@ -59,13 +60,30 @@ def _sanitize_scraper_params(raw_params):
     daterestrict = params.get('daterestrict', '')
     if daterestrict and daterestrict.strip():
         # Validate daterestrict format: d[1-365], w[1-52], m[1-12], y[1-10]
-        import re
         dr = daterestrict.strip()
-        if not re.match(r'^[dwmy]\d+$', dr):
+        match = re.match(r'^([dwmy])(\d+)$', dr)
+        if not match:
             logger.warning(f"Invalid daterestrict format '{dr}', should be d30, w8, m3, or y1. Ignoring.")
             params['daterestrict'] = ''
         else:
-            params['daterestrict'] = dr
+            unit, value = match.groups()
+            value = int(value)
+            # Validate ranges
+            valid = False
+            if unit == 'd' and 1 <= value <= 365:
+                valid = True
+            elif unit == 'w' and 1 <= value <= 52:
+                valid = True
+            elif unit == 'm' and 1 <= value <= 12:
+                valid = True
+            elif unit == 'y' and 1 <= value <= 10:
+                valid = True
+            
+            if valid:
+                params['daterestrict'] = dr
+            else:
+                logger.warning(f"Invalid daterestrict value '{dr}' out of range. Ignoring.")
+                params['daterestrict'] = ''
     else:
         params['daterestrict'] = ''
 

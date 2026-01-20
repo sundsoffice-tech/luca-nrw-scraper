@@ -103,7 +103,7 @@ class ProcessLauncher:
         if params.get('force', False):
             cmd.append('--force')
 
-        # Once flag - default False for continuous mode, True for single-run
+        # Once flag - Default False enables continuous mode; set True for single-run execution
         # Only add if explicitly True (UI controls this)
         if params.get('once', False):
             cmd.append('--once')

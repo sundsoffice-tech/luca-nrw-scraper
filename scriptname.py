@@ -9562,8 +9562,10 @@ def parse_args():
     ap.add_argument("--dry-run", dest="dry_run", action="store_true", help="Test-Modus ohne tatsächliche Ausführung (keine DB-Änderungen)")
     ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
-    # Note: INDUSTRY_ORDER might not include all choices from ScraperConfig.INDUSTRY_CHOICES
-    ap.add_argument("--industry", choices=["all","recruiter","candidates","talent_hunt","handelsvertreter","nrw","social","solar","telekom","versicherung","bau","ecom","household","d2d","callcenter"] + list(INDUSTRY_ORDER),
+    # Use base modes + INDUSTRY_ORDER to avoid duplicates
+    base_industries = ["all","recruiter","candidates","talent_hunt"]
+    all_industries = base_industries + [i for i in INDUSTRY_ORDER if i not in base_industries]
+    ap.add_argument("--industry", choices=all_industries,
                 default=os.getenv("INDUSTRY","all"),
                 help="Branche für diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
     ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
