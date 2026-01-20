@@ -26,7 +26,39 @@ except FileNotFoundError:
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-please-change-me-in-production')
+# SECRET_KEY must be set via environment variable - no fallback allowed
+SECRET_KEY = os.getenv('SECRET_KEY', '')
+
+# Validate SECRET_KEY - fail fast if missing or insecure
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is not set. "
+        "Generate a secure key using: "
+        "python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+    )
+
+# Check for insecure placeholder keys
+INSECURE_KEYS = [
+    'django-insecure-please-change-me-in-production',
+    'your-secret-key-here',
+    'changeme',
+    'insecure',
+]
+if SECRET_KEY in INSECURE_KEYS or SECRET_KEY.startswith('django-insecure-'):
+    raise ValueError(
+        f"SECRET_KEY is set to an insecure value. "
+        f"Never use placeholder keys in production. "
+        f"Generate a secure key using: "
+        f"python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+    )
+
+# Enforce minimum key length for additional security
+if len(SECRET_KEY) < 50:
+    raise ValueError(
+        f"SECRET_KEY must be at least 50 characters long (current length: {len(SECRET_KEY)}). "
+        f"Generate a secure key using: "
+        f"python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
