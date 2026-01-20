@@ -1,7 +1,7 @@
 """Template filters for pages app with security sanitization."""
 
 from django import template
-from ...mailbox.utils.security import sanitize_page_html, sanitize_css
+from mailbox.utils.security import sanitize_page_html, sanitize_css
 
 register = template.Library()
 

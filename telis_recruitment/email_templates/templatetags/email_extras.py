@@ -3,7 +3,7 @@
 import json
 from django import template
 from django.utils.safestring import mark_safe
-from ...mailbox.utils.security import sanitize_email_html
+from mailbox.utils.security import sanitize_email_html
 
 register = template.Library()
 

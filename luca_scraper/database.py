@@ -589,9 +589,6 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
             new_id = cur.lastrowid
             con.commit()
             return (new_id, True)
-        con.commit()
-        
-        return (new_id, True)
     except Exception as exc:
         logger.error("Error in upsert_lead_sqlite: %s", exc)
         con.rollback()
