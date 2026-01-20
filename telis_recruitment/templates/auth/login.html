@@ -22,7 +22,7 @@
         </div>
 
         <!-- Login Form -->
-        <div class="bg-dark-800 rounded-lg shadow-xl p-8 border border-dark-700">
+        <div class="bg-dark-800 rounded-lg shadow-xl p-8 border border-dark-700 subtle-glow">
             <form method="post" class="space-y-6" action="{% url 'login' %}">
                 {% csrf_token %}
                 
@@ -125,15 +125,4 @@
         </div>
     </div>
 </div>
-
-<style>
-    /* Subtle glow animation for the form */
-    @keyframes subtle-glow {
-        0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.1); }
-        50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.15); }
-    }
-    .bg-dark-800 {
-        animation: subtle-glow 4s infinite;
-    }
-</style>
 {% endblock %}
