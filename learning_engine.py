@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import urllib.parse
 import re
 import logging
+import hashlib
 
 # Import unified learning database adapter
 try:
@@ -699,15 +700,53 @@ class LearningEngine:
         """
         if not query:
             return
-        
+
         # Use unified learning database adapter
-        learning_db.record_dork_usage(
-            query=query,
-            leads_found=leads_found,
-            phone_leads=phone_leads,
-            results=leads_found,  # Approximate results as leads for success rate
-            db_path=self.db_path
-        )
+        try:
+            learning_db.record_dork_usage(
+                query=query,
+                leads_found=leads_found,
+                phone_leads=phone_leads,
+                results=leads_found,  # Approximate results as leads for success rate
+                db_path=self.db_path
+            )
+        except Exception:
+            pass
+
+        query_hash = hashlib.sha256(query.encode()).hexdigest()
+        
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        
+        try:
+            # Calculate initial effectiveness score
+            initial_effectiveness = min(1.0, leads_found * 0.2)
+            
+            cur.execute("""
+                INSERT INTO learning_queries 
+                (query_hash, query_text, times_used, leads_generated, last_used, effectiveness_score)
+                VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP, ?)
+                ON CONFLICT(query_hash) DO UPDATE SET
+                    times_used = times_used + 1,
+                    leads_generated = leads_generated + ?,
+                    avg_leads_per_run = CAST(leads_generated + ? AS REAL) / (times_used + 1),
+                    last_used = CURRENT_TIMESTAMP,
+                    effectiveness_score = MIN(1.0, CAST(leads_generated + ? AS REAL) / (times_used + 1) * 0.2)
+            """, (
+                query_hash, 
+                query, 
+                leads_found, 
+                initial_effectiveness,
+                leads_found,
+                leads_found,
+                leads_found
+            ))
+            
+            con.commit()
+        except Exception:
+            pass
+        finally:
+            con.close()
     
     def get_domain_priority(self, domain: str) -> float:
         """

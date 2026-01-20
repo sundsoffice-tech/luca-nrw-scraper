@@ -6,6 +6,11 @@ Inherits from base settings.py and overrides for production security.
 import os
 from .settings import *
 
+# Custom warning category used for security-related warnings
+class SecurityWarning(Warning):
+    """Warning category for production security issues (e.g., insecure SSL)."""
+    pass
+
 # ======================
 # SECURITY SETTINGS
 # ======================

@@ -72,7 +72,15 @@ async function loadLeads() {
         }
         
         const response = await fetch(`/api/leads/?${params.toString()}`);
-        if (!response.ok) throw new Error('Failed to load leads');
+        if (!response.ok) {
+            let errorText = '';
+            try {
+                errorText = await response.text();
+            } catch (readError) {
+                console.error('Error reading response body:', readError);
+            }
+            throw new Error(`Failed to load leads: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
+        }
         
         const data = await response.json();
         

@@ -2,11 +2,14 @@
 Email threading service for grouping related emails into conversations.
 """
 import re
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from django.utils import timezone
 from django.db import transaction
 from mailbox.models import EmailConversation, EmailAccount
 import logging
+
+if TYPE_CHECKING:
+    from leads.models import Lead
 
 logger = logging.getLogger(__name__)
 
