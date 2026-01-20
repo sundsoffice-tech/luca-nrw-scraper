@@ -29,6 +29,7 @@ python_files = ["test_*.py", "*_test.py", "tests.py"]
 python_classes = ["Test*", "*Test", "*TestCase"]
 python_functions = ["test_*"]
 testpaths = ["tests", "telis_recruitment"]
+DJANGO_SETTINGS_MODULE = "telis_recruitment.telis.settings"
 addopts = [
     "--verbose",
     "--strict-markers",
