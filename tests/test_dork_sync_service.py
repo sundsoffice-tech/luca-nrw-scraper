@@ -221,6 +221,68 @@ class TestRecordDorkResultWithSync:
         assert row[0] == "explore"
 
 
+class TestScoreCalculationEdgeCases:
+    """Tests for edge cases in score calculation for dork_sync service."""
+    
+    def test_edge_case_leads_found_zero_but_leads_with_phone_positive(self, sync_service, temp_sqlite_db):
+        """
+        Test the specific edge case mentioned in the issue:
+        leads_found=0 and leads_with_phone=1 should result in score=1.0, not 0.0
+        """
+        result = sync_service.record_dork_result_with_sync(
+            dork="edge case test dork",
+            results=10,
+            leads_found=0,  # Edge case: no leads found
+            leads_with_phone=1,  # But 1 lead with phone (data inconsistency)
+            sync_to_django=False,
+        )
+        
+        assert result is True
+        
+        # Verify stored in SQLite with correct score
+        conn = sqlite3.connect(temp_sqlite_db)
+        cursor = conn.execute(
+            "SELECT leads_found, leads_with_phone, score, pool "
+            "FROM learning_dork_performance WHERE dork = ?",
+            ("edge case test dork",)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        assert row is not None
+        assert row[0] == 0  # leads_found
+        assert row[1] == 1  # leads_with_phone
+        assert row[2] == 1.0, f"Expected score 1.0 but got {row[2]}"  # score should be 1.0, not 0.0
+        assert row[3] == "core"  # pool
+    
+    def test_edge_case_leads_with_phone_exceeds_leads_found(self, sync_service, temp_sqlite_db):
+        """Test edge case where leads_with_phone > leads_found (data inconsistency)."""
+        result = sync_service.record_dork_result_with_sync(
+            dork="inconsistent data dork",
+            results=20,
+            leads_found=5,
+            leads_with_phone=8,  # More phone leads than total leads
+            sync_to_django=False,
+        )
+        
+        assert result is True
+        
+        conn = sqlite3.connect(temp_sqlite_db)
+        cursor = conn.execute(
+            "SELECT leads_found, leads_with_phone, score "
+            "FROM learning_dork_performance WHERE dork = ?",
+            ("inconsistent data dork",)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        assert row is not None
+        assert row[0] == 5  # leads_found
+        assert row[1] == 8  # leads_with_phone
+        # Score should be 8 / max(1, max(5, 8)) = 8 / 8 = 1.0
+        assert row[2] == 1.0, f"Expected score 1.0 but got {row[2]}"
+
+
 class TestSyncAllDorks:
     """Tests for bulk sync functionality."""
     

@@ -1413,7 +1413,11 @@ class ActiveLearningEngine:
             leads_with_phone: Number of leads with valid phone numbers
         """
         try:
-            score = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
+            # Use max(leads_found, leads_with_phone) to handle edge cases where
+            # leads_with_phone > leads_found (data inconsistency)
+            # Then divide by max(1, ...) to prevent division by zero
+            actual_leads = max(leads_found, leads_with_phone)
+            score = leads_with_phone / max(1, actual_leads)
             pool = 'core' if leads_with_phone > 0 else 'explore'
             
             with sqlite3.connect(self.db_path) as conn:
@@ -1426,7 +1430,9 @@ class ActiveLearningEngine:
                     new_total_results = existing[1] + results
                     new_leads = existing[2] + leads_found
                     new_phone_leads = existing[3] + leads_with_phone
-                    new_score = new_phone_leads / max(1, new_leads)
+                    # Handle edge case where new_phone_leads > new_leads
+                    actual_new_leads = max(new_leads, new_phone_leads)
+                    new_score = new_phone_leads / max(1, actual_new_leads)
                     
                     conn.execute("""
                         UPDATE learning_dork_performance 
