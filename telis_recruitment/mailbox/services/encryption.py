@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,11 +20,26 @@ def _get_encryption_key() -> bytes:
     Get or generate encryption key from Django SECRET_KEY.
     
     Uses PBKDF2 to derive a Fernet-compatible key from Django's SECRET_KEY.
+    The salt must be configured in Django settings as ENCRYPTION_SALT.
+    
+    Raises:
+        ImproperlyConfigured: If ENCRYPTION_SALT is not configured in settings
     """
     secret_key = settings.SECRET_KEY.encode()
     
-    # Use a fixed salt (in production, this could be environment-specific)
-    salt = b'mailbox_encryption_salt_v1'
+    # Load salt from settings (must be configured in environment)
+    encryption_salt = getattr(settings, 'ENCRYPTION_SALT', None)
+    if not encryption_salt:
+        raise ImproperlyConfigured(
+            "ENCRYPTION_SALT must be configured in Django settings. "
+            "Please set the ENCRYPTION_SALT environment variable."
+        )
+    
+    # Convert salt to bytes if it's a string
+    if isinstance(encryption_salt, str):
+        salt = encryption_salt.encode()
+    else:
+        salt = encryption_salt
     
     # Derive a 32-byte key using PBKDF2
     kdf = PBKDF2HMAC(
