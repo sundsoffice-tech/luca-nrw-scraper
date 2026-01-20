@@ -469,7 +469,7 @@ class ProcessManager:
         
         logger.info("Error tracking and circuit breaker reset complete")
     
-    def preview_command(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def preview_command(self, params: Dict[str, Any]) -> str:
         """
         Preview the command that would be executed without starting the process.
         
@@ -477,9 +477,99 @@ class ProcessManager:
             params: Dictionary of scraper parameters
             
         Returns:
-            Dictionary with command preview information
+            Command string preview
         """
         return self.launcher.preview_command(params)
+    
+    # Backward compatibility: proxy properties and methods for tests
+    @property
+    def error_counts(self):
+        """Backward compatibility: access retry_controller.error_counts"""
+        return self.retry_controller.error_counts
+    
+    @error_counts.setter
+    def error_counts(self, value):
+        """Backward compatibility: set retry_controller.error_counts"""
+        self.retry_controller.error_counts = value
+    
+    @property
+    def error_timestamps(self):
+        """Backward compatibility: access retry_controller.error_timestamps"""
+        return self.retry_controller.error_timestamps
+    
+    @property
+    def consecutive_failures(self):
+        """Backward compatibility: access retry_controller.consecutive_failures"""
+        return self.retry_controller.consecutive_failures
+    
+    @consecutive_failures.setter
+    def consecutive_failures(self, value):
+        """Backward compatibility: set retry_controller.consecutive_failures"""
+        self.retry_controller.consecutive_failures = value
+    
+    @property
+    def retry_count(self):
+        """Backward compatibility: access retry_controller.retry_count"""
+        return self.retry_controller.retry_count
+    
+    @retry_count.setter
+    def retry_count(self, value):
+        """Backward compatibility: set retry_controller.retry_count"""
+        self.retry_controller.retry_count = value
+    
+    @property
+    def circuit_breaker_state(self):
+        """Backward compatibility: access circuit_breaker.state"""
+        return self.circuit_breaker.state
+    
+    @circuit_breaker_state.setter
+    def circuit_breaker_state(self, value):
+        """Backward compatibility: set circuit_breaker.state"""
+        self.circuit_breaker.state = value
+    
+    @property
+    def circuit_breaker_failures(self):
+        """Backward compatibility: access circuit_breaker.failures"""
+        return self.circuit_breaker.failures
+    
+    @circuit_breaker_failures.setter
+    def circuit_breaker_failures(self, value):
+        """Backward compatibility: set circuit_breaker.failures"""
+        self.circuit_breaker.failures = value
+    
+    @property
+    def circuit_breaker_opened_at(self):
+        """Backward compatibility: access circuit_breaker.opened_at"""
+        return self.circuit_breaker.opened_at
+    
+    @circuit_breaker_opened_at.setter
+    def circuit_breaker_opened_at(self, value):
+        """Backward compatibility: set circuit_breaker.opened_at"""
+        self.circuit_breaker.opened_at = value
+    
+    def _track_error(self, error_type: str):
+        """Backward compatibility: delegate to _handle_error"""
+        self._handle_error(error_type)
+    
+    def _calculate_error_rate(self) -> float:
+        """Backward compatibility: delegate to retry_controller"""
+        return self.retry_controller.calculate_error_rate()
+    
+    def _open_circuit_breaker(self):
+        """Backward compatibility: delegate to circuit_breaker"""
+        self.circuit_breaker.open(self.output_monitor.log_error)
+        # Stop the running process if any
+        if self.is_running():
+            logger.info("Stopping scraper due to circuit breaker opening")
+            self.stop()
+    
+    def _close_circuit_breaker(self):
+        """Backward compatibility: delegate to circuit_breaker"""
+        self.circuit_breaker.close(self.output_monitor.log_error)
+    
+    def _check_circuit_breaker(self) -> bool:
+        """Backward compatibility: delegate to circuit_breaker"""
+        return self.circuit_breaker.check_and_update(self.output_monitor.log_error)
 
 
 # Global manager instance
