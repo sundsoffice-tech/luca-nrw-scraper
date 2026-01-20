@@ -24,6 +24,9 @@ class ProcessManagerErrorTrackingTest(TestCase):
             'rate_limit': 0,
             'config_error': 0,
             'crash': 0,
+            'connection_error': 0,
+            'timeout': 0,
+            'parsing_error': 0,
             'other': 0
         }
         self.manager.error_timestamps.clear()
@@ -112,6 +115,32 @@ class ProcessManagerErrorTrackingTest(TestCase):
         self.assertEqual(self.manager.circuit_breaker_state, CircuitBreakerState.CLOSED)
         self.assertEqual(self.manager.circuit_breaker_failures, 0)
         self.assertIsNone(self.manager.circuit_breaker_opened_at)
+    
+    def test_track_connection_error(self):
+        """Test tracking connection errors."""
+        self.manager._track_error('connection_error')
+        
+        self.assertEqual(self.manager.error_counts['connection_error'], 1)
+        self.assertEqual(len(self.manager.error_timestamps), 1)
+    
+    def test_track_timeout_error(self):
+        """Test tracking timeout errors."""
+        self.manager._track_error('timeout')
+        
+        self.assertEqual(self.manager.error_counts['timeout'], 1)
+        self.assertEqual(len(self.manager.error_timestamps), 1)
+    
+    def test_track_parsing_error(self):
+        """Test tracking parsing errors."""
+        self.manager._track_error('parsing_error')
+        
+        self.assertEqual(self.manager.error_counts['parsing_error'], 1)
+        self.assertEqual(len(self.manager.error_timestamps), 1)
+    
+    def test_error_rate_window_initialized(self):
+        """Test that error_rate_window_seconds is properly initialized."""
+        self.assertIsNotNone(self.manager.error_rate_window_seconds)
+        self.assertEqual(self.manager.error_rate_window_seconds, 300)  # 5 minutes
 
 
 class ProcessManagerRetryLogicTest(TestCase):
@@ -163,6 +192,15 @@ class ProcessManagerRetryLogicTest(TestCase):
         self.assertEqual(backoff1, 10.0)
         self.assertEqual(backoff2, 20.0)
         self.assertEqual(backoff3, 40.0)
+    
+    def test_calculate_retry_backoff_max_cap(self):
+        """Test that backoff is capped at 300 seconds."""
+        # Set high retry count to exceed cap
+        self.manager.retry_count = 10  # Would be 10.0 * 2^10 = 10240 without cap
+        backoff = self.manager._calculate_retry_backoff()
+        
+        # Should be capped at 300
+        self.assertEqual(backoff, 300.0)
     
     def test_adjust_qpi_for_rate_limit(self):
         """Test QPI adjustment when rate limit errors detected."""
@@ -321,3 +359,4 @@ class ProcessManagerConfigLoadTest(TestCase):
         self.assertEqual(manager.error_rate_threshold, 0.4)
         self.assertEqual(manager.circuit_breaker_failure_threshold, 7)
         self.assertEqual(manager.retry_backoff_base, 60.0)
+        self.assertEqual(manager.error_rate_window_seconds, 300)  # Should be initialized

@@ -313,6 +313,105 @@
     </div>
 </div>
 
+<!-- Run Details Modal -->
+<div id="run-details-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div class="bg-dark-800 rounded-lg border border-dark-700 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between p-6 border-b border-dark-700">
+            <h2 class="text-2xl font-semibold text-gray-100">Run Details #<span id="modal-run-id">-</span></h2>
+            <button id="btn-close-modal" class="text-gray-400 hover:text-gray-200 text-2xl">&times;</button>
+        </div>
+        
+        <!-- Modal Content -->
+        <div class="flex-1 overflow-y-auto p-6">
+            <!-- Loading State -->
+            <div id="modal-loading" class="text-center py-8">
+                <div class="text-gray-400">Lade Details...</div>
+            </div>
+            
+            <!-- Content -->
+            <div id="modal-content" class="hidden space-y-6">
+                <!-- Overview -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-dark-900 rounded p-3">
+                        <div class="text-gray-400 text-xs">Status</div>
+                        <div class="text-lg font-semibold mt-1" id="detail-status">-</div>
+                    </div>
+                    <div class="bg-dark-900 rounded p-3">
+                        <div class="text-gray-400 text-xs">Dauer</div>
+                        <div class="text-lg font-semibold text-gray-100 mt-1" id="detail-duration">-</div>
+                    </div>
+                    <div class="bg-dark-900 rounded p-3">
+                        <div class="text-gray-400 text-xs">Leads</div>
+                        <div class="text-lg font-semibold text-primary mt-1" id="detail-leads">-</div>
+                    </div>
+                    <div class="bg-dark-900 rounded p-3">
+                        <div class="text-gray-400 text-xs">API-Kosten</div>
+                        <div class="text-lg font-semibold text-yellow-400 mt-1">$<span id="detail-cost">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- Parameters Snapshot -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-100 mb-3">Parameter</h3>
+                    <div class="bg-dark-900 rounded p-4">
+                        <pre id="detail-params" class="text-sm text-gray-300 overflow-x-auto">-</pre>
+                    </div>
+                </div>
+                
+                <!-- Performance Metrics -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-100 mb-3">Performance</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Links geprüft</div>
+                            <div class="text-gray-100 font-semibold" id="detail-links-checked">-</div>
+                        </div>
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Akzeptanzrate</div>
+                            <div class="text-green-400 font-semibold" id="detail-acceptance-rate">-</div>
+                        </div>
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Block-Rate</div>
+                            <div class="text-red-400 font-semibold" id="detail-block-rate">-</div>
+                        </div>
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Erfolgsrate</div>
+                            <div class="text-blue-400 font-semibold" id="detail-success-rate">-</div>
+                        </div>
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Ø Request-Zeit</div>
+                            <div class="text-gray-100 font-semibold" id="detail-avg-time">-</div>
+                        </div>
+                        <div class="bg-dark-900 rounded p-3">
+                            <div class="text-gray-400 text-xs">Timeout-Rate</div>
+                            <div class="text-yellow-400 font-semibold" id="detail-timeout-rate">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Error Statistics -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-100 mb-3">Fehler & Warnungen</h3>
+                    <div class="bg-dark-900 rounded p-4">
+                        <div class="space-y-2" id="detail-errors">
+                            <div class="text-gray-500 text-sm">Keine Fehler</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Logs -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-100 mb-3">Logs</h3>
+                    <div class="bg-dark-900 rounded p-4 max-h-64 overflow-y-auto">
+                        <pre id="detail-logs" class="text-xs text-gray-300 whitespace-pre-wrap">-</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="{% static 'js/scraper-control.js' %}"></script>
 {% endblock %}
 
@@ -626,10 +725,178 @@ document.getElementById('btn-reset-cb').addEventListener('click', async function
     }
 });
 
-// Placeholder for run details modal
-window.showRunDetails = function(runId) {
-    // TODO: Implement modal with detailed run information
-    console.log('Show details for run', runId);
+// Run Details Modal
+const runDetailsModal = document.getElementById('run-details-modal');
+const modalContent = document.getElementById('modal-content');
+const modalLoading = document.getElementById('modal-loading');
+const btnCloseModal = document.getElementById('btn-close-modal');
+
+btnCloseModal.addEventListener('click', () => {
+    runDetailsModal.classList.add('hidden');
+});
+
+// Close modal on background click
+runDetailsModal.addEventListener('click', (e) => {
+    if (e.target === runDetailsModal) {
+        runDetailsModal.classList.add('hidden');
+    }
+});
+
+window.showRunDetails = async function(runId) {
+    try {
+        // Show modal
+        runDetailsModal.classList.remove('hidden');
+        modalContent.classList.add('hidden');
+        modalLoading.classList.remove('hidden');
+        
+        document.getElementById('modal-run-id').textContent = runId;
+        
+        // Fetch run details
+        const response = await fetch(`{% url "scraper_control:api-runs" %}`, {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load runs');
+        
+        const runs = await response.json();
+        const run = runs.find(r => r.id === runId);
+        
+        if (!run) {
+            throw new Error('Run not found');
+        }
+        
+        // Populate modal with data
+        // Status
+        const statusEl = document.getElementById('detail-status');
+        statusEl.textContent = run.status;
+        statusEl.className = 'text-lg font-semibold mt-1';
+        if (run.status === 'completed') {
+            statusEl.classList.add('text-green-400');
+        } else if (run.status === 'failed' || run.status === 'error') {
+            statusEl.classList.add('text-red-400');
+        } else if (run.status === 'running') {
+            statusEl.classList.add('text-primary');
+        } else {
+            statusEl.classList.add('text-gray-400');
+        }
+        
+        // Duration
+        if (run.duration_seconds) {
+            const hours = Math.floor(run.duration_seconds / 3600);
+            const minutes = Math.floor((run.duration_seconds % 3600) / 60);
+            const seconds = run.duration_seconds % 60;
+            let durationStr = '';
+            if (hours > 0) durationStr += `${hours}h `;
+            if (minutes > 0) durationStr += `${minutes}m `;
+            durationStr += `${seconds}s`;
+            document.getElementById('detail-duration').textContent = durationStr.trim();
+        } else {
+            document.getElementById('detail-duration').textContent = '-';
+        }
+        
+        // Leads
+        document.getElementById('detail-leads').textContent = `${run.leads_accepted || 0} / ${run.leads_found || 0}`;
+        
+        // API Cost
+        document.getElementById('detail-cost').textContent = run.api_cost ? run.api_cost.toFixed(2) : '0.00';
+        
+        // Parameters (fetch from run endpoint to get params_snapshot)
+        const detailResponse = await fetch(`/crm/scraper/api/scraper/runs/?run_id=${runId}`, {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        // For now, show basic params
+        document.getElementById('detail-params').textContent = JSON.stringify({
+            industry: 'N/A (fetch from API)',
+            qpi: 'N/A',
+            mode: 'N/A'
+        }, null, 2);
+        
+        // Performance metrics
+        document.getElementById('detail-links-checked').textContent = run.links_checked || 0;
+        document.getElementById('detail-acceptance-rate').textContent = `${(run.lead_acceptance_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-block-rate').textContent = `${(run.block_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-success-rate').textContent = `${(run.success_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-avg-time').textContent = `${Math.round(run.avg_request_time_ms || 0)}ms`;
+        document.getElementById('detail-timeout-rate').textContent = `${(run.timeout_rate || 0).toFixed(1)}%`;
+        
+        // Errors
+        const errorsContainer = document.getElementById('detail-errors');
+        errorsContainer.innerHTML = '';
+        
+        // Fetch errors for this run
+        try {
+            const errorsResponse = await fetch(`{% url "scraper_control:api-errors-filtered" %}?run_id=${runId}&limit=10`, {
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            
+            if (errorsResponse.ok) {
+                const errors = await errorsResponse.json();
+                if (errors.length > 0) {
+                    errors.forEach(error => {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'text-sm border-l-2 border-red-500 pl-3 py-1';
+                        
+                        const typeSpan = document.createElement('span');
+                        typeSpan.className = 'text-red-400 font-semibold';
+                        typeSpan.textContent = error.error_type_display;
+                        
+                        const msgSpan = document.createElement('span');
+                        msgSpan.className = 'text-gray-300 ml-2';
+                        msgSpan.textContent = `(${error.count}x) ${error.message.substring(0, 100)}`;
+                        
+                        errorDiv.appendChild(typeSpan);
+                        errorDiv.appendChild(msgSpan);
+                        errorsContainer.appendChild(errorDiv);
+                    });
+                } else {
+                    errorsContainer.innerHTML = '<div class="text-gray-500 text-sm">Keine Fehler</div>';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading errors:', e);
+        }
+        
+        // Logs
+        try {
+            const logsResponse = await fetch(`{% url "scraper_control:api-logs-filtered" %}?run_id=${runId}&limit=200`, {
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            
+            if (logsResponse.ok) {
+                const logs = await logsResponse.json();
+                if (logs.length > 0) {
+                    const logsText = logs.map(log => {
+                        const timestamp = new Date(log.created_at).toLocaleTimeString();
+                        return `[${timestamp}] [${log.level}] ${log.message}`;
+                    }).join('\n');
+                    document.getElementById('detail-logs').textContent = logsText;
+                } else {
+                    document.getElementById('detail-logs').textContent = 'Keine Logs verfügbar';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading logs:', e);
+            document.getElementById('detail-logs').textContent = 'Fehler beim Laden der Logs';
+        }
+        
+        // Show content
+        modalLoading.classList.add('hidden');
+        modalContent.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error loading run details:', error);
+        alert('Fehler beim Laden der Run-Details: ' + error.message);
+        runDetailsModal.classList.add('hidden');
+    }
 };
 </script>
 {% endblock %}
