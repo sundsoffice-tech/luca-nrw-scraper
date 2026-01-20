@@ -282,8 +282,122 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     sync_status_to_scraper,
 )
 
-# Re-export DATABASE_BACKEND from config
-from .config import DATABASE_BACKEND
+
+def _normalize_phone(value: Optional[str]) -> Optional[str]:
+    """Keep only digits when normalizing phone numbers for lookup."""
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return digits or None
+
+
+def _build_crm_status_index() -> Optional[Tuple[Dict[str, str], Dict[str, str]]]:
+    """Load CRM lead statuses indexed by email and phone."""
+    try:
+        from telis_recruitment.leads.models import Lead
+    except Exception as exc:
+        logger.debug("CRM models unavailable for status sync: %s", exc)
+        return None
+
+    email_index: Dict[str, str] = {}
+    phone_index: Dict[str, str] = {}
+
+    try:
+        queryset = Lead.objects.filter(source=Lead.Source.SCRAPER).values("email", "telefon", "status")
+    except Exception as exc:
+        logger.warning("Failed to load CRM lead statuses: %s", exc)
+        return None
+
+    for row in queryset:
+        status = row.get("status")
+        if not status:
+            continue
+        normalized_email = _normalize_email(row.get("email"))
+        if normalized_email:
+            email_index[normalized_email] = status
+        normalized_phone = _normalize_phone(row.get("telefon"))
+        if normalized_phone:
+            phone_index[normalized_phone] = status
+
+    return email_index, phone_index
+
+
+def sync_status_to_scraper() -> Dict[str, int]:
+    """
+    Synchronize CRM lead statuses back into the scraper database.
+
+    This keeps the local SQLite DB aware of which leads were already acted upon
+    so the scraper can avoid reprocessing them.
+    
+    Optimized to use bulk UPDATE with CASE expression instead of individual updates.
+    """
+    index = _build_crm_status_index()
+    if not index:
+        return {"checked": 0, "updated": 0}
+
+    email_index, phone_index = index
+    stats = {"checked": 0, "updated": 0}
+
+    with transaction() as con:
+        cur = con.cursor()
+        cur.execute("SELECT id, email, telefon, crm_status FROM leads WHERE email IS NOT NULL OR telefon IS NOT NULL")
+        rows = cur.fetchall()
+        stats["checked"] = len(rows)
+
+        # Build a mapping of lead_id -> new_status for all leads that need updating
+        updates = {}
+        for row in rows:
+            new_status = None
+            if row["email"]:
+                new_status = email_index.get(_normalize_email(row["email"]))
+            if not new_status and row["telefon"]:
+                new_status = phone_index.get(_normalize_phone(row["telefon"]))
+            if new_status and new_status != row["crm_status"]:
+                updates[row["id"]] = new_status
+
+        # Perform bulk update using CASE expression if there are updates
+        if updates:
+            # Build CASE expression for bulk update
+            # UPDATE leads SET crm_status = CASE 
+            #   WHEN id = ? THEN ?
+            #   WHEN id = ? THEN ?
+            #   ...
+            # END
+            # WHERE id IN (?, ?, ...)
+            
+            # Build parameterized query components
+            # Using list of tuples to ensure proper structure
+            params = []
+            ids = []
+            
+            for lead_id, status in updates.items():
+                params.extend([lead_id, status])
+                ids.append(lead_id)
+            
+            # Build the CASE clauses - each is just "WHEN id = ? THEN ?"
+            # This is safe as we're only joining a fixed pattern string
+            case_clause = "WHEN id = ? THEN ?"
+            case_expression = ' '.join([case_clause] * len(updates))
+            
+            # Build placeholders for WHERE IN clause
+            id_placeholders = ','.join('?' * len(ids))
+            
+            # Build and execute the bulk update query
+            # All values are parameterized - no user input in SQL structure
+            sql = f"""
+                UPDATE leads 
+                SET crm_status = CASE 
+                    {case_expression}
+                END
+                WHERE id IN ({id_placeholders})
+            """
+            
+            # Execute bulk update with all parameters
+            cur.execute(sql, params + ids)
+            stats["updated"] = len(updates)
+
+    logger.debug("sync_status_to_scraper updated %d rows (checked %d)", stats["updated"], stats["checked"])
+    return stats
 
 
 # =========================
