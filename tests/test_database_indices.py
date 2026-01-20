@@ -55,8 +55,8 @@ class TestDatabaseIndices:
             """)
             indices = [row[0] for row in cursor.fetchall()]
             
-            # Check that our indices exist
-            assert 'idx_queries_done_q' in indices, "Index on queries_done.q should exist"
+            # Check that our timestamp index exists
+            # Note: q column has auto-index from PRIMARY KEY
             assert 'idx_queries_done_ts' in indices, "Index on queries_done.ts should exist"
     
     def test_urls_seen_indices_exist(self, temp_db, reset_db_ready):
@@ -71,8 +71,8 @@ class TestDatabaseIndices:
             """)
             indices = [row[0] for row in cursor.fetchall()]
             
-            # Check that our indices exist
-            assert 'idx_urls_seen_url' in indices, "Index on urls_seen.url should exist"
+            # Check that our timestamp index exists
+            # Note: url column has auto-index from PRIMARY KEY
             assert 'idx_urls_seen_ts' in indices, "Index on urls_seen.ts should exist"
     
     def test_index_details(self, temp_db, reset_db_ready):
@@ -80,25 +80,25 @@ class TestDatabaseIndices:
         with patch("luca_scraper.database.DB_PATH", temp_db):
             conn = database.db()
             
-            # Check idx_queries_done_q
+            # Check idx_queries_done_ts
             cursor = conn.execute("""
                 SELECT sql FROM sqlite_master 
-                WHERE type='index' AND name='idx_queries_done_q'
+                WHERE type='index' AND name='idx_queries_done_ts'
             """)
             result = cursor.fetchone()
             assert result is not None
             assert 'queries_done' in result[0].lower()
-            assert 'q' in result[0].lower()
+            assert 'ts' in result[0].lower()
             
-            # Check idx_urls_seen_url
+            # Check idx_urls_seen_ts
             cursor = conn.execute("""
                 SELECT sql FROM sqlite_master 
-                WHERE type='index' AND name='idx_urls_seen_url'
+                WHERE type='index' AND name='idx_urls_seen_ts'
             """)
             result = cursor.fetchone()
             assert result is not None
             assert 'urls_seen' in result[0].lower()
-            assert 'url' in result[0].lower()
+            assert 'ts' in result[0].lower()
     
     def test_queries_performance_with_index(self, temp_db, reset_db_ready):
         """Test that queries on indexed columns use the index"""
@@ -162,15 +162,15 @@ class TestDatabaseIndices:
             cursor = conn.execute("""
                 SELECT COUNT(*) FROM sqlite_master 
                 WHERE type='index' AND tbl_name='queries_done' 
-                AND name IN ('idx_queries_done_q', 'idx_queries_done_ts')
+                AND name = 'idx_queries_done_ts'
             """)
             count = cursor.fetchone()[0]
-            assert count == 2, "Should have exactly 2 indices on queries_done"
+            assert count == 1, "Should have exactly 1 timestamp index on queries_done"
             
             cursor = conn.execute("""
                 SELECT COUNT(*) FROM sqlite_master 
                 WHERE type='index' AND tbl_name='urls_seen' 
-                AND name IN ('idx_urls_seen_url', 'idx_urls_seen_ts')
+                AND name = 'idx_urls_seen_ts'
             """)
             count = cursor.fetchone()[0]
-            assert count == 2, "Should have exactly 2 indices on urls_seen"
+            assert count == 1, "Should have exactly 1 timestamp index on urls_seen"
