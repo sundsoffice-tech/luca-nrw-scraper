@@ -497,3 +497,139 @@ class ProjectTemplate(models.Model):
         self.usage_count += 1
         self.save(update_fields=['usage_count'])
 
+
+class ProjectNavigation(models.Model):
+    """Navigationsstruktur für Multipage-Projekte"""
+    
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, related_name='nav_items')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    
+    title = models.CharField(max_length=100, help_text="Angezeigter Menütext")
+    page = models.ForeignKey('LandingPage', on_delete=models.SET_NULL, null=True, blank=True)
+    external_url = models.URLField(blank=True, help_text="Externe URL (überschreibt Seiten-Link)")
+    icon = models.CharField(max_length=50, blank=True, help_text="Icon-Klasse (z.B. 'fa-home')")
+    
+    order = models.PositiveIntegerField(default=0)
+    is_visible = models.BooleanField(default=True)
+    open_in_new_tab = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['order']
+        verbose_name = 'Project Navigation'
+        verbose_name_plural = 'Project Navigations'
+    
+    def __str__(self):
+        return f"{self.project.name} - {self.title}"
+    
+    def get_url(self):
+        if self.external_url:
+            return self.external_url
+        if self.page:
+            return self.page.get_absolute_url()
+        return '#'
+
+
+class ProjectAsset(models.Model):
+    """Gemeinsame Assets für ein Projekt (CSS, JS, Fonts)"""
+    
+    ASSET_TYPE_CHOICES = [
+        ('css', 'Stylesheet'),
+        ('js', 'JavaScript'),
+        ('font', 'Font'),
+        ('image', 'Bild'),
+        ('other', 'Sonstiges'),
+    ]
+    
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, related_name='project_assets')
+    file = models.FileField(upload_to='projects/assets/%Y/%m/')
+    asset_type = models.CharField(max_length=20, choices=ASSET_TYPE_CHOICES)
+    name = models.CharField(max_length=255)
+    relative_path = models.CharField(max_length=500)
+    
+    include_globally = models.BooleanField(default=False, help_text="In alle Projekt-Seiten einbinden")
+    load_order = models.PositiveIntegerField(default=100)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['load_order', 'name']
+        verbose_name = 'Project Asset'
+        verbose_name_plural = 'Project Assets'
+    
+    def __str__(self):
+        return f"{self.project.name} - {self.name} ({self.asset_type})"
+
+
+class ProjectSettings(models.Model):
+    """Projekt-spezifische Einstellungen"""
+    
+    project = models.OneToOneField('Project', on_delete=models.CASCADE, related_name='settings')
+    
+    # SEO Defaults
+    default_seo_title_suffix = models.CharField(max_length=100, blank=True)
+    default_seo_description = models.TextField(blank=True)
+    default_seo_image = models.URLField(blank=True)
+    
+    # Analytics
+    google_analytics_id = models.CharField(max_length=50, blank=True)
+    facebook_pixel_id = models.CharField(max_length=50, blank=True)
+    custom_head_code = models.TextField(blank=True, help_text="Wird in <head> eingefügt")
+    custom_body_code = models.TextField(blank=True, help_text="Wird vor </body> eingefügt")
+    
+    # Design
+    primary_color = models.CharField(max_length=7, default='#3B82F6')
+    secondary_color = models.CharField(max_length=7, default='#10B981')
+    font_family = models.CharField(max_length=100, default='Inter, sans-serif')
+    
+    favicon = models.ImageField(upload_to='projects/favicons/', blank=True)
+    custom_404_page = models.ForeignKey('LandingPage', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Project Settings'
+        verbose_name_plural = 'Project Settings'
+    
+    def __str__(self):
+        return f"Settings for {self.project.name}"
+    
+    def get_css_variables(self):
+        return f""":root {{
+    --project-primary: {self.primary_color};
+    --project-secondary: {self.secondary_color};
+    --project-font: {self.font_family};
+}}"""
+
+
+class ProjectDeployment(models.Model):
+    """Deployment-Historie für Projekte"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Ausstehend'),
+        ('building', 'Wird erstellt'),
+        ('deploying', 'Wird deployed'),
+        ('success', 'Erfolgreich'),
+        ('failed', 'Fehlgeschlagen'),
+    ]
+    
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, related_name='deployments')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    version = models.CharField(max_length=50, blank=True)
+    
+    target_domain = models.CharField(max_length=255, blank=True)
+    target_path = models.CharField(max_length=255, default='/')
+    
+    build_log = models.TextField(blank=True)
+    deployed_files_count = models.PositiveIntegerField(default=0)
+    deployed_size_bytes = models.PositiveBigIntegerField(default=0)
+    
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    deployed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    class Meta:
+        ordering = ['-started_at']
+        verbose_name = 'Project Deployment'
+        verbose_name_plural = 'Project Deployments'
+    
+    def __str__(self):
+        return f"{self.project.name} - {self.get_status_display()} ({self.started_at})"
+

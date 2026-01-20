@@ -192,8 +192,7 @@ async def extract_kleinanzeigen_detail_async(
         full_text = f"{title} {description}"
 
         # ========================================
-        # PARALLEL PHONE EXTRACTION
-        # Run both regex and advanced extraction simultaneously, merge results
+        # PHONE EXTRACTION - Using centralized extraction module
         # ========================================
         phones = []
         phone_sources = {}  # Track where each phone was found for scoring

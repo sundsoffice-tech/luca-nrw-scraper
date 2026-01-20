@@ -711,3 +711,282 @@ def project_delete(request, slug):
             'success': False,
             'error': f'Fehler beim Löschen: {str(e)}'
         }, status=500)
+
+
+# ============================================================================
+# Project Settings, Navigation, Build & Export Views
+# ============================================================================
+
+@staff_member_required
+def project_settings_view(request, slug):
+    """Projekt-Einstellungen bearbeiten"""
+    from .models import ProjectSettings
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    # Get or create settings
+    settings_obj, created = ProjectSettings.objects.get_or_create(project=project)
+    
+    if request.method == 'POST':
+        try:
+            # Update SEO settings
+            settings_obj.default_seo_title_suffix = request.POST.get('default_seo_title_suffix', '')
+            settings_obj.default_seo_description = request.POST.get('default_seo_description', '')
+            settings_obj.default_seo_image = request.POST.get('default_seo_image', '')
+            
+            # Update Analytics
+            settings_obj.google_analytics_id = request.POST.get('google_analytics_id', '')
+            settings_obj.facebook_pixel_id = request.POST.get('facebook_pixel_id', '')
+            settings_obj.custom_head_code = request.POST.get('custom_head_code', '')
+            settings_obj.custom_body_code = request.POST.get('custom_body_code', '')
+            
+            # Update Design
+            settings_obj.primary_color = request.POST.get('primary_color', '#3B82F6')
+            settings_obj.secondary_color = request.POST.get('secondary_color', '#10B981')
+            settings_obj.font_family = request.POST.get('font_family', 'Inter, sans-serif')
+            
+            # Handle favicon upload
+            if 'favicon' in request.FILES:
+                settings_obj.favicon = request.FILES['favicon']
+            
+            # Handle custom 404 page
+            custom_404_id = request.POST.get('custom_404_page')
+            if custom_404_id:
+                try:
+                    settings_obj.custom_404_page = LandingPage.objects.get(id=custom_404_id)
+                except LandingPage.DoesNotExist:
+                    settings_obj.custom_404_page = None
+            else:
+                settings_obj.custom_404_page = None
+            
+            settings_obj.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Einstellungen gespeichert'
+            })
+        except Exception as e:
+            logger.error(f"Error saving project settings: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+    
+    # GET request - show form
+    pages = LandingPage.objects.filter(project=project)
+    
+    return render(request, 'pages/project_settings.html', {
+        'project': project,
+        'settings': settings_obj,
+        'pages': pages
+    })
+
+
+@staff_member_required
+def project_navigation_view(request, slug):
+    """Navigation Editor mit Drag & Drop"""
+    from .models import ProjectNavigation
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    # Get navigation items
+    nav_items = ProjectNavigation.objects.filter(project=project).select_related('page', 'parent')
+    
+    # Get available pages
+    available_pages = LandingPage.objects.filter(project=project)
+    
+    return render(request, 'pages/project_navigation.html', {
+        'project': project,
+        'nav_items': nav_items,
+        'available_pages': available_pages
+    })
+
+
+@staff_member_required
+@require_POST
+def save_navigation(request, slug):
+    """Speichert Navigation-Struktur (AJAX)"""
+    from .models import ProjectNavigation
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    try:
+        data = json.loads(request.body)
+        navigation_items = data.get('navigation', [])
+        
+        # Delete old navigation
+        ProjectNavigation.objects.filter(project=project).delete()
+        
+        # Create new navigation recursively
+        def create_nav_items(items, parent=None, order_offset=0):
+            for idx, item in enumerate(items):
+                # Get page if page_id is provided
+                page = None
+                if item.get('page_id'):
+                    try:
+                        page = LandingPage.objects.get(id=item['page_id'])
+                    except LandingPage.DoesNotExist:
+                        pass
+                
+                # Create navigation item
+                nav_item = ProjectNavigation.objects.create(
+                    project=project,
+                    parent=parent,
+                    title=item.get('title', ''),
+                    page=page,
+                    external_url=item.get('external_url', ''),
+                    icon=item.get('icon', ''),
+                    order=order_offset + idx,
+                    is_visible=item.get('is_visible', True),
+                    open_in_new_tab=item.get('open_in_new_tab', False)
+                )
+                
+                # Create children recursively
+                if 'children' in item and item['children']:
+                    create_nav_items(item['children'], parent=nav_item)
+        
+        create_nav_items(navigation_items)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Navigation gespeichert'
+        })
+    except Exception as e:
+        logger.error(f"Error saving navigation: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@staff_member_required
+@require_POST
+def build_project(request, slug):
+    """Baut das Projekt (erstellt statische Dateien)"""
+    from .models import ProjectDeployment
+    from .services.project_builder import ProjectBuilder
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    try:
+        # Create deployment record
+        deployment = ProjectDeployment.objects.create(
+            project=project,
+            status='building',
+            deployed_by=request.user
+        )
+        
+        # Build project
+        builder = ProjectBuilder(project)
+        result = builder.build()
+        
+        if result['success']:
+            # Update deployment record
+            deployment.status = 'success'
+            deployment.deployed_files_count = result['files_count']
+            deployment.deployed_size_bytes = result['total_size']
+            deployment.build_log = '\n'.join(result.get('warnings', []))
+            deployment.completed_at = timezone.now()
+            deployment.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Projekt erfolgreich gebaut',
+                'files_count': result['files_count'],
+                'total_size': result['total_size'],
+                'warnings': result.get('warnings', [])
+            })
+        else:
+            # Update deployment as failed
+            deployment.status = 'failed'
+            deployment.build_log = '\n'.join(result.get('errors', []))
+            deployment.completed_at = timezone.now()
+            deployment.save()
+            
+            return JsonResponse({
+                'success': False,
+                'errors': result.get('errors', [])
+            }, status=400)
+    except Exception as e:
+        logger.error(f"Error building project {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+def export_project(request, slug):
+    """Exportiert das Projekt als ZIP"""
+    from .services.project_builder import ProjectBuilder
+    from django.http import FileResponse
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    try:
+        # Build project
+        builder = ProjectBuilder(project)
+        build_result = builder.build()
+        
+        if not build_result['success']:
+            return JsonResponse({
+                'success': False,
+                'errors': build_result.get('errors', [])
+            }, status=400)
+        
+        # Export as ZIP
+        zip_path = builder.export_zip()
+        
+        # Send file as download with proper resource management
+        with open(zip_path, 'rb') as zip_file:
+            response = FileResponse(
+                zip_file,
+                as_attachment=True,
+                filename=zip_path.name
+            )
+            # Note: FileResponse will handle closing the file
+            return response
+        
+        # Cleanup build directory after sending (optional)
+        # builder.cleanup()
+        
+    except Exception as e:
+        logger.error(f"Error exporting project {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required
+def project_deployments(request, slug):
+    """Zeigt Deployment-Historie"""
+    from .models import ProjectDeployment
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    # Get last 20 deployments
+    deployments = ProjectDeployment.objects.filter(project=project)[:20]
+    
+    return render(request, 'pages/project_deployments.html', {
+        'project': project,
+        'deployments': deployments
+    })
+
+
+@staff_member_required
+def project_build_view(request, slug):
+    """Build-Übersicht und -Steuerung"""
+    from .models import ProjectAsset
+    
+    project = get_object_or_404(Project, slug=slug)
+    
+    # Get project info
+    pages = LandingPage.objects.filter(project=project, status='published')
+    assets = ProjectAsset.objects.filter(project=project)
+    
+    return render(request, 'pages/project_build.html', {
+        'project': project,
+        'pages': pages,
+        'assets': assets
+    })
