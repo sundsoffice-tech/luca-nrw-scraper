@@ -194,19 +194,23 @@
     </div>
 </div>
 
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Chart.js with SRI -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-5VKo/lQY53xj2M3TmYtQl3D6m5i2hPH4OOPz7Y3sAaTOFH7H4aqmQqF5lqb9PXqJ" crossorigin="anonymous"></script>
 <script>
+// Safely parse JSON data from Django
+const pageViewsData = JSON.parse('{{ page_views_by_day_json|escapejs }}');
+const eventsCategoryData = JSON.parse('{{ events_by_category_json|escapejs }}');
+
 // Page Views Chart
 const pageViewsCtx = document.getElementById('pageViewsChart');
 if (pageViewsCtx) {
     new Chart(pageViewsCtx, {
         type: 'line',
         data: {
-            labels: {{ page_views_by_day|safe|default:"[]" }}.map(item => new Date(item.date).toLocaleDateString('de-DE')),
+            labels: pageViewsData.map(item => new Date(item.date).toLocaleDateString('de-DE')),
             datasets: [{
                 label: 'Seitenaufrufe',
-                data: {{ page_views_by_day|safe|default:"[]" }}.map(item => item.count),
+                data: pageViewsData.map(item => item.count),
                 borderColor: '#06b6d4',
                 backgroundColor: 'rgba(6, 182, 212, 0.1)',
                 tension: 0.4,
@@ -250,9 +254,9 @@ if (eventsCategoryCtx) {
     new Chart(eventsCategoryCtx, {
         type: 'doughnut',
         data: {
-            labels: {{ events_by_category|safe|default:"[]" }}.map(item => item.category),
+            labels: eventsCategoryData.map(item => item.category),
             datasets: [{
-                data: {{ events_by_category|safe|default:"[]" }}.map(item => item.count),
+                data: eventsCategoryData.map(item => item.count),
                 backgroundColor: [
                     '#06b6d4',
                     '#10b981',

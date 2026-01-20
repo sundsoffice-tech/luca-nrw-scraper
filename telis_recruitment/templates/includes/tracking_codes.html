@@ -38,8 +38,16 @@ Include this in the <head> section of your base template
     {% endif %}
     
     {% comment %} Custom Tracking Code {% endcomment %}
+    {% comment %}
+    SECURITY NOTE: The custom_tracking_code field allows administrators to inject
+    custom JavaScript. This is intentionally allowed for flexibility but should
+    only be accessible to trusted administrators. The |safe filter is required
+    here to allow legitimate tracking scripts to function.
+    
+    ADMINISTRATORS: Only enter tracking codes from trusted sources.
+    {% endcomment %}
     {% if custom_tracking_code %}
-    <!-- Custom Tracking Code -->
+    <!-- Custom Tracking Code (Admin-provided) -->
     {{ custom_tracking_code|safe }}
     {% endif %}
 {% endif %}

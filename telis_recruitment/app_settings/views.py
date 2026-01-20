@@ -4,7 +4,9 @@ from django.contrib import messages
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from django.core.serializers.json import DjangoJSONEncoder
 from datetime import timedelta
+import json
 
 from .models import UserPreferences, SystemSettings, PageView, AnalyticsEvent
 
@@ -148,7 +150,15 @@ def analytics_dashboard(request):
     Display analytics dashboard with statistics and charts.
     """
     # Get date range from query params or default to last 30 days
-    days = int(request.GET.get('days', 30))
+    # Validate input to prevent ValueError
+    try:
+        days = int(request.GET.get('days', 30))
+        # Ensure days is within acceptable range
+        if days < 1 or days > 365:
+            days = 30
+    except (ValueError, TypeError):
+        days = 30
+    
     start_date = timezone.now() - timedelta(days=days)
     
     # Total page views
@@ -214,14 +224,18 @@ def analytics_dashboard(request):
     # System settings for tracking code info
     system_settings = SystemSettings.get_settings()
     
+    # Safely JSON encode data for JavaScript to prevent XSS
+    page_views_by_day_json = json.dumps(page_views_by_day, cls=DjangoJSONEncoder)
+    events_by_category_json = json.dumps(events_by_category, cls=DjangoJSONEncoder)
+    
     context = {
         'days': days,
         'total_page_views': total_page_views,
         'unique_visitors': unique_visitors,
         'total_events': total_events,
-        'page_views_by_day': page_views_by_day,
+        'page_views_by_day_json': page_views_by_day_json,
+        'events_by_category_json': events_by_category_json,
         'top_pages': top_pages,
-        'events_by_category': events_by_category,
         'top_events': top_events,
         'recent_page_views': recent_page_views,
         'user_activity': user_activity,
