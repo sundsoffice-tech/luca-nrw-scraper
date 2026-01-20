@@ -240,6 +240,11 @@ PERPLEXITY_API_KEY=pplx-...
 
 # For email automation
 BREVO_API_KEY=xkeysib-...
+
+# For TinyMCE Rich-Text-Editor in email composer
+# Get your free API key at: https://www.tiny.cloud/
+# Leave as 'no-api-key' for development (shows warning but works)
+TINYMCE_API_KEY=no-api-key
 ```
 
 ### Scraper Configuration
