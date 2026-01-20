@@ -131,6 +131,27 @@
     .panel-content {
         padding: 15px;
     }
+    /* Device Mode Indicator */
+    .device-indicator {
+        background: #007bff;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        margin: 10px 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .device-indicator.tablet {
+        background: #17a2b8;
+    }
+    .device-indicator.mobile {
+        background: #28a745;
+    }
     .gjs-block {
         background: #0f3460;
         border: 1px solid #16213e;
@@ -353,6 +374,11 @@
 
         <!-- Right Panel: Styles & Layers -->
         <div class="right-panel">
+            <!-- Device Mode Indicator -->
+            <div id="device-mode-indicator" class="device-indicator">
+                🖥️ Editing: Desktop View
+            </div>
+            
             <!-- Style Manager Section -->
             <div class="panel-section">
                 <div class="panel-header" onclick="togglePanel('styles-panel')">
@@ -387,6 +413,10 @@
 <script src="https://unpkg.com/grapesjs"></script>
 <script src="{% static 'pages/js/grapesjs-blocks-bundle.js' %}"></script>
 <script>
+    // Note: Responsive CSS is handled automatically by GrapesJS via the mediaQuery property
+    // on style properties. When properties have mediaQuery: 'tablet' or 'mobile', GrapesJS
+    // uses the deviceManager configuration and mediaCondition setting to generate appropriate
+    // CSS media queries (e.g., @media (max-width: 992px)) during CSS export.
     // Configuration constants
     const MAX_FILE_SIZE_MB = 10;
     const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -405,6 +435,8 @@
                 '{% url "pages:brand_css" %}', // Brand CSS variables
             ]
         },
+        // Media query configuration for responsive editing
+        mediaCondition: 'max-width',
         blockManager: {
             appendTo: '#blocks-container',
         },
@@ -450,6 +482,200 @@
                     ]
                 },
                 {
+                    name: 'Responsive Typography',
+                    open: false,
+                    buildProps: ['font-size', 'line-height'],
+                    properties: [
+                        {
+                            property: 'font-size',
+                            label: 'Font Size (Desktop)',
+                            type: 'select',
+                            defaults: '16px',
+                            options: [
+                                { value: '12px', name: '12px' },
+                                { value: '14px', name: '14px' },
+                                { value: '16px', name: '16px' },
+                                { value: '18px', name: '18px' },
+                                { value: '20px', name: '20px' },
+                                { value: '24px', name: '24px' },
+                                { value: '28px', name: '28px' },
+                                { value: '32px', name: '32px' },
+                                { value: '36px', name: '36px' },
+                                { value: '48px', name: '48px' },
+                            ]
+                        },
+                        {
+                            id: 'font-size-tablet',
+                            property: 'font-size',
+                            label: 'Font Size (Tablet)',
+                            type: 'select',
+                            // toRequire: 1 specifies that at least 1 sub-property must have a value
+                            // for the composite property to be considered valid in GrapesJS
+                            toRequire: 1,
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: '12px', name: '12px' },
+                                { value: '14px', name: '14px' },
+                                { value: '16px', name: '16px' },
+                                { value: '18px', name: '18px' },
+                                { value: '20px', name: '20px' },
+                                { value: '24px', name: '24px' },
+                                { value: '28px', name: '28px' },
+                                { value: '32px', name: '32px' },
+                            ],
+                            mediaQuery: 'tablet'
+                        },
+                        {
+                            id: 'font-size-mobile',
+                            property: 'font-size',
+                            label: 'Font Size (Mobile)',
+                            type: 'select',
+                            toRequire: 1,
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: '12px', name: '12px' },
+                                { value: '14px', name: '14px' },
+                                { value: '16px', name: '16px' },
+                                { value: '18px', name: '18px' },
+                                { value: '20px', name: '20px' },
+                                { value: '24px', name: '24px' },
+                            ],
+                            mediaQuery: 'mobile'
+                        },
+                        {
+                            id: 'line-height-tablet',
+                            property: 'line-height',
+                            label: 'Line Height (Tablet)',
+                            type: 'select',
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: '1', name: '1' },
+                                { value: '1.2', name: '1.2' },
+                                { value: '1.4', name: '1.4' },
+                                { value: '1.6', name: '1.6' },
+                                { value: '1.8', name: '1.8' },
+                                { value: '2', name: '2' },
+                            ],
+                            mediaQuery: 'tablet'
+                        },
+                        {
+                            id: 'line-height-mobile',
+                            property: 'line-height',
+                            label: 'Line Height (Mobile)',
+                            type: 'select',
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: '1', name: '1' },
+                                { value: '1.2', name: '1.2' },
+                                { value: '1.4', name: '1.4' },
+                                { value: '1.6', name: '1.6' },
+                                { value: '1.8', name: '1.8' },
+                                { value: '2', name: '2' },
+                            ],
+                            mediaQuery: 'mobile'
+                        },
+                    ]
+                },
+                {
+                    name: 'Responsive Spacing',
+                    open: false,
+                    buildProps: ['margin', 'padding'],
+                    properties: [
+                        {
+                            id: 'margin-tablet',
+                            property: 'margin',
+                            label: 'Margin (Tablet)',
+                            type: 'composite',
+                            defaults: '',
+                            mediaQuery: 'tablet'
+                        },
+                        {
+                            id: 'margin-mobile',
+                            property: 'margin',
+                            label: 'Margin (Mobile)',
+                            type: 'composite',
+                            defaults: '',
+                            mediaQuery: 'mobile'
+                        },
+                        {
+                            id: 'padding-tablet',
+                            property: 'padding',
+                            label: 'Padding (Tablet)',
+                            type: 'composite',
+                            defaults: '',
+                            mediaQuery: 'tablet'
+                        },
+                        {
+                            id: 'padding-mobile',
+                            property: 'padding',
+                            label: 'Padding (Mobile)',
+                            type: 'composite',
+                            defaults: '',
+                            mediaQuery: 'mobile'
+                        },
+                    ]
+                },
+                {
+                    name: 'Responsive Visibility',
+                    open: false,
+                    properties: [
+                        {
+                            id: 'display-desktop',
+                            property: 'display',
+                            label: 'Display (Desktop)',
+                            type: 'select',
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Default' },
+                                { value: 'block', name: 'Block' },
+                                { value: 'inline-block', name: 'Inline Block' },
+                                { value: 'flex', name: 'Flex' },
+                                { value: 'inline-flex', name: 'Inline Flex' },
+                                { value: 'grid', name: 'Grid' },
+                                { value: 'none', name: 'Hidden' },
+                            ]
+                        },
+                        {
+                            id: 'display-tablet',
+                            property: 'display',
+                            label: 'Display (Tablet)',
+                            type: 'select',
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: 'block', name: 'Block' },
+                                { value: 'inline-block', name: 'Inline Block' },
+                                { value: 'flex', name: 'Flex' },
+                                { value: 'inline-flex', name: 'Inline Flex' },
+                                { value: 'grid', name: 'Grid' },
+                                { value: 'none', name: 'Hidden' },
+                            ],
+                            mediaQuery: 'tablet'
+                        },
+                        {
+                            id: 'display-mobile',
+                            property: 'display',
+                            label: 'Display (Mobile)',
+                            type: 'select',
+                            defaults: '',
+                            options: [
+                                { value: '', name: 'Inherit' },
+                                { value: 'block', name: 'Block' },
+                                { value: 'inline-block', name: 'Inline Block' },
+                                { value: 'flex', name: 'Flex' },
+                                { value: 'inline-flex', name: 'Inline Flex' },
+                                { value: 'grid', name: 'Grid' },
+                                { value: 'none', name: 'Hidden' },
+                            ],
+                            mediaQuery: 'mobile'
+                        },
+                    ]
+                },
+                {
                     name: 'Decorations',
                     open: false,
                     properties: [
@@ -475,9 +701,23 @@
         },
         deviceManager: {
             devices: [
-                { name: 'Desktop', width: '' },
-                { name: 'Tablet', width: '768px', widthMedia: '992px' },
-                { name: 'Mobile', width: '375px', widthMedia: '480px' },
+                { 
+                    name: 'Desktop', 
+                    width: '',
+                    id: 'desktop'
+                },
+                { 
+                    name: 'Tablet', 
+                    width: '768px', 
+                    widthMedia: '992px',
+                    id: 'tablet'
+                },
+                { 
+                    name: 'Mobile', 
+                    width: '375px', 
+                    widthMedia: '480px',
+                    id: 'mobile'
+                },
             ]
         },
     });
@@ -577,8 +817,27 @@
         // Update active state
         document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        
         // Set device in editor
         window.editor.setDevice(deviceName);
+        
+        // Update device indicator
+        const indicator = document.getElementById('device-mode-indicator');
+        if (indicator) {
+            const icons = {
+                'Desktop': '🖥️',
+                'Tablet': '💻',
+                'Mobile': '📱'
+            };
+            const classes = {
+                'Desktop': '',
+                'Tablet': 'tablet',
+                'Mobile': 'mobile'
+            };
+            
+            indicator.textContent = `${icons[deviceName]} Editing: ${deviceName} View`;
+            indicator.className = 'device-indicator ' + (classes[deviceName] || '');
+        }
         // Show feedback
         showToast(`Preview mode: ${deviceName}`, 'info');
     }

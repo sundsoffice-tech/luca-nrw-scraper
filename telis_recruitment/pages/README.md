@@ -7,6 +7,7 @@ The `pages` Django app provides a no-code landing page builder using GrapesJS, i
 ## Features
 
 - **GrapesJS Builder**: Visual drag-and-drop page builder with live preview
+- **Responsive Editing**: Device-specific styles for Desktop, Tablet, and Mobile (NEW!)
 - **Custom LUCA Blocks**: Pre-built components (Lead Form, Stats Counter, Testimonials)
 - **Version History**: Auto-save with undo/redo capability
 - **SEO Optimization**: Built-in meta tags, title, and description fields
@@ -108,6 +109,27 @@ Landing pages can specify a `brevo_list_id` to add form submissions to a specifi
 3. On form submission, lead is automatically synced to Brevo
 
 The integration reuses the existing Brevo service in `leads/services/brevo.py`.
+
+### Responsive Editing
+
+**NEW!** The builder now supports device-specific styling for Desktop, Tablet, and Mobile:
+
+1. **Switch Device Modes**: Use the toolbar buttons (🖥️ Desktop, 💻 Tablet, 📱 Mobile)
+2. **Device Indicator**: Visual badge shows current editing mode (color-coded)
+3. **Responsive Properties**:
+   - **Typography**: Font sizes and line heights per device
+   - **Spacing**: Margins and padding per device
+   - **Visibility**: Show/hide elements on specific devices
+
+**Example Workflow**:
+1. Select an element in the canvas
+2. Set Desktop font size to 48px in "Responsive Typography"
+3. Set Tablet font size to 36px
+4. Set Mobile font size to 24px
+5. Switch device modes to preview changes
+6. Save - CSS media queries are automatically generated
+
+For detailed instructions, see [RESPONSIVE_EDITING_GUIDE.md](/RESPONSIVE_EDITING_GUIDE.md).
 
 ### Migration from Existing Landing
 

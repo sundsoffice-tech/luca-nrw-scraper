@@ -2,6 +2,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
+import json
 from .models import LandingPage, PageVersion, PageComponent, PageSubmission, UploadedFile
 from leads.models import Lead
 
@@ -298,3 +299,132 @@ class ProjectTemplateTest(TestCase):
         template.increment_usage()
         template.refresh_from_db()
         self.assertEqual(template.usage_count, initial_count + 1)
+
+
+class ResponsiveEditingTest(TestCase):
+    """Test responsive editing functionality"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.staff_user = User.objects.create_user(
+            username='staffuser',
+            password='staffpass',
+            is_staff=True
+        )
+        self.page = LandingPage.objects.create(
+            slug='responsive-test',
+            title='Responsive Test Page',
+            status='draft',
+            created_by=self.staff_user
+        )
+    
+    def test_builder_includes_responsive_sections(self):
+        """Test that builder includes responsive editing sections"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'responsive-test'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for responsive sections in the builder
+        self.assertContains(response, 'Responsive Typography')
+        self.assertContains(response, 'Responsive Spacing')
+        self.assertContains(response, 'Responsive Visibility')
+    
+    def test_builder_includes_device_indicator(self):
+        """Test that builder includes device mode indicator"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'responsive-test'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for device indicator
+        self.assertContains(response, 'device-mode-indicator')
+        self.assertContains(response, 'Editing: Desktop View')
+    
+    def test_builder_has_device_buttons(self):
+        """Test that builder has device switching buttons"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'responsive-test'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for device buttons
+        self.assertContains(response, 'btn-desktop')
+        self.assertContains(response, 'btn-tablet')
+        self.assertContains(response, 'btn-mobile')
+        self.assertContains(response, 'setDevice')
+    
+    def test_responsive_properties_configuration(self):
+        """Test that responsive properties are properly configured"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'responsive-test'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for font-size properties for different devices
+        self.assertContains(response, 'Font Size (Desktop)')
+        self.assertContains(response, 'Font Size (Tablet)')
+        self.assertContains(response, 'Font Size (Mobile)')
+        
+        # Check for spacing properties
+        self.assertContains(response, 'Margin (Tablet)')
+        self.assertContains(response, 'Margin (Mobile)')
+        self.assertContains(response, 'Padding (Tablet)')
+        self.assertContains(response, 'Padding (Mobile)')
+        
+        # Check for visibility properties
+        self.assertContains(response, 'Display (Desktop)')
+        self.assertContains(response, 'Display (Tablet)')
+        self.assertContains(response, 'Display (Mobile)')
+    
+    def test_media_query_configuration(self):
+        """Test that media query configuration is present"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'responsive-test'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for mediaCondition configuration
+        self.assertContains(response, "mediaCondition: 'max-width'")
+        
+        # Check for device configuration with IDs
+        self.assertContains(response, "id: 'desktop'")
+        self.assertContains(response, "id: 'tablet'")
+        self.assertContains(response, "id: 'mobile'")
+    
+    def test_save_page_with_responsive_css(self):
+        """Test saving a page with responsive CSS"""
+        self.client.login(username='staffuser', password='staffpass')
+        
+        # Sample CSS with media queries
+        responsive_css = """
+        .hero { font-size: 48px; }
+        @media (max-width: 992px) {
+            .hero { font-size: 36px; }
+        }
+        @media (max-width: 480px) {
+            .hero { font-size: 24px; }
+        }
+        """
+        
+        # GrapesJS component structure
+        data = {
+            'html': '<div class="hero">Test</div>',
+            'css': responsive_css,
+            'html_json': {
+                'tagName': 'div',
+                'classes': ['hero'],
+                'components': [{'type': 'textnode', 'content': 'Test'}]
+            },
+            'note': 'Test with responsive CSS'
+        }
+        
+        response = self.client.post(
+            reverse('pages:builder-save', kwargs={'slug': 'responsive-test'}),
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify the CSS was saved
+        self.page.refresh_from_db()
+        self.assertIn('@media', self.page.css)
+        self.assertIn('max-width: 992px', self.page.css)
+        self.assertIn('max-width: 480px', self.page.css)
+
