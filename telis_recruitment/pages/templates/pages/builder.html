@@ -325,6 +325,9 @@
     .code-textarea:focus {
         outline: none;
     }
+    .toolbar-btn.code-mode-active { 
+        background: #28a745;
+    }
 </style>
 {% endblock %}
 
@@ -368,7 +371,10 @@
         </div>
         
         <div class="toolbar-right">
-            <button class="toolbar-btn" id="mode-toggle-btn" onclick="toggleEditorMode()" title="Switch between visual and code editor">
+            <button class="toolbar-btn" id="mode-toggle-btn" onclick="toggleEditorMode()" 
+                    title="Switch between visual and code editor"
+                    aria-pressed="false"
+                    aria-label="Toggle between visual and code editor modes">
                 📝 <span id="mode-toggle-text">Code Mode</span>
             </button>
             <button class="toolbar-btn" onclick="editor.runCommand('preview')" title="Preview your page">
@@ -431,10 +437,10 @@
             
             <!-- Code Editor Mode -->
             <div id="code-editor-container">
-                <div class="code-editor-tabs">
-                    <button class="code-tab active" onclick="switchCodeTab('html', event)">HTML</button>
-                    <button class="code-tab" onclick="switchCodeTab('css', event)">CSS</button>
-                    <button class="code-tab" onclick="switchCodeTab('json', event)">Components (JSON)</button>
+                <div class="code-editor-tabs" role="tablist" aria-label="Code editor tabs">
+                    <button class="code-tab active" role="tab" aria-selected="true" aria-controls="html-editor" onclick="switchCodeTab('html', event)">HTML</button>
+                    <button class="code-tab" role="tab" aria-selected="false" aria-controls="css-editor" onclick="switchCodeTab('css', event)">CSS</button>
+                    <button class="code-tab" role="tab" aria-selected="false" aria-controls="json-editor" onclick="switchCodeTab('json', event)">Components (JSON)</button>
                 </div>
                 <div id="html-editor" class="code-editor-pane active">
                     <textarea id="html-code" class="code-textarea" placeholder="HTML code will appear here..."></textarea>
@@ -1336,7 +1342,8 @@
     function toggleEditorMode() {
         const gjsContainer = document.getElementById('gjs');
         const codeEditorContainer = document.getElementById('code-editor-container');
-        const modeToggleBtn = document.getElementById('mode-toggle-text');
+        const modeToggleBtn = document.getElementById('mode-toggle-btn');
+        const modeToggleText = document.getElementById('mode-toggle-text');
         const leftPanel = document.querySelector('.left-panel');
         const rightPanel = document.querySelector('.right-panel');
         
@@ -1348,16 +1355,19 @@
             syncVisualToCode();
             
             // Hide visual editor, show code editor
-            gjsContainer.style.display = 'none';
-            codeEditorContainer.classList.add('active');
+            if (gjsContainer) gjsContainer.style.display = 'none';
+            if (codeEditorContainer) codeEditorContainer.classList.add('active');
             
             // Hide side panels in code mode
             if (leftPanel) leftPanel.style.display = 'none';
             if (rightPanel) rightPanel.style.display = 'none';
             
-            // Update button
-            modeToggleBtn.textContent = 'Visual Mode';
-            document.getElementById('mode-toggle-btn').style.background = '#28a745';
+            // Update button with CSS class instead of inline style
+            if (modeToggleText) modeToggleText.textContent = 'Visual Mode';
+            if (modeToggleBtn) {
+                modeToggleBtn.classList.add('code-mode-active');
+                modeToggleBtn.setAttribute('aria-pressed', 'true');
+            }
             
             showToast('Switched to Code Editor mode', 'info');
         } else {
@@ -1368,16 +1378,19 @@
             syncCodeToVisual();
             
             // Show visual editor, hide code editor
-            gjsContainer.style.display = 'block';
-            codeEditorContainer.classList.remove('active');
+            if (gjsContainer) gjsContainer.style.display = 'block';
+            if (codeEditorContainer) codeEditorContainer.classList.remove('active');
             
             // Show side panels in visual mode
             if (leftPanel) leftPanel.style.display = 'block';
             if (rightPanel) rightPanel.style.display = 'block';
             
-            // Update button
-            modeToggleBtn.textContent = 'Code Mode';
-            document.getElementById('mode-toggle-btn').style.background = '#0f3460';
+            // Update button with CSS class instead of inline style
+            if (modeToggleText) modeToggleText.textContent = 'Code Mode';
+            if (modeToggleBtn) {
+                modeToggleBtn.classList.remove('code-mode-active');
+                modeToggleBtn.setAttribute('aria-pressed', 'false');
+            }
             
             showToast('Switched to Visual Builder mode', 'info');
         }
@@ -1389,18 +1402,31 @@
         const css = window.editor.getCss();
         const components = window.editor.getComponents();
         
-        // Update code editors
-        document.getElementById('html-code').value = html;
-        document.getElementById('css-code').value = css;
-        document.getElementById('json-code').value = JSON.stringify(components, null, 2);
+        // Update code editors with null checks
+        const htmlCode = document.getElementById('html-code');
+        const cssCode = document.getElementById('css-code');
+        const jsonCode = document.getElementById('json-code');
+        
+        if (htmlCode) htmlCode.value = html;
+        if (cssCode) cssCode.value = css;
+        if (jsonCode) jsonCode.value = JSON.stringify(components, null, 2);
     }
     
     function syncCodeToVisual() {
         try {
-            // Get content from code editors
-            const html = document.getElementById('html-code').value;
-            const css = document.getElementById('css-code').value;
-            const jsonCode = document.getElementById('json-code').value;
+            // Get content from code editors with null checks
+            const htmlCodeEl = document.getElementById('html-code');
+            const cssCodeEl = document.getElementById('css-code');
+            const jsonCodeEl = document.getElementById('json-code');
+            
+            if (!htmlCodeEl || !cssCodeEl || !jsonCodeEl) {
+                console.error('Code editor elements not found');
+                return;
+            }
+            
+            const html = htmlCodeEl.value;
+            const css = cssCodeEl.value;
+            const jsonCode = jsonCodeEl.value;
             
             // Update CSS first
             if (css) {
@@ -1438,15 +1464,27 @@
             return;
         }
         
-        // Update tab buttons
-        document.querySelectorAll('.code-tab').forEach(btn => btn.classList.remove('active'));
+        // Map tab names to element IDs safely
+        const editorPaneIds = {
+            'html': 'html-editor',
+            'css': 'css-editor',
+            'json': 'json-editor'
+        };
+        
+        // Update tab buttons with ARIA attributes
+        document.querySelectorAll('.code-tab').forEach(btn => {
+            btn.classList.remove('active');
+            btn.setAttribute('aria-selected', 'false');
+        });
+        
         if (clickEvent && clickEvent.target) {
             clickEvent.target.classList.add('active');
+            clickEvent.target.setAttribute('aria-selected', 'true');
         }
         
         // Update editor panes
         document.querySelectorAll('.code-editor-pane').forEach(pane => pane.classList.remove('active'));
-        const editorPane = document.getElementById(tab + '-editor');
+        const editorPane = document.getElementById(editorPaneIds[tab]);
         if (editorPane) {
             editorPane.classList.add('active');
         }
