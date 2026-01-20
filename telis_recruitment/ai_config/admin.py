@@ -4,7 +4,10 @@ from django.db.models import Sum, Count
 from django.utils import timezone
 from datetime import timedelta
 from unfold.admin import ModelAdmin, TabularInline
-from .models import AIProvider, AIModel, AIConfig, PromptTemplate, AIUsageLog
+from .models import (
+    AIProvider, AIModel, AIConfig, PromptTemplate, AIUsageLog,
+    DorkPerformance, SourcePerformance, PatternSuccess, TelefonbuchCache
+)
 
 
 class AIModelInline(TabularInline):
@@ -275,3 +278,205 @@ class AIUsageLogAdmin(ModelAdmin):
         extra_context['month_total_requests'] = month_logs.count()
         
         return super().changelist_view(request, extra_context=extra_context)
+
+
+@admin.register(DorkPerformance)
+class DorkPerformanceAdmin(ModelAdmin):
+    list_display = [
+        'query_preview', 'pool_badge', 'times_used', 'phone_leads',
+        'leads_found', 'success_rate_percent', 'last_used'
+    ]
+    list_filter = ['pool', ('last_used', admin.DateFieldListFilter)]
+    search_fields = ['query', 'query_hash']
+    ordering = ['-success_rate', '-phone_leads']
+    date_hierarchy = 'last_used'
+    
+    fieldsets = (
+        ('Query Information', {
+            'fields': ('query', 'query_hash', 'pool')
+        }),
+        ('Performance Metrics', {
+            'fields': ('times_used', 'leads_found', 'phone_leads', 'success_rate')
+        }),
+        ('Timestamps', {
+            'fields': ('last_used', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['query_hash', 'created_at', 'updated_at']
+    
+    @admin.display(description='Query')
+    def query_preview(self, obj):
+        preview = obj.query[:80]
+        if len(obj.query) > 80:
+            preview += '...'
+        return preview
+    
+    @admin.display(description='Pool')
+    def pool_badge(self, obj):
+        if obj.pool == 'core':
+            return format_html(
+                '<span style="background-color: #3b82f6; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px; font-weight: 500;">Core</span>'
+            )
+        return format_html(
+            '<span style="background-color: #6b7280; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">Explore</span>'
+        )
+    
+    @admin.display(description='Success Rate')
+    def success_rate_percent(self, obj):
+        return f"{obj.success_rate * 100:.1f}%"
+
+
+@admin.register(SourcePerformance)
+class SourcePerformanceAdmin(ModelAdmin):
+    list_display = [
+        'domain', 'status_badge', 'leads_with_phone', 'leads_found',
+        'avg_quality_percent', 'total_visits', 'last_visit'
+    ]
+    list_filter = ['is_blocked', ('last_visit', admin.DateFieldListFilter)]
+    search_fields = ['domain', 'blocked_reason']
+    ordering = ['-avg_quality', '-leads_with_phone']
+    date_hierarchy = 'last_visit'
+    
+    fieldsets = (
+        ('Source Information', {
+            'fields': ('domain', 'is_blocked', 'blocked_reason')
+        }),
+        ('Performance Metrics', {
+            'fields': ('leads_found', 'leads_with_phone', 'avg_quality', 'total_visits')
+        }),
+        ('Timestamps', {
+            'fields': ('last_visit', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    @admin.display(description='Status')
+    def status_badge(self, obj):
+        if obj.is_blocked:
+            return format_html(
+                '<span style="background-color: #ef4444; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px; font-weight: 500;">🚫 Blocked</span>'
+            )
+        return format_html(
+            '<span style="background-color: #22c55e; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">✓ Active</span>'
+        )
+    
+    @admin.display(description='Quality')
+    def avg_quality_percent(self, obj):
+        return f"{obj.avg_quality * 100:.1f}%"
+
+
+@admin.register(PatternSuccess)
+class PatternSuccessAdmin(ModelAdmin):
+    list_display = [
+        'pattern_type', 'pattern_preview', 'occurrences',
+        'confidence_percent', 'last_success'
+    ]
+    list_filter = ['pattern_type', ('last_success', admin.DateFieldListFilter)]
+    search_fields = ['pattern_value', 'pattern_hash']
+    ordering = ['-confidence', '-occurrences']
+    date_hierarchy = 'last_success'
+    
+    fieldsets = (
+        ('Pattern Information', {
+            'fields': ('pattern_type', 'pattern_value', 'pattern_hash')
+        }),
+        ('Performance Metrics', {
+            'fields': ('occurrences', 'confidence')
+        }),
+        ('Metadata', {
+            'fields': ('metadata', 'last_success'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['pattern_hash', 'created_at', 'updated_at']
+    
+    @admin.display(description='Pattern')
+    def pattern_preview(self, obj):
+        preview = obj.pattern_value[:60]
+        if len(obj.pattern_value) > 60:
+            preview += '...'
+        return preview
+    
+    @admin.display(description='Confidence')
+    def confidence_percent(self, obj):
+        return f"{obj.confidence * 100:.1f}%"
+
+
+@admin.register(TelefonbuchCache)
+class TelefonbuchCacheAdmin(ModelAdmin):
+    list_display = [
+        'query_preview', 'hits', 'expires_at', 'is_expired_badge',
+        'created_at'
+    ]
+    list_filter = [
+        ('expires_at', admin.DateFieldListFilter),
+        ('created_at', admin.DateFieldListFilter)
+    ]
+    search_fields = ['query_text', 'query_hash']
+    ordering = ['-created_at']
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Query Information', {
+            'fields': ('query_text', 'query_hash')
+        }),
+        ('Cache Data', {
+            'fields': ('results_json', 'hits')
+        }),
+        ('Expiration', {
+            'fields': ('expires_at',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ['query_hash', 'created_at', 'updated_at']
+    
+    @admin.display(description='Query')
+    def query_preview(self, obj):
+        preview = obj.query_text[:60]
+        if len(obj.query_text) > 60:
+            preview += '...'
+        return preview
+    
+    @admin.display(description='Expired')
+    def is_expired_badge(self, obj):
+        if obj.is_expired:
+            return format_html(
+                '<span style="background-color: #ef4444; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px; font-weight: 500;">Expired</span>'
+            )
+        return format_html(
+            '<span style="background-color: #22c55e; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">Valid</span>'
+        )
+    
+    def has_add_permission(self, request):
+        """Cache entries are created programmatically"""
+        return False
+    
+    actions = ['cleanup_expired']
+    
+    @admin.action(description='Clean up expired entries')
+    def cleanup_expired(self, request, queryset):
+        """Delete expired cache entries"""
+        from django.utils import timezone
+        expired = queryset.filter(expires_at__lt=timezone.now())
+        count = expired.count()
+        expired.delete()
+        self.message_user(request, f"Deleted {count} expired cache entries.")
