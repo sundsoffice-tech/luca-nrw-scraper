@@ -6,7 +6,7 @@ import pytest
 import sqlite3
 import os
 import tempfile
-from phonebook_lookup import (
+from scripts.phonebook_lookup import (
     PhonebookLookup,
     enrich_lead_with_phonebook,
     enrich_existing_leads,

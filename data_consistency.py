@@ -22,7 +22,7 @@ from datetime import datetime
 
 # Import phonebook lookup at module level for better testability
 try:
-    from phonebook_lookup import PhonebookLookup
+    from scripts.phonebook_lookup import PhonebookLookup
     PHONEBOOK_AVAILABLE = True
 except ImportError:
     PhonebookLookup = None

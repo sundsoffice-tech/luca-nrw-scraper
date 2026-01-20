@@ -151,7 +151,7 @@ class TestPhonebookLookup:
     
     def test_sources_configuration(self):
         """Test that all sources are configured."""
-        from phonebook_lookup import PhonebookLookup
+        from scripts.phonebook_lookup import PhonebookLookup
         
         lookup = PhonebookLookup()
         assert len(lookup.SOURCES) == 5
@@ -165,7 +165,7 @@ class TestPhonebookLookup:
     
     def test_is_valid_name(self):
         """Test name validation."""
-        from phonebook_lookup import PhonebookLookup
+        from scripts.phonebook_lookup import PhonebookLookup
         
         lookup = PhonebookLookup()
         

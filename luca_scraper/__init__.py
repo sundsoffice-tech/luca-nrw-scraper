@@ -259,7 +259,8 @@ from .crawlers import (
     crawl_meinestadt_listings_async,
     
     # Generic
-    extract_generic_detail_async,
+    extract_detail_generic,
+    extract_generic_detail_async,  # Backward compatibility alias
     _mark_url_seen,
 )
 
@@ -489,7 +490,8 @@ __all__ = [
     "crawl_quoka_listings_async",
     "crawl_kalaydo_listings_async",
     "crawl_meinestadt_listings_async",
-    "extract_generic_detail_async",
+    "extract_detail_generic",
+    "extract_generic_detail_async",  # Backward compatibility alias
     "_mark_url_seen",
 ]
 
