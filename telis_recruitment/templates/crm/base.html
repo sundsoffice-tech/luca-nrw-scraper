@@ -191,9 +191,10 @@
                 <!-- Trennlinie -->
                 <div class="my-4 mx-4 border-t border-dark-700"></div>
                 
-                <!-- Email Module Section (Collapsible) -->
-                <div class="sidebar-section-header flex items-center px-4 py-3 text-gray-300 {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}active{% endif %}" onclick="toggleEmailSection()">
-                    <span class="sidebar-section-icon mr-2 text-sm {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}expanded{% endif %}">▶</span>
+                <!-- Email Module Section (Collapsible) - Hidden on mailbox pages which have their own sidebar -->
+                {% if 'mailbox' not in request.resolver_match.namespace %}
+                <div class="sidebar-section-header flex items-center px-4 py-3 text-gray-300 {% if 'email_templates' in request.resolver_match.namespace %}active{% endif %}" onclick="toggleEmailSection()">
+                    <span class="sidebar-section-icon mr-2 text-sm {% if 'email_templates' in request.resolver_match.namespace %}expanded{% endif %}">▶</span>
                     <span class="text-xl mr-3">📧</span>
                     <span class="font-semibold">Email Module</span>
                     {% if unread_email_count %}
@@ -201,9 +202,9 @@
                     {% endif %}
                 </div>
                 
-                <div id="email-section" class="sidebar-section {% if 'mailbox' not in request.resolver_match.namespace and 'email_templates' not in request.resolver_match.namespace %}collapsed{% endif %}" style="max-height: {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}500px{% else %}0{% endif %};">
+                <div id="email-section" class="sidebar-section {% if 'email_templates' not in request.resolver_match.namespace %}collapsed{% endif %}" style="max-height: {% if 'email_templates' in request.resolver_match.namespace %}500px{% else %}0{% endif %};">
                     <!-- Postfach -->
-                    <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'mailbox' in request.resolver_match.namespace %}active{% endif %}">
+                    <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12">
                         <span class="text-lg mr-3">📬</span>
                         <span>Postfach</span>
                     </a>
@@ -226,6 +227,7 @@
                         <span>Logs</span>
                     </a>
                 </div>
+                {% endif %}
                 
                 <!-- Trennlinie -->
                 <div class="my-4 mx-4 border-t border-dark-700"></div>
