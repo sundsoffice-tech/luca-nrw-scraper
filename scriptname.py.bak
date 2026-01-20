@@ -273,22 +273,50 @@ try:
         start_scraper_run as _start_scraper_run_router,
         finish_scraper_run as _finish_scraper_run_router,
     )
-    # === FIX:  Ensure db_router imports are available ===
-    try:
-        _test = _start_scraper_run_router
-    except NameError:
-        from luca_scraper.db_router import start_scraper_run as _start_scraper_run_router
-        print("[WARN] _start_scraper_run_router was not imported, re-importing...")
 
-    try:
-        _test = _finish_scraper_run_router
-    except NameError:
-        from luca_scraper.db_router import finish_scraper_run as _finish_scraper_run_router
-        print("[WARN] _finish_scraper_run_router was not imported, re-importing...")
-    # === END FIX ===
+# === FIX:  Ensure db_router imports are available ===
+try:
+    _start_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import start_scraper_run as _start_scraper_run_router
+    print("[WARN] _start_scraper_run_router was not imported, re-importing...")
+
+try:
+    _finish_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import finish_scraper_run as _finish_scraper_run_router
+    print("[WARN] _finish_scraper_run_router was not imported, re-importing...")
+# === END FIX ===
 
 
+# === FIX:  Ensure db_router imports are available ===
+try:
+    _start_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import start_scraper_run as _start_scraper_run_router
+    print("[WARN] _start_scraper_run_router was not imported, re-importing...")
 
+try:
+    _finish_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import finish_scraper_run as _finish_scraper_run_router
+    print("[WARN] _finish_scraper_run_router was not imported, re-importing...")
+# === END FIX ===
+
+
+# === FIX:  Ensure db_router imports are available ===
+try:
+    _start_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import start_scraper_run as _start_scraper_run_router
+    print("[WARN] _start_scraper_run_router was not imported, re-importing...")
+
+try:
+    _finish_scraper_run_router
+except NameError:
+    from luca_scraper.db_router import finish_scraper_run as _finish_scraper_run_router
+    print("[WARN] _finish_scraper_run_router was not imported, re-importing...")
+# === END FIX ===
 
     # Phase 3 imports
     from luca_scraper.search import (
