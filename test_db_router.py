@@ -9,7 +9,8 @@ import sys
 import tempfile
 
 # Add the project directory to the path
-sys.path.insert(0, '/home/runner/work/luca-nrw-scraper/luca-nrw-scraper')
+project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_dir)
 
 
 def test_sqlite_backend():
