@@ -18,11 +18,16 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path, include
 from leads.views import landing_page, phone_dashboard
+from pages import views as pages_views
 
 urlpatterns = [
     # Public pages
     path('', landing_page, name='landing-page'),
     path('phone/', phone_dashboard, name='phone-dashboard'),
+    
+    # SEO Files
+    path('sitemap.xml', pages_views.sitemap_xml, name='sitemap'),
+    path('robots.txt', pages_views.robots_txt, name='robots'),
     
     # Public landing pages (pages app)
     path('p/', include('pages.public_urls')),

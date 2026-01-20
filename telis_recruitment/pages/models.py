@@ -86,6 +86,31 @@ class LandingPage(models.Model):
                                        help_text="SEO meta description")
     seo_image = models.URLField(blank=True, help_text="SEO image URL")
     
+    # Extended SEO fields
+    seo_keywords = models.TextField(blank=True, help_text="SEO keywords (comma-separated)")
+    canonical_url = models.URLField(blank=True, help_text="Canonical URL for this page")
+    robots_meta = models.CharField(max_length=100, blank=True, default='index, follow',
+                                   help_text="Robots meta tag (e.g., 'index, follow', 'noindex, nofollow')")
+    
+    # Open Graph fields
+    og_title = models.CharField(max_length=255, blank=True, help_text="Open Graph title (defaults to seo_title)")
+    og_description = models.TextField(blank=True, help_text="Open Graph description (defaults to seo_description)")
+    og_image = models.URLField(blank=True, help_text="Open Graph image URL (defaults to seo_image)")
+    og_type = models.CharField(max_length=50, blank=True, default='website', 
+                               help_text="Open Graph type (website, article, etc.)")
+    
+    # Twitter Card fields
+    twitter_card = models.CharField(max_length=50, blank=True, default='summary_large_image',
+                                   help_text="Twitter card type")
+    twitter_site = models.CharField(max_length=100, blank=True, help_text="Twitter @username for site")
+    twitter_creator = models.CharField(max_length=100, blank=True, help_text="Twitter @username for creator")
+    
+    # Sitemap fields
+    sitemap_priority = models.DecimalField(max_digits=2, decimal_places=1, default=0.5,
+                                          help_text="Sitemap priority (0.0 to 1.0)")
+    sitemap_changefreq = models.CharField(max_length=20, blank=True, default='weekly',
+                                         help_text="Sitemap change frequency")
+    
     # Form integration
     form_settings = models.JSONField(default=dict, blank=True,
                                     help_text="Form configuration (fields, validation, etc.)")
