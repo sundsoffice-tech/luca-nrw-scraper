@@ -45,6 +45,16 @@ class TestPhonePatternExtraction:
         assert result is not None
         assert "176" in result
         
+        # 11-digit number starting with 0 (should remove the 0)
+        html = '<a href="https://wa.me/01761234567">WhatsApp</a>'
+        result = extract_whatsapp_number(html)
+        assert result == "+491761234567"
+        
+        # 11-digit number NOT starting with 0 (should keep all digits)
+        html = '<a href="https://wa.me/12345678901">WhatsApp</a>'
+        result = extract_whatsapp_number(html)
+        assert result == "+4912345678901"
+        
         # No WhatsApp link
         html = '<p>No WhatsApp here</p>'
         result = extract_whatsapp_number(html)

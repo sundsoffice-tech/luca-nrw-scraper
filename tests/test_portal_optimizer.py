@@ -178,6 +178,27 @@ class TestPortalOptimizer:
             assert 'success_rate' in portal
             assert portal['health'] in ['excellent', 'good', 'fair', 'poor', 'critical', 'unknown']
     
+    def test_get_portal_health_report_enabled_field(self, portal_optimizer, learning_engine):
+        """Test that enabled field is accessed correctly from sqlite3.Row (bug fix test)."""
+        # Add portal data
+        learning_engine.update_domain_performance(
+            domain="test.de",
+            success=True,
+            rate_limited=False
+        )
+        
+        # This should not raise AttributeError: 'sqlite3.Row' object has no attribute 'get'
+        report = portal_optimizer.get_portal_health_report()
+        
+        # Verify report structure
+        assert 'portals' in report
+        assert len(report['portals']) > 0
+        
+        # Verify enabled field is present and is a boolean
+        portal = report['portals'][0]
+        assert 'enabled' in portal
+        assert isinstance(portal['enabled'], bool)
+    
     def test_domain_to_portal_key_mapping(self, portal_optimizer):
         """Test internal domain to portal key mapping."""
         # This is a private method, but we can test it indirectly
