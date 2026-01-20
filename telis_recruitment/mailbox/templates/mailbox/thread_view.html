@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load mailbox_extras %}
 
 {% block title %}{{ conversation.subject }} - Mailbox{% endblock %}
 
@@ -73,7 +74,7 @@
                     
                     {% if email.body_html %}
                         <div class="email-content">
-                            {{ email.body_html|safe }}
+                            {{ email.body_html|sanitize_email }}
                         </div>
                     {% else %}
                         <pre class="mb-0">{{ email.body_text }}</pre>

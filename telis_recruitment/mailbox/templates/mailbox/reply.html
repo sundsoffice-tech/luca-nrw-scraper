@@ -1,5 +1,6 @@
 {% extends "crm/base.html" %}
 {% load static %}
+{% load mailbox_extras %}
 
 {% block title %}↩️ Antworten - {{ conversation.subject }}{% endblock %}
 
@@ -185,7 +186,7 @@
             
             <div class="mb-3">
                 <label class="form-label">Nachricht</label>
-                <textarea id="body" name="body" class="form-control">{{ quoted_content|safe }}</textarea>
+                <textarea id="body" name="body" class="form-control">{{ quoted_content|sanitize_quoted }}</textarea>
             </div>
             
             {% if signatures %}
