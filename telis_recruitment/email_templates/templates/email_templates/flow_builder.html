@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load email_extras %}
 
 {% block title %}{% if flow %}{{ flow.name }} bearbeiten{% else %}Neuer Flow{% endif %} - TELIS CRM{% endblock %}
 
@@ -224,7 +225,7 @@
         name: '{% if flow %}{{ flow.name }}{% endif %}',
         description: '{% if flow %}{{ flow.description }}{% endif %}',
         trigger_type: '{% if flow %}{{ flow.trigger_type }}{% endif %}',
-        trigger_config: {% if flow %}{{ flow.trigger_config|safe }}{% else %}{}{% endif %},
+        trigger_config: {% if flow %}{{ flow.trigger_config|json_encode }}{% else %}{}{% endif %},
         is_active: {% if flow %}{{ flow.is_active|lower }}{% else %}false{% endif %},
         steps: [
             {% if flow %}
@@ -234,7 +235,7 @@
                     order: {{ step.order }},
                     name: '{{ step.name|escapejs }}',
                     action_type: '{{ step.action_type }}',
-                    action_config: {{ step.action_config|safe }},
+                    action_config: {{ step.action_config|json_encode }},
                     email_template: {% if step.email_template %}{{ step.email_template.id }}{% else %}null{% endif %},
                     is_active: {{ step.is_active|lower }}
                 }{% if not forloop.last %},{% endif %}

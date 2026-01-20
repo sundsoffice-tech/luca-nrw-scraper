@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load email_extras %}
 
 {% block title %}Vorschau - {{ template.name }}{% endblock %}
 
@@ -59,7 +60,7 @@
                 HTML-Vorschau:
             </label>
             <div class="border border-gray-300 dark:border-gray-600 p-4 rounded bg-white">
-                {{ rendered.html_content|safe }}
+                {{ rendered.html_content|sanitize_email_template }}
             </div>
         </div>
 
@@ -127,7 +128,7 @@
 const templateSlug = '{{ template.slug }}';
 const apiBaseUrl = '/api/email-templates/templates/';
 const csrfToken = '{{ csrf_token }}';
-const sampleVariables = {{ variables|safe }};
+const sampleVariables = {{ variables|json_encode }};
 
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
