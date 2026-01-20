@@ -23,5 +23,5 @@ def tinymce_api_key(request):
     Makes TINYMCE_API_KEY available in all templates for TinyMCE initialization.
     """
     return {
-        'TINYMCE_API_KEY': getattr(settings, 'TINYMCE_API_KEY', 'no-api-key')
+        'TINYMCE_API_KEY': settings.TINYMCE_API_KEY
     }
