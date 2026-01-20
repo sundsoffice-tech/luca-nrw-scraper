@@ -1,7 +1,11 @@
 from django.conf import settings
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import ScraperConfig, ScraperRun, ScraperLog, ErrorLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
+from .models import (
+    ScraperConfig, ScraperRun, ScraperLog, ErrorLog,
+    SearchRegion, SearchDork, PortalSource, BlacklistEntry,
+    UrlSeen, QueryDone
+)
 
 
 # Unregister ScraperConfig if it's already registered (prevents AlreadyRegistered error)
@@ -310,3 +314,43 @@ class BlacklistEntryAdmin(ModelAdmin):
     list_filter = ['entry_type', 'is_active']
     list_editable = ['is_active']
     search_fields = ['value', 'reason']
+
+
+@admin.register(UrlSeen)
+class UrlSeenAdmin(ModelAdmin):
+    """Admin interface for UrlSeen"""
+    
+    list_display = ['url_preview', 'first_run', 'created_at']
+    list_filter = ['created_at', 'first_run']
+    search_fields = ['url']
+    readonly_fields = ['url', 'first_run', 'created_at']
+    date_hierarchy = 'created_at'
+    
+    def url_preview(self, obj):
+        """Show first 80 chars of URL"""
+        return obj.url[:80] + ('...' if len(obj.url) > 80 else '')
+    url_preview.short_description = "URL"
+    
+    def has_add_permission(self, request):
+        """URLs are tracked automatically"""
+        return False
+
+
+@admin.register(QueryDone)
+class QueryDoneAdmin(ModelAdmin):
+    """Admin interface for QueryDone"""
+    
+    list_display = ['query_preview', 'last_run', 'created_at', 'last_executed_at']
+    list_filter = ['created_at', 'last_executed_at', 'last_run']
+    search_fields = ['query']
+    readonly_fields = ['query', 'last_run', 'created_at', 'last_executed_at']
+    date_hierarchy = 'last_executed_at'
+    
+    def query_preview(self, obj):
+        """Show first 100 chars of query"""
+        return obj.query[:100] + ('...' if len(obj.query) > 100 else '')
+    query_preview.short_description = "Query"
+    
+    def has_add_permission(self, request):
+        """Queries are tracked automatically"""
+        return False
