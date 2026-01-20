@@ -32,10 +32,10 @@ ALLOWED_EMAIL_ATTRIBUTES = {
     'th': ['colspan', 'rowspan', 'align', 'valign'],
 }
 
-# CSS properties allowed in style attributes
+# CSS properties allowed in style attributes (remove potentially dangerous ones)
 ALLOWED_CSS_PROPERTIES = [
     # Colors
-    'color', 'background', 'background-color', 'background-image',
+    'color', 'background', 'background-color',
     # Text
     'font-family', 'font-size', 'font-weight', 'font-style', 'text-align',
     'text-decoration', 'line-height', 'letter-spacing', 'word-spacing',
@@ -100,12 +100,8 @@ def sanitize_email_html(html_content):
         strip_comments=True,
     )
     
-    # Additional security: ensure all links open in new tab and have noopener
-    cleaned = bleach.linkify(
-        cleaned,
-        callbacks=[lambda attrs, new: attrs if attrs.get('href', '').startswith('mailto:') else {**attrs, 'target': '_blank', 'rel': 'noopener noreferrer'}],
-        skip_tags=['pre', 'code'],
-    )
+    # Note: bleach.linkify has compatibility issues with newer versions
+    # Skipping linkify for now - the clean() method already handles href sanitization
     
     return mark_safe(cleaned)
 

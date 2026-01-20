@@ -1,0 +1,7 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting tinycss2
+  Downloading tinycss2-1.5.1-py3-none-any.whl.metadata (3.0 kB)
+Requirement already satisfied: webencodings>=0.4 in /home/runner/.local/lib/python3.12/site-packages (from tinycss2) (0.5.1)
+Downloading tinycss2-1.5.1-py3-none-any.whl (28 kB)
+Installing collected packages: tinycss2
+Successfully installed tinycss2-1.5.1

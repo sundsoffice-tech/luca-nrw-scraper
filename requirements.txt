@@ -17,6 +17,7 @@ pandas>=2.0.0
 
 # Security - HTML sanitization
 bleach>=6.0.0
+tinycss2>=1.2.0
 
 # Optional: PDF export
 reportlab>=4.0.0
