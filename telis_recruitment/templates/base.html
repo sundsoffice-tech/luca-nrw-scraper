@@ -34,6 +34,10 @@
     </script>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/common.css' %}">
+    
+    <!-- Analytics & Tracking Codes -->
+    {% include 'includes/tracking_codes.html' %}
+    
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-dark-900 text-gray-100 min-h-screen">

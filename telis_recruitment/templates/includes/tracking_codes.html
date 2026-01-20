@@ -1,0 +1,53 @@
+{% comment %}
+Analytics & Tracking Code Snippet
+Include this in the <head> section of your base template
+{% endcomment %}
+
+{% if analytics_enabled %}
+    {% comment %} Google Analytics {% endcomment %}
+    {% if google_analytics_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '{{ google_analytics_id }}');
+    </script>
+    {% endif %}
+    
+    {% comment %} Meta Pixel (Facebook Pixel) {% endcomment %}
+    {% if meta_pixel_id %}
+    <!-- Meta Pixel Code -->
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '{{ meta_pixel_id }}');
+        fbq('track', 'PageView');
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none"
+             src="https://www.facebook.com/tr?id={{ meta_pixel_id }}&ev=PageView&noscript=1"/>
+    </noscript>
+    {% endif %}
+    
+    {% comment %} Custom Tracking Code {% endcomment %}
+    {% comment %}
+    SECURITY NOTE: The custom_tracking_code field allows administrators to inject
+    custom JavaScript. This is intentionally allowed for flexibility but should
+    only be accessible to trusted administrators. The |safe filter is required
+    here to allow legitimate tracking scripts to function.
+    
+    ADMINISTRATORS: Only enter tracking codes from trusted sources.
+    {% endcomment %}
+    {% if custom_tracking_code %}
+    <!-- Custom Tracking Code (Admin-provided) -->
+    {{ custom_tracking_code|safe }}
+    {% endif %}
+{% endif %}

@@ -23,6 +23,8 @@ from .models import (
 )
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
+from .services.seo_analyzer import SEOAnalyzer
+from .services.sitemap_generator import generate_sitemap_xml
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,27 @@ def builder_save(request, slug):
         page.html = data.get('html', '')
         page.css = data.get('css', '')
         page.updated_by = request.user
+        
+        # Update social media settings if provided
+        social_media = data.get('social_media', {})
+        if social_media:
+            # Define field mappings for cleaner code
+            social_fields = {
+                'og_title': '',
+                'og_description': '',
+                'og_image': '',
+                'twitter_card': 'summary_large_image',
+                'twitter_title': '',
+                'twitter_description': '',
+                'twitter_image': '',
+                'enable_share_buttons': False,
+                'share_button_position': 'bottom-right',
+                'share_platforms': ['facebook', 'twitter', 'whatsapp', 'linkedin']
+            }
+            
+            for field, default_value in social_fields.items():
+                setattr(page, field, social_media.get(field, default_value))
+        
         page.save()
         
         # Create version entry
@@ -101,6 +124,18 @@ def builder_load(request, slug):
         'html_json': page.html_json,
         'html': page.html,
         'css': page.css,
+        'page': {
+            'og_title': page.og_title,
+            'og_description': page.og_description,
+            'og_image': page.og_image,
+            'twitter_card': page.twitter_card,
+            'twitter_title': page.twitter_title,
+            'twitter_description': page.twitter_description,
+            'twitter_image': page.twitter_image,
+            'enable_share_buttons': page.enable_share_buttons,
+            'share_button_position': page.share_button_position,
+            'share_platforms': page.share_platforms,
+        }
     })
 
 
@@ -1129,3 +1164,196 @@ def project_build_view(request, slug):
         'pages': pages,
         'assets': assets
     })
+
+
+@staff_member_required
+@require_http_methods(["GET"])
+def social_preview(request, slug):
+    """Preview how the page will appear on social media platforms"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    # Get the full URL for the page
+    page_url = request.build_absolute_uri(page.get_absolute_url())
+    
+    # Prepare preview data for different platforms
+    preview_data = {
+        'page': page,
+        'page_url': page_url,
+        'og_title': page.get_og_title(),
+        'og_description': page.get_og_description(),
+        'og_image': page.get_og_image(),
+        'twitter_card': page.twitter_card,
+        'twitter_title': page.get_twitter_title(),
+        'twitter_description': page.get_twitter_description(),
+        'twitter_image': page.get_twitter_image(),
+    }
+    
+    return render(request, 'pages/social_preview.html', preview_data)
+# ============================================================================
+# SEO Tools and Analysis Views
+# ============================================================================
+
+@staff_member_required
+@require_http_methods(["GET"])
+def analyze_page_seo(request, slug):
+    """Analyze page for SEO best practices"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    try:
+        analyzer = SEOAnalyzer(page)
+        analysis = analyzer.analyze()
+        
+        return JsonResponse({
+            'success': True,
+            'analysis': analysis
+        })
+    except Exception as e:
+        logger.error(f"Error analyzing SEO for page {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@staff_member_required  
+@require_POST
+def update_page_seo(request, slug):
+    """Update SEO settings for a page"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Update SEO fields
+        if 'seo_title' in data:
+            page.seo_title = data['seo_title']
+        if 'seo_description' in data:
+            page.seo_description = data['seo_description']
+        if 'seo_keywords' in data:
+            page.seo_keywords = data['seo_keywords']
+        if 'seo_image' in data:
+            page.seo_image = data['seo_image']
+        
+        # Update Open Graph fields
+        if 'og_title' in data:
+            page.og_title = data['og_title']
+        if 'og_description' in data:
+            page.og_description = data['og_description']
+        if 'og_image' in data:
+            page.og_image = data['og_image']
+        if 'og_type' in data:
+            page.og_type = data['og_type']
+        
+        # Update Twitter Card fields
+        if 'twitter_card' in data:
+            page.twitter_card = data['twitter_card']
+        if 'twitter_site' in data:
+            page.twitter_site = data['twitter_site']
+        if 'twitter_creator' in data:
+            page.twitter_creator = data['twitter_creator']
+        
+        # Update other SEO fields
+        if 'canonical_url' in data:
+            page.canonical_url = data['canonical_url']
+        if 'robots_meta' in data:
+            page.robots_meta = data['robots_meta']
+        
+        # Update sitemap fields
+        if 'sitemap_priority' in data:
+            page.sitemap_priority = data['sitemap_priority']
+        if 'sitemap_changefreq' in data:
+            page.sitemap_changefreq = data['sitemap_changefreq']
+        
+        page.updated_by = request.user
+        page.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'SEO settings updated successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error updating SEO for page {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@staff_member_required
+@require_POST
+def update_page_slug(request, slug):
+    """Update page slug with validation"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    try:
+        data = json.loads(request.body)
+        new_slug = data.get('new_slug')
+        
+        if not new_slug:
+            return JsonResponse({
+                'success': False,
+                'error': 'New slug is required'
+            }, status=400)
+        
+        # Validate slug format
+        new_slug = slugify(new_slug)
+        
+        # Check if slug already exists
+        if LandingPage.objects.filter(slug=new_slug).exclude(id=page.id).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'Slug "{new_slug}" already exists'
+            }, status=400)
+        
+        old_slug = page.slug
+        page.slug = new_slug
+        page.updated_by = request.user
+        page.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Slug updated successfully',
+            'old_slug': old_slug,
+            'new_slug': new_slug,
+            'new_url': page.get_absolute_url()
+        })
+    except Exception as e:
+        logger.error(f"Error updating slug for page {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+# ============================================================================
+# Sitemap Generation Views
+# ============================================================================
+
+def sitemap_xml(request):
+    """Generate sitemap.xml for all published pages"""
+    from django.http import HttpResponse
+    
+    # Get all published pages
+    pages = LandingPage.objects.filter(status='published').order_by('-updated_at')
+    
+    # Generate sitemap XML
+    xml_content = generate_sitemap_xml(pages, request)
+    
+    return HttpResponse(xml_content, content_type='application/xml')
+
+
+def robots_txt(request):
+    """Generate robots.txt with sitemap reference"""
+    from django.conf import settings
+    
+    base_url = request.build_absolute_uri('/')[:-1] if request else getattr(settings, 'SITE_URL', 'http://localhost:8000')
+    
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "",
+        "# Sitemaps",
+        f"Sitemap: {base_url}/sitemap.xml"
+    ]
+    
+    return HttpResponse('\n'.join(lines), content_type='text/plain')

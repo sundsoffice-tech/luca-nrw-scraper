@@ -86,6 +86,65 @@ class LandingPage(models.Model):
                                        help_text="SEO meta description")
     seo_image = models.URLField(blank=True, help_text="SEO image URL")
     
+    # Social Media / OpenGraph fields
+    og_title = models.CharField(max_length=255, blank=True,
+                               help_text="OpenGraph title (defaults to seo_title)")
+    og_description = models.TextField(blank=True,
+                                     help_text="OpenGraph description (defaults to seo_description)")
+    og_image = models.URLField(blank=True,
+                              help_text="OpenGraph image URL (defaults to seo_image)")
+    og_type = models.CharField(max_length=50, default='website',
+                              help_text="OpenGraph type (website, article, etc.)")
+    
+    # Twitter Card fields
+    twitter_card = models.CharField(max_length=50, default='summary_large_image',
+                                   help_text="Twitter card type")
+    twitter_title = models.CharField(max_length=255, blank=True,
+                                    help_text="Twitter card title (defaults to og_title)")
+    twitter_description = models.TextField(blank=True,
+                                          help_text="Twitter card description (defaults to og_description)")
+    twitter_image = models.URLField(blank=True,
+                                   help_text="Twitter card image (defaults to og_image)")
+    
+    # Share button settings
+    enable_share_buttons = models.BooleanField(default=False,
+                                              help_text="Enable social media share buttons on the page")
+    share_button_position = models.CharField(max_length=20, default='bottom-right',
+                                            choices=[
+                                                ('top-left', 'Top Left'),
+                                                ('top-right', 'Top Right'),
+                                                ('bottom-left', 'Bottom Left'),
+                                                ('bottom-right', 'Bottom Right'),
+                                                ('inline', 'Inline in content'),
+                                            ],
+                                            help_text="Position of share buttons")
+    share_platforms = models.JSONField(default=list, blank=True,
+                                      help_text="List of enabled share platforms (e.g., ['facebook', 'twitter', 'whatsapp', 'linkedin'])")
+    # Extended SEO fields
+    seo_keywords = models.TextField(blank=True, help_text="SEO keywords (comma-separated)")
+    canonical_url = models.URLField(blank=True, help_text="Canonical URL for this page")
+    robots_meta = models.CharField(max_length=100, blank=True, default='index, follow',
+                                   help_text="Robots meta tag (e.g., 'index, follow', 'noindex, nofollow')")
+    
+    # Open Graph fields
+    og_title = models.CharField(max_length=255, blank=True, help_text="Open Graph title (defaults to seo_title)")
+    og_description = models.TextField(blank=True, help_text="Open Graph description (defaults to seo_description)")
+    og_image = models.URLField(blank=True, help_text="Open Graph image URL (defaults to seo_image)")
+    og_type = models.CharField(max_length=50, blank=True, default='website', 
+                               help_text="Open Graph type (website, article, etc.)")
+    
+    # Twitter Card fields
+    twitter_card = models.CharField(max_length=50, blank=True, default='summary_large_image',
+                                   help_text="Twitter card type")
+    twitter_site = models.CharField(max_length=100, blank=True, help_text="Twitter @username for site")
+    twitter_creator = models.CharField(max_length=100, blank=True, help_text="Twitter @username for creator")
+    
+    # Sitemap fields
+    sitemap_priority = models.DecimalField(max_digits=2, decimal_places=1, default=0.5,
+                                          help_text="Sitemap priority (0.0 to 1.0)")
+    sitemap_changefreq = models.CharField(max_length=20, blank=True, default='weekly',
+                                         help_text="Sitemap change frequency")
+    
     # Form integration
     form_settings = models.JSONField(default=dict, blank=True,
                                     help_text="Form configuration (fields, validation, etc.)")
@@ -155,6 +214,36 @@ class LandingPage(models.Model):
         elif self.hosting_type == 'custom' and self.custom_domain:
             return self.custom_domain
         return None
+    
+    def get_og_title(self):
+        """Get OpenGraph title with fallback to seo_title or page title"""
+        return self.og_title or self.seo_title or self.title
+    
+    def get_og_description(self):
+        """Get OpenGraph description with fallback to seo_description"""
+        return self.og_description or self.seo_description or ''
+    
+    def get_og_image(self):
+        """Get OpenGraph image with fallback to seo_image"""
+        return self.og_image or self.seo_image or ''
+    
+    def get_twitter_title(self):
+        """Get Twitter card title with fallback to og_title"""
+        return self.twitter_title or self.get_og_title()
+    
+    def get_twitter_description(self):
+        """Get Twitter card description with fallback to og_description"""
+        return self.twitter_description or self.get_og_description()
+    
+    def get_twitter_image(self):
+        """Get Twitter card image with fallback to og_image"""
+        return self.twitter_image or self.get_og_image()
+    
+    def get_share_platforms(self):
+        """Get enabled share platforms with defaults"""
+        if self.share_platforms:
+            return self.share_platforms
+        return ['facebook', 'twitter', 'whatsapp', 'linkedin']
 
 
 class PageVersion(models.Model):

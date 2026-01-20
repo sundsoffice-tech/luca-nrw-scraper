@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'reports',
     'mailbox.apps.MailboxConfig',
     'app_settings.apps.AppSettingsConfig',
+    'forms.apps.FormsConfig',
 ]
 
 MIDDLEWARE = [
@@ -119,6 +120,7 @@ TEMPLATES = [
                 'mailbox.context_processors.unread_email_count',
                 'telis.context_processors.version_context',
                 'telis.context_processors.tinymce_api_key',
+                'app_settings.context_processors.tracking_codes',
             ],
         },
     },
