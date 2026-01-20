@@ -14,6 +14,9 @@
     
     <title>{% block title %}Dashboard - TELIS CRM{% endblock %}</title>
     
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
+    <link rel="stylesheet" href="{% static 'css/common.css' %}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -32,8 +35,6 @@
             }
         }
     </script>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/common.css' %}">
     
     <!-- Analytics & Tracking Codes -->
     {% include 'includes/tracking_codes.html' %}
