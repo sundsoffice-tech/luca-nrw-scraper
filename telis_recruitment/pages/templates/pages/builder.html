@@ -432,9 +432,9 @@
             <!-- Code Editor Mode -->
             <div id="code-editor-container">
                 <div class="code-editor-tabs">
-                    <button class="code-tab active" onclick="switchCodeTab('html')">HTML</button>
-                    <button class="code-tab" onclick="switchCodeTab('css')">CSS</button>
-                    <button class="code-tab" onclick="switchCodeTab('json')">Components (JSON)</button>
+                    <button class="code-tab active" onclick="switchCodeTab('html', event)">HTML</button>
+                    <button class="code-tab" onclick="switchCodeTab('css', event)">CSS</button>
+                    <button class="code-tab" onclick="switchCodeTab('json', event)">Components (JSON)</button>
                 </div>
                 <div id="html-editor" class="code-editor-pane active">
                     <textarea id="html-code" class="code-textarea" placeholder="HTML code will appear here..."></textarea>
@@ -1402,22 +1402,25 @@
             const css = document.getElementById('css-code').value;
             const jsonCode = document.getElementById('json-code').value;
             
-            // Update GrapesJS
-            if (html) {
-                window.editor.setComponents(html);
-            }
+            // Update CSS first
             if (css) {
                 window.editor.setStyle(css);
             }
             
-            // Try to parse and set JSON components if valid
+            // Try to parse and set JSON components if valid, otherwise use HTML
             if (jsonCode && jsonCode.trim()) {
                 try {
                     const components = JSON.parse(jsonCode);
                     window.editor.setComponents(components);
                 } catch (e) {
-                    console.warn('Could not parse JSON components:', e);
+                    console.warn('Could not parse JSON components, using HTML instead:', e);
+                    if (html) {
+                        window.editor.setComponents(html);
+                    }
                 }
+            } else if (html) {
+                // If no JSON, use HTML
+                window.editor.setComponents(html);
             }
             
             showToast('Code synced to visual editor', 'success');
@@ -1427,10 +1430,12 @@
         }
     }
     
-    function switchCodeTab(tab) {
+    function switchCodeTab(tab, clickEvent) {
         // Update tab buttons
         document.querySelectorAll('.code-tab').forEach(btn => btn.classList.remove('active'));
-        event.target.classList.add('active');
+        if (clickEvent && clickEvent.target) {
+            clickEvent.target.classList.add('active');
+        }
         
         // Update editor panes
         document.querySelectorAll('.code-editor-pane').forEach(pane => pane.classList.remove('active'));
