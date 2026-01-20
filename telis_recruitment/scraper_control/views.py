@@ -58,7 +58,14 @@ def _sanitize_scraper_params(raw_params):
 
     daterestrict = params.get('daterestrict', '')
     if daterestrict and daterestrict.strip():
-        params['daterestrict'] = daterestrict.strip()
+        # Validate daterestrict format: d[1-365], w[1-52], m[1-12], y[1-10]
+        import re
+        dr = daterestrict.strip()
+        if not re.match(r'^[dwmy]\d+$', dr):
+            logger.warning(f"Invalid daterestrict format '{dr}', should be d30, w8, m3, or y1. Ignoring.")
+            params['daterestrict'] = ''
+        else:
+            params['daterestrict'] = dr
     else:
         params['daterestrict'] = ''
 
