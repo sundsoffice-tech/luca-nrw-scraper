@@ -1,0 +1,216 @@
+/**
+ * Common CSS for TELIS Recruitment Application
+ * Centralized styles to avoid duplication across templates
+ * Performance optimized with minimal selectors
+ */
+
+/* === ANIMATIONS === */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
+}
+
+@keyframes subtle-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.1); }
+    50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.15); }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* === UTILITY CLASSES === */
+.pulse-glow {
+    animation: pulse-glow 2s infinite;
+}
+
+.subtle-glow {
+    animation: subtle-glow 4s infinite;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Screen reader only - for accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* === SIDEBAR COMPONENTS === */
+.sidebar-link {
+    transition: all 0.2s ease-in-out;
+}
+
+.sidebar-link:hover {
+    background-color: rgba(6, 182, 212, 0.1);
+    border-left: 3px solid #06b6d4;
+}
+
+.sidebar-link:focus {
+    outline: 2px solid #06b6d4;
+    outline-offset: -2px;
+}
+
+.sidebar-link.active {
+    background-color: rgba(6, 182, 212, 0.15);
+    border-left: 3px solid #06b6d4;
+    color: #06b6d4;
+}
+
+.sidebar-link.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sidebar-link.disabled:hover {
+    background-color: transparent;
+    border-left: none;
+}
+
+.sidebar-section {
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+}
+
+.sidebar-section.collapsed {
+    max-height: 0;
+}
+
+.sidebar-section-header {
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border: none;
+    background: transparent;
+}
+
+.sidebar-section-header:hover {
+    background-color: rgba(6, 182, 212, 0.05);
+}
+
+.sidebar-section-header:focus {
+    outline: 2px solid #06b6d4;
+    outline-offset: -2px;
+}
+
+.sidebar-section-header.active {
+    background-color: rgba(6, 182, 212, 0.1);
+}
+
+.sidebar-section-icon {
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-section-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.sidebar-mobile {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-mobile.open {
+    transform: translateX(0);
+}
+
+/* === TOAST NOTIFICATIONS === */
+.toast {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 300px;
+    animation: slideIn 0.3s ease-out;
+    transition: all 0.3s ease-out;
+}
+
+.toast.removing {
+    animation: slideOut 0.3s ease-out;
+    opacity: 0;
+    transform: translateX(100%);
+}
+
+.toast-success {
+    border-left: 4px solid #10b981;
+}
+
+.toast-error {
+    border-left: 4px solid #ef4444;
+}
+
+.toast-warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.toast-info {
+    border-left: 4px solid #06b6d4;
+}
+
+.toast-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    flex: 1;
+    color: #f1f5f9;
+    font-size: 14px;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    color: #f1f5f9;
+}
+

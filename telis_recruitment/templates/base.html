@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block meta_description %}TELIS Recruitment - Professional Lead Generation & CRM System for NRW Sales Teams{% endblock %}">
+    <meta name="author" content="TELIS">
+    
+    <!-- Open Graph / SEO -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{% block og_title %}TELIS Recruitment{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Professional Lead Generation & CRM System for NRW Sales Teams{% endblock %}">
+    <meta property="og:site_name" content="TELIS Recruitment">
+    
     <title>{% block title %}TELIS Recruitment{% endblock %}</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -11,7 +21,7 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#06b6d4',  // cyan-500
+                        primary: '#06b6d4',
                         dark: {
                             900: '#0f172a',
                             800: '#1e293b',
@@ -22,13 +32,8 @@
             }
         }
     </script>
-    <style>
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
-            50% { box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); }
-        }
-        .pulse-glow { animation: pulse-glow 2s infinite; }
-    </style>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/common.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-dark-900 text-gray-100 min-h-screen">
