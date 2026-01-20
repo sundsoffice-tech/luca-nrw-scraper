@@ -428,3 +428,191 @@ class ResponsiveEditingTest(TestCase):
         self.assertIn('max-width: 992px', self.page.css)
         self.assertIn('max-width: 480px', self.page.css)
 
+
+class SocialMediaIntegrationTest(TestCase):
+    """Test social media integration features"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.staff_user = User.objects.create_user(
+            username='staffuser',
+            password='staffpass',
+            is_staff=True
+        )
+        self.page = LandingPage.objects.create(
+            slug='test-social',
+            title='Test Social Media Page',
+            status='published',
+            seo_title='Test SEO Title',
+            seo_description='Test SEO Description',
+            seo_image='https://example.com/image.jpg',
+            created_by=self.staff_user
+        )
+    
+    def test_social_media_fields_exist(self):
+        """Test that social media fields exist on the model"""
+        self.assertIsNotNone(self.page.og_title)
+        self.assertIsNotNone(self.page.og_description)
+        self.assertIsNotNone(self.page.og_image)
+        self.assertIsNotNone(self.page.twitter_card)
+        self.assertIsNotNone(self.page.enable_share_buttons)
+    
+    def test_og_fallback_methods(self):
+        """Test OpenGraph fallback methods"""
+        # When og_title is not set, should fallback to seo_title
+        self.assertEqual(self.page.get_og_title(), self.page.seo_title)
+        
+        # When og_title is set, should return og_title
+        self.page.og_title = 'Custom OG Title'
+        self.assertEqual(self.page.get_og_title(), 'Custom OG Title')
+        
+        # Test description fallback
+        self.assertEqual(self.page.get_og_description(), self.page.seo_description)
+        
+        # Test image fallback
+        self.assertEqual(self.page.get_og_image(), self.page.seo_image)
+    
+    def test_twitter_fallback_methods(self):
+        """Test Twitter Card fallback methods"""
+        self.page.og_title = 'OG Title'
+        self.page.og_description = 'OG Description'
+        self.page.og_image = 'https://example.com/og-image.jpg'
+        
+        # Should fallback to OG values
+        self.assertEqual(self.page.get_twitter_title(), 'OG Title')
+        self.assertEqual(self.page.get_twitter_description(), 'OG Description')
+        self.assertEqual(self.page.get_twitter_image(), 'https://example.com/og-image.jpg')
+        
+        # When twitter-specific values are set
+        self.page.twitter_title = 'Twitter Title'
+        self.assertEqual(self.page.get_twitter_title(), 'Twitter Title')
+    
+    def test_share_platforms_default(self):
+        """Test default share platforms"""
+        platforms = self.page.get_share_platforms()
+        self.assertIn('facebook', platforms)
+        self.assertIn('twitter', platforms)
+        self.assertIn('whatsapp', platforms)
+        self.assertIn('linkedin', platforms)
+    
+    def test_public_page_social_meta_tags(self):
+        """Test that public page includes social media meta tags"""
+        response = self.client.get(reverse('pages_public:page-public', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for OpenGraph tags
+        self.assertContains(response, 'property="og:title"')
+        self.assertContains(response, 'property="og:description"')
+        self.assertContains(response, 'property="og:url"')
+        self.assertContains(response, 'property="og:type"')
+        
+        # Check for Twitter Card tags
+        self.assertContains(response, 'name="twitter:card"')
+        self.assertContains(response, 'name="twitter:title"')
+        
+        # Check for structured data
+        self.assertContains(response, 'application/ld+json')
+    
+    def test_share_buttons_rendering(self):
+        """Test that share buttons are rendered when enabled"""
+        self.page.enable_share_buttons = True
+        self.page.share_platforms = ['facebook', 'twitter']
+        self.page.save()
+        
+        response = self.client.get(reverse('pages_public:page-public', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for share buttons
+        self.assertContains(response, 'social-share-buttons')
+        self.assertContains(response, 'share-facebook')
+        self.assertContains(response, 'share-twitter')
+    
+    def test_share_buttons_not_rendered_when_disabled(self):
+        """Test that share buttons are not rendered when disabled"""
+        self.page.enable_share_buttons = False
+        self.page.save()
+        
+        response = self.client.get(reverse('pages_public:page-public', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Should not contain share buttons
+        self.assertNotContains(response, 'social-share-buttons')
+    
+    def test_social_preview_view_access(self):
+        """Test social preview view requires staff access"""
+        # Not logged in
+        response = self.client.get(reverse('pages:social-preview', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 302)  # Redirect to login
+        
+        # Staff user can access
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:social-preview', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Social Media Preview')
+    
+    def test_social_preview_displays_platforms(self):
+        """Test social preview displays Facebook, Twitter, LinkedIn previews"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:social-preview', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check for platform previews
+        self.assertContains(response, 'Facebook / WhatsApp')
+        self.assertContains(response, 'X (Twitter)')
+        self.assertContains(response, 'LinkedIn')
+    
+    def test_save_social_media_settings(self):
+        """Test saving social media settings through builder"""
+        self.client.login(username='staffuser', password='staffpass')
+        
+        data = {
+            'html': '<div>Test</div>',
+            'css': '',
+            'html_json': {},
+            'social_media': {
+                'og_title': 'New OG Title',
+                'og_description': 'New OG Description',
+                'og_image': 'https://example.com/new-image.jpg',
+                'twitter_card': 'summary',
+                'enable_share_buttons': True,
+                'share_button_position': 'top-right',
+                'share_platforms': ['facebook', 'whatsapp']
+            }
+        }
+        
+        response = self.client.post(
+            reverse('pages:builder-save', kwargs={'slug': 'test-social'}),
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify settings were saved
+        self.page.refresh_from_db()
+        self.assertEqual(self.page.og_title, 'New OG Title')
+        self.assertEqual(self.page.og_description, 'New OG Description')
+        self.assertEqual(self.page.og_image, 'https://example.com/new-image.jpg')
+        self.assertEqual(self.page.twitter_card, 'summary')
+        self.assertTrue(self.page.enable_share_buttons)
+        self.assertEqual(self.page.share_button_position, 'top-right')
+        self.assertEqual(self.page.share_platforms, ['facebook', 'whatsapp'])
+    
+    def test_load_social_media_settings(self):
+        """Test loading social media settings in builder"""
+        self.client.login(username='staffuser', password='staffpass')
+        
+        # Set some social media settings
+        self.page.og_title = 'Test OG Title'
+        self.page.enable_share_buttons = True
+        self.page.share_platforms = ['facebook', 'twitter']
+        self.page.save()
+        
+        response = self.client.get(reverse('pages:builder-load', kwargs={'slug': 'test-social'}))
+        self.assertEqual(response.status_code, 200)
+        
+        data = json.loads(response.content)
+        self.assertEqual(data['page']['og_title'], 'Test OG Title')
+        self.assertTrue(data['page']['enable_share_buttons'])
+        self.assertEqual(data['page']['share_platforms'], ['facebook', 'twitter'])
+

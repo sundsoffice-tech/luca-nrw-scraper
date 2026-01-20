@@ -64,6 +64,27 @@ def builder_save(request, slug):
         page.html = data.get('html', '')
         page.css = data.get('css', '')
         page.updated_by = request.user
+        
+        # Update social media settings if provided
+        social_media = data.get('social_media', {})
+        if social_media:
+            # Define field mappings for cleaner code
+            social_fields = {
+                'og_title': '',
+                'og_description': '',
+                'og_image': '',
+                'twitter_card': 'summary_large_image',
+                'twitter_title': '',
+                'twitter_description': '',
+                'twitter_image': '',
+                'enable_share_buttons': False,
+                'share_button_position': 'bottom-right',
+                'share_platforms': ['facebook', 'twitter', 'whatsapp', 'linkedin']
+            }
+            
+            for field, default_value in social_fields.items():
+                setattr(page, field, social_media.get(field, default_value))
+        
         page.save()
         
         # Create version entry
@@ -103,6 +124,18 @@ def builder_load(request, slug):
         'html_json': page.html_json,
         'html': page.html,
         'css': page.css,
+        'page': {
+            'og_title': page.og_title,
+            'og_description': page.og_description,
+            'og_image': page.og_image,
+            'twitter_card': page.twitter_card,
+            'twitter_title': page.twitter_title,
+            'twitter_description': page.twitter_description,
+            'twitter_image': page.twitter_image,
+            'enable_share_buttons': page.enable_share_buttons,
+            'share_button_position': page.share_button_position,
+            'share_platforms': page.share_platforms,
+        }
     })
 
 
@@ -1133,6 +1166,29 @@ def project_build_view(request, slug):
     })
 
 
+@staff_member_required
+@require_http_methods(["GET"])
+def social_preview(request, slug):
+    """Preview how the page will appear on social media platforms"""
+    page = get_object_or_404(LandingPage, slug=slug)
+    
+    # Get the full URL for the page
+    page_url = request.build_absolute_uri(page.get_absolute_url())
+    
+    # Prepare preview data for different platforms
+    preview_data = {
+        'page': page,
+        'page_url': page_url,
+        'og_title': page.get_og_title(),
+        'og_description': page.get_og_description(),
+        'og_image': page.get_og_image(),
+        'twitter_card': page.twitter_card,
+        'twitter_title': page.get_twitter_title(),
+        'twitter_description': page.get_twitter_description(),
+        'twitter_image': page.get_twitter_image(),
+    }
+    
+    return render(request, 'pages/social_preview.html', preview_data)
 # ============================================================================
 # SEO Tools and Analysis Views
 # ============================================================================
