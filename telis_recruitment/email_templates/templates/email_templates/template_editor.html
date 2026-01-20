@@ -1,4 +1,5 @@
 {% extends "crm/base.html" %}
+{% load email_extras %}
 
 {% block title %}Template Editor - {{ template.name }}{% endblock %}
 
@@ -150,7 +151,7 @@
                         HTML-Inhalt:
                     </label>
                     <div id="preview-html" class="preview-frame text-sm">
-                        {{ template.html_content|safe }}
+                        {{ template.html_content|sanitize_email_template }}
                     </div>
                 </div>
             </div>
@@ -207,7 +208,7 @@
 const templateSlug = '{{ template.slug }}';
 const apiBaseUrl = '/api/email-templates/templates/';
 const csrfToken = '{{ csrf_token }}';
-const sampleVariables = {{ sample_variables|safe }};
+const sampleVariables = {{ sample_variables|json_encode }};
 
 let lastFocusedField = null;
 

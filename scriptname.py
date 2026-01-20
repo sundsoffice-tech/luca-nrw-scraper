@@ -1726,7 +1726,7 @@ async def get_cached_telefonbuch_result(name: str, city: str) -> Optional[List[D
     if not name or not city:
         return None
     
-    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
+    query_hash = hashlib.sha256(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
     
     con = db()
     cur = con.cursor()
@@ -1766,7 +1766,7 @@ async def cache_telefonbuch_result(name: str, city: str, results: List[Dict]):
     if not name or not city:
         return
     
-    query_hash = hashlib.md5(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
+    query_hash = hashlib.sha256(f"{name.lower()}:{city.lower()}".encode()).hexdigest()
     results_json = json.dumps(results, ensure_ascii=False)
     
     con = db()

@@ -27,7 +27,7 @@ Die drei Learning-Engines (learning_engine.py, ai_learning_engine.py, perplexity
 Trackt Such-Query Performance:
 ```python
 - query: TextField (Such-Query)
-- query_hash: CharField (MD5 Hash für schnelle Lookups)
+- query_hash: CharField (SHA-256 Hash für schnelle Lookups)
 - times_used: Integer (Anzahl Verwendungen)
 - leads_found: Integer (Gefundene Leads)
 - phone_leads: Integer (Leads mit Telefonnummer)

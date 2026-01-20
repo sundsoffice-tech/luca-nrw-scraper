@@ -8,7 +8,7 @@ Falls back gracefully to default constants when Django is not available.
 """
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import logging
 
 from metrics import get_metrics_store, MetricsStore
@@ -74,7 +74,7 @@ class AdaptiveSearchSystem:
     
     def __init__(
         self,
-        all_dorks: List[str],
+        all_dorks: Union[List[str], Callable[[], List[str]]],
         metrics_db_path: str = "metrics.db",
         query_cache_ttl: int = 86400,  # 24 hours
         url_seen_ttl: int = 604800,  # 7 days
@@ -90,14 +90,8 @@ class AdaptiveSearchSystem:
             url_seen_ttl: TTL for URL seen set in seconds (default 7d)
             initial_mode: Initial Wasserfall mode
         """
-        # Load AI configuration (from Django DB if available, else defaults)
-        self.ai_config = get_ai_config()
-        if AI_CONFIG_AVAILABLE:
-            logger.info(f"Adaptive system using AI config from Django DB: "
-                       f"provider={self.ai_config.get('default_provider')}, "
-                       f"model={self.ai_config.get('default_model')}")
-        else:
-            logger.info("Adaptive system using fallback AI config (Django not available)")
+        # Lazy-load AI configuration when first needed
+        self._ai_config: Optional[Dict[str, Any]] = None
         
         # Initialize components
         self.metrics = get_metrics_store(metrics_db_path)
@@ -113,9 +107,27 @@ class AdaptiveSearchSystem:
         self.query_cache = get_query_cache(ttl_seconds=query_cache_ttl)
         self.url_seen = get_url_seen_set(ttl_seconds=url_seen_ttl)
         self.reporter = ReportGenerator(self.metrics)
-        
+
         # Runtime state
         self.run_count = 0
+
+    @property
+    def ai_config(self) -> Dict[str, Any]:
+        """
+        Lazily load AI configuration (supports Django-backed ai_config loader).
+        Logging only happens on the first access so startup stays lightweight.
+        """
+        if self._ai_config is None:
+            self._ai_config = get_ai_config()
+            if AI_CONFIG_AVAILABLE:
+                logger.info(
+                    "Adaptive system using AI config from Django DB: "
+                    f"provider={self._ai_config.get('default_provider')}, "
+                    f"model={self._ai_config.get('default_model')}"
+                )
+            else:
+                logger.info("Adaptive system using fallback AI config (Django not available)")
+        return self._ai_config
     
     def select_dorks_for_run(self) -> List[Dict[str, str]]:
         """
@@ -324,12 +336,12 @@ class AdaptiveSearchSystem:
         self.url_seen.clear_expired()
 
 
-def create_system_from_env(all_dorks: List[str]) -> AdaptiveSearchSystem:
+def create_system_from_env(all_dorks: Union[List[str], Callable[[], List[str]]]) -> AdaptiveSearchSystem:
     """
     Create adaptive system from environment variables.
     
     Args:
-        all_dorks: List of all available dorks
+        all_dorks: List or callable returning all available dorks
     
     Returns:
         Configured AdaptiveSearchSystem

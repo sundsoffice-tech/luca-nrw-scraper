@@ -28,9 +28,13 @@ This guide covers deploying LUCA Command Center (Django CRM) to various cloud pl
 
 ### Pre-Deployment Checklist
 
+- [ ] **CRITICAL: `SECRET_KEY` must be set** - Server will not start without it
+  - Generate: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
+  - Must be at least 50 characters long
+  - Never use placeholder or insecure values
+  - Store securely in environment variables
 - [ ] `.env` configured with production settings
 - [ ] `DEBUG=False` in `.env`
-- [ ] `SECRET_KEY` set to a strong random value
 - [ ] `ALLOWED_HOSTS` includes your domain
 - [ ] `CSRF_TRUSTED_ORIGINS` includes your domain with protocol
 - [ ] Static files collected: `python manage.py collectstatic`
@@ -68,7 +72,8 @@ Ensure these files are in your repository root:
 In Railway dashboard → Variables:
 
 ```bash
-SECRET_KEY=your-generated-secret-key-here
+# REQUIRED: Generate a unique SECRET_KEY (server will not start without it)
+SECRET_KEY=your-generated-secret-key-here  # Use: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 DEBUG=False
 ALLOWED_HOSTS=your-app.railway.app
 CSRF_TRUSTED_ORIGINS=https://your-app.railway.app
@@ -78,6 +83,8 @@ DJANGO_SETTINGS_MODULE=telis.settings_prod
 OPENAI_API_KEY=sk-...
 BREVO_API_KEY=xkeysib-...
 ```
+
+**⚠️ IMPORTANT:** The SECRET_KEY must be set and must be at least 50 characters long. The server will fail to start if SECRET_KEY is missing or uses an insecure placeholder value.
 
 ### Step 5: Configure Build & Deploy
 
@@ -152,12 +159,15 @@ Add in Render dashboard:
 
 ```bash
 PYTHON_VERSION=3.11.0
-SECRET_KEY=your-generated-secret-key
+# REQUIRED: Generate a unique SECRET_KEY (server will not start without it)
+SECRET_KEY=your-generated-secret-key  # Use: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 DEBUG=False
 ALLOWED_HOSTS=your-app.onrender.com
 CSRF_TRUSTED_ORIGINS=https://your-app.onrender.com
 DJANGO_SETTINGS_MODULE=telis.settings_prod
 ```
+
+**⚠️ IMPORTANT:** The SECRET_KEY must be set and must be at least 50 characters long. The server will fail to start if SECRET_KEY is missing or uses an insecure placeholder value.
 
 ### Step 4: Add Persistent Disk
 
@@ -266,11 +276,18 @@ flyctl volumes create luca_data --region fra --size 1
 ### Step 6: Set Secrets
 
 ```bash
-flyctl secrets set SECRET_KEY="your-secret-key"
+# REQUIRED: Generate a unique SECRET_KEY (server will not start without it)
+# First generate a key using Python:
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# Then set it as a secret:
+flyctl secrets set SECRET_KEY="your-generated-secret-key-from-above"
 flyctl secrets set DEBUG=False
 flyctl secrets set ALLOWED_HOSTS="luca-command-center.fly.dev"
 flyctl secrets set CSRF_TRUSTED_ORIGINS="https://luca-command-center.fly.dev"
 ```
+
+**⚠️ IMPORTANT:** The SECRET_KEY must be set and must be at least 50 characters long. The server will fail to start if SECRET_KEY is missing or uses an insecure placeholder value.
 
 ### Step 7: Deploy
 
@@ -434,6 +451,9 @@ nano .env
 
 Update:
 ```bash
+# REQUIRED: Generate a unique SECRET_KEY (server will not start without it)
+# Generate using: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+SECRET_KEY=your-generated-secret-key-here
 DEBUG=False
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
@@ -442,6 +462,8 @@ SESSION_COOKIE_SECURE=True
 CSRF_COOKIE_SECURE=True
 SECURE_HSTS_SECONDS=31536000
 ```
+
+**⚠️ IMPORTANT:** The SECRET_KEY must be set and must be at least 50 characters long. The server will fail to start if SECRET_KEY is missing or uses an insecure placeholder value.
 
 Restart:
 ```bash

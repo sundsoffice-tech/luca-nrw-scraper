@@ -391,6 +391,8 @@ async def crawl_kleinanzeigen_portal_async(
     leads = []
 
     for crawl_url in crawl_urls:
+        seen_urls = []
+        seen_local = set()
         try:
             if log_func:
                 log_func("info", "Kleinanzeigen: Crawling listing", url=crawl_url)
@@ -414,7 +416,7 @@ async def crawl_kleinanzeigen_portal_async(
 
             # Step 2: Extract details from each ad
             for i, ad_url in enumerate(ad_links):
-                if url_seen_func and url_seen_func(ad_url):
+                if url_seen_func and (url_seen_func(ad_url) or ad_url in seen_local):
                     if log_func:
                         log_func("debug", "Kleinanzeigen: URL already seen (skip)", url=ad_url)
                     continue
@@ -434,9 +436,9 @@ async def crawl_kleinanzeigen_portal_async(
 
                 if lead_data:
                     leads.append(lead_data)
-                    # Mark URL as seen
                     if mark_url_seen_func:
-                        mark_url_seen_func(ad_url, source="Kleinanzeigen")
+                        seen_urls.append(ad_url)
+                        seen_local.add(ad_url)
                 else:
                     if log_func:
                         log_func("debug", "Kleinanzeigen: No valid lead data", url=ad_url)
@@ -448,6 +450,9 @@ async def crawl_kleinanzeigen_portal_async(
         except Exception as e:
             if log_func:
                 log_func("error", "Kleinanzeigen: Error crawling", url=crawl_url, error=str(e))
+        finally:
+            if mark_url_seen_func and seen_urls:
+                mark_url_seen_func(seen_urls, source="Kleinanzeigen")
 
     if log_func:
         log_func("info", "Kleinanzeigen: Crawling completed", total_leads=len(leads))

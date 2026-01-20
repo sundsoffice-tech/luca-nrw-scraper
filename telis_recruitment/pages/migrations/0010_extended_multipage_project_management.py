@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('pages', '0009_project_landingpage_project'),
+        ('pages', '0008_project_landingpage_project'),
     ]
 
     operations = [

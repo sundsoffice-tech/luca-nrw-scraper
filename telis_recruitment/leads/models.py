@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from telis_recruitment.leads.utils.normalization import normalize_email, normalize_phone
 
 
 class Lead(models.Model):
@@ -13,7 +14,23 @@ class Lead(models.Model):
     # === KERN-FELDER ===
     name = models.CharField(max_length=255, verbose_name="Name")
     email = models.EmailField(null=True, blank=True, verbose_name="E-Mail")
+    email_normalized = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Normalisierte E-Mail",
+        help_text="Klein geschrieben und getrimmt für schnelle Duplikatssuche",
+    )
     telefon = models.CharField(max_length=50, null=True, blank=True, verbose_name="Telefon")
+    normalized_phone = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="Normalisierte Telefonnummer",
+        db_index=True,
+        help_text="Nur Ziffern für schnellen Abgleich",
+    )
     phone_type = models.CharField(max_length=20, null=True, blank=True, verbose_name="Telefon-Typ")
     whatsapp_link = models.CharField(max_length=255, null=True, blank=True, verbose_name="WhatsApp-Link")
     
@@ -141,7 +158,7 @@ class Lead(models.Model):
     last_called_at = models.DateTimeField(null=True, blank=True, verbose_name="Letzter Anruf")
     next_followup_at = models.DateTimeField(null=True, blank=True, verbose_name="Nächstes Follow-Up")
     notes = models.TextField(null=True, blank=True, verbose_name="Notizen")
-    
+
     # === EMAIL-TRACKING ===
     email_sent_count = models.IntegerField(default=0, verbose_name="Emails gesendet")
     email_opens = models.IntegerField(default=0, verbose_name="Email Öffnungen")
@@ -172,6 +189,8 @@ class Lead(models.Model):
             models.Index(fields=['quality_score']),
             models.Index(fields=['lead_type']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['email_normalized']),
+            models.Index(fields=['normalized_phone']),
         ]
     
     def __str__(self):
@@ -184,6 +203,11 @@ class Lead(models.Model):
     @property
     def is_hot_lead(self):
         return self.quality_score >= 80 and self.interest_level >= 3
+
+    def save(self, *args, **kwargs):
+        self.email_normalized = normalize_email(self.email)
+        self.normalized_phone = normalize_phone(self.telefon)
+        super().save(*args, **kwargs)
 
 
 class CallLog(models.Model):

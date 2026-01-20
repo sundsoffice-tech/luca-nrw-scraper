@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load pages_extras %}
 <html lang="de">
 <head>
     <meta charset="UTF-8">
@@ -26,13 +27,13 @@
         }
         
         /* Page-specific CSS from builder */
-        {{ page.css|safe }}
+        {{ page.css|sanitize_page_css }}
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
     <!-- Rendered HTML from builder -->
-    {{ page.html|safe }}
+    {{ page.html|sanitize_page }}
     
     <script>
         // Form submission handler

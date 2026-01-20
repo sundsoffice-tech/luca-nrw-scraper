@@ -138,6 +138,38 @@ python scriptname.py --once --industry talent_hunt --qpi 15
 python scriptname.py --ui
 ```
 
+## Adaptive Throttling & Metrics
+
+The scraper relies on the waterfall throttling strategy (`wasserfall.py`) to adjust aggressiveness based on the phone-find rate and host health. We only step toward `moderate` or `aggressive` once the feedback loop proves the current crawl can sustain a higher load, and we step back when drops or backoffs spike so that monitored hosts remain usable.
+
+### Adaptive Mode API
+
+- `WasserfallManager.increment_run()` counts each dispatch to enforce the minimum number of runs before evaluating a mode change so we avoid rapid oscillations.
+- `WasserfallManager.check_and_transition()` compares the measured phone-find rate against `phone_find_rate_threshold` and inspects the ratio of backed-off hosts before committing to a transition; every upward move is justified by a stable signal.
+- `transition_mode(direction, reason)` records the rationale (phone rate, backoff counts, run history) so callers always understand why the system shifted gears.
+
+```python
+from wasserfall import WasserfallManager
+from metrics import get_metrics_store
+
+metrics = get_metrics_store()
+manager = WasserfallManager(metrics, initial_mode="moderate")
+
+# Each dispatcher run increments the counter before we evaluate a transition.
+manager.increment_run()
+transition = manager.check_and_transition()
+if transition:
+    print("Mode switched:", transition["from_mode"], "→", transition["to_mode"])
+```
+
+### Metrics Signals for Transitions
+
+- `calculate_phone_find_rate()` produces the lead-to-fetch ratio that triggers upward transitions, emphasizing throughput quality instead of raw volume.
+- `get_backedoff_hosts()` ensures we see a small fraction of hosts already backed off so we can protect the fleet before pushing toward `aggressive`.
+- `record_drop(...)`, `set_host_backoff(...)`, and `record_query(...)` allow other modules to feed actionable evidence into the next evaluation cycle, keeping the heuristics synchronized without duplicating storage.
+
+These APIs let both the scraper and CRM dashboards share the same metrics store (`metrics.py`) for reporting and debugging while keeping the waterfall rules declarative.
+
 ## 📚 Documentation
 
 ### 🎯 Onboarding (Neu!)
