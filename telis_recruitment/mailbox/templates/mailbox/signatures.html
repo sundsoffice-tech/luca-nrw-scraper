@@ -25,6 +25,22 @@
         background: rgba(15, 23, 42, 0.8);
         border: 1px solid #1f2937;
     }
+    
+    /* Mobile responsive table */
+    @media (max-width: 768px) {
+        .signature-table th:nth-child(2),
+        .signature-table td:nth-child(2) {
+            display: none; /* Hide "Updated" column on mobile */
+        }
+        .signature-table th,
+        .signature-table td {
+            font-size: 0.875rem;
+            padding: 0.5rem !important;
+        }
+        .signature-table .truncate {
+            max-width: 120px;
+        }
+    }
 </style>
 {% endblock %}
 

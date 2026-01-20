@@ -96,6 +96,19 @@
         color: #f1f5f9;
         font-size: 14px;
     }
+    
+    /* Mobile responsive table */
+    @media (max-width: 768px) {
+        .custom-table th:nth-child(5),
+        .custom-table td:nth-child(5) {
+            display: none; /* Hide "Letzte Synchronisation" column on mobile */
+        }
+        .custom-table th,
+        .custom-table td {
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+    }
     .badge {
         display: inline-block;
         padding: 4px 10px;
@@ -219,12 +232,7 @@
                     </table>
                 </div>
             {% else %}
-                <div class="empty-state">
-                    <p>Sie haben noch keine Email-Konten konfiguriert.</p>
-                    <a href="/admin/mailbox/emailaccount/add/" class="btn-primary">
-                        ➕ Erstes Konto hinzufügen
-                    </a>
-                </div>
+                {% include "mailbox/partials/empty_state.html" with icon="📧" title="Keine Email-Konten konfiguriert" message="Sie haben noch keine Email-Konten hinzugefügt." action_url="/admin/mailbox/emailaccount/add/" action_text="➕ Erstes Konto hinzufügen" %}
             {% endif %}
         </div>
     </div>

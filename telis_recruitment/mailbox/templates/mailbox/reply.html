@@ -9,22 +9,7 @@
         max-width: 1000px;
         margin: 0 auto;
         padding: 20px;
-    }
-    .original-email {
-        background: #1e293b;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 24px;
-        border: 1px solid #334155;
-    }
-    .original-email .header {
-        color: #64748b;
-        font-size: 14px;
-        margin-bottom: 12px;
-        line-height: 1.6;
-    }
-    .original-email .header strong {
-        color: #94a3b8;
+        padding-bottom: 100px; /* Space for sticky action bar */
     }
     .reply-card {
         background: #1e293b;
@@ -32,6 +17,50 @@
         border: 1px solid #334155;
         padding: 24px;
     }
+    
+    /* Collapsible original email */
+    details.original-email {
+        background: #1e293b;
+        border-radius: 8px;
+        padding: 12px 20px;
+        margin-bottom: 24px;
+        border: 1px solid #334155;
+        cursor: pointer;
+    }
+    details.original-email summary {
+        color: #64748b;
+        font-size: 14px;
+        font-weight: 500;
+        user-select: none;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    details.original-email summary::-webkit-details-marker {
+        display: none;
+    }
+    details.original-email summary::before {
+        content: '▶';
+        display: inline-block;
+        transition: transform 0.2s;
+        font-size: 12px;
+    }
+    details.original-email[open] summary::before {
+        transform: rotate(90deg);
+    }
+    details.original-email .header {
+        color: #64748b;
+        font-size: 14px;
+        margin-top: 12px;
+        line-height: 1.6;
+        padding-top: 12px;
+        border-top: 1px solid #334155;
+    }
+    details.original-email .header strong {
+        color: #94a3b8;
+    }
+    
     .form-label {
         display: block;
         color: #94a3b8;
@@ -58,6 +87,24 @@
         color: #64748b;
         cursor: not-allowed;
     }
+    
+    /* Sticky Action Bar */
+    .sticky-action-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #1e293b;
+        border-top: 1px solid #334155;
+        padding: 16px 24px;
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        z-index: 40;
+    }
+    
     .btn-send {
         background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         border: none;
@@ -109,18 +156,19 @@
         </a>
     </div>
     
-    <!-- Original Email Preview -->
-    <div class="original-email">
+    <!-- Original Email Preview (Collapsible) -->
+    <details class="original-email">
+        <summary>📄 Zitierte Nachricht anzeigen</summary>
         <div class="header">
             <strong>Von:</strong> {{ original_email.from_name|default:original_email.from_email }}<br>
             <strong>Datum:</strong> {{ original_email.sent_at|default:original_email.received_at|date:"d.m.Y H:i" }}<br>
             <strong>Betreff:</strong> {{ original_email.subject }}
         </div>
-    </div>
+    </details>
     
     <!-- Reply Form -->
     <div class="reply-card">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="reply-form">
             {% csrf_token %}
             
             <div class="mb-3">
@@ -158,20 +206,21 @@
                 <label class="form-label">Anhänge</label>
                 <input type="file" name="attachments" class="form-control" multiple>
             </div>
-            
-            <div class="flex gap-2">
-                <button type="submit" name="action" value="send" class="btn-send">
-                    📤 Senden
-                </button>
-                <button type="submit" name="action" value="draft" class="btn-secondary">
-                    💾 Als Entwurf speichern
-                </button>
-                <a href="{% url 'mailbox:conversation' conversation.id %}" class="btn-secondary">
-                    ✕ Abbrechen
-                </a>
-            </div>
         </form>
     </div>
+</div>
+
+<!-- Sticky Action Bar -->
+<div class="sticky-action-bar">
+    <button type="submit" form="reply-form" name="action" value="send" class="btn-send">
+        📤 Senden
+    </button>
+    <button type="submit" form="reply-form" name="action" value="draft" class="btn-secondary">
+        💾 Als Entwurf speichern
+    </button>
+    <a href="{% url 'mailbox:conversation' conversation.id %}" class="btn-secondary">
+        ✕ Abbrechen
+    </a>
 </div>
 
 <!-- TinyMCE -->
@@ -184,7 +233,16 @@ tinymce.init({
     plugins: 'link image lists',
     toolbar: 'undo redo | bold italic underline | bullist numlist | link',
     skin: 'oxide-dark',
-    content_css: 'dark'
+    content_css: 'dark',
+    setup: function(editor) {
+        // Focus on editor after initialization (only if user hasn't interacted with page yet)
+        editor.on('init', function() {
+            // Only auto-focus on desktop devices and if no other element has focus
+            if (window.innerWidth >= 768 && document.activeElement === document.body) {
+                setTimeout(() => editor.focus(), 100);
+            }
+        });
+    }
 });
 
 // Signature management

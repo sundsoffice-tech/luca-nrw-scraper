@@ -36,6 +36,39 @@
             border-left: 3px solid #06b6d4;
             color: #06b6d4;
         }
+        .sidebar-link.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .sidebar-link.disabled:hover {
+            background-color: transparent;
+            border-left: none;
+        }
+        
+        /* Collapsible section */
+        .sidebar-section {
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        .sidebar-section.collapsed {
+            max-height: 0;
+        }
+        .sidebar-section-header {
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        .sidebar-section-header:hover {
+            background-color: rgba(6, 182, 212, 0.05);
+        }
+        .sidebar-section-header.active {
+            background-color: rgba(6, 182, 212, 0.1);
+        }
+        .sidebar-section-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+        .sidebar-section-icon.expanded {
+            transform: rotate(90deg);
+        }
         
         /* Mobile sidebar slide animation */
         .sidebar-mobile {
@@ -44,6 +77,80 @@
         }
         .sidebar-mobile.open {
             transform: translateX(0);
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            animation: slideIn 0.3s ease-out;
+            transition: all 0.3s ease-out;
+        }
+        .toast.removing {
+            animation: slideOut 0.3s ease-out;
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        .toast-success {
+            border-left: 4px solid #10b981;
+        }
+        .toast-error {
+            border-left: 4px solid #ef4444;
+        }
+        .toast-warning {
+            border-left: 4px solid #f59e0b;
+        }
+        .toast-info {
+            border-left: 4px solid #06b6d4;
+        }
+        .toast-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .toast-message {
+            flex: 1;
+            color: #f1f5f9;
+            font-size: 14px;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            color: #64748b;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .toast-close:hover {
+            color: #f1f5f9;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
         }
     </style>
     {% block extra_head %}{% endblock %}
@@ -75,44 +182,50 @@
                     <span>Leads</span>
                 </a>
                 
-                <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
+                <a href="javascript:void(0);" class="sidebar-link disabled flex items-center px-4 py-3 text-gray-300">
                     <span class="text-xl mr-3">📞</span>
                     <span>Telefon</span>
-                    <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
+                    <span class="ml-auto text-xs bg-gray-600/30 text-gray-400 px-2 py-1 rounded">Bald</span>
                 </a>
                 
                 <!-- Trennlinie -->
                 <div class="my-4 mx-4 border-t border-dark-700"></div>
                 
-                <!-- Email Sektion Header -->
-                <span class="text-xs text-gray-500 uppercase px-4 py-2 block font-semibold">📧 Email</span>
-                
-                <!-- Postfach (NEU - Hauptlink) -->
-                <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'mailbox' in request.resolver_match.namespace %}active{% endif %}">
-                    <span class="text-xl mr-3">📬</span>
-                    <span>Postfach</span>
+                <!-- Email Module Section (Collapsible) -->
+                <div class="sidebar-section-header flex items-center px-4 py-3 text-gray-300 {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}active{% endif %}" onclick="toggleEmailSection()">
+                    <span class="sidebar-section-icon mr-2 text-sm {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}expanded{% endif %}">▶</span>
+                    <span class="text-xl mr-3">📧</span>
+                    <span class="font-semibold">Email Module</span>
                     {% if unread_email_count %}
                     <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{{ unread_email_count }}</span>
                     {% endif %}
-                </a>
+                </div>
                 
-                <!-- Email Templates -->
-                <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}">
-                    <span class="text-lg mr-3">📝</span>
-                    <span>Templates</span>
-                </a>
-                
-                <!-- Flows -->
-                <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="text-lg mr-3">🔄</span>
-                    <span>Flows</span>
-                </a>
-                
-                <!-- Versand-Logs -->
-                <a href="{% url 'email_templates:send-logs' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-8 {% if 'send-logs' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="text-lg mr-3">📊</span>
-                    <span>Logs</span>
-                </a>
+                <div id="email-section" class="sidebar-section {% if 'mailbox' not in request.resolver_match.namespace and 'email_templates' not in request.resolver_match.namespace %}collapsed{% endif %}" style="max-height: {% if 'mailbox' in request.resolver_match.namespace or 'email_templates' in request.resolver_match.namespace %}500px{% else %}0{% endif %};">
+                    <!-- Postfach -->
+                    <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'mailbox' in request.resolver_match.namespace %}active{% endif %}">
+                        <span class="text-lg mr-3">📬</span>
+                        <span>Postfach</span>
+                    </a>
+                    
+                    <!-- Email Templates -->
+                    <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}">
+                        <span class="text-lg mr-3">📝</span>
+                        <span>Templates</span>
+                    </a>
+                    
+                    <!-- Flows -->
+                    <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}">
+                        <span class="text-lg mr-3">🔄</span>
+                        <span>Flows</span>
+                    </a>
+                    
+                    <!-- Versand-Logs -->
+                    <a href="{% url 'email_templates:send-logs' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'send-logs' in request.resolver_match.url_name %}active{% endif %}">
+                        <span class="text-lg mr-3">📊</span>
+                        <span>Logs</span>
+                    </a>
+                </div>
                 
                 <!-- Trennlinie -->
                 <div class="my-4 mx-4 border-t border-dark-700"></div>
@@ -283,6 +396,16 @@
 
             <!-- Page Content -->
             <main class="flex-1 overflow-y-auto p-6">
+                <!-- Toast Notification Container -->
+                <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md"></div>
+                
+                <!-- Django Messages as Toasts -->
+                {% if messages %}
+                    {% for message in messages %}
+                    <div class="toast-message hidden" data-level="{{ message.tags }}" data-text="{{ message }}"></div>
+                    {% endfor %}
+                {% endif %}
+                
                 {% block content %}{% endblock %}
             </main>
         </div>
@@ -295,6 +418,76 @@
             sidebar.classList.toggle('open');
             overlay.classList.toggle('hidden');
         }
+        
+        function toggleEmailSection() {
+            const section = document.getElementById('email-section');
+            const icon = document.querySelector('.sidebar-section-header .sidebar-section-icon');
+            
+            if (!section || !icon) return;
+            
+            if (section.classList.contains('collapsed')) {
+                section.classList.remove('collapsed');
+                section.style.maxHeight = '500px';
+                icon.classList.add('expanded');
+            } else {
+                section.classList.add('collapsed');
+                section.style.maxHeight = '0';
+                icon.classList.remove('expanded');
+            }
+        }
+        
+        // Toast Notification System
+        function showToast(message, level = 'info', duration = 5000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${level}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${icons[level] || icons.info}</span>
+                <span class="toast-message">${message}</span>
+                <button class="toast-close" onclick="removeToast(this)">×</button>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Auto-dismiss after duration
+            if (duration > 0) {
+                setTimeout(() => {
+                    removeToast(toast.querySelector('.toast-close'));
+                }, duration);
+            }
+        }
+        
+        function removeToast(button) {
+            const toast = button.closest('.toast');
+            if (!toast) return;
+            
+            toast.classList.add('removing');
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }
+        
+        // Display Django messages as toasts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const messages = document.querySelectorAll('.toast-message');
+            messages.forEach(msg => {
+                const level = msg.dataset.level || 'info';
+                const text = msg.dataset.text || '';
+                if (text) {
+                    showToast(text, level);
+                }
+                msg.remove();
+            });
+        });
     </script>
 
     <!-- Cookie Consent Banner -->
