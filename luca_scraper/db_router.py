@@ -63,25 +63,25 @@ if DATABASE_BACKEND == 'django':
 else:
     logger.info("db_router: Using SQLite backend")
     
-    # Import SQLite implementations
-    from . import database
+    # Import SQLite implementations from repository module
+    from . import repository
     
     # Lead management functions
-    upsert_lead = database.upsert_lead_sqlite
-    lead_exists = database.lead_exists_sqlite
-    get_lead_count = database.get_lead_count_sqlite
+    upsert_lead = repository.upsert_lead_sqlite
+    lead_exists = repository.lead_exists_sqlite
+    get_lead_count = repository.get_lead_count_sqlite
     
     # URL tracking functions
-    is_url_seen = database.is_url_seen_sqlite
-    mark_url_seen = database.mark_url_seen_sqlite
+    is_url_seen = repository.is_url_seen_sqlite
+    mark_url_seen = repository.mark_url_seen_sqlite
     
     # Query tracking functions
-    is_query_done = database.is_query_done_sqlite
-    mark_query_done = database.mark_query_done_sqlite
+    is_query_done = repository.is_query_done_sqlite
+    mark_query_done = repository.mark_query_done_sqlite
     
     # Scraper run tracking functions
-    start_scraper_run = database.start_scraper_run_sqlite
-    finish_scraper_run = database.finish_scraper_run_sqlite
+    start_scraper_run = repository.start_scraper_run_sqlite
+    finish_scraper_run = repository.finish_scraper_run_sqlite
     
     # SQLite-specific functions (not available in Django backend)
     # These can be imported directly if needed
