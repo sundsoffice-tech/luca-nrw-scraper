@@ -1,6 +1,10 @@
 """Views for pages app - builder and public page rendering"""
 import json
 import logging
+import os
+import zipfile
+import shutil
+from pathlib import Path
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -8,9 +12,15 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
+from django.utils.text import slugify
 from django.db import transaction, models as db_models
+from django.db.models import Count
+from django.conf import settings
 
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
+from .models import (
+    Project, LandingPage, PageVersion, PageComponent, PageSubmission, 
+    PageAsset, BrandSettings, PageTemplate
+)
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
 
@@ -452,3 +462,252 @@ def template_list(request):
 
 
 
+
+
+# ============================================================================
+# Project Management Views
+# ============================================================================
+
+@staff_member_required
+def quick_create(request):
+    """Quick create interface with tabs for different input methods"""
+    templates = PageTemplate.objects.filter(is_active=True)
+    
+    return render(request, 'pages/quick_create.html', {
+        'templates': templates
+    })
+
+
+@staff_member_required
+@require_POST
+def upload_project(request):
+    """Upload komplettes HTML/CSS/JS Projekt als ZIP"""
+    try:
+        # Check if ZIP file is provided
+        if 'zip_file' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'Keine ZIP-Datei hochgeladen'
+            }, status=400)
+        
+        zip_file = request.FILES['zip_file']
+        
+        # Validate file size (max 50MB)
+        max_size = 50 * 1024 * 1024  # 50MB
+        if zip_file.size > max_size:
+            return JsonResponse({
+                'success': False,
+                'error': f'Datei zu groß. Maximum: 50MB (hochgeladen: {zip_file.size / (1024 * 1024):.1f}MB)'
+            }, status=400)
+        
+        # Get project metadata
+        project_name = request.POST.get('name', zip_file.name.replace('.zip', ''))
+        project_slug = slugify(project_name)
+        project_type = request.POST.get('type', 'website')
+        project_description = request.POST.get('description', '')
+        
+        # Check if project with this slug already exists
+        if Project.objects.filter(slug=project_slug).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'Ein Projekt mit dem Slug "{project_slug}" existiert bereits'
+            }, status=400)
+        
+        # Allowed file extensions
+        allowed_extensions = {
+            '.html', '.htm', '.css', '.js', '.json',
+            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico',
+            '.woff', '.woff2', '.ttf', '.eot',
+            '.txt', '.md'
+        }
+        
+        # Extract ZIP to temporary directory
+        projects_root = os.path.join(settings.MEDIA_ROOT, 'projects')
+        os.makedirs(projects_root, exist_ok=True)
+        
+        project_path = os.path.join(projects_root, project_slug)
+        
+        # Extract ZIP file
+        html_files = []
+        extracted_files = []
+        
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            # Validate and extract files
+            for file_info in zip_ref.filelist:
+                # Skip directories
+                if file_info.is_dir():
+                    continue
+                
+                # Get file extension
+                file_ext = os.path.splitext(file_info.filename)[1].lower()
+                
+                # Skip hidden files and unwanted files
+                filename_parts = Path(file_info.filename).parts
+                if any(part.startswith('.') or part.startswith('__') for part in filename_parts):
+                    continue
+                
+                # Check if file type is allowed
+                if file_ext not in allowed_extensions:
+                    logger.warning(f"Skipping file with disallowed extension: {file_info.filename}")
+                    continue
+                
+                # Prevent path traversal attacks
+                extracted_path = os.path.normpath(os.path.join(project_path, file_info.filename))
+                if not extracted_path.startswith(project_path):
+                    logger.warning(f"Path traversal attempt detected: {file_info.filename}")
+                    continue
+                
+                # Extract the file
+                zip_ref.extract(file_info, project_path)
+                extracted_files.append(file_info.filename)
+                
+                # Track HTML files
+                if file_ext in ['.html', '.htm']:
+                    html_files.append(file_info.filename)
+        
+        if not html_files:
+            return JsonResponse({
+                'success': False,
+                'error': 'Keine HTML-Dateien im ZIP-Archiv gefunden'
+            }, status=400)
+        
+        # Create Project
+        with transaction.atomic():
+            project = Project.objects.create(
+                name=project_name,
+                slug=project_slug,
+                project_type=project_type,
+                description=project_description,
+                static_path=f'projects/{project_slug}/',
+                created_by=request.user
+            )
+            
+            # Create LandingPage for each HTML file
+            main_page = None
+            pages_created = []
+            
+            for html_file in html_files:
+                # Generate page slug from filename
+                page_filename = os.path.basename(html_file)
+                page_name = os.path.splitext(page_filename)[0]
+                page_slug = f"{project_slug}-{slugify(page_name)}"
+                
+                # Ensure unique slug
+                counter = 1
+                original_slug = page_slug
+                while LandingPage.objects.filter(slug=page_slug).exists():
+                    page_slug = f"{original_slug}-{counter}"
+                    counter += 1
+                
+                # Read HTML content
+                html_path = os.path.join(project_path, html_file)
+                with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    html_content = f.read()
+                
+                # Create LandingPage
+                page = LandingPage.objects.create(
+                    slug=page_slug,
+                    title=f"{project_name} - {page_name}",
+                    status='draft',
+                    project=project,
+                    is_uploaded_site=True,
+                    uploaded_files_path=f'projects/{project_slug}/',
+                    entry_point=html_file,
+                    html=html_content,
+                    created_by=request.user,
+                    updated_by=request.user
+                )
+                
+                pages_created.append({
+                    'slug': page_slug,
+                    'title': page.title,
+                    'file': html_file
+                })
+                
+                # Set main page (index.html or first HTML file)
+                if page_filename.lower() in ['index.html', 'index.htm'] or main_page is None:
+                    main_page = page
+            
+            # Set main page for project
+            if main_page:
+                project.main_page = main_page
+                project.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Projekt "{project_name}" erfolgreich hochgeladen',
+            'data': {
+                'project': {
+                    'name': project.name,
+                    'slug': project.slug,
+                    'url': project.get_absolute_url()
+                },
+                'pages': pages_created,
+                'files_extracted': len(extracted_files)
+            }
+        })
+    
+    except zipfile.BadZipFile:
+        return JsonResponse({
+            'success': False,
+            'error': 'Ungültige ZIP-Datei'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error uploading project: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Hochladen: {str(e)}'
+        }, status=500)
+
+
+@staff_member_required
+def project_list(request):
+    """Liste aller hochgeladenen Projekte"""
+    projects = Project.objects.annotate(
+        page_count=Count('pages')
+    ).select_related('main_page', 'created_by')
+    
+    return render(request, 'pages/project_list.html', {
+        'projects': projects
+    })
+
+
+@staff_member_required
+def project_detail(request, slug):
+    """Projektdetails mit allen Seiten"""
+    project = get_object_or_404(Project.objects.select_related('main_page', 'created_by'), slug=slug)
+    pages = project.pages.all().order_by('title')
+    
+    return render(request, 'pages/project_detail.html', {
+        'project': project,
+        'pages': pages
+    })
+
+
+@staff_member_required
+@require_POST
+def project_delete(request, slug):
+    """Projekt und alle zugehörigen Seiten löschen"""
+    project = get_object_or_404(Project, slug=slug)
+    
+    try:
+        # Delete project files
+        if project.static_path:
+            project_path = os.path.join(settings.MEDIA_ROOT, project.static_path)
+            if os.path.exists(project_path):
+                shutil.rmtree(project_path)
+        
+        # Delete project (will cascade delete pages)
+        project_name = project.name
+        project.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Projekt "{project_name}" wurde gelöscht'
+        })
+    except Exception as e:
+        logger.error(f"Error deleting project {slug}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Fehler beim Löschen: {str(e)}'
+        }, status=500)

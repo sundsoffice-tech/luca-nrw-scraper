@@ -5,6 +5,56 @@ from django.utils import timezone
 from django.urls import reverse
 
 
+class Project(models.Model):
+    """Container für Multipage-Projekte (Spiele, Websites, Apps)"""
+    
+    TYPE_CHOICES = [
+        ('website', 'Multi-Page Website'),
+        ('game', 'Browser-Spiel'),
+        ('app', 'Web-App'),
+        ('landing', 'Landing Page Sammlung'),
+    ]
+    
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    project_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='website')
+    description = models.TextField(blank=True)
+    
+    # Verzeichnis für statische Dateien (CSS, JS, Bilder)
+    static_path = models.CharField(max_length=500, blank=True)
+    
+    # Hauptseite (index.html)
+    main_page = models.ForeignKey(
+        'LandingPage', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='main_for_project'
+    )
+    
+    # Navigation/Sitemap als JSON
+    navigation = models.JSONField(default=list, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    is_deployed = models.BooleanField(default=False)
+    deployed_url = models.URLField(blank=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Project'
+        verbose_name_plural = 'Projects'
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_project_type_display()})"
+    
+    def get_absolute_url(self):
+        """URL for the project detail page"""
+        return reverse('pages:project-detail', kwargs={'slug': self.slug})
+
+
 class LandingPage(models.Model):
     """Main landing page model for no-code builder"""
     
@@ -17,6 +67,11 @@ class LandingPage(models.Model):
                            help_text="URL slug for the page (e.g., 'home' for /p/home/)")
     title = models.CharField(max_length=255, help_text="Internal title for the page")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    
+    # Project relation
+    project = models.ForeignKey('Project', on_delete=models.CASCADE, null=True, blank=True, 
+                                related_name='pages',
+                                help_text="Parent project for multipage sites")
     
     # GrapesJS data
     html_json = models.JSONField(default=dict, blank=True,

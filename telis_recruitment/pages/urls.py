@@ -9,6 +9,15 @@ urlpatterns = [
     path('', views.builder_list, name='builder-list'),
     path('builder/<slug:slug>/', views.builder_view, name='page-builder'),
     
+    # Quick Create Interface
+    path('quick-create/', views.quick_create, name='quick-create'),
+    
+    # Project Management
+    path('projects/', views.project_list, name='project-list'),
+    path('projects/<slug:slug>/', views.project_detail, name='project-detail'),
+    path('projects/<slug:slug>/delete/', views.project_delete, name='project-delete'),
+    path('upload-project/', views.upload_project, name='upload-project'),
+    
     # Builder API endpoints
     path('api/<slug:slug>/save/', views.builder_save, name='builder-save'),
     path('api/<slug:slug>/load/', views.builder_load, name='builder-load'),

@@ -1,0 +1,44 @@
+# Generated manually for adding Project model and LandingPage.project field
+
+from django.conf import settings
+from django.db import migrations, models
+import django.db.models.deletion
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('pages', '0008_brandsettings_text_light_color'),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='Project',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', models.CharField(max_length=255)),
+                ('slug', models.SlugField(unique=True)),
+                ('project_type', models.CharField(choices=[('website', 'Multi-Page Website'), ('game', 'Browser-Spiel'), ('app', 'Web-App'), ('landing', 'Landing Page Sammlung')], default='website', max_length=20)),
+                ('description', models.TextField(blank=True)),
+                ('static_path', models.CharField(blank=True, max_length=500)),
+                ('navigation', models.JSONField(blank=True, default=list)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('is_deployed', models.BooleanField(default=False)),
+                ('deployed_url', models.URLField(blank=True)),
+                ('created_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
+                ('main_page', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='main_for_project', to='pages.landingpage')),
+            ],
+            options={
+                'verbose_name': 'Project',
+                'verbose_name_plural': 'Projects',
+                'ordering': ['-updated_at'],
+            },
+        ),
+        migrations.AddField(
+            model_name='landingpage',
+            name='project',
+            field=models.ForeignKey(blank=True, help_text='Parent project for multipage sites', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='pages', to='pages.project'),
+        ),
+    ]

@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from unfold.admin import ModelAdmin, TabularInline
 from .models import (
-    LandingPage, PageVersion, PageComponent, PageSubmission, 
+    Project, LandingPage, PageVersion, PageComponent, PageSubmission, 
     UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate,
     FileVersion, ProjectTemplate
 )
@@ -498,3 +498,67 @@ class ProjectTemplateAdmin(ModelAdmin):
             )
         return '-'
     preview_thumbnail.short_description = 'Preview'
+
+
+class LandingPageInlineForProject(TabularInline):
+    """Inline display of landing pages for a project"""
+    model = LandingPage
+    extra = 0
+    can_delete = False
+    readonly_fields = ['slug', 'title', 'status', 'created_at']
+    fields = ['slug', 'title', 'status', 'created_at']
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Project)
+class ProjectAdmin(ModelAdmin):
+    """Admin interface for projects"""
+    
+    list_display = ['name', 'slug', 'project_type', 'page_count', 'created_by', 'created_at', 'detail_link']
+    list_filter = ['project_type', 'is_deployed', 'created_at', 'created_by']
+    search_fields = ['name', 'slug', 'description']
+    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = [
+        ('Project Information', {
+            'fields': ['name', 'slug', 'project_type', 'description']
+        }),
+        ('Configuration', {
+            'fields': ['static_path', 'main_page', 'navigation']
+        }),
+        ('Deployment', {
+            'fields': ['is_deployed', 'deployed_url'],
+            'classes': ['collapse'],
+        }),
+        ('Metadata', {
+            'fields': ['created_by', 'created_at', 'updated_at'],
+            'classes': ['collapse'],
+        }),
+    ]
+    
+    inlines = [LandingPageInlineForProject]
+    
+    def page_count(self, obj):
+        """Count of pages in project"""
+        count = obj.pages.count()
+        return format_html(
+            '<span style="background-color: #3b82f6; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">{} pages</span>',
+            count
+        )
+    page_count.short_description = 'Pages'
+    
+    def detail_link(self, obj):
+        """Link to project detail page"""
+        url = reverse('pages:project-detail', kwargs={'slug': obj.slug})
+        return format_html('<a href="{}" target="_blank">View Project</a>', url)
+    detail_link.short_description = 'Detail'
+    
+    def save_model(self, request, obj, form, change):
+        """Track who created the project"""
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
