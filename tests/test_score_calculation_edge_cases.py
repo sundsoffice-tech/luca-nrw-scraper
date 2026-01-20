@@ -29,7 +29,8 @@ def active_learning(temp_db):
     """Create an active learning engine instance."""
     from learning_engine import LearningEngine
     # First initialize the base learning engine to create tables
-    base_engine = LearningEngine(temp_db)
+    # (base_engine is needed for its side effect of creating database tables)
+    base_engine = LearningEngine(temp_db)  # noqa: F841
     return ActiveLearningEngine(temp_db)
 
 
