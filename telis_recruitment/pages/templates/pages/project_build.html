@@ -1,0 +1,220 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}{{ project.name }} - Build - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-list' %}" class="text-gray-400 hover:text-white">Projects</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-detail' slug=project.slug %}" class="text-gray-400 hover:text-white">{{ project.name }}</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Build</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Projekt Build</h1>
+            <p class="text-gray-400">{{ project.name }}</p>
+        </div>
+        
+        <a href="{% url 'pages:project-detail' slug=project.slug %}" 
+           class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+            ← Zurück
+        </a>
+    </div>
+
+    <!-- Build Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <!-- Pages Count -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Published Pages</div>
+            <div class="text-3xl font-bold text-white">{{ pages.count }}</div>
+        </div>
+        
+        <!-- Assets Count -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Project Assets</div>
+            <div class="text-3xl font-bold text-white">{{ assets.count }}</div>
+        </div>
+        
+        <!-- Project Type -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Project Type</div>
+            <div class="text-xl font-bold text-white">{{ project.get_project_type_display }}</div>
+        </div>
+    </div>
+
+    <!-- Build Details -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6 mb-6">
+        <h2 class="text-xl font-semibold text-white mb-4">Was wird gebaut?</h2>
+        
+        <div class="space-y-4">
+            <!-- Pages List -->
+            <div>
+                <h3 class="text-sm font-semibold text-gray-300 mb-2">Seiten ({{ pages.count }})</h3>
+                <div class="bg-dark-700 rounded p-4">
+                    {% if pages %}
+                    <ul class="space-y-2">
+                        {% for page in pages %}
+                        <li class="flex items-center space-x-2">
+                            <span class="text-primary">📄</span>
+                            <span class="text-white">{{ page.title }}</span>
+                            <span class="text-gray-500 text-sm">({{ page.slug }}.html)</span>
+                            {% if page == project.main_page %}
+                            <span class="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded">Main</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-gray-500 text-sm">Keine published Pages</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Assets List -->
+            <div>
+                <h3 class="text-sm font-semibold text-gray-300 mb-2">Assets ({{ assets.count }})</h3>
+                <div class="bg-dark-700 rounded p-4">
+                    {% if assets %}
+                    <ul class="space-y-2">
+                        {% for asset in assets %}
+                        <li class="flex items-center space-x-2">
+                            <span class="text-primary">
+                                {% if asset.asset_type == 'css' %}🎨
+                                {% elif asset.asset_type == 'js' %}⚙️
+                                {% elif asset.asset_type == 'font' %}🔤
+                                {% else %}📦{% endif %}
+                            </span>
+                            <span class="text-white">{{ asset.name }}</span>
+                            <span class="text-gray-500 text-sm">({{ asset.get_asset_type_display }})</span>
+                            {% if asset.include_globally %}
+                            <span class="px-2 py-0.5 text-xs bg-green-500/20 text-green-500 rounded">Global</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-gray-500 text-sm">Keine Assets</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Additional Files -->
+            <div>
+                <h3 class="text-sm font-semibold text-gray-300 mb-2">Zusätzliche Dateien</h3>
+                <div class="bg-dark-700 rounded p-4">
+                    <ul class="space-y-2 text-sm">
+                        <li class="flex items-center space-x-2">
+                            <span class="text-primary">📋</span>
+                            <span class="text-white">sitemap.xml</span>
+                        </li>
+                        <li class="flex items-center space-x-2">
+                            <span class="text-primary">🤖</span>
+                            <span class="text-white">robots.txt</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Build Actions -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-white mb-4">Build Aktionen</h2>
+        
+        <div class="space-y-4">
+            <div class="flex items-start space-x-4">
+                <button onclick="buildProject()" 
+                        class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition flex items-center space-x-2">
+                    <span>🔨</span>
+                    <span>Projekt bauen</span>
+                </button>
+                
+                <button onclick="exportProject()" 
+                        class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center space-x-2">
+                    <span>📦</span>
+                    <span>Als ZIP exportieren</span>
+                </button>
+                
+                <a href="{% url 'pages:project-deployments' slug=project.slug %}" 
+                   class="px-6 py-3 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition flex items-center space-x-2">
+                    <span>📜</span>
+                    <span>Deployment History</span>
+                </a>
+            </div>
+            
+            <div class="text-sm text-gray-400">
+                <p>💡 <strong>Build:</strong> Erstellt statische HTML-Dateien aus Ihrem Projekt</p>
+                <p>💡 <strong>Export:</strong> Erstellt ein ZIP-Archiv zum Download</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Build Log -->
+    <div id="buildLog" class="hidden mt-6 bg-dark-800 rounded-lg border border-dark-700 p-6">
+        <h2 class="text-xl font-semibold text-white mb-4">Build Log</h2>
+        <div id="buildLogContent" class="bg-dark-900 rounded p-4 font-mono text-sm text-gray-300 max-h-96 overflow-y-auto">
+            <!-- Build log will appear here -->
+        </div>
+    </div>
+</div>
+
+<script>
+async function buildProject() {
+    const buildLog = document.getElementById('buildLog');
+    const buildLogContent = document.getElementById('buildLogContent');
+    
+    buildLog.classList.remove('hidden');
+    buildLogContent.innerHTML = '🔨 Starte Build...\n';
+    
+    try {
+        const response = await fetch('{% url "pages:project-build" slug=project.slug %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            buildLogContent.innerHTML += `✅ Build erfolgreich!\n`;
+            buildLogContent.innerHTML += `📁 Dateien: ${data.files_count}\n`;
+            buildLogContent.innerHTML += `💾 Größe: ${(data.total_size / 1024).toFixed(2)} KB\n`;
+            
+            if (data.warnings && data.warnings.length > 0) {
+                buildLogContent.innerHTML += `\n⚠️ Warnungen:\n`;
+                data.warnings.forEach(warning => {
+                    buildLogContent.innerHTML += `  - ${warning}\n`;
+                });
+            }
+            
+            alert('Build erfolgreich!');
+        } else {
+            buildLogContent.innerHTML += `❌ Build fehlgeschlagen!\n`;
+            if (data.errors && data.errors.length > 0) {
+                data.errors.forEach(error => {
+                    buildLogContent.innerHTML += `  - ${error}\n`;
+                });
+            }
+            alert('Build fehlgeschlagen! Siehe Log für Details.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        buildLogContent.innerHTML += `❌ Fehler: ${error}\n`;
+        alert('Fehler beim Build-Prozess');
+    }
+}
+
+function exportProject() {
+    if (confirm('Projekt als ZIP exportieren?')) {
+        window.location.href = '{% url "pages:project-export" slug=project.slug %}';
+    }
+}
+</script>
+
+{% endblock %}
