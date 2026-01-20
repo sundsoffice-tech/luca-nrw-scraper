@@ -67,6 +67,9 @@ class ProcessManager:
             'rate_limit': 0,
             'config_error': 0,
             'crash': 0,
+            'connection_error': 0,
+            'timeout': 0,
+            'parsing_error': 0,
             'other': 0
         }
         self.error_timestamps: deque = deque(maxlen=100)  # Track last 100 errors for rate calculation
@@ -95,15 +98,23 @@ class ProcessManager:
             self.error_rate_threshold = config.process_error_rate_threshold
             self.circuit_breaker_failure_threshold = config.process_circuit_breaker_failures
             self.retry_backoff_base = config.process_retry_backoff_base
+            self.error_rate_window_seconds = 300  # 5 minutes window for error rate calculation
             
             logger.info(f"Loaded config: max_retry={self.max_retry_attempts}, "
                        f"qpi_factor={self.qpi_reduction_factor}, "
                        f"error_threshold={self.error_rate_threshold}, "
                        f"cb_threshold={self.circuit_breaker_failure_threshold}, "
-                       f"backoff={self.retry_backoff_base}")
+                       f"backoff={self.retry_backoff_base}, "
+                       f"error_window={self.error_rate_window_seconds}s")
         except Exception as e:
             logger.warning(f"Failed to load config from database, using defaults: {e}")
-            # Keep default values set in __init__
+            # Set default values
+            self.max_retry_attempts = 3
+            self.qpi_reduction_factor = 0.7
+            self.error_rate_threshold = 0.5
+            self.circuit_breaker_failure_threshold = 5
+            self.retry_backoff_base = 30.0
+            self.error_rate_window_seconds = 300  # 5 minutes
     
     def _read_output(self):
         """Background thread to read and store process output."""
@@ -217,6 +228,15 @@ class ProcessManager:
                             elif 'rate limit' in message_lower:
                                 self._log_error("Rate limit hit - consider reducing QPI")
                                 self._track_error('rate_limit')
+                            elif 'ConnectionError' in line or 'connection' in message_lower and 'error' in message_lower:
+                                self._log_error("Connection error detected")
+                                self._track_error('connection_error')
+                            elif 'TimeoutError' in line or 'timeout' in message_lower:
+                                self._log_error("Timeout error detected")
+                                self._track_error('timeout')
+                            elif 'ParseError' in line or 'parsing' in message_lower and 'error' in message_lower:
+                                self._log_error("Parsing error detected")
+                                self._track_error('parsing_error')
                             
                         except Exception as e:
                             logger.error(f"Failed to update ScraperRun logs: {e}")
@@ -361,12 +381,13 @@ class ProcessManager:
     
     def _calculate_retry_backoff(self) -> float:
         """
-        Calculate exponential backoff for retry.
+        Calculate exponential backoff for retry with maximum cap.
         
         Returns:
-            Backoff time in seconds
+            Backoff time in seconds (capped at 300s = 5 minutes)
         """
-        return self.retry_backoff_base * (2 ** self.retry_count)
+        backoff = self.retry_backoff_base * (2 ** self.retry_count)
+        return min(backoff, 300.0)  # Max 5 minutes
     
     def _adjust_qpi_for_rate_limit(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -856,6 +877,9 @@ class ProcessManager:
             'rate_limit': 0,
             'config_error': 0,
             'crash': 0,
+            'connection_error': 0,
+            'timeout': 0,
+            'parsing_error': 0,
             'other': 0
         }
         self.error_timestamps.clear()

@@ -46,6 +46,19 @@
                 <div class="text-2xl font-bold text-gray-100 mt-1" id="stat-resources">-</div>
             </div>
         </div>
+        
+        <!-- Circuit Breaker Status -->
+        <div id="circuit-breaker-status" class="hidden bg-red-900/50 border border-red-700 rounded-lg p-4 mt-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-red-400 font-semibold">⚠️ Circuit Breaker OPEN</span>
+                    <p class="text-sm text-red-300 mt-1">Wartezeit: <span id="cb-remaining">--</span>s verbleibend</p>
+                </div>
+                <button id="btn-reset-cb" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded transition duration-150">
+                    Manuell zurücksetzen
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Control Panel -->
@@ -251,13 +264,13 @@
                         <td class="py-3 px-4 text-gray-400 text-sm">{{ run.started_at|date:"d.m.Y H:i" }}</td>
                         <td class="py-3 px-4 text-gray-400 text-sm">
                             {% if run.duration %}
-                                {% with total_seconds=run.duration.total_seconds|floatformat:0 %}
-                                    {% if total_seconds|add:0 >= 3600 %}
-                                        {{ total_seconds|floatformat:0|divisibleby:3600 }}h
-                                    {% elif total_seconds|add:0 >= 60 %}
-                                        {{ total_seconds|floatformat:0|divisibleby:60 }}m
+                                {% with total_seconds=run.duration.total_seconds %}
+                                    {% if total_seconds >= 3600 %}
+                                        {{ total_seconds|floatformat:0|add:"0"|floatformat:0 }}h
+                                    {% elif total_seconds >= 60 %}
+                                        {{ total_seconds|floatformat:0|add:"0"|floatformat:0 }}m
                                     {% else %}
-                                        {{ total_seconds }}s
+                                        {{ total_seconds|floatformat:0 }}s
                                     {% endif %}
                                 {% endwith %}
                             {% else %}
@@ -443,21 +456,46 @@ async function loadPortalStatus() {
                 statusIcon = '⚠️';
             }
             
-            item.innerHTML = `
-                <div class="flex-1">
-                    <div class="text-sm text-gray-200">${portal.display_name}</div>
-                    <div class="text-xs text-gray-500">Rate: ${portal.rate_limit_seconds}s | Errors: ${portal.consecutive_errors}</div>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <span class="${statusColor}">${statusIcon}</span>
-                    <button class="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded" 
-                            onclick="togglePortal('${portal.name}', ${!portal.is_active})">
-                        ${portal.is_active ? 'Deaktivieren' : 'Aktivieren'}
-                    </button>
-                    ${portal.circuit_breaker_tripped ? `<button class="text-xs px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded" 
-                            onclick="resetCircuitBreaker('${portal.name}')">Reset</button>` : ''}
-                </div>
-            `;
+            // Create elements safely using DOM manipulation
+            const flexDiv = document.createElement('div');
+            flexDiv.className = 'flex-1';
+            
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'text-sm text-gray-200';
+            nameDiv.textContent = portal.display_name;
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'text-xs text-gray-500';
+            infoDiv.textContent = `Rate: ${portal.rate_limit_seconds}s | Errors: ${portal.consecutive_errors}`;
+            
+            flexDiv.appendChild(nameDiv);
+            flexDiv.appendChild(infoDiv);
+            
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'flex items-center space-x-2';
+            
+            const statusSpan = document.createElement('span');
+            statusSpan.className = statusColor;
+            statusSpan.textContent = statusIcon;
+            
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded';
+            toggleBtn.textContent = portal.is_active ? 'Deaktivieren' : 'Aktivieren';
+            toggleBtn.onclick = () => togglePortal(portal.name, !portal.is_active);
+            
+            actionsDiv.appendChild(statusSpan);
+            actionsDiv.appendChild(toggleBtn);
+            
+            if (portal.circuit_breaker_tripped) {
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'text-xs px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded';
+                resetBtn.textContent = 'Reset';
+                resetBtn.onclick = () => resetCircuitBreaker(portal.name);
+                actionsDiv.appendChild(resetBtn);
+            }
+            
+            item.appendChild(flexDiv);
+            item.appendChild(actionsDiv);
             
             container.appendChild(item);
         });
@@ -541,7 +579,52 @@ scraperControl.updateUI = function(status) {
     document.getElementById('metric-acceptance-rate').textContent = (status.lead_acceptance_rate || 0) + '%';
     document.getElementById('metric-block-rate').textContent = (status.block_rate || 0) + '%';
     document.getElementById('metric-avg-time').textContent = Math.round(status.avg_request_time_ms || 0) + 'ms';
+    
+    // Update Circuit Breaker Status
+    const cbStatus = document.getElementById('circuit-breaker-status');
+    const cbRemaining = document.getElementById('cb-remaining');
+    
+    if (status.circuit_breaker_state === 'open' || status.circuit_breaker_state === 'half_open') {
+        cbStatus.classList.remove('hidden');
+        if (status.circuit_breaker_remaining_seconds !== undefined) {
+            cbRemaining.textContent = Math.ceil(status.circuit_breaker_remaining_seconds);
+        } else {
+            cbRemaining.textContent = '--';
+        }
+    } else {
+        cbStatus.classList.add('hidden');
+    }
 };
+
+// Circuit Breaker Reset
+document.getElementById('btn-reset-cb').addEventListener('click', async function() {
+    if (!confirm('Circuit Breaker manuell zurücksetzen?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('{% url "scraper_control:api-reset-circuit-breaker" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({})
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✓ Circuit Breaker zurückgesetzt');
+            scraperControl.updateStatus();
+        } else {
+            alert('✗ Fehler: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error resetting circuit breaker:', error);
+        alert('✗ Fehler beim Zurücksetzen: ' + error.message);
+    }
+});
 
 // Placeholder for run details modal
 window.showRunDetails = function(runId) {

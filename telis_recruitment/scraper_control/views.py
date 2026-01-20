@@ -300,13 +300,44 @@ def api_scraper_config_update(request):
     try:
         config = ScraperConfig.get_config()
         
-        # Update fields
+        # Get available choices for validation
+        valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
+        valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
+        
+        # Update fields with validation
         if 'industry' in request.data:
-            config.industry = request.data['industry']
+            industry = request.data['industry']
+            if industry not in valid_industries:
+                return Response({
+                    'success': False,
+                    'error': f'Ungültige Industry. Erlaubt: {", ".join(valid_industries)}'
+                }, status=http_status.HTTP_400_BAD_REQUEST)
+            config.industry = industry
+            
         if 'mode' in request.data:
-            config.mode = request.data['mode']
+            mode = request.data['mode']
+            if mode not in valid_modes:
+                return Response({
+                    'success': False,
+                    'error': f'Ungültiger Mode. Erlaubt: {", ".join(valid_modes)}'
+                }, status=http_status.HTTP_400_BAD_REQUEST)
+            config.mode = mode
+            
         if 'qpi' in request.data:
-            config.qpi = int(request.data['qpi'])
+            try:
+                qpi = int(request.data['qpi'])
+                if not 1 <= qpi <= 100:
+                    return Response({
+                        'success': False,
+                        'error': 'QPI muss zwischen 1 und 100 liegen'
+                    }, status=http_status.HTTP_400_BAD_REQUEST)
+                config.qpi = qpi
+            except (ValueError, TypeError):
+                return Response({
+                    'success': False,
+                    'error': 'QPI muss eine Zahl sein'
+                }, status=http_status.HTTP_400_BAD_REQUEST)
+                
         if 'daterestrict' in request.data:
             config.daterestrict = request.data['daterestrict']
         if 'smart' in request.data:
@@ -734,11 +765,11 @@ def api_reset_circuit_breaker(request):
     """
     POST /crm/scraper/api/control/circuit-breaker/reset/
     
-    Manually reset circuit breaker for a portal.
+    Manually reset circuit breaker for a portal or the process manager.
     
     POST data:
     {
-        "portal": "portal_name"
+        "portal": "portal_name"  # Optional, if not provided resets process manager CB
     }
     """
     try:
@@ -746,30 +777,37 @@ def api_reset_circuit_breaker(request):
         
         portal = request.data.get('portal')
         
-        if not portal:
-            return Response({
-                'success': False,
-                'error': 'Portal-Name ist erforderlich'
-            }, status=http_status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            portal_obj = PortalSource.objects.get(name=portal)
-            portal_obj.circuit_breaker_tripped = False
-            portal_obj.circuit_breaker_reset_at = None
-            portal_obj.consecutive_errors = 0
-            portal_obj.save()
+        if portal:
+            # Reset portal circuit breaker
+            try:
+                portal_obj = PortalSource.objects.get(name=portal)
+                portal_obj.circuit_breaker_tripped = False
+                portal_obj.circuit_breaker_reset_at = None
+                portal_obj.consecutive_errors = 0
+                portal_obj.save()
+                
+                logger.info(f"Circuit breaker reset for portal {portal} by {request.user.username}")
+                
+                return Response({
+                    'success': True,
+                    'message': f'Circuit Breaker für {portal} zurückgesetzt'
+                }, status=http_status.HTTP_200_OK)
+            except PortalSource.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Portal {portal} nicht gefunden'
+                }, status=http_status.HTTP_404_NOT_FOUND)
+        else:
+            # Reset process manager circuit breaker
+            manager = get_manager()
+            manager.reset_error_tracking()
             
-            logger.info(f"Circuit breaker reset for portal {portal} by {request.user.username}")
+            logger.info(f"Process manager circuit breaker reset by {request.user.username}")
             
             return Response({
                 'success': True,
-                'message': f'Circuit Breaker für {portal} zurückgesetzt'
+                'message': 'Process Manager Circuit Breaker zurückgesetzt'
             }, status=http_status.HTTP_200_OK)
-        except PortalSource.DoesNotExist:
-            return Response({
-                'success': False,
-                'error': f'Portal {portal} nicht gefunden'
-            }, status=http_status.HTTP_404_NOT_FOUND)
             
     except Exception as e:
         logger.error(f"Error resetting circuit breaker: {e}", exc_info=True)

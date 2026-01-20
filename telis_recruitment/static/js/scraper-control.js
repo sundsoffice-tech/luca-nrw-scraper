@@ -37,6 +37,14 @@ class ScraperControl {
         this.btnStart.addEventListener('click', () => this.start());
         this.btnStop.addEventListener('click', () => this.stop());
         this.btnClearLogs.addEventListener('click', () => this.clearLogs());
+        
+        // Log level filter
+        const logLevelFilter = document.getElementById('log-level-filter');
+        if (logLevelFilter) {
+            logLevelFilter.addEventListener('change', (e) => {
+                this.filterLogs(e.target.value);
+            });
+        }
     }
     
     async updateStatus() {
@@ -259,7 +267,8 @@ class ScraperControl {
         }
         
         const logEntry = document.createElement('div');
-        logEntry.className = 'py-1';
+        logEntry.className = 'py-1 log-entry';
+        logEntry.dataset.level = level;  // For filter
         
         // Color code by level
         let color = 'text-gray-300';
@@ -272,7 +281,19 @@ class ScraperControl {
         }
         
         const ts = timestamp || new Date().toLocaleTimeString();
-        logEntry.innerHTML = `<span class="text-gray-500">[${ts}]</span> <span class="${color}">${message}</span>`;
+        
+        // Create timestamp span
+        const tsSpan = document.createElement('span');
+        tsSpan.className = 'text-gray-500';
+        tsSpan.textContent = `[${ts}] `;
+        
+        // Create message span
+        const msgSpan = document.createElement('span');
+        msgSpan.className = color;
+        msgSpan.textContent = message;
+        
+        logEntry.appendChild(tsSpan);
+        logEntry.appendChild(msgSpan);
         
         this.logContainer.appendChild(logEntry);
         
@@ -283,6 +304,17 @@ class ScraperControl {
         while (this.logContainer.children.length > 500) {
             this.logContainer.removeChild(this.logContainer.firstChild);
         }
+    }
+    
+    filterLogs(level) {
+        const entries = this.logContainer.querySelectorAll('.log-entry');
+        entries.forEach(entry => {
+            if (!level || entry.dataset.level === level || entry.dataset.level === 'LOG') {
+                entry.style.display = '';
+            } else {
+                entry.style.display = 'none';
+            }
+        });
     }
     
     clearLogs() {
