@@ -491,6 +491,8 @@ def record_pattern_success(
             
             # Update metrics
             pattern.occurrences += 1
+            # Confidence formula: occurrences / (occurrences + 10)
+            # This gives gradual confidence buildup (0.09 at 1 occurrence, 0.5 at 10, 0.91 at 100)
             pattern.confidence = min(1.0, pattern.occurrences / (pattern.occurrences + 10.0))
             pattern.metadata = metadata
             pattern.last_success = timezone.now()

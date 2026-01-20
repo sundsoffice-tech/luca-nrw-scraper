@@ -16,6 +16,7 @@ def test_unified_learning_db():
     # Create temporary database for testing
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
         test_db = tmp.name
+        # Close the file handle before using it
     
     try:
         print(f"\n1. Testing with SQLite backend (db: {test_db})")
