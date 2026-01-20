@@ -16,6 +16,10 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# Expected counts for validation
+EXPECTED_MIN_INDEXES = 17
+EXPECTED_MIN_CONSTRAINTS = 10
+
 
 def test_sqlite_indexes():
     """Test that SQLite schema has the new performance indexes."""
@@ -81,7 +85,8 @@ def test_django_model_structure():
     try:
         # Set minimal environment for Django import
         import os
-        os.environ.setdefault('SECRET_KEY', 'test-key-for-validation-only-' + 'x' * 30)
+        TEST_SECRET_KEY = 'test-validation-only-do-not-use-in-production-' + 'x' * 30
+        os.environ.setdefault('SECRET_KEY', TEST_SECRET_KEY)
         os.environ.setdefault('DEBUG', 'True')
         os.environ.setdefault('ALLOWED_HOSTS', '*')
         
@@ -114,15 +119,15 @@ def test_django_model_structure():
         for constraint in constraints:
             print(f"  - {constraint.name}")
         
-        if len(indexes) >= 17 and len(constraints) >= 10:
+        if len(indexes) >= EXPECTED_MIN_INDEXES and len(constraints) >= EXPECTED_MIN_CONSTRAINTS:
             print(f"\n✓ Django model structure looks good!")
-            print(f"  - {len(indexes)} indexes (expected: 17+)")
-            print(f"  - {len(constraints)} constraints (expected: 10+)")
+            print(f"  - {len(indexes)} indexes (expected: {EXPECTED_MIN_INDEXES}+)")
+            print(f"  - {len(constraints)} constraints (expected: {EXPECTED_MIN_CONSTRAINTS}+)")
             return True
         else:
             print(f"\n✗ Unexpected counts:")
-            print(f"  - Indexes: {len(indexes)} (expected: 17+)")
-            print(f"  - Constraints: {len(constraints)} (expected: 10+)")
+            print(f"  - Indexes: {len(indexes)} (expected: {EXPECTED_MIN_INDEXES}+)")
+            print(f"  - Constraints: {len(constraints)} (expected: {EXPECTED_MIN_CONSTRAINTS}+)")
             return False
             
     except Exception as e:
