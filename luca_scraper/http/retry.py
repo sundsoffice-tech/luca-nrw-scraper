@@ -3,6 +3,7 @@ Retry logic and circuit breaker for HTTP requests.
 """
 
 import os
+import threading
 import time
 from typing import Any, Dict
 
@@ -13,9 +14,13 @@ CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))
 CB_MAX_PENALTY = int(os.getenv("CB_MAX_PENALTY", "900"))
 RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
 
-# Global state
+# Global state with thread locks for concurrent access
 _HOST_STATE: Dict[str, Dict[str, Any]] = {}
+_HOST_STATE_LOCK = threading.Lock()
+
 _RETRY_URLS: Dict[str, Dict[str, Any]] = {}
+_RETRY_URLS_LOCK = threading.Lock()
+
 RUN_METRICS = {
     "removed_by_dropper": 0,
     "portal_dropped": 0,
@@ -26,6 +31,7 @@ RUN_METRICS = {
     "status_403": 0,
     "status_5xx": 0,
 }
+_RUN_METRICS_LOCK = threading.Lock()
 
 
 def log(level: str, msg: str, **ctx):
@@ -38,46 +44,49 @@ def log(level: str, msg: str, **ctx):
 
 
 def _reset_metrics():
-    """Reset run metrics to zero."""
+    """Reset run metrics to zero (thread-safe)."""
     global RUN_METRICS
-    RUN_METRICS = {k: 0 for k in RUN_METRICS}
+    with _RUN_METRICS_LOCK:
+        RUN_METRICS = {k: 0 for k in RUN_METRICS}
 
 
 def _record_drop(reason: str):
     """
-    Record a dropped URL.
+    Record a dropped URL (thread-safe).
     
     Args:
         reason: Reason for dropping the URL
     """
-    RUN_METRICS["removed_by_dropper"] += 1
-    if reason in ("portal_host", "portal_domain"):
-        RUN_METRICS["portal_dropped"] += 1
-    if reason == "impressum_no_contact":
-        RUN_METRICS["impressum_dropped"] += 1
-    if reason == "pdf_without_cv_hint":
-        RUN_METRICS["pdf_dropped"] += 1
+    with _RUN_METRICS_LOCK:
+        RUN_METRICS["removed_by_dropper"] += 1
+        if reason in ("portal_host", "portal_domain"):
+            RUN_METRICS["portal_dropped"] += 1
+        if reason == "impressum_no_contact":
+            RUN_METRICS["impressum_dropped"] += 1
+        if reason == "pdf_without_cv_hint":
+            RUN_METRICS["pdf_dropped"] += 1
 
 
 def _record_retry(status: int):
     """
-    Record a retry attempt.
+    Record a retry attempt (thread-safe).
     
     Args:
         status: HTTP status code that triggered the retry
     """
-    RUN_METRICS["retry_count"] += 1
-    if status == 429:
-        RUN_METRICS["status_429"] += 1
-    elif status == 403:
-        RUN_METRICS["status_403"] += 1
-    if 500 <= status < 600:
-        RUN_METRICS["status_5xx"] += 1
+    with _RUN_METRICS_LOCK:
+        RUN_METRICS["retry_count"] += 1
+        if status == 429:
+            RUN_METRICS["status_429"] += 1
+        elif status == 403:
+            RUN_METRICS["status_403"] += 1
+        if 500 <= status < 600:
+            RUN_METRICS["status_5xx"] += 1
 
 
 def _penalize_host(host: str, reason: str = "error"):
     """
-    Penalize host with learning integration.
+    Penalize host with learning integration (thread-safe).
     
     Implements circuit breaker pattern with exponential backoff.
     API hosts get shorter penalties.
@@ -98,18 +107,19 @@ def _penalize_host(host: str, reason: str = "error"):
     else:
         penalty = CB_BASE_PENALTY
     
-    if is_google_api:
-        # Google API: never hard-penalize; at most a short cool-down
-        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        st["penalty_until"] = time.time() + penalty
-        st["failures"] = 0
-        log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
-    else:
-        st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
-        st["failures"] = min(st["failures"] + 1, 10)
-        penalty = min(penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
-        st["penalty_until"] = time.time() + penalty
-        log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
+    with _HOST_STATE_LOCK:
+        if is_google_api:
+            # Google API: never hard-penalize; at most a short cool-down
+            st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+            st["penalty_until"] = time.time() + penalty
+            st["failures"] = 0
+            log("info", "Google API backoff (soft)", host=host, penalty_s=penalty)
+        else:
+            st = _HOST_STATE.setdefault(host, {"penalty_until": 0.0, "failures": 0})
+            st["failures"] = min(st["failures"] + 1, 10)
+            penalty = min(penalty * (2 ** (st["failures"] - 1)), CB_MAX_PENALTY)
+            st["penalty_until"] = time.time() + penalty
+            log("warn", "Circuit-Breaker: Host penalized", host=host, failures=st["failures"], penalty_s=penalty)
     
     # Inform learning engine
     try:
@@ -122,7 +132,7 @@ def _penalize_host(host: str, reason: str = "error"):
 
 def _host_allowed(host: str) -> bool:
     """
-    Check if host is allowed (not penalized).
+    Check if host is allowed (not penalized) (thread-safe).
     
     Args:
         host: Hostname to check
@@ -132,14 +142,16 @@ def _host_allowed(host: str) -> bool:
     """
     if host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com"):
         return True
-    st = _HOST_STATE.get(host)
-    if not st:
-        return True
-    if time.time() >= st.get("penalty_until", 0.0):
-        st["failures"] = 0
-        st["penalty_until"] = 0.0
-        return True
-    return False
+    
+    with _HOST_STATE_LOCK:
+        st = _HOST_STATE.get(host)
+        if not st:
+            return True
+        if time.time() >= st.get("penalty_until", 0.0):
+            st["failures"] = 0
+            st["penalty_until"] = 0.0
+            return True
+        return False
 
 
 def _should_retry_status(status: int) -> bool:
@@ -161,7 +173,7 @@ def _should_retry_status(status: int) -> bool:
 
 def _schedule_retry(url: str, status: int):
     """
-    Schedule URL for retry.
+    Schedule URL for retry (thread-safe).
     
     Args:
         url: URL to retry
@@ -170,9 +182,11 @@ def _schedule_retry(url: str, status: int):
     _record_retry(status)
     if not url:
         return
-    if url in _RETRY_URLS:
-        return
-    _RETRY_URLS[url] = {"retries": 0, "status": status, "last_ts": time.time()}
+    
+    with _RETRY_URLS_LOCK:
+        if url in _RETRY_URLS:
+            return
+        _RETRY_URLS[url] = {"retries": 0, "status": status, "last_ts": time.time()}
 
 
 # Public API aliases

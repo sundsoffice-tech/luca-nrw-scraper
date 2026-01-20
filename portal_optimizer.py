@@ -10,6 +10,13 @@ import sqlite3
 from typing import Dict, Any, List
 from learning_engine import LearningEngine
 
+# Import thread-safe database utilities
+try:
+    from luca_scraper.db_utils import get_db_connection, with_db_retry
+    DB_UTILS_AVAILABLE = True
+except ImportError:
+    DB_UTILS_AVAILABLE = False
+
 
 class PortalOptimizer:
     """
@@ -164,76 +171,83 @@ class PortalOptimizer:
     
     def get_portal_health_report(self) -> Dict[str, Any]:
         """
-        Generate comprehensive portal health report.
+        Generate comprehensive portal health report (thread-safe with retry).
         
         Returns:
             Health report with scores and recommendations
         """
-        con = sqlite3.connect(self.learning_engine.db_path)
+        @with_db_retry()
+        def _generate_report():
+            if DB_UTILS_AVAILABLE:
+                with get_db_connection(self.learning_engine.db_path) as con:
+                    return self._generate_health_report_internal(con)
+            else:
+                # Fallback without db_utils
+                con = sqlite3.connect(self.learning_engine.db_path)
+                try:
+                    return self._generate_health_report_internal(con)
+                finally:
+                    con.close()
+        
+        return _generate_report()
+    
+    def _generate_health_report_internal(self, con) -> Dict[str, Any]:
+        """Internal method to generate health report with given connection."""
         con.row_factory = sqlite3.Row
         cur = con.cursor()
         
-        try:
-            # Get all portal stats
-            cur.execute("""
-                SELECT domain, success_rate, total_requests, 
-                       successful_requests, rate_limit_detected, enabled
-                FROM domain_performance
-                ORDER BY success_rate DESC
-            """)
-            
-            portals = []
-            health_score = 0
-            total_portals = 0
-            
-            for row in cur.fetchall():
-                # sqlite3.Row doesn't have .get() method, use try-except instead
-                try:
-                    enabled_value = row["enabled"]
-                except (KeyError, IndexError):
-                    enabled_value = 1
-                
-                portal_info = {
-                    "domain": row["domain"],
-                    "health": "unknown",
-                    "success_rate": row["success_rate"],
-                    "total_requests": row["total_requests"],
-                    "successful_requests": row["successful_requests"],
-                    "rate_limited": bool(row["rate_limit_detected"]),
-                    "enabled": bool(enabled_value)
-                }
-                
-                # Determine health
-                if row["success_rate"] >= 0.2:
-                    portal_info["health"] = "excellent"
-                    health_score += 100
-                elif row["success_rate"] >= 0.1:
-                    portal_info["health"] = "good"
-                    health_score += 70
-                elif row["success_rate"] >= 0.05:
-                    portal_info["health"] = "fair"
-                    health_score += 40
-                elif row["success_rate"] >= 0.01:
-                    portal_info["health"] = "poor"
-                    health_score += 20
-                else:
-                    portal_info["health"] = "critical"
-                    health_score += 0
-                
-                portals.append(portal_info)
-                total_portals += 1
-            
-            avg_health = health_score / total_portals if total_portals > 0 else 0
-            
-            return {
-                "overall_health": round(avg_health, 1),
-                "health_grade": self._health_to_grade(avg_health),
-                "portals": portals,
-                "total_portals": total_portals,
-                "recommendations": self.get_optimization_suggestions()
+        # Get all portal stats
+        cur.execute("""
+            SELECT domain, success_rate, total_requests, 
+                   successful_requests, rate_limit_detected, enabled
+            FROM domain_performance
+            ORDER BY success_rate DESC
+        """)
+        
+        portals = []
+        health_score = 0
+        total_portals = 0
+        
+        for row in cur.fetchall():
+            portal_info = {
+                "domain": row["domain"],
+                "health": "unknown",
+                "success_rate": row["success_rate"],
+                "total_requests": row["total_requests"],
+                "successful_requests": row["successful_requests"],
+                "rate_limited": bool(row["rate_limit_detected"]),
+                "enabled": bool(row.get("enabled", 1))
             }
-        finally:
-            con.close()
+            
+            # Determine health
+            if row["success_rate"] >= 0.2:
+                portal_info["health"] = "excellent"
+                health_score += 100
+            elif row["success_rate"] >= 0.1:
+                portal_info["health"] = "good"
+                health_score += 70
+            elif row["success_rate"] >= 0.05:
+                portal_info["health"] = "fair"
+                health_score += 40
+            elif row["success_rate"] >= 0.01:
+                portal_info["health"] = "poor"
+                health_score += 20
+            else:
+                portal_info["health"] = "critical"
+                health_score += 0
+            
+            portals.append(portal_info)
+            total_portals += 1
+        
+        avg_health = health_score / total_portals if total_portals > 0 else 0
+        
+        return {
+            "overall_health": round(avg_health, 1),
+            "health_grade": self._health_to_grade(avg_health),
+            "portals": portals,
+            "total_portals": total_portals,
+            "recommendations": self.get_optimization_suggestions()
+        }
     
     def _health_to_grade(self, health_score: float) -> str:
         """Convert health score to letter grade."""

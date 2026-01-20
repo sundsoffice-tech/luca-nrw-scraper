@@ -22,6 +22,19 @@ import logging
 # Import unified learning database adapter
 from luca_scraper import learning_db
 
+# Import thread-safe database utilities
+try:
+    from luca_scraper.db_utils import (
+        get_db_connection,
+        with_db_retry,
+        configure_connection,
+        ensure_db_initialized
+    )
+    DB_UTILS_AVAILABLE = True
+except ImportError:
+    logging.warning("db_utils not available, using basic SQLite without retry logic")
+    DB_UTILS_AVAILABLE = False
+
 # Optional Django ai_config integration
 # Falls back gracefully when Django is not available or configured
 try:
@@ -114,189 +127,196 @@ class LearningEngine:
         self._ensure_learning_tables()
     
     def _ensure_learning_tables(self) -> None:
-        """Create success_patterns table and additional learning tables if they don't exist."""
-        con = sqlite3.connect(self.db_path)
-        con.row_factory = sqlite3.Row
-        cur = con.cursor()
+        """Create success_patterns table and additional learning tables if they don't exist (thread-safe)."""
+        def _init_tables(con):
+            """Initialize tables - called by ensure_db_initialized."""
+            cur = con.cursor()
+            
+            # Success Patterns table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS success_patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern_type TEXT NOT NULL,
+                    pattern_value TEXT NOT NULL,
+                    success_count INTEGER DEFAULT 0,
+                    fail_count INTEGER DEFAULT 0,
+                    last_success TIMESTAMP,
+                    confidence_score REAL DEFAULT 0.0,
+                    metadata TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(pattern_type, pattern_value)
+                )
+            """)
+            
+            # Create indexes for faster queries
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_success_patterns_type_confidence 
+                ON success_patterns(pattern_type, confidence_score DESC)
+            """)
+            
+            # Domain Learning table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS learning_domains (
+                    domain TEXT PRIMARY KEY,
+                    total_visits INTEGER DEFAULT 0,
+                    successful_extractions INTEGER DEFAULT 0,
+                    leads_found INTEGER DEFAULT 0,
+                    avg_quality REAL DEFAULT 0.0,
+                    last_visit TIMESTAMP,
+                    score REAL DEFAULT 0.5
+                )
+            """)
+            
+            # Query Performance table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS learning_queries (
+                    query_hash TEXT PRIMARY KEY,
+                    query_text TEXT,
+                    times_used INTEGER DEFAULT 0,
+                    leads_generated INTEGER DEFAULT 0,
+                    avg_leads_per_run REAL DEFAULT 0.0,
+                    last_used TIMESTAMP,
+                    effectiveness_score REAL DEFAULT 0.5
+                )
+            """)
+            
+            # Extraction Patterns table - tracks successful extraction patterns
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS extraction_patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern_type TEXT NOT NULL,
+                    pattern TEXT NOT NULL,
+                    description TEXT,
+                    success_count INTEGER DEFAULT 0,
+                    last_success TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(pattern_type, pattern)
+                )
+            """)
+            
+            # Failed Extractions table - learn from failures
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS failed_extractions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    failure_reason TEXT,
+                    html_snippet TEXT,
+                    visible_phone_numbers TEXT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Phone Patterns table - discovered phone number formats
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS phone_patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern TEXT NOT NULL UNIQUE,
+                    pattern_type TEXT,
+                    success_count INTEGER DEFAULT 0,
+                    example_matches TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Domain Performance table - detailed portal tracking
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS domain_performance (
+                    domain TEXT PRIMARY KEY,
+                    enabled BOOLEAN DEFAULT 1,
+                    priority INTEGER DEFAULT 2,
+                    delay_seconds REAL DEFAULT 3.0,
+                    success_rate REAL DEFAULT 0.0,
+                    total_requests INTEGER DEFAULT 0,
+                    successful_requests INTEGER DEFAULT 0,
+                    rate_limit_detected BOOLEAN DEFAULT 0,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT
+                )
+            """)
+            
+            # AI Improvements table - track AI-generated improvements
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ai_improvements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    improvement_type TEXT NOT NULL,
+                    description TEXT,
+                    implementation_status TEXT DEFAULT 'pending',
+                    impact_estimate TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    applied_at TIMESTAMP
+                )
+            """)
+            
+            # Active Learning: Portal/Run Metrics
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS learning_portal_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id INTEGER,
+                    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                    portal TEXT,
+                    urls_crawled INTEGER DEFAULT 0,
+                    leads_found INTEGER DEFAULT 0,
+                    leads_with_phone INTEGER DEFAULT 0,
+                    success_rate REAL DEFAULT 0.0,
+                    errors INTEGER DEFAULT 0
+                )
+            """)
+            
+            # Active Learning: Dork/Query Performance
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS learning_dork_performance (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dork TEXT UNIQUE,
+                    times_used INTEGER DEFAULT 0,
+                    total_results INTEGER DEFAULT 0,
+                    leads_found INTEGER DEFAULT 0,
+                    leads_with_phone INTEGER DEFAULT 0,
+                    score REAL DEFAULT 0.0,
+                    last_used TEXT,
+                    pool TEXT DEFAULT 'explore'
+                )
+            """)
+            
+            # Active Learning: Phone Patterns Learned
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS phone_patterns_learned (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern TEXT UNIQUE,
+                    times_matched INTEGER DEFAULT 0,
+                    source_portal TEXT,
+                    discovered_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Active Learning: Host Backoff
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS host_backoff (
+                    host TEXT PRIMARY KEY,
+                    failures INTEGER DEFAULT 0,
+                    last_failure TEXT,
+                    backoff_until TEXT,
+                    reason TEXT
+                )
+            """)
+            
+            con.commit()
+            
+            # Create indexes for better query performance (after commit)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_run ON learning_portal_metrics(run_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_portal ON learning_portal_metrics(portal)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_timestamp ON learning_portal_metrics(timestamp)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_dork_performance_score ON learning_dork_performance(score DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_dork_performance_pool ON learning_dork_performance(pool)")
+            
+            con.commit()
         
-        # Success Patterns table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS success_patterns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pattern_type TEXT NOT NULL,
-                pattern_value TEXT NOT NULL,
-                success_count INTEGER DEFAULT 0,
-                fail_count INTEGER DEFAULT 0,
-                last_success TIMESTAMP,
-                confidence_score REAL DEFAULT 0.0,
-                metadata TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(pattern_type, pattern_value)
-            )
-        """)
-        
-        # Create indexes for faster queries
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_success_patterns_type_confidence 
-            ON success_patterns(pattern_type, confidence_score DESC)
-        """)
-        
-        # Domain Learning table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS learning_domains (
-                domain TEXT PRIMARY KEY,
-                total_visits INTEGER DEFAULT 0,
-                successful_extractions INTEGER DEFAULT 0,
-                leads_found INTEGER DEFAULT 0,
-                avg_quality REAL DEFAULT 0.0,
-                last_visit TIMESTAMP,
-                score REAL DEFAULT 0.5
-            )
-        """)
-        
-        # Query Performance table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS learning_queries (
-                query_hash TEXT PRIMARY KEY,
-                query_text TEXT,
-                times_used INTEGER DEFAULT 0,
-                leads_generated INTEGER DEFAULT 0,
-                avg_leads_per_run REAL DEFAULT 0.0,
-                last_used TIMESTAMP,
-                effectiveness_score REAL DEFAULT 0.5
-            )
-        """)
-        
-        # Extraction Patterns table - tracks successful extraction patterns
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS extraction_patterns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pattern_type TEXT NOT NULL,
-                pattern TEXT NOT NULL,
-                description TEXT,
-                success_count INTEGER DEFAULT 0,
-                last_success TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(pattern_type, pattern)
-            )
-        """)
-        
-        # Failed Extractions table - learn from failures
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS failed_extractions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT NOT NULL,
-                failure_reason TEXT,
-                html_snippet TEXT,
-                visible_phone_numbers TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Phone Patterns table - discovered phone number formats
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS phone_patterns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pattern TEXT NOT NULL UNIQUE,
-                pattern_type TEXT,
-                success_count INTEGER DEFAULT 0,
-                example_matches TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Domain Performance table - detailed portal tracking
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS domain_performance (
-                domain TEXT PRIMARY KEY,
-                enabled BOOLEAN DEFAULT 1,
-                priority INTEGER DEFAULT 2,
-                delay_seconds REAL DEFAULT 3.0,
-                success_rate REAL DEFAULT 0.0,
-                total_requests INTEGER DEFAULT 0,
-                successful_requests INTEGER DEFAULT 0,
-                rate_limit_detected BOOLEAN DEFAULT 0,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                reason TEXT
-            )
-        """)
-        
-        # AI Improvements table - track AI-generated improvements
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS ai_improvements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                improvement_type TEXT NOT NULL,
-                description TEXT,
-                implementation_status TEXT DEFAULT 'pending',
-                impact_estimate TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                applied_at TIMESTAMP
-            )
-        """)
-        
-        # Active Learning: Portal/Run Metrics
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS learning_portal_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id INTEGER,
-                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-                portal TEXT,
-                urls_crawled INTEGER DEFAULT 0,
-                leads_found INTEGER DEFAULT 0,
-                leads_with_phone INTEGER DEFAULT 0,
-                success_rate REAL DEFAULT 0.0,
-                errors INTEGER DEFAULT 0
-            )
-        """)
-        
-        # Active Learning: Dork/Query Performance
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS learning_dork_performance (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dork TEXT UNIQUE,
-                times_used INTEGER DEFAULT 0,
-                total_results INTEGER DEFAULT 0,
-                leads_found INTEGER DEFAULT 0,
-                leads_with_phone INTEGER DEFAULT 0,
-                score REAL DEFAULT 0.0,
-                last_used TEXT,
-                pool TEXT DEFAULT 'explore'
-            )
-        """)
-        
-        # Active Learning: Phone Patterns Learned
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS phone_patterns_learned (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pattern TEXT UNIQUE,
-                times_matched INTEGER DEFAULT 0,
-                source_portal TEXT,
-                discovered_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Active Learning: Host Backoff
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS host_backoff (
-                host TEXT PRIMARY KEY,
-                failures INTEGER DEFAULT 0,
-                last_failure TEXT,
-                backoff_until TEXT,
-                reason TEXT
-            )
-        """)
-        
-        con.commit()
-        
-        # Create indexes for better query performance (after commit)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_run ON learning_portal_metrics(run_id)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_portal ON learning_portal_metrics(portal)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_portal_metrics_timestamp ON learning_portal_metrics(timestamp)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_dork_performance_score ON learning_dork_performance(score DESC)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_dork_performance_pool ON learning_dork_performance(pool)")
-        
-        con.commit()
-        con.close()
+        if DB_UTILS_AVAILABLE:
+            ensure_db_initialized(self.db_path, _init_tables)
+        else:
+            # Fallback without thread-safety
+            con = sqlite3.connect(self.db_path)
+            _init_tables(con)
+            con.close()
     
     def learn_from_success(self, lead_data: Dict[str, Any], query: str = "") -> None:
         """
@@ -356,7 +376,7 @@ class LearningEngine:
     
     def _increment_pattern(self, pattern_type: str, pattern_value: str, metadata: Dict[str, Any]) -> None:
         """
-        Increment success count for a pattern and update confidence score.
+        Increment success count for a pattern and update confidence score (thread-safe with retry).
         Uses unified learning_db adapter.
         """
         if not pattern_value:
@@ -375,42 +395,77 @@ class LearningEngine:
         )
         
         # Also maintain legacy success_patterns table for compatibility
-        con = sqlite3.connect(self.db_path)
-        cur = con.cursor()
-        
-        # Convert metadata to JSON (store only essential info)
-        meta_json = json.dumps({
-            "last_lead_type": metadata.get("lead_type", ""),
-            "last_tags": metadata.get("tags", "")[:200],  # Truncate
-            "last_score": metadata.get("score", 0)
-        })
+        @with_db_retry()
+        def _update_pattern():
+            # Convert metadata to JSON (store only essential info)
+            meta_json = json.dumps({
+                "last_lead_type": metadata.get("lead_type", ""),
+                "last_tags": metadata.get("tags", "")[:200],  # Truncate
+                "last_score": metadata.get("score", 0)
+            })
+            
+            if DB_UTILS_AVAILABLE:
+                with get_db_connection(self.db_path) as con:
+                    cur = con.cursor()
+                    try:
+                        # Try to insert or update
+                        cur.execute("""
+                            INSERT INTO success_patterns 
+                            (pattern_type, pattern_value, success_count, last_success, metadata)
+                            VALUES (?, ?, 1, ?, ?)
+                            ON CONFLICT(pattern_type, pattern_value) DO UPDATE SET
+                                success_count = success_count + 1,
+                                last_success = ?,
+                                metadata = ?
+                        """, (pattern_type, pattern_value, datetime.now(timezone.utc).isoformat(), 
+                              meta_json, datetime.now(timezone.utc).isoformat(), meta_json))
+                        
+                        # Update confidence score
+                        cur.execute("""
+                            UPDATE success_patterns
+                            SET confidence_score = CAST(success_count AS REAL) / 
+                                                  (success_count + fail_count + 1.0)
+                            WHERE pattern_type = ? AND pattern_value = ?
+                        """, (pattern_type, pattern_value))
+                        
+                        con.commit()
+                    except Exception:
+                        pass
+            else:
+                # Fallback without db_utils
+                con = sqlite3.connect(self.db_path)
+                cur = con.cursor()
+                try:
+                    cur.execute("""
+                        INSERT INTO success_patterns 
+                        (pattern_type, pattern_value, success_count, last_success, metadata)
+                        VALUES (?, ?, 1, ?, ?)
+                        ON CONFLICT(pattern_type, pattern_value) DO UPDATE SET
+                            success_count = success_count + 1,
+                            last_success = ?,
+                            metadata = ?
+                    """, (pattern_type, pattern_value, datetime.now(timezone.utc).isoformat(), 
+                          meta_json, datetime.now(timezone.utc).isoformat(), meta_json))
+                    
+                    # Update confidence score
+                    cur.execute("""
+                        UPDATE success_patterns
+                        SET confidence_score = CAST(success_count AS REAL) / 
+                                              (success_count + fail_count + 1.0)
+                        WHERE pattern_type = ? AND pattern_value = ?
+                    """, (pattern_type, pattern_value))
+                    
+                    con.commit()
+                except Exception:
+                    pass
+                finally:
+                    con.close()
         
         try:
-            # Try to insert or update
-            cur.execute("""
-                INSERT INTO success_patterns 
-                (pattern_type, pattern_value, success_count, last_success, metadata)
-                VALUES (?, ?, 1, ?, ?)
-                ON CONFLICT(pattern_type, pattern_value) DO UPDATE SET
-                    success_count = success_count + 1,
-                    last_success = ?,
-                    metadata = ?
-            """, (pattern_type, pattern_value, datetime.now(timezone.utc).isoformat(), 
-                  meta_json, datetime.now(timezone.utc).isoformat(), meta_json))
-            
-            # Update confidence score
-            cur.execute("""
-                UPDATE success_patterns
-                SET confidence_score = CAST(success_count AS REAL) / 
-                                      (success_count + fail_count + 1.0)
-                WHERE pattern_type = ? AND pattern_value = ?
-            """, (pattern_type, pattern_value))
-            
-            con.commit()
+            _update_pattern()
         except Exception:
+            # Silent fail - don't break lead processing if learning fails
             pass
-        finally:
-            con.close()
     
     def increment_fail(self, pattern_type: str, pattern_value: str) -> None:
         """Increment fail count for a pattern (when URL doesn't yield a lead)."""
