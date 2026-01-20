@@ -397,16 +397,19 @@ class BrandSettingsAdmin(ModelAdmin):
 class PageTemplateAdmin(ModelAdmin):
     """Admin interface for page templates"""
     
-    list_display = ['name', 'category', 'usage_count', 'is_active', 'created_at', 'preview_thumbnail']
+    list_display = ['name', 'category_badge', 'usage_count', 'is_active', 'created_at', 'preview_thumbnail']
     list_filter = ['category', 'is_active', 'created_at']
     search_fields = ['name', 'slug', 'description']
     prepopulated_fields = {'slug': ('name',)}
     readonly_fields = ['usage_count', 'created_at']
-    prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = [
         ('Template Information', {
             'fields': ['name', 'slug', 'category', 'description', 'is_active', 'thumbnail']
+        }),
+        ('Layout Configuration', {
+            'fields': ['layout_config'],
+            'description': 'Flexible Layout-Konfiguration (Sektionen, Einstellungen, Optionen)'
         }),
         ('Content', {
             'fields': ['html_json', 'html', 'css']
@@ -415,6 +418,28 @@ class PageTemplateAdmin(ModelAdmin):
             'fields': ['usage_count', 'created_at']
         }),
     ]
+    
+    def category_badge(self, obj):
+        """Show category as colored badge"""
+        colors = {
+            'landing': '#667eea',
+            'contact': '#22c55e',
+            'sales': '#f5576c',
+            'info': '#3b82f6',
+            'lead_gen': '#8b5cf6',
+            'product': '#f59e0b',
+            'coming_soon': '#6b7280',
+            'thank_you': '#10b981',
+        }
+        color = colors.get(obj.category, '#6b7280')
+        
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">{}</span>',
+            color,
+            obj.get_category_display()
+        )
+    category_badge.short_description = 'Category'
     
     def preview_thumbnail(self, obj):
         """Display thumbnail preview"""

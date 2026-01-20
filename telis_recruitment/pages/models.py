@@ -407,6 +407,10 @@ class BrandSettings(models.Model):
 class PageTemplate(models.Model):
     """Vorgefertigte Seiten-Templates"""
     CATEGORIES = [
+        ('landing', 'Landingpage'),
+        ('contact', 'Kontaktseite'),
+        ('sales', 'Verkaufsseite'),
+        ('info', 'Infoseite'),
         ('lead_gen', 'Lead Generation'),
         ('product', 'Produktseite'),
         ('coming_soon', 'Coming Soon'),
@@ -421,6 +425,14 @@ class PageTemplate(models.Model):
     html = models.TextField(blank=True)
     css = models.TextField(blank=True)
     thumbnail = models.ImageField(upload_to='templates/thumbnails/', blank=True)
+    
+    # Layout-Konfiguration für flexible Anpassung
+    layout_config = models.JSONField(
+        default=dict, 
+        blank=True,
+        help_text="Flexible Layout-Konfiguration (Sektionen, Einstellungen, Optionen)"
+    )
+    
     usage_count = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
