@@ -187,6 +187,12 @@ class PortalOptimizer:
             total_portals = 0
             
             for row in cur.fetchall():
+                # sqlite3.Row doesn't have .get() method, use try-except instead
+                try:
+                    enabled_value = row["enabled"]
+                except (KeyError, IndexError):
+                    enabled_value = 1
+                
                 portal_info = {
                     "domain": row["domain"],
                     "health": "unknown",
@@ -194,7 +200,7 @@ class PortalOptimizer:
                     "total_requests": row["total_requests"],
                     "successful_requests": row["successful_requests"],
                     "rate_limited": bool(row["rate_limit_detected"]),
-                    "enabled": bool(row.get("enabled", 1))
+                    "enabled": bool(enabled_value)
                 }
                 
                 # Determine health
