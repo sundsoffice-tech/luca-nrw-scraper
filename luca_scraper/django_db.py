@@ -36,6 +36,17 @@ from telis_recruitment.leads.field_mapping import (
 
 logger = logging.getLogger(__name__)
 
+# Transient error keywords that indicate retryable database errors
+TRANSIENT_ERROR_KEYWORDS = [
+    'database is locked',
+    'connection',
+    'timeout',
+    'deadlock',
+    'temporary',
+    'locked',
+    'busy'
+]
+
 def _map_scraper_data_to_django(data: Dict) -> Dict:
     """
     Map scraper data fields to Django Lead model fields.
@@ -239,13 +250,7 @@ def upsert_lead(data: Dict, max_retries: int = 3, retry_delay: float = 0.1) -> T
             last_exception = exc
             # Check if this is a transient error that we should retry
             error_str = str(exc).lower()
-            is_transient = any(keyword in error_str for keyword in [
-                'database is locked',
-                'connection',
-                'timeout',
-                'deadlock',
-                'temporary'
-            ])
+            is_transient = any(keyword in error_str for keyword in TRANSIENT_ERROR_KEYWORDS)
             
             if is_transient and attempt < max_retries - 1:
                 # Calculate exponential backoff delay
@@ -262,10 +267,6 @@ def upsert_lead(data: Dict, max_retries: int = 3, retry_delay: float = 0.1) -> T
                         f"Failed to save lead after {max_retries} attempts. Last error: {exc}"
                     )
                 raise
-    
-    # If we somehow get here, re-raise the last exception
-    if last_exception:
-        raise last_exception
 
 
 

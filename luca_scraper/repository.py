@@ -19,6 +19,18 @@ from .config import DATABASE_BACKEND
 
 logger = logging.getLogger(__name__)
 
+# Transient error keywords that indicate retryable database errors
+# Shared between Django and SQLite backends
+TRANSIENT_ERROR_KEYWORDS = [
+    'database is locked',
+    'connection',
+    'timeout',
+    'deadlock',
+    'temporary',
+    'locked',
+    'busy'
+]
+
 
 # =========================
 # BACKEND SELECTION LOGIC
@@ -240,11 +252,7 @@ def upsert_lead_sqlite(data: Dict, max_retries: int = 3, retry_delay: float = 0.
             
             # Check if this is a database lock error that we should retry
             error_str = str(exc).lower()
-            is_lock_error = any(keyword in error_str for keyword in [
-                'database is locked',
-                'locked',
-                'busy'
-            ])
+            is_lock_error = any(keyword in error_str for keyword in TRANSIENT_ERROR_KEYWORDS)
             
             if is_lock_error and attempt < max_retries - 1:
                 # Calculate exponential backoff delay
@@ -267,10 +275,6 @@ def upsert_lead_sqlite(data: Dict, max_retries: int = 3, retry_delay: float = 0.
                     con.close()
                 except Exception:
                     pass
-    
-    # If we somehow get here, re-raise the last exception
-    if last_exception:
-        raise last_exception
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:

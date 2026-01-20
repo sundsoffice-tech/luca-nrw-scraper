@@ -84,7 +84,7 @@ class TestLeadSaveRetry:
             # Attempt 1: fail immediately
             # Attempt 2: wait 0.01s (0.01 * 2^0), then fail
             # Attempt 3: wait 0.02s (0.01 * 2^1), then fail
-            # Total wait: 0.03s minimum
+            # Total minimum wait time: 0.01s + 0.02s = 0.03s
             assert elapsed >= 0.03
     
     def test_no_retry_on_non_transient_error(self):
