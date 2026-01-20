@@ -238,10 +238,9 @@ def api_save_fields(request, slug):
         }, status=500)
 
 
-@csrf_exempt
 @require_POST
 def api_submit_form(request, slug):
-    """Handle form submission (public endpoint)"""
+    """Handle form submission (public endpoint with CSRF protection)"""
     try:
         form = get_object_or_404(Form, slug=slug, status='published')
         
@@ -262,27 +261,35 @@ def api_submit_form(request, slug):
         # Create lead if configured
         if form.save_to_leads:
             try:
-                lead_data = {
-                    'name': data.get('name', ''),
-                    'email': data.get('email'),
-                    'telefon': data.get('phone') or data.get('telefon'),
-                    'source': 'form',
-                    'form_name': form.name,
-                }
+                # Validate required fields
+                name = data.get('name', '').strip()
+                email = data.get('email', '').strip()
                 
-                lead = Lead.objects.create(**lead_data)
-                submission.lead_created = True
-                submission.lead_id = lead.id
-                submission.save()
-                
-                logger.info(f"Created lead {lead.id} from form submission")
+                if not name:
+                    logger.warning("Cannot create lead: name is missing")
+                else:
+                    lead_data = {
+                        'name': name,
+                        'email': email if email else None,
+                        'telefon': data.get('phone') or data.get('telefon'),
+                        'source': 'form',
+                        'form_name': form.name,
+                    }
+                    
+                    lead = Lead.objects.create(**lead_data)
+                    submission.lead_created = True
+                    submission.lead_id = lead.id
+                    submission.save()
+                    
+                    logger.info(f"Created lead {lead.id} from form submission")
             except Exception as e:
                 logger.error(f"Error creating lead from submission: {e}")
         
         # Send notification email if configured
         if form.send_email_notification and form.notification_email:
-            # TODO: Implement email notification
-            logger.info(f"Email notification should be sent to {form.notification_email}")
+            # Email notification can be implemented using Django's email system
+            # For now, just log the notification
+            logger.info(f"Form submission received - notification configured for {form.notification_email}")
         
         return JsonResponse({
             'success': True,

@@ -71,10 +71,15 @@
                     <div>
                         <div class="text-sm text-gray-400">Lead ID</div>
                         <div class="text-white">
-                            <a href="{% url 'crm-lead-detail' submission.lead_id %}" 
+                            {% url 'crm-lead-detail' submission.lead_id as lead_url %}
+                            {% if lead_url %}
+                            <a href="{{ lead_url }}" 
                                class="text-primary hover:text-cyan-400">
                                 #{{ submission.lead_id }}
                             </a>
+                            {% else %}
+                            #{{ submission.lead_id }}
+                            {% endif %}
                         </div>
                     </div>
                 </div>
