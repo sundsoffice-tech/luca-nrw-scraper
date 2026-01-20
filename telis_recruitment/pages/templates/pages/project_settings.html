@@ -1,0 +1,232 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}{{ project.name }} - Einstellungen - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-list' %}" class="text-gray-400 hover:text-white">Projects</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-detail' slug=project.slug %}" class="text-gray-400 hover:text-white">{{ project.name }}</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Einstellungen</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Projekt-Einstellungen</h1>
+            <p class="text-gray-400">{{ project.name }}</p>
+        </div>
+        
+        <a href="{% url 'pages:project-detail' slug=project.slug %}" 
+           class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+            ← Zurück
+        </a>
+    </div>
+
+    <!-- Settings Form -->
+    <form id="settingsForm" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- SEO Defaults -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">SEO Defaults</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="default_seo_title_suffix" class="block text-sm font-medium text-gray-300 mb-2">
+                        Title Suffix
+                    </label>
+                    <input type="text" id="default_seo_title_suffix" name="default_seo_title_suffix" 
+                           value="{{ settings.default_seo_title_suffix }}"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <p class="mt-1 text-sm text-gray-500">Wird an alle Seitentitel angehängt</p>
+                </div>
+                
+                <div>
+                    <label for="default_seo_description" class="block text-sm font-medium text-gray-300 mb-2">
+                        Default Description
+                    </label>
+                    <textarea id="default_seo_description" name="default_seo_description" rows="3"
+                              class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">{{ settings.default_seo_description }}</textarea>
+                </div>
+                
+                <div>
+                    <label for="default_seo_image" class="block text-sm font-medium text-gray-300 mb-2">
+                        Default SEO Image URL
+                    </label>
+                    <input type="url" id="default_seo_image" name="default_seo_image" 
+                           value="{{ settings.default_seo_image }}"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Analytics & Tracking</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="google_analytics_id" class="block text-sm font-medium text-gray-300 mb-2">
+                        Google Analytics ID
+                    </label>
+                    <input type="text" id="google_analytics_id" name="google_analytics_id" 
+                           value="{{ settings.google_analytics_id }}"
+                           placeholder="G-XXXXXXXXXX"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label for="facebook_pixel_id" class="block text-sm font-medium text-gray-300 mb-2">
+                        Facebook Pixel ID
+                    </label>
+                    <input type="text" id="facebook_pixel_id" name="facebook_pixel_id" 
+                           value="{{ settings.facebook_pixel_id }}"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label for="custom_head_code" class="block text-sm font-medium text-gray-300 mb-2">
+                        Custom Head Code
+                    </label>
+                    <textarea id="custom_head_code" name="custom_head_code" rows="4"
+                              class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent">{{ settings.custom_head_code }}</textarea>
+                    <p class="mt-1 text-sm text-gray-500">Wird in &lt;head&gt; eingefügt</p>
+                </div>
+                
+                <div>
+                    <label for="custom_body_code" class="block text-sm font-medium text-gray-300 mb-2">
+                        Custom Body Code
+                    </label>
+                    <textarea id="custom_body_code" name="custom_body_code" rows="4"
+                              class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent">{{ settings.custom_body_code }}</textarea>
+                    <p class="mt-1 text-sm text-gray-500">Wird vor &lt;/body&gt; eingefügt</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Design</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="primary_color" class="block text-sm font-medium text-gray-300 mb-2">
+                        Primary Color
+                    </label>
+                    <div class="flex space-x-2">
+                        <input type="color" id="primary_color" name="primary_color" 
+                               value="{{ settings.primary_color }}"
+                               class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.primary_color }}"
+                               class="flex-1 px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                               onchange="document.getElementById('primary_color').value = this.value">
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="secondary_color" class="block text-sm font-medium text-gray-300 mb-2">
+                        Secondary Color
+                    </label>
+                    <div class="flex space-x-2">
+                        <input type="color" id="secondary_color" name="secondary_color" 
+                               value="{{ settings.secondary_color }}"
+                               class="w-16 h-10 rounded cursor-pointer">
+                        <input type="text" value="{{ settings.secondary_color }}"
+                               class="flex-1 px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                               onchange="document.getElementById('secondary_color').value = this.value">
+                    </div>
+                </div>
+                
+                <div class="md:col-span-2">
+                    <label for="font_family" class="block text-sm font-medium text-gray-300 mb-2">
+                        Font Family
+                    </label>
+                    <input type="text" id="font_family" name="font_family" 
+                           value="{{ settings.font_family }}"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+            </div>
+        </div>
+
+        <!-- Favicon & 404 -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Favicon & Error Pages</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="favicon" class="block text-sm font-medium text-gray-300 mb-2">
+                        Favicon
+                    </label>
+                    <input type="file" id="favicon" name="favicon" accept="image/*"
+                           class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                    {% if settings.favicon %}
+                    <p class="mt-2 text-sm text-gray-500">Aktuell: <a href="{{ settings.favicon.url }}" target="_blank" class="text-primary hover:underline">{{ settings.favicon.name }}</a></p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="custom_404_page" class="block text-sm font-medium text-gray-300 mb-2">
+                        Custom 404 Page
+                    </label>
+                    <select id="custom_404_page" name="custom_404_page"
+                            class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="">Default 404</option>
+                        {% for page in pages %}
+                        <option value="{{ page.id }}" {% if settings.custom_404_page and settings.custom_404_page.id == page.id %}selected{% endif %}>
+                            {{ page.title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end space-x-4">
+            <a href="{% url 'pages:project-detail' slug=project.slug %}" 
+               class="px-6 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+                Abbrechen
+            </a>
+            <button type="submit" 
+                    class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
+                Einstellungen speichern
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    
+    try {
+        const response = await fetch('{% url "pages:project-settings" slug=project.slug %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Einstellungen gespeichert!');
+            window.location.href = '{% url "pages:project-detail" slug=project.slug %}';
+        } else {
+            alert('Fehler: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Fehler beim Speichern der Einstellungen');
+    }
+});
+</script>
+
+{% endblock %}

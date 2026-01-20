@@ -1,0 +1,220 @@
+{% extends 'crm/base.html' %}
+
+{% block title %}{{ project.name }} - Deployments - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-list' %}" class="text-gray-400 hover:text-white">Projects</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <a href="{% url 'pages:project-detail' slug=project.slug %}" class="text-gray-400 hover:text-white">{{ project.name }}</a>
+    <span class="text-gray-500 mx-2">/</span>
+    <span class="text-gray-300">Deployments</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Deployment History</h1>
+            <p class="text-gray-400">{{ project.name }}</p>
+        </div>
+        
+        <div class="flex space-x-2">
+            <a href="{% url 'pages:project-detail' slug=project.slug %}" 
+               class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+                ← Zurück
+            </a>
+            <a href="{% url 'pages:project-build-page' slug=project.slug %}" 
+               class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
+                Neuer Build
+            </a>
+        </div>
+    </div>
+
+    <!-- Deployments Table -->
+    <div class="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-dark-900">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Version
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Gestartet
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Dauer
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Dateien
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Größe
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Von
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                            Details
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-700">
+                    {% if deployments %}
+                    {% for deployment in deployments %}
+                    <tr class="hover:bg-dark-700 transition">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if deployment.status == 'success' %}
+                            <span class="px-3 py-1 text-sm font-medium bg-green-500/20 text-green-500 rounded-full">
+                                ✓ Erfolgreich
+                            </span>
+                            {% elif deployment.status == 'failed' %}
+                            <span class="px-3 py-1 text-sm font-medium bg-red-500/20 text-red-500 rounded-full">
+                                ✗ Fehlgeschlagen
+                            </span>
+                            {% elif deployment.status == 'building' %}
+                            <span class="px-3 py-1 text-sm font-medium bg-yellow-500/20 text-yellow-500 rounded-full">
+                                🔨 Wird erstellt
+                            </span>
+                            {% elif deployment.status == 'deploying' %}
+                            <span class="px-3 py-1 text-sm font-medium bg-blue-500/20 text-blue-500 rounded-full">
+                                🚀 Wird deployed
+                            </span>
+                            {% else %}
+                            <span class="px-3 py-1 text-sm font-medium bg-gray-500/20 text-gray-500 rounded-full">
+                                ⏳ Ausstehend
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-white font-mono text-sm">
+                                {{ deployment.version|default:"—" }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-white text-sm">
+                                {{ deployment.started_at|date:"d.m.Y H:i" }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-gray-400 text-sm">
+                                {% if deployment.completed_at and deployment.started_at %}
+                                    {% with duration_seconds=deployment.completed_at|timesince:deployment.started_at %}
+                                        {{ duration_seconds }}
+                                    {% endwith %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-white text-sm">
+                                {{ deployment.deployed_files_count }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-gray-400 text-sm">
+                                {% if deployment.deployed_size_bytes %}
+                                    {{ deployment.deployed_size_bytes|filesizeformat }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-gray-400 text-sm">
+                                {{ deployment.deployed_by.username|default:"System" }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <button onclick="showDeploymentDetails({{ deployment.id }})" 
+                                    class="text-primary hover:text-primary/80 text-sm">
+                                Details →
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center">
+                            <div class="text-gray-500">
+                                <div class="text-4xl mb-2">📦</div>
+                                <p class="text-lg">Noch keine Deployments</p>
+                                <p class="text-sm mt-2">Starten Sie einen Build, um loszulegen</p>
+                                <a href="{% url 'pages:project-build-page' slug=project.slug %}" 
+                                   class="inline-block mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
+                                    Ersten Build erstellen
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    {% if deployments %}
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Total Deployments</div>
+            <div class="text-3xl font-bold text-white">{{ deployments|length }}</div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Erfolgreich</div>
+            <div class="text-3xl font-bold text-green-500">
+                {{ deployments|length }}
+            </div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Fehlgeschlagen</div>
+            <div class="text-3xl font-bold text-red-500">0</div>
+        </div>
+        
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="text-gray-400 text-sm mb-1">Letzter Build</div>
+            <div class="text-lg font-bold text-white">
+                {{ deployments.0.started_at|timesince }} ago
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Deployment Details Modal -->
+<div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-start mb-4">
+            <h2 class="text-xl font-semibold text-white">Deployment Details</h2>
+            <button onclick="closeDetailsModal()" class="text-gray-400 hover:text-white">
+                ✕
+            </button>
+        </div>
+        
+        <div id="detailsContent" class="space-y-4">
+            <!-- Details will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<script>
+function showDeploymentDetails(deploymentId) {
+    // Show modal with deployment details
+    document.getElementById('detailsModal').classList.remove('hidden');
+    // In a real implementation, you would fetch the details via AJAX
+}
+
+function closeDetailsModal() {
+    document.getElementById('detailsModal').classList.add('hidden');
+}
+</script>
+
+{% endblock %}
