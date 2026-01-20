@@ -17,7 +17,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiohttp
 import tldextract
 
-from cache import get_ai_response_cache
+try:
+    from cache import get_ai_response_cache
+except ImportError:
+    import sys
+    import os
+    _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    from cache import get_ai_response_cache
+
 from luca_scraper.config import OPENAI_API_KEY, HTTP_TIMEOUT
 
 
