@@ -53,6 +53,9 @@ urlpatterns = [
     # Reports (analytics and reporting)
     path('crm/reports/', include('reports.urls')),
     
+    # Forms (form builder)
+    path('crm/forms/', include('forms.urls')),
+    
     # CRM (protected)
     path('crm/', include('leads.crm_urls')),
     
