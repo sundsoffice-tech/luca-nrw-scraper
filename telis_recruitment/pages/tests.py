@@ -137,6 +137,15 @@ class BuilderViewTest(TestCase):
         response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'test'}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'grapesjs')
+    
+    def test_asset_urls_resolve(self):
+        """Test that asset management URLs resolve correctly in builder template"""
+        self.client.login(username='staffuser', password='staffpass')
+        response = self.client.get(reverse('pages:page-builder', kwargs={'slug': 'test'}))
+        self.assertEqual(response.status_code, 200)
+        # Verify upload-asset and list-assets URLs are present in the rendered template
+        self.assertContains(response, reverse('pages:upload-asset'))
+        self.assertContains(response, reverse('pages:list-assets'))
 
 
 class FormSubmissionTest(TestCase):

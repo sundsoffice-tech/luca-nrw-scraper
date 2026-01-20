@@ -354,7 +354,7 @@
             appendTo: '#layers-container'
         },
         assetManager: {
-            upload: '{% url "pages:upload_asset" %}',
+            upload: '{% url "pages:upload-asset" %}',
             uploadName: 'file',
             assets: [],
             headers: {
@@ -475,7 +475,7 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            fetch('{% url "pages:upload_asset" %}', {
+            fetch('{% url "pages:upload-asset" %}', {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': '{{ csrf_token }}'
@@ -499,7 +499,7 @@
     }
 
     function loadAssets() {
-        fetch('{% url "pages:list_assets" %}')
+        fetch('{% url "pages:list-assets" %}')
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('assets-container');
