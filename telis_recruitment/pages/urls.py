@@ -1,6 +1,6 @@
 """URL configuration for pages app"""
 from django.urls import path
-from . import views, views_upload, views_editor
+from . import views, views_upload, views_editor, views_changelog
 
 app_name = 'pages'
 
@@ -92,4 +92,20 @@ urlpatterns = [
     path('api/<slug:slug>/editor/restore/', views_editor.restore_version, name='editor-restore'),
     path('api/<slug:slug>/export/', views_editor.export_project, name='export-project'),
     path('api/<slug:slug>/import/', views_editor.import_project, name='import-project'),
+    
+    # ===== NEW: Changelog & Undo/Redo API (Staff Only) =====
+    # Undo/Redo endpoints
+    path('api/<slug:slug>/undo/', views_changelog.undo, name='changelog-undo'),
+    path('api/<slug:slug>/redo/', views_changelog.redo, name='changelog-redo'),
+    path('api/<slug:slug>/undo-redo/state/', views_changelog.undo_redo_state, name='undo-redo-state'),
+    
+    # Changelog endpoints
+    path('api/<slug:slug>/changelog/history/', views_changelog.changelog_history, name='changelog-history'),
+    path('api/<slug:slug>/changelog/<int:version>/', views_changelog.changelog_version, name='changelog-version'),
+    path('api/<slug:slug>/changelog/restore/', views_changelog.changelog_restore, name='changelog-restore'),
+    
+    # Snapshot endpoints
+    path('api/<slug:slug>/snapshots/', views_changelog.list_snapshots, name='list-snapshots'),
+    path('api/<slug:slug>/snapshots/create/', views_changelog.create_snapshot, name='create-snapshot'),
+    path('api/<slug:slug>/snapshots/<int:snapshot_id>/restore/', views_changelog.restore_snapshot, name='restore-snapshot'),
 ]
