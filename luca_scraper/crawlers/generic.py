@@ -12,6 +12,12 @@ from typing import Any, Dict, Optional
 
 from bs4 import BeautifulSoup
 
+from luca_scraper.extraction.phone_email_extraction import (
+    extract_phone_numbers,
+    extract_email_address,
+    extract_whatsapp_number,
+)
+
 
 async def extract_generic_detail_async(
     url: str,
@@ -81,100 +87,43 @@ async def extract_generic_detail_async(
         full_text = f"{title} {description}"
         
         # ========================================
-        # PARALLEL PHONE EXTRACTION
-        # Run both regex and advanced extraction simultaneously, merge results
+        # PHONE EXTRACTION - Using centralized extraction module
         # ========================================
-        phones = []
-        phone_sources = {}  # Track where each phone was found for scoring
+        phones, phone_sources = extract_phone_numbers(
+            html=html,
+            text=full_text,
+            normalize_phone_func=normalize_phone_func,
+            validate_phone_func=validate_phone_func,
+            is_mobile_number_func=is_mobile_number_func,
+            MOBILE_RE=MOBILE_RE,
+            extract_all_phone_patterns_func=extract_all_phone_patterns_func,
+            get_best_phone_number_func=get_best_phone_number_func,
+            learning_engine=learning_engine,
+            portal_tag=source_tag,
+            log_func=log_func,
+        )
         
-        # 1. Standard regex extraction (runs in parallel with advanced)
-        if MOBILE_RE:
-            phone_matches = MOBILE_RE.findall(full_text)
-            for phone_match in phone_matches:
-                normalized = normalize_phone_func(phone_match)
-                if normalized:
-                    is_valid, phone_type = validate_phone_func(normalized)
-                    if is_valid and is_mobile_number_func(normalized):
-                        if normalized not in phones:
-                            phones.append(normalized)
-                            phone_sources[normalized] = "regex_standard"
+        # EMAIL EXTRACTION - Using centralized extraction module
+        email = extract_email_address(
+            text=full_text,
+            EMAIL_RE=EMAIL_RE,
+        )
         
-        # 2. Advanced pattern extraction (runs in parallel, not as fallback)
-        if extract_all_phone_patterns_func and get_best_phone_number_func:
-            try:
-                extraction_results = extract_all_phone_patterns_func(html, full_text)
-                # Process all results from advanced extraction, not just best
-                for category, numbers in extraction_results.items():
-                    if isinstance(numbers, list):
-                        for num in numbers:
-                            normalized = normalize_phone_func(num) if num else None
-                            if normalized and is_mobile_number_func(normalized):
-                                if normalized not in phones:
-                                    phones.append(normalized)
-                                    phone_sources[normalized] = f"advanced_{category}"
-                                    if log_func:
-                                        log_func("info", f"{source_tag}: Advanced extraction ({category}) found phone", 
-                                            url=url, phone=normalized[:8]+"...")
-                
-                # Also get best phone if not already included
-                best_phone = get_best_phone_number_func(extraction_results)
-                if best_phone:
-                    normalized = normalize_phone_func(best_phone)
-                    if normalized and is_mobile_number_func(normalized):
-                        if normalized not in phones:
-                            phones.append(normalized)
-                            phone_sources[normalized] = "advanced_best"
-                        if learning_engine:
-                            learning_engine.record_phone_pattern(
-                                pattern="advanced_extraction",
-                                pattern_type=f"{source_tag}_enhanced",
-                                example=normalized[:8]+"..."
-                            )
-                        # Learn phone pattern for AI Learning Engine
-                        try:
-                            from ai_learning_engine import ActiveLearningEngine
-                            learning = ActiveLearningEngine()
-                            learning.learn_phone_pattern(best_phone, normalized, source_tag)
-                        except Exception:
-                            pass  # Learning is optional
-            except Exception as e:
-                if log_func:
-                    log_func("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
+        # WHATSAPP EXTRACTION - Using centralized extraction module
+        whatsapp, wa_sources = extract_whatsapp_number(
+            html=html,
+            normalize_phone_func=normalize_phone_func,
+            validate_phone_func=validate_phone_func,
+            is_mobile_number_func=is_mobile_number_func,
+            extract_whatsapp_number_func=extract_whatsapp_number_func,
+            portal_tag=source_tag,
+            log_func=log_func,
+        )
         
-        # Extract email
-        email = ""
-        if EMAIL_RE:
-            email_matches = EMAIL_RE.findall(full_text)
-            if email_matches:
-                email = email_matches[0]
-        
-        # 3. WhatsApp extraction (parallel with other methods)
-        if extract_whatsapp_number_func:
-            try:
-                wa_number = extract_whatsapp_number_func(html)
-                if wa_number:
-                    normalized_wa = normalize_phone_func(wa_number)
-                    if normalized_wa and is_mobile_number_func(normalized_wa):
-                        if normalized_wa not in phones:
-                            phones.append(normalized_wa)
-                            phone_sources[normalized_wa] = "whatsapp_enhanced"
-                            if log_func:
-                                log_func("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
-            except Exception:
-                pass
-        
-        # 4. Fallback WhatsApp link extraction
-        wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
-        if wa_link:
-            wa_href = wa_link.get("href", "")
-            wa_phone = re.sub(r'\D', '', wa_href)
-            if wa_phone:
-                wa_normalized = "+" + wa_phone
-                is_valid, phone_type = validate_phone_func(wa_normalized)
-                if is_valid and is_mobile_number_func(wa_normalized):
-                    if wa_normalized not in phones:
-                        phones.append(wa_normalized)
-                        phone_sources[wa_normalized] = "whatsapp_link"
+        # Merge WhatsApp results into phones list
+        if whatsapp and whatsapp not in phones:
+            phones.append(whatsapp)
+            phone_sources.update(wa_sources)
         
         # Extract name
         name = ""
