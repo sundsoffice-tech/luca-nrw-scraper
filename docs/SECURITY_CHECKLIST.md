@@ -7,9 +7,16 @@ This comprehensive checklist ensures your LUCA NRW Scraper deployment is secure 
 ### Django Core Security
 
 - [ ] **SECRET_KEY**: Generated unique key (never use default)
+  - ✅ **ENFORCED:** Server will not start without a valid SECRET_KEY
+  - ✅ **ENFORCED:** Minimum 50 characters required
+  - ✅ **ENFORCED:** Insecure placeholder values are rejected
   - Generate: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
-  - Minimum 50 characters
   - Never commit to version control
+  - Store in environment variables only
+  - The application will raise a `ValueError` and refuse to start if:
+    - SECRET_KEY is not set
+    - SECRET_KEY is set to a known insecure value (e.g., 'django-insecure-*', 'changeme', 'insecure')
+    - SECRET_KEY is shorter than 50 characters
 
 - [ ] **DEBUG Mode**: Disabled in production
   - Set `DEBUG=False` in `.env`
