@@ -260,7 +260,19 @@ def set_entry_point(request, slug):
 
 
 def serve_uploaded_file(request, slug, file_path):
-    """Serve uploaded static files (public)"""
+    """
+    Serve uploaded static files (public)
+    
+    Security Note:
+    -------------
+    Uploaded files may contain JavaScript that executes in the visitor's browser.
+    This view applies Content-Security-Policy headers to limit what the JavaScript can do:
+    - Prevents framing by external sites
+    - Restricts connection endpoints
+    - Limits script sources
+    
+    See pages/SECURITY.md for more information about upload security.
+    """
     page = get_object_or_404(LandingPage, slug=slug, status='published')
     
     # Check if this is an uploaded site
@@ -289,7 +301,31 @@ def serve_uploaded_file(request, slug, file_path):
         # Serve file with proper resource cleanup
         try:
             file_handle = open(full_path, 'rb')
-            return FileResponse(file_handle, content_type=content_type)
+            response = FileResponse(file_handle, content_type=content_type)
+            
+            # Add security headers for HTML files to sandbox JavaScript
+            if content_type in ['text/html', 'application/xhtml+xml']:
+                # Content Security Policy to limit what uploaded JavaScript can do
+                # Note: 'unsafe-inline' and 'unsafe-eval' are needed for most HTML/JS projects
+                # but they do reduce security. Only upload trusted content.
+                csp_policy = "; ".join([
+                    "default-src 'self'",
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                    "style-src 'self' 'unsafe-inline'",
+                    "img-src 'self' data: https:",
+                    "font-src 'self' data:",
+                    "connect-src 'self'",
+                    "frame-ancestors 'none'",
+                ])
+                response['Content-Security-Policy'] = csp_policy
+                
+                # Prevent page from being embedded in iframes from other domains
+                response['X-Frame-Options'] = 'DENY'
+                
+                # Prevent MIME type sniffing
+                response['X-Content-Type-Options'] = 'nosniff'
+            
+            return response
         except Exception as e:
             logger.error(f"Error opening file {file_path} for page {slug}: {e}")
             return HttpResponse('Error opening file', status=500)

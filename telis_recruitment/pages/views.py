@@ -481,7 +481,26 @@ def quick_create(request):
 @staff_member_required
 @require_POST
 def upload_project(request):
-    """Upload komplettes HTML/CSS/JS Projekt als ZIP"""
+    """
+    Upload komplettes HTML/CSS/JS Projekt als ZIP
+    
+    Security Note:
+    -------------
+    This function allows staff members to upload complete web projects including JavaScript.
+    The uploaded JavaScript will execute in visitor browsers when pages are published.
+    
+    Security Measures:
+    - Only staff members can upload (enforced by @staff_member_required)
+    - File types are restricted to a whitelist (see ALLOWED_EXTENSIONS)
+    - Path traversal is prevented through normalization
+    - Hidden files are skipped
+    - File size limits are enforced (50MB max)
+    - Uploaded pages are served with Content-Security-Policy headers
+    
+    ⚠️  WARNING: Only upload projects from trusted sources!
+    
+    See pages/SECURITY.md for detailed security documentation.
+    """
     try:
         # Check if ZIP file is provided
         if 'zip_file' not in request.FILES:
