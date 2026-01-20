@@ -36,7 +36,7 @@ async def extract_generic_detail_async(
     """
     Generic function to extract contact information from any ad detail page.
     Similar to extract_kleinanzeigen_detail_async but works for multiple sites.
-    
+
     Args:
         url: URL of the ad detail page
         source_tag: Tag to identify the source (e.g., "markt_de", "quoka")
@@ -54,7 +54,7 @@ async def extract_generic_detail_async(
         HTTP_TIMEOUT: HTTP request timeout
         EMAIL_RE: Email regex pattern
         MOBILE_RE: Mobile phone regex pattern
-        
+
     Returns:
         Dict with lead data or None if extraction failed
     """
@@ -64,10 +64,10 @@ async def extract_generic_detail_async(
             if log_func:
                 log_func("debug", f"{source_tag}: Failed to fetch detail", url=url, status=r.status_code if r else "None")
             return None
-        
+
         html = r.text or ""
         soup = BeautifulSoup(html, "html.parser")
-        
+
         # Extract title - try multiple selectors
         title = ""
         for selector in ["h1", "h1.title", ".ad-title", ".listing-title"]:
@@ -75,20 +75,20 @@ async def extract_generic_detail_async(
             if title_elem:
                 title = title_elem.get_text(" ", strip=True)
                 break
-        
+
         # Extract description - get all text from body
         description = soup.get_text(" ", strip=True)
-        
+
         # Combine text for extraction
         full_text = f"{title} {description}"
-        
+
         # ========================================
         # PARALLEL PHONE EXTRACTION
         # Run both regex and advanced extraction simultaneously, merge results
         # ========================================
         phones = []
         phone_sources = {}  # Track where each phone was found for scoring
-        
+
         # 1. Standard regex extraction (runs in parallel with advanced)
         if MOBILE_RE:
             phone_matches = MOBILE_RE.findall(full_text)
@@ -100,7 +100,7 @@ async def extract_generic_detail_async(
                         if normalized not in phones:
                             phones.append(normalized)
                             phone_sources[normalized] = "regex_standard"
-        
+
         # 2. Advanced pattern extraction (runs in parallel, not as fallback)
         if extract_all_phone_patterns_func and get_best_phone_number_func:
             try:
@@ -117,7 +117,7 @@ async def extract_generic_detail_async(
                                     if log_func:
                                         log_func("info", f"{source_tag}: Advanced extraction ({category}) found phone", 
                                             url=url, phone=normalized[:8]+"...")
-                
+
                 # Also get best phone if not already included
                 best_phone = get_best_phone_number_func(extraction_results)
                 if best_phone:
@@ -142,14 +142,14 @@ async def extract_generic_detail_async(
             except Exception as e:
                 if log_func:
                     log_func("debug", f"{source_tag}: Advanced extraction failed", error=str(e))
-        
+
         # Extract email
         email = ""
         if EMAIL_RE:
             email_matches = EMAIL_RE.findall(full_text)
             if email_matches:
                 email = email_matches[0]
-        
+
         # 3. WhatsApp extraction (parallel with other methods)
         if extract_whatsapp_number_func:
             try:
@@ -164,7 +164,7 @@ async def extract_generic_detail_async(
                                 log_func("info", f"{source_tag}: WhatsApp extraction found phone", url=url)
             except Exception:
                 pass
-        
+
         # 4. Fallback WhatsApp link extraction
         wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
         if wa_link:
@@ -177,12 +177,12 @@ async def extract_generic_detail_async(
                     if wa_normalized not in phones:
                         phones.append(wa_normalized)
                         phone_sources[wa_normalized] = "whatsapp_link"
-        
+
         # Extract name
         name = ""
         if extract_name_enhanced_func:
             name = extract_name_enhanced_func(full_text)
-        
+
         # 5. Browser extraction as last resort (only if no phones found)
         if not phones:
             if log_func:
@@ -206,7 +206,7 @@ async def extract_generic_detail_async(
                 except Exception as e:
                     if log_func:
                         log_func("debug", f"{source_tag}: Browser extraction failed", url=url, error=str(e))
-            
+
             # If still no phones found, return None
             if not phones:
                 if learning_engine:
@@ -217,7 +217,7 @@ async def extract_generic_detail_async(
                         visible_phones=[]
                     )
                 return None
-        
+
         # Build lead data using centralized function
         lead = build_lead_data(
             name=name,
@@ -231,9 +231,9 @@ async def extract_generic_detail_async(
             has_whatsapp=False,  # Will be checked separately
             tags=f"{source_tag},candidate,mobile,direct_crawl",
         )
-        
+
         return lead
-        
+
     except Exception as e:
         if log_func:
             log_func("error", f"{source_tag}: Error extracting detail", url=url, error=str(e))
@@ -243,7 +243,7 @@ async def extract_generic_detail_async(
 def _mark_url_seen(url: str, source: str = "", db_func=None, log_func=None, seen_cache=None, normalize_func=None):
     """
     Helper function to mark a URL as seen in the database.
-    
+
     Args:
         url: The URL to mark as seen
         source: Optional source name for logging (e.g., "Markt.de", "Quoka")

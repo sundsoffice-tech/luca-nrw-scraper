@@ -26,12 +26,12 @@ def build_lead_data(
 ) -> Dict[str, Any]:
     """
     Build a complete lead data dictionary with dynamic scoring.
-    
+
     This function encapsulates the logic for:
     1. Selecting the main phone number from a list of phones
     2. Calculating dynamic score based on data completeness and quality
     3. Building a complete lead dictionary with all required fields
-    
+
     Args:
         name: Contact person name
         phones: List of phone numbers (mobile numbers)
@@ -43,16 +43,16 @@ def build_lead_data(
         portal: Portal/source identifier (e.g., "kleinanzeigen", "markt_de")
         has_whatsapp: Whether lead has WhatsApp number
         tags: Optional custom tags string (if None, will be auto-generated)
-        
+
     Returns:
         Dictionary containing lead data with score, confidence, and quality metrics
     """
     # Use first mobile number found
     main_phone = phones[0] if phones else ""
-    
+
     # Get phone source for scoring
     phone_source = phone_sources.get(main_phone, "unknown") if main_phone else "unknown"
-    
+
     # ========================================
     # DYNAMIC SCORING: Use centralized scoring module
     # ========================================
@@ -74,11 +74,11 @@ def build_lead_data(
         dynamic_score = 85
         data_quality_score = 0.80
         confidence_score = 0.85
-    
+
     # Auto-generate tags if not provided
     if tags is None:
         tags = f"{portal},candidate,mobile,direct_crawl"
-    
+
     # Build lead data with dynamic scores
     lead = {
         "name": name or "",
@@ -102,7 +102,7 @@ def build_lead_data(
         "phones_found": len(phones),
         "has_whatsapp": has_whatsapp,
     }
-    
+
     return lead
 
 

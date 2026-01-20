@@ -31,7 +31,7 @@ async def crawl_kleinanzeigen_listings_async(
     """
     Crawl Kleinanzeigen listing pages directly (not via Google) and extract all ad links.
     Supports pagination (page 1, 2, 3...).
-    
+
     Args:
         listing_url: Base URL for the listing (e.g., https://www.kleinanzeigen.de/s-stellengesuche/...)
         max_pages: Maximum number of pages to crawl (default: 5)
@@ -42,17 +42,17 @@ async def crawl_kleinanzeigen_listings_async(
         HTTP_TIMEOUT: HTTP request timeout
         PORTAL_DELAYS: Portal-specific delays config
         jitter_func: Function to add random jitter to delays
-        
+
     Returns:
         List of ad detail URLs
     """
     if not ENABLE_KLEINANZEIGEN:
         return []
-    
+
     ad_links: List[str] = []
     seen_urls = set()
     page_num = 1  # Initialize before loop
-    
+
     for page_num in range(1, max_pages + 1):
         # Build URL with page parameter, properly handling existing query params
         if page_num == 1:
@@ -64,26 +64,26 @@ async def crawl_kleinanzeigen_listings_async(
             params['page'] = [str(page_num)]
             new_query = urllib.parse.urlencode(params, doseq=True)
             url = urllib.parse.urlunparse(parsed._replace(query=new_query))
-        
+
         try:
             # Use configured delay for kleinanzeigen portal
             if page_num > 1:
                 delay = PORTAL_DELAYS.get("kleinanzeigen", 3.0) if PORTAL_DELAYS else 3.0
                 jitter = jitter_func(0.5, 1.0) if jitter_func else 0.5
                 await asyncio.sleep(delay + jitter)
-            
+
             if log_func:
                 log_func("info", "Crawling Kleinanzeigen listing", url=url, page=page_num)
-            
+
             r = await http_get_func(url, timeout=HTTP_TIMEOUT)
             if not r or r.status_code != 200:
                 if log_func:
                     log_func("warn", "Failed to fetch listing page", url=url, status=r.status_code if r else "None")
                 break
-            
+
             html = r.text or ""
             soup = BeautifulSoup(html, "html.parser")
-            
+
             # Extract ad links from listing
             page_links = 0
             for art in soup.select("li.ad-listitem article.aditem"):
@@ -94,37 +94,37 @@ async def crawl_kleinanzeigen_listings_async(
                     a_tag = art.find("a", href=True)
                     if a_tag:
                         href = a_tag.get("href", "")
-                
+
                 if not href or "/s-anzeige/" not in href:
                     continue
-                
+
                 # Build full URL using the base URL from the listing
                 parsed_listing = urllib.parse.urlparse(listing_url)
                 base_url = f"{parsed_listing.scheme}://{parsed_listing.netloc}"
                 full_url = urllib.parse.urljoin(base_url, href)
                 norm_url = normalize_func(full_url) if normalize_func else full_url
-                
+
                 if norm_url in seen_urls:
                     continue
-                
+
                 seen_urls.add(norm_url)
                 ad_links.append(full_url)
                 page_links += 1
-            
+
             if log_func:
                 log_func("info", "Extracted ad links from page", page=page_num, count=page_links)
-            
+
             # If no links found, we've reached the end
             if page_links == 0:
                 if log_func:
                     log_func("info", "No more ads found, stopping pagination", page=page_num)
                 break
-                
+
         except Exception as e:
             if log_func:
                 log_func("error", "Error crawling listing page", url=url, error=str(e))
             break
-    
+
     if log_func:
         log_func("info", "Completed Kleinanzeigen listing crawl", total_ads=len(ad_links), pages=page_num)
     return ad_links
@@ -149,7 +149,7 @@ async def extract_kleinanzeigen_detail_async(
 ) -> Optional[Dict[str, Any]]:
     """
     Crawl individual Kleinanzeigen ad detail page and extract contact information.
-    
+
     Args:
         url: URL of the ad detail page
         http_get_func: Function to fetch HTTP content
@@ -166,7 +166,7 @@ async def extract_kleinanzeigen_detail_async(
         HTTP_TIMEOUT: HTTP request timeout
         EMAIL_RE: Email regex pattern
         MOBILE_RE: Mobile phone regex pattern
-        
+
     Returns:
         Dict with lead data or None if extraction failed
     """
@@ -176,28 +176,28 @@ async def extract_kleinanzeigen_detail_async(
             if log_func:
                 log_func("debug", "Failed to fetch detail page", url=url, status=r.status_code if r else "None")
             return None
-        
+
         html = r.text or ""
         soup = BeautifulSoup(html, "html.parser")
-        
+
         # Extract title
         title_elem = soup.select_one("h1#viewad-title, h1.boxedarticle--title")
         title = title_elem.get_text(" ", strip=True) if title_elem else ""
-        
+
         # Extract description
         desc_elem = soup.select_one("#viewad-description-text, .boxedarticle--description")
         description = desc_elem.get_text(" ", strip=True) if desc_elem else ""
-        
+
         # Combine text for extraction
         full_text = f"{title} {description}"
-        
+
         # ========================================
         # PARALLEL PHONE EXTRACTION
         # Run both regex and advanced extraction simultaneously, merge results
         # ========================================
         phones = []
         phone_sources = {}  # Track where each phone was found for scoring
-        
+
         # 1. Standard regex extraction (runs in parallel with advanced)
         if MOBILE_RE:
             phone_matches = MOBILE_RE.findall(full_text)
@@ -209,7 +209,7 @@ async def extract_kleinanzeigen_detail_async(
                         if normalized not in phones:
                             phones.append(normalized)
                             phone_sources[normalized] = "regex_standard"
-        
+
         # 2. Advanced pattern extraction (runs in parallel, not as fallback)
         if extract_all_phone_patterns_func and get_best_phone_number_func:
             try:
@@ -226,7 +226,7 @@ async def extract_kleinanzeigen_detail_async(
                                     if log_func:
                                         log_func("info", f"Kleinanzeigen: Advanced extraction ({category}) found phone", 
                                             url=url, phone=normalized[:8]+"...")
-                
+
                 # Also get best phone if not already included
                 best_phone = get_best_phone_number_func(extraction_results)
                 if best_phone:
@@ -251,14 +251,14 @@ async def extract_kleinanzeigen_detail_async(
             except Exception as e:
                 if log_func:
                     log_func("debug", "Advanced phone extraction failed", error=str(e))
-        
+
         # Extract email
         email = ""
         if EMAIL_RE:
             email_matches = EMAIL_RE.findall(full_text)
             if email_matches:
                 email = email_matches[0]
-        
+
         # 3. WhatsApp extraction (parallel with other methods)
         whatsapp = ""
         if extract_whatsapp_number_func:
@@ -276,7 +276,7 @@ async def extract_kleinanzeigen_detail_async(
                                     url=url, phone=normalized_wa[:8]+"...")
             except Exception:
                 pass
-        
+
         # 4. Fallback WhatsApp link extraction
         if not whatsapp:
             wa_link = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
@@ -291,16 +291,16 @@ async def extract_kleinanzeigen_detail_async(
                         if wa_normalized not in phones:
                             phones.append(wa_normalized)
                             phone_sources[wa_normalized] = "whatsapp_link"
-        
+
         # Extract location/region
         location_elem = soup.select_one("#viewad-locality, .boxedarticle--details--locality")
         location = location_elem.get_text(" ", strip=True) if location_elem else ""
-        
+
         # Extract name (from title or text)
         name = ""
         if extract_name_enhanced_func:
             name = extract_name_enhanced_func(full_text)
-        
+
         # 5. Browser extraction as last resort (only if no phones found)
         if not phones:
             if log_func:
@@ -316,7 +316,7 @@ async def extract_kleinanzeigen_detail_async(
                 except Exception as e:
                     if log_func:
                         log_func("debug", "Browser extraction failed", url=url, error=str(e))
-            
+
             # If still no phones found, return None
             if not phones:
                 if learning_engine:
@@ -327,7 +327,7 @@ async def extract_kleinanzeigen_detail_async(
                         visible_phones=[]
                     )
                 return None
-        
+
         # Build lead data using centralized function
         lead = build_lead_data(
             name=name,
@@ -341,13 +341,13 @@ async def extract_kleinanzeigen_detail_async(
             has_whatsapp=bool(whatsapp),
             tags="kleinanzeigen,candidate,mobile,direct_crawl",
         )
-        
+
         if log_func:
             log_func("info", "Extracted lead from Kleinanzeigen ad", 
                      url=url, has_phone=bool(lead["telefon"]), has_email=bool(email), 
                      score=lead["score"], confidence=lead["confidence"])
         return lead
-        
+
     except Exception as e:
         if log_func:
             log_func("error", "Error extracting Kleinanzeigen detail", url=url, error=str(e))
@@ -368,7 +368,7 @@ async def crawl_kleinanzeigen_portal_async(
     """
     Wrapper function to crawl Kleinanzeigen that matches the pattern of other portals.
     Crawls all configured URLs and returns list of lead dicts.
-    
+
     Args:
         crawl_urls: List of listing URLs to crawl
         http_get_func: Function to fetch HTTP content
@@ -379,23 +379,23 @@ async def crawl_kleinanzeigen_portal_async(
         DIRECT_CRAWL_SOURCES: Config for which sources to crawl
         ENABLE_KLEINANZEIGEN: Feature flag
         **extract_kwargs: Additional kwargs for extraction functions
-        
+
     Returns:
         List of lead dicts extracted from Kleinanzeigen
     """
     if DIRECT_CRAWL_SOURCES and not DIRECT_CRAWL_SOURCES.get("kleinanzeigen", True):
         return []
-    
+
     if not ENABLE_KLEINANZEIGEN:
         return []
-    
+
     leads = []
-    
+
     for crawl_url in crawl_urls:
         try:
             if log_func:
                 log_func("info", "Kleinanzeigen: Crawling listing", url=crawl_url)
-            
+
             # Step 1: Get ad links from listing page
             ad_links = await crawl_kleinanzeigen_listings_async(
                 crawl_url,
@@ -404,27 +404,27 @@ async def crawl_kleinanzeigen_portal_async(
                 log_func=log_func,
                 **extract_kwargs
             )
-            
+
             if not ad_links:
                 if log_func:
                     log_func("info", "Kleinanzeigen: No ads found", url=crawl_url)
                 continue
-            
+
             if log_func:
                 log_func("info", "Kleinanzeigen: Ads found", url=crawl_url, count=len(ad_links))
-            
+
             # Step 2: Extract details from each ad
             for i, ad_url in enumerate(ad_links):
                 if url_seen_func and url_seen_func(ad_url):
                     if log_func:
                         log_func("debug", "Kleinanzeigen: URL already seen (skip)", url=ad_url)
                     continue
-                
+
                 # Rate limiting between detail page fetches
                 if i > 0:
                     jitter = jitter_func(0.5, 1.0) if jitter_func else 0.5
                     await asyncio.sleep(2.5 + jitter)
-                
+
                 # Extract lead data from ad detail page
                 lead_data = await extract_kleinanzeigen_detail_async(
                     ad_url,
@@ -432,7 +432,7 @@ async def crawl_kleinanzeigen_portal_async(
                     log_func=log_func,
                     **extract_kwargs
                 )
-                
+
                 if lead_data:
                     leads.append(lead_data)
                     # Mark URL as seen
@@ -441,15 +441,15 @@ async def crawl_kleinanzeigen_portal_async(
                 else:
                     if log_func:
                         log_func("debug", "Kleinanzeigen: No valid lead data", url=ad_url)
-            
+
             # Rate limiting between listing pages
             jitter = jitter_func(0.5, 1.0) if jitter_func else 0.5
             await asyncio.sleep(3.0 + jitter)
-            
+
         except Exception as e:
             if log_func:
                 log_func("error", "Kleinanzeigen: Error crawling", url=crawl_url, error=str(e))
-    
+
     if log_func:
         log_func("info", "Kleinanzeigen: Crawling completed", total_leads=len(leads))
     return leads
