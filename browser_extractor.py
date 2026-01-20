@@ -102,6 +102,32 @@ def _setup_chrome_options() -> Options:
     return options
 
 
+def _setup_chrome_options_headless_fallback() -> Options:
+    """
+    Setup Chrome options with additional headless fallback options to suppress
+    GPU/GCM errors in headless environments (servers, CI, Docker).
+    
+    This includes all standard options plus additional flags to:
+    - Suppress WebGL errors (no hardware GPU in headless mode)
+    - Suppress GCM/Phone Registration errors (Chrome push notification failures)
+    - Reduce log clutter and improve stability in headless environments
+    """
+    # Start with standard options
+    options = _setup_chrome_options()
+    
+    # Additional headless-specific options to suppress errors
+    options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--disable-webgl')
+    options.add_argument('--disable-webgl2')
+    options.add_argument('--disable-notifications')
+    options.add_argument('--disable-push-messaging')
+    options.add_argument('--disable-background-networking')
+    options.add_argument('--log-level=3')
+    options.add_argument('--disable-logging')
+    
+    return options
+
+
 def _rate_limit():
     """Enforce rate limiting between browser requests"""
     global _last_request_time
@@ -130,7 +156,7 @@ def _detect_portal(url: str) -> str:
         return 'generic'
 
 
-def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: int = 15) -> Optional[str]:
+def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: int = 15, use_fallback_options: bool = False) -> Optional[str]:
     """
     Extract phone number using headless browser to click on reveal buttons.
     
@@ -140,12 +166,15 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
     3. Tries to find and click phone reveal buttons
     4. Waits for AJAX response
     5. Extracts phone number from updated HTML
+    6. On WebDriverException, retries with fallback options (unless use_fallback_options=True)
     
     Args:
         url: URL of the ad detail page
         portal: Portal name (kleinanzeigen, quoka, markt_de, dhd24, generic)
                 If None, will be auto-detected from URL
         timeout: Maximum time to wait for page load and button click (seconds)
+        use_fallback_options: If True, uses fallback headless options directly (default: False)
+                             If False, tries standard options first, then fallback on error
     
     Returns:
         Normalized phone number or None if extraction failed
@@ -160,83 +189,107 @@ def extract_phone_with_browser(url: str, portal: Optional[str] = None, timeout: 
     # Get selectors for this portal
     selectors = BUTTON_SELECTORS.get(portal, BUTTON_SELECTORS['generic'])
     
-    driver = None
-    try:
-        # Setup Chrome with anti-bot options
-        options = _setup_chrome_options()
-        driver = webdriver.Chrome(options=options)
-        driver.set_page_load_timeout(timeout)
-        
-        # Navigate to page
-        logging.info(f"Browser extraction: Loading {url} (portal: {portal})")
-        driver.get(url)
-        
-        # Wait for page to load
-        time.sleep(PAGE_LOAD_WAIT)
-        
-        # Try to find and click the phone reveal button
-        button_clicked = False
-        for selector in selectors:
-            try:
-                if selector.startswith("//"):
-                    # XPath selector
-                    button = WebDriverWait(driver, BUTTON_WAIT).until(
-                        EC.element_to_be_clickable((By.XPATH, selector))
-                    )
-                else:
-                    # CSS selector
-                    button = WebDriverWait(driver, BUTTON_WAIT).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                    )
-                
-                # Click the button
-                button.click()
-                logging.info(f"Browser extraction: Clicked button with selector: {selector}")
-                button_clicked = True
-                
-                # Wait for AJAX response
-                time.sleep(AJAX_WAIT)
-                break
-                
-            except (TimeoutException, NoSuchElementException):
-                # Try next selector
-                continue
-            except Exception as e:
-                logging.debug(f"Browser extraction: Error with selector {selector}: {e}")
-                continue
-        
-        if not button_clicked:
-            logging.debug(f"Browser extraction: No phone button found on {url}")
-        
-        # Extract phone from updated HTML
-        html = driver.page_source
-        phones = extract_phones_advanced(html, html)
-        
-        if phones:
-            best_phone = get_best_phone(phones)
-            if best_phone:
-                logging.info(f"Browser extraction: Successfully extracted phone from {url}")
-                return best_phone
-        
-        logging.debug(f"Browser extraction: No phone number found in HTML after button click")
-        return None
-        
-    except TimeoutException:
-        logging.warning(f"Browser extraction: Timeout loading {url}")
-        return None
-    except WebDriverException as e:
-        logging.warning(f"Browser extraction: WebDriver error for {url}: {e}")
-        return None
-    except Exception as e:
-        logging.warning(f"Browser extraction: Unexpected error for {url}: {e}")
-        return None
-    finally:
-        # Always close the browser
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+    # Helper function to perform extraction with given options
+    def _extract_with_options(chrome_options: Options, is_fallback: bool = False) -> Optional[str]:
+        driver = None
+        try:
+            # Setup Chrome with given options
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.set_page_load_timeout(timeout)
+            
+            # Navigate to page
+            if is_fallback:
+                logging.info(f"Browser extraction: Loading {url} with fallback options (portal: {portal})")
+            else:
+                logging.info(f"Browser extraction: Loading {url} (portal: {portal})")
+            driver.get(url)
+            
+            # Wait for page to load
+            time.sleep(PAGE_LOAD_WAIT)
+            
+            # Try to find and click the phone reveal button
+            button_clicked = False
+            for selector in selectors:
+                try:
+                    if selector.startswith("//"):
+                        # XPath selector
+                        button = WebDriverWait(driver, BUTTON_WAIT).until(
+                            EC.element_to_be_clickable((By.XPATH, selector))
+                        )
+                    else:
+                        # CSS selector
+                        button = WebDriverWait(driver, BUTTON_WAIT).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                        )
+                    
+                    # Click the button
+                    button.click()
+                    logging.info(f"Browser extraction: Clicked button with selector: {selector}")
+                    button_clicked = True
+                    
+                    # Wait for AJAX response
+                    time.sleep(AJAX_WAIT)
+                    break
+                    
+                except (TimeoutException, NoSuchElementException):
+                    # Try next selector
+                    continue
+                except Exception as e:
+                    logging.debug(f"Browser extraction: Error with selector {selector}: {e}")
+                    continue
+            
+            if not button_clicked:
+                logging.debug(f"Browser extraction: No phone button found on {url}")
+            
+            # Extract phone from updated HTML
+            html = driver.page_source
+            phones = extract_phones_advanced(html, html)
+            
+            if phones:
+                best_phone = get_best_phone(phones)
+                if best_phone:
+                    logging.info(f"Browser extraction: Successfully extracted phone from {url}")
+                    return best_phone
+            
+            logging.debug(f"Browser extraction: No phone number found in HTML after button click")
+            return None
+            
+        except TimeoutException:
+            logging.warning(f"Browser extraction: Timeout loading {url}")
+            return None
+        except WebDriverException as e:
+            # Only re-raise if this is not the fallback attempt
+            if not is_fallback:
+                raise
+            logging.warning(f"Browser extraction: WebDriver error for {url} (fallback): {e}")
+            return None
+        except Exception as e:
+            logging.warning(f"Browser extraction: Unexpected error for {url}: {e}")
+            return None
+        finally:
+            # Always close the browser
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+    
+    # Try with standard or fallback options based on parameter
+    if use_fallback_options:
+        # Force use of fallback options
+        logging.info(f"Browser extraction: Using fallback options for {url}")
+        options = _setup_chrome_options_headless_fallback()
+        return _extract_with_options(options, is_fallback=True)
+    else:
+        # Try standard options first
+        try:
+            options = _setup_chrome_options()
+            return _extract_with_options(options, is_fallback=False)
+        except WebDriverException as e:
+            # Retry with fallback options
+            logging.warning(f"Browser extraction: WebDriver error with standard options, retrying with fallback options: {e}")
+            options = _setup_chrome_options_headless_fallback()
+            return _extract_with_options(options, is_fallback=True)
 
 
 def extract_phone_with_browser_batch(urls: list, portal: Optional[str] = None) -> dict:
