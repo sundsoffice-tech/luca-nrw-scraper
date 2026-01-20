@@ -355,6 +355,45 @@ def mark_url_seen(url: str, run_id: Optional[int] = None) -> None:
     UrlSeen.objects.create(url=url, first_run=scraper_run)
 
 
+def mark_urls_seen_batch(urls: list, run_id: Optional[int] = None) -> None:
+    """
+    Mark multiple URLs as seen in a single transaction.
+    
+    This is more efficient than calling mark_url_seen multiple times
+    as it uses Django's bulk_create for atomic batch insertion.
+    
+    Args:
+        urls: List of URLs to mark as seen
+        run_id: Optional scraper run ID
+    """
+    from telis_recruitment.scraper_control.models import UrlSeen, ScraperRun
+    
+    if not urls:
+        return
+    
+    # Get ScraperRun if run_id is provided
+    scraper_run = None
+    if run_id:
+        try:
+            scraper_run = ScraperRun.objects.get(id=run_id)
+        except ScraperRun.DoesNotExist:
+            logger.warning(f"ScraperRun with id {run_id} not found")
+    
+    # Filter out URLs that already exist to avoid duplicates
+    existing_urls = set(UrlSeen.objects.filter(url__in=urls).values_list('url', flat=True))
+    new_urls = [url for url in urls if url not in existing_urls]
+    
+    if not new_urls:
+        return
+    
+    # Bulk create UrlSeen entries
+    url_seen_objects = [
+        UrlSeen(url=url, first_run=scraper_run)
+        for url in new_urls
+    ]
+    UrlSeen.objects.bulk_create(url_seen_objects, ignore_conflicts=True)
+
+
 def is_query_done(query: str) -> bool:
     """
     Check if a query has been executed before.
@@ -390,6 +429,47 @@ def mark_query_done(query: str, run_id: Optional[int] = None) -> None:
             query_done.save()
         except ScraperRun.DoesNotExist:
             logger.warning(f"ScraperRun with id {run_id} not found")
+
+
+def mark_queries_done_batch(queries: list, run_id: Optional[int] = None) -> None:
+    """
+    Mark multiple queries as executed in a single transaction.
+    
+    This is more efficient than calling mark_query_done multiple times
+    as it uses Django's bulk operations for atomic batch insertion/update.
+    
+    Args:
+        queries: List of search queries to mark as done
+        run_id: Optional scraper run ID
+    """
+    from telis_recruitment.scraper_control.models import QueryDone, ScraperRun
+    
+    if not queries:
+        return
+    
+    # Get ScraperRun if run_id is provided
+    scraper_run = None
+    if run_id:
+        try:
+            scraper_run = ScraperRun.objects.get(id=run_id)
+        except ScraperRun.DoesNotExist:
+            logger.warning(f"ScraperRun with id {run_id} not found")
+    
+    # Get existing queries
+    existing_queries = set(QueryDone.objects.filter(query__in=queries).values_list('query', flat=True))
+    new_queries = [q for q in queries if q not in existing_queries]
+    
+    # Bulk create new QueryDone entries
+    if new_queries:
+        query_done_objects = [
+            QueryDone(query=query, last_run=scraper_run)
+            for query in new_queries
+        ]
+        QueryDone.objects.bulk_create(query_done_objects, ignore_conflicts=True)
+    
+    # Update existing queries if run_id is provided
+    if scraper_run and existing_queries:
+        QueryDone.objects.filter(query__in=existing_queries).update(last_run=scraper_run)
 
 
 def start_scraper_run() -> int:
@@ -483,8 +563,10 @@ __all__ = [
     'update_lead',
     'is_url_seen',
     'mark_url_seen',
+    'mark_urls_seen_batch',
     'is_query_done',
     'mark_query_done',
+    'mark_queries_done_batch',
     'start_scraper_run',
     'finish_scraper_run',
 ]

@@ -51,10 +51,12 @@ if DATABASE_BACKEND == 'django':
     # URL tracking functions
     is_url_seen = django_db.is_url_seen
     mark_url_seen = django_db.mark_url_seen
+    mark_urls_seen_batch = django_db.mark_urls_seen_batch
     
     # Query tracking functions
     is_query_done = django_db.is_query_done
     mark_query_done = django_db.mark_query_done
+    mark_queries_done_batch = django_db.mark_queries_done_batch
     
     # Scraper run tracking functions
     start_scraper_run = django_db.start_scraper_run
@@ -74,10 +76,12 @@ else:
     # URL tracking functions
     is_url_seen = database.is_url_seen_sqlite
     mark_url_seen = database.mark_url_seen_sqlite
+    mark_urls_seen_batch = database.mark_urls_seen_batch_sqlite
     
     # Query tracking functions
     is_query_done = database.is_query_done_sqlite
     mark_query_done = database.mark_query_done_sqlite
+    mark_queries_done_batch = database.mark_queries_done_batch_sqlite
     
     # Scraper run tracking functions
     start_scraper_run = database.start_scraper_run_sqlite
@@ -102,10 +106,12 @@ __all__ = [
     # URL tracking
     'is_url_seen',
     'mark_url_seen',
+    'mark_urls_seen_batch',
     
     # Query tracking
     'is_query_done',
     'mark_query_done',
+    'mark_queries_done_batch',
     
     # Scraper run tracking
     'start_scraper_run',

@@ -601,6 +601,33 @@ def mark_url_seen_sqlite(url: str, run_id: Optional[int] = None) -> None:
         con.close()
 
 
+def mark_urls_seen_batch_sqlite(urls: list, run_id: Optional[int] = None) -> None:
+    """
+    Mark multiple URLs as seen in a single transaction in SQLite.
+    
+    This is more efficient than calling mark_url_seen_sqlite multiple times
+    as it uses only one database connection and transaction.
+    
+    Args:
+        urls: List of URLs to mark as seen
+        run_id: Optional scraper run ID
+    """
+    if not urls:
+        return
+    
+    con = db()
+    cur = con.cursor()
+    try:
+        # Use executemany for batch insert
+        cur.executemany(
+            "INSERT OR IGNORE INTO urls_seen(url, first_run_id, ts) VALUES(?, ?, datetime('now'))",
+            [(url, run_id) for url in urls]
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
 def is_query_done_sqlite(query: str) -> bool:
     """
     Check if a query has been done in SQLite.
@@ -634,6 +661,33 @@ def mark_query_done_sqlite(query: str, run_id: Optional[int] = None) -> None:
         cur.execute(
             "INSERT OR REPLACE INTO queries_done(q, last_run_id, ts) VALUES(?, ?, datetime('now'))",
             (query, run_id)
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def mark_queries_done_batch_sqlite(queries: list, run_id: Optional[int] = None) -> None:
+    """
+    Mark multiple queries as done in a single transaction in SQLite.
+    
+    This is more efficient than calling mark_query_done_sqlite multiple times
+    as it uses only one database connection and transaction.
+    
+    Args:
+        queries: List of search queries to mark as done
+        run_id: Optional scraper run ID
+    """
+    if not queries:
+        return
+    
+    con = db()
+    cur = con.cursor()
+    try:
+        # Use executemany for batch insert
+        cur.executemany(
+            "INSERT OR REPLACE INTO queries_done(q, last_run_id, ts) VALUES(?, ?, datetime('now'))",
+            [(query, run_id) for query in queries]
         )
         con.commit()
     finally:
@@ -720,8 +774,10 @@ _BASE_EXPORTS = [
     'lead_exists_sqlite',
     'is_url_seen_sqlite',
     'mark_url_seen_sqlite',
+    'mark_urls_seen_batch_sqlite',
     'is_query_done_sqlite',
     'mark_query_done_sqlite',
+    'mark_queries_done_batch_sqlite',
     'start_scraper_run_sqlite',
     'finish_scraper_run_sqlite',
     'get_lead_count_sqlite',
