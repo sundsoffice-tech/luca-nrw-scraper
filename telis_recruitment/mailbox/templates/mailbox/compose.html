@@ -10,30 +10,82 @@
         margin: 0 auto;
         padding: 20px;
     }
-    .compose-card {
-        background: #1a1a2e;
+    
+    /* Gradient Page Header */
+    .page-header {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05));
         border-radius: 12px;
-        border: 1px solid #2d2d44;
-        padding: 24px;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        border: 1px solid rgba(99, 102, 241, 0.1);
     }
+    
+    .page-header h3 {
+        color: #e2e8f0;
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    /* Modernere Card mit Glassmorphism-Effekt */
+    .compose-card {
+        background: linear-gradient(145deg, rgba(26, 26, 46, 0.9), rgba(22, 22, 42, 0.95));
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid rgba(99, 102, 241, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        padding: 32px;
+    }
+    
+    /* Section Headers */
+    .section-header {
+        color: #8b5cf6;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 16px;
+        margin-top: 24px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+    }
+    
+    .section-header:first-of-type {
+        margin-top: 0;
+    }
+    
+    /* Form Labels */
     .form-label {
         color: #a0a0b0;
         font-weight: 500;
         margin-bottom: 8px;
+        font-size: 0.875rem;
+        transition: color 0.2s ease;
     }
+    
+    /* Verbesserte Inputs mit Focus-Animation */
     .form-control, .form-select {
-        background: #16162a;
-        border: 1px solid #2d2d44;
+        background: rgba(22, 22, 42, 0.6);
+        border: 1px solid rgba(99, 102, 241, 0.15);
         color: #fff;
         border-radius: 8px;
-        padding: 12px;
+        padding: 12px 16px;
+        transition: all 0.2s ease;
     }
+    
     .form-control:focus, .form-select:focus {
-        background: #16162a;
-        border-color: #6366f1;
+        background: rgba(22, 22, 42, 0.8);
+        border-color: #8b5cf6;
         color: #fff;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+        transform: translateY(-1px);
+        outline: none;
     }
+    
+    .form-control:hover, .form-select:hover {
+        border-color: rgba(139, 92, 246, 0.3);
+    }
+    
+    /* Gradient Button Styles */
     .btn-send {
         background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         border: none;
@@ -41,28 +93,64 @@
         border-radius: 8px;
         color: #fff;
         font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
     }
+    
     .btn-send:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
     }
+    
+    .btn-send:active {
+        transform: translateY(0);
+    }
+    
+    /* Outline Button Styles */
+    .btn-outline-secondary {
+        background: rgba(99, 102, 241, 0.05);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        color: #a78bfa;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-outline-secondary:hover {
+        background: rgba(99, 102, 241, 0.1);
+        border-color: #8b5cf6;
+        color: #c4b5fd;
+        transform: translateY(-1px);
+    }
+    
+    /* Form Sections */
+    .form-section {
+        margin-bottom: 24px;
+    }
+    
+    /* To Suggestions */
     .to-suggestions-container {
         position: relative;
     }
+    
     .to-suggestion-dropdown {
         position: absolute;
         top: calc(100% + 6px);
         left: 0;
         right: 0;
-        background: #0f0f1a;
-        border: 1px solid #1f2937;
-        border-radius: 10px;
-        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.7);
+        background: linear-gradient(145deg, rgba(15, 15, 26, 0.98), rgba(22, 22, 42, 0.98));
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(139, 92, 246, 0.1);
         z-index: 30;
         max-height: 220px;
         overflow-y: auto;
         padding: 8px 0;
     }
+    
     .to-suggestion-row {
         width: 100%;
         border: none;
@@ -74,31 +162,97 @@
         flex-direction: column;
         gap: 2px;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: all 0.15s ease;
+        border-radius: 6px;
+        margin: 2px 8px;
+        width: calc(100% - 16px);
     }
+    
     .to-suggestion-row:hover, .to-suggestion-row:focus {
-        background: rgba(99, 102, 241, 0.12);
+        background: rgba(139, 92, 246, 0.15);
         outline: none;
+        transform: translateX(2px);
     }
+    
     .to-suggestion-row .to-suggestion-name {
         font-size: 14px;
         font-weight: 600;
         color: #fff;
     }
+    
     .to-suggestion-row .to-suggestion-email {
         font-size: 12px;
-        color: #a0a0b0;
+        color: #a0aec0;
     }
+    
+    /* Action Buttons Container */
+    .action-buttons {
+        display: flex;
+        gap: 12px;
+        padding-top: 8px;
+        margin-top: 32px;
+        border-top: 1px solid rgba(139, 92, 246, 0.1);
+    }
+    
+    /* Form Text/Help Text */
+    .form-text {
+        color: #718096;
+        font-size: 0.75rem;
+        margin-top: 6px;
+    }
+    
+    /* File Input Styling */
+    .form-control[type="file"] {
+        padding: 10px 16px;
+        cursor: pointer;
+    }
+    
+    .form-control[type="file"]::file-selector-button {
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        color: #a78bfa;
+        padding: 6px 14px;
+        border-radius: 6px;
+        margin-right: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .form-control[type="file"]::file-selector-button:hover {
+        background: rgba(139, 92, 246, 0.25);
+        border-color: #8b5cf6;
+    }
+    
     .hidden {
         display: none !important;
+    }
+    
+    /* Responsive Improvements */
+    @media (max-width: 768px) {
+        .compose-container {
+            padding: 12px;
+        }
+        
+        .compose-card {
+            padding: 20px;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .action-buttons .btn {
+            width: 100%;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="compose-container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="mb-0">✉️ Neue Email schreiben</h3>
+    <!-- Gradient Page Header -->
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <h3>✉️ Neue Email schreiben</h3>
         <a href="{% url 'mailbox:inbox' %}" class="btn btn-outline-secondary">
             ← Zurück zum Posteingang
         </a>
@@ -108,84 +262,88 @@
         <form method="post" enctype="multipart/form-data" id="compose-form">
             {% csrf_token %}
             
-            <!-- Account selection -->
-            <div class="mb-3">
-                <label for="account" class="form-label">Von</label>
-                <select class="form-select" id="account" name="account" required>
-                    <option value="">Wählen Sie ein Konto...</option>
-                    {% for account in accounts %}
-                    <option value="{{ account.id }}">{{ account.name }} ({{ account.email_address }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <!-- To -->
-            <div class="mb-3">
-                <label for="to" class="form-label">An</label>
-                <div class="to-suggestions-container">
-                    <input type="text" class="form-control" id="to" name="to" value="{{ to_email }}" required autocomplete="off">
-                    <div id="to-suggestion-box"
-                         class="to-suggestion-dropdown hidden"
-                         role="listbox"
-                         aria-label="Empfänger Vorschläge">
-                    </div>
+            <!-- Section: Absender -->
+            <div class="section-header">📨 Absender</div>
+            <div class="form-section">
+                <div class="mb-3">
+                    <label for="account" class="form-label">Von</label>
+                    <select class="form-select" id="account" name="account" required>
+                        <option value="">Wählen Sie ein Konto...</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.id }}">{{ account.name }} ({{ account.email_address }})</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <small class="form-text text-muted">Mehrere Empfänger mit Komma trennen</small>
             </div>
             
-            <!-- CC -->
-            <div class="mb-3">
-                <label for="cc" class="form-label">CC</label>
-                <input type="text" class="form-control" id="cc" name="cc">
+            <!-- Section: Empfänger -->
+            <div class="section-header">👥 Empfänger</div>
+            <div class="form-section">
+                <div class="mb-3">
+                    <label for="to" class="form-label">An</label>
+                    <div class="to-suggestions-container">
+                        <input type="text" class="form-control" id="to" name="to" value="{{ to_email }}" required autocomplete="off">
+                        <div id="to-suggestion-box"
+                             class="to-suggestion-dropdown hidden"
+                             role="listbox"
+                             aria-label="Empfänger Vorschläge">
+                        </div>
+                    </div>
+                    <small class="form-text">Mehrere Empfänger mit Komma trennen</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="cc" class="form-label">CC (optional)</label>
+                    <input type="text" class="form-control" id="cc" name="cc">
+                </div>
             </div>
             
-            <!-- Subject -->
-            <div class="mb-3">
-                <label for="subject" class="form-label">Betreff</label>
-                <input type="text" class="form-control" id="subject" name="subject" required>
+            <!-- Section: Inhalt -->
+            <div class="section-header">📝 Inhalt</div>
+            <div class="form-section">
+                <div class="mb-3">
+                    <label for="subject" class="form-label">Betreff</label>
+                    <input type="text" class="form-control" id="subject" name="subject" required>
+                </div>
+                
+                {% if templates %}
+                <div class="mb-3">
+                    <label for="template" class="form-label">Vorlage (optional)</label>
+                    <select class="form-select" id="template" name="template">
+                        <option value="">Kein Template</option>
+                        {% for template in templates %}
+                        <option value="{{ template.id }}">{{ template.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <label for="body" class="form-label">Nachricht</label>
+                    <textarea id="body" name="body" class="form-control"></textarea>
+                </div>
+                
+                {% if signatures %}
+                <div class="mb-3">
+                    <label for="signature" class="form-label">Signatur</label>
+                    <select class="form-select" id="signature" name="signature">
+                        <option value="">Keine Signatur</option>
+                        {% for sig in signatures %}
+                        <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>{{ sig.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <label for="attachments" class="form-label">Anhänge (optional)</label>
+                    <input type="file" name="attachments" id="attachments" class="form-control" multiple>
+                    <small class="form-text">Mehrere Dateien können ausgewählt werden</small>
+                </div>
             </div>
             
-            <!-- Template selection -->
-            {% if templates %}
-            <div class="mb-3">
-                <label for="template" class="form-label">Template</label>
-                <select class="form-select" id="template" name="template">
-                    <option value="">Kein Template</option>
-                    {% for template in templates %}
-                    <option value="{{ template.id }}">{{ template.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
-            
-            <!-- Body -->
-            <div class="mb-3">
-                <label for="body" class="form-label">Nachricht</label>
-                <textarea id="body" name="body" class="form-control"></textarea>
-            </div>
-            
-            <!-- Signature selection -->
-            {% if signatures %}
-            <div class="mb-3">
-                <label for="signature" class="form-label">Signatur</label>
-                <select class="form-select" id="signature" name="signature">
-                    <option value="">Keine Signatur</option>
-                    {% for sig in signatures %}
-                    <option value="{{ sig.id }}" {% if sig.is_default %}selected{% endif %}>{{ sig.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
-            
-            <!-- Attachments -->
-            <div class="mb-3">
-                <label for="attachments" class="form-label">Anhänge</label>
-                <input type="file" name="attachments" id="attachments" class="form-control" multiple>
-                <small class="form-text text-muted">Mehrere Dateien können ausgewählt werden</small>
-            </div>
-            
-            <!-- Actions -->
-            <div class="d-flex gap-2">
+            <!-- Section: Aktionen -->
+            <div class="action-buttons">
                 <button type="submit" name="action" value="send" class="btn btn-send">
                     📤 Senden
                 </button>
