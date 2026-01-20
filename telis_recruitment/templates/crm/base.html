@@ -147,6 +147,11 @@
                     <span>Landing Pages</span>
                 </a>
                 
+                <a href="{% url 'forms:list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'forms' %}active{% endif %}" {% if request.resolver_match.namespace == 'forms' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">📝</span>
+                    <span>Form Builder</span>
+                </a>
+                
                 <a href="{% url 'app_settings:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'app_settings' %}active{% endif %}" {% if request.resolver_match.namespace == 'app_settings' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
                     <span class="text-xl mr-3" aria-hidden="true">⚙️</span>
                     <span>Einstellungen</span>
