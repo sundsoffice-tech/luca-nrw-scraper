@@ -815,6 +815,12 @@ class ProcessManager:
             elapsed = (timezone.now() - self.circuit_breaker_opened_at).total_seconds()
             remaining = max(0, penalty_seconds - elapsed)
             
+            # Auto-transition to HALF_OPEN when penalty time has expired
+            if remaining == 0 and self.circuit_breaker_state == CircuitBreakerState.OPEN:
+                self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
+                logger.info("Circuit breaker auto-transitioning to HALF_OPEN (penalty expired)")
+                self._log_error("⚠️ Circuit breaker HALF_OPEN - ready for test operation")
+            
             status_info['circuit_breaker_penalty_seconds'] = penalty_seconds
             status_info['circuit_breaker_elapsed_seconds'] = elapsed
             status_info['circuit_breaker_remaining_seconds'] = remaining

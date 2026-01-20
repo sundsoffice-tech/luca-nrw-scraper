@@ -141,6 +141,27 @@ class ProcessManagerErrorTrackingTest(TestCase):
         """Test that error_rate_window_seconds is properly initialized."""
         self.assertIsNotNone(self.manager.error_rate_window_seconds)
         self.assertEqual(self.manager.error_rate_window_seconds, 300)  # 5 minutes
+    
+    def test_get_status_auto_transitions_to_half_open(self):
+        """Test that get_status() auto-transitions circuit breaker from OPEN to HALF_OPEN when penalty expires."""
+        # Open the circuit breaker
+        self.manager._open_circuit_breaker()
+        
+        # Verify initial state is OPEN
+        self.assertEqual(self.manager.circuit_breaker_state, CircuitBreakerState.OPEN)
+        
+        # Set opened time to past (beyond penalty)
+        self.manager.circuit_breaker_opened_at = timezone.now() - timedelta(seconds=35)
+        
+        # Call get_status which should auto-transition to HALF_OPEN
+        status = self.manager.get_status()
+        
+        # Verify state changed to HALF_OPEN
+        self.assertEqual(self.manager.circuit_breaker_state, CircuitBreakerState.HALF_OPEN)
+        self.assertEqual(status['circuit_breaker_state'], 'half_open')
+        
+        # Verify remaining time is 0
+        self.assertEqual(status['circuit_breaker_remaining_seconds'], 0)
 
 
 class ProcessManagerRetryLogicTest(TestCase):
