@@ -1,0 +1,25 @@
+﻿import re
+
+# Lese die kaputte Datei
+with open('scriptname.py', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Entferne ALLE FIX-Blöcke
+pattern = r'\n*# === FIX:  Ensure db_router imports are available ===.*? # === END FIX ===\n*'
+content_clean = re.sub(pattern, '\n', content, flags=re.DOTALL)
+
+# Zähle wie viele entfernt wurden
+removed = content. count('# === FIX: ')
+print(f"Entfernt:  {removed} FIX-Bloecke")
+
+# Speichere
+with open('scriptname.py', 'w', encoding='utf-8') as f:
+    f.write(content_clean)
+
+# Prüfe Syntax
+import ast
+try:
+    ast. parse(content_clean)
+    print("Syntax: OK - Datei repariert!")
+except SyntaxError as e:
+    print(f"Syntax Error: {e}")
