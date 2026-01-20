@@ -5,6 +5,8 @@ Lernt aus Erfolgen und Fehlern, optimiert sich automatisch.
 
 Integrates with Django ai_config app when available for DB-driven AI configuration.
 Falls back gracefully to default constants when Django is not available.
+
+CONSOLIDATED: Uses luca_scraper.learning_db for unified database layer.
 """
 
 import sqlite3
@@ -14,6 +16,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 import logging
+
+# Import unified learning database adapter
+from luca_scraper import learning_db
 
 # Optional Django ai_config integration
 # Falls back gracefully when Django is not available or configured
@@ -255,6 +260,7 @@ class ActiveLearningEngine:
                           top_domains: Optional[List[str]] = None):
         """
         Speichert Dork-Ergebnis für Lernen und synchronisiert mit CRM.
+        Uses unified learning_db adapter.
         
         Args:
             dork: Die Such-Query
@@ -265,6 +271,16 @@ class ActiveLearningEngine:
             extraction_patterns: Erfolgreiche Extraktions-Patterns (optional)
             top_domains: Top-Domains für diesen Dork (optional)
         """
+        # Use unified learning database adapter
+        learning_db.record_dork_usage(
+            query=dork,
+            leads_found=leads_found,
+            phone_leads=leads_with_phone,
+            results=results,
+            db_path=self.db_path
+        )
+        
+        # Also maintain legacy learning_dork_performance table for compatibility
         score = leads_with_phone / max(1, results) if results > 0 else 0
         pool = 'core' if leads_with_phone > 0 else 'explore'
         

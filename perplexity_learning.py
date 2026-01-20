@@ -13,6 +13,8 @@ Features:
 Integrates with Django ai_config app when available for DB-driven AI configuration.
 Falls back gracefully to environment variables and default constants when Django is not available.
 
+CONSOLIDATED: Uses luca_scraper.learning_db for unified database layer.
+
 Usage:
     from perplexity_learning import PerplexityLearning
     
@@ -29,6 +31,9 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional
 import logging
+
+# Import unified learning database adapter
+from luca_scraper import learning_db
 
 # Optional Django ai_config integration
 # Falls back gracefully when Django is not available or configured
@@ -192,16 +197,45 @@ class PerplexityLearning:
     def record_perplexity_result(self, query: str, citations: List[str], leads: List[Dict]):
         """
         Record a Perplexity search result for analysis.
+        Uses unified learning_db adapter.
         
         Args:
             query: Search query used
             citations: List of citation URLs
             leads: List of leads found from this query
         """
-        conn = sqlite3.connect(self.db_path)
-        
         leads_with_phone = sum(1 for l in leads if l.get("telefon"))
         success_rate = leads_with_phone / len(leads) if leads else 0
+        
+        # Use unified learning database adapter for dork tracking
+        learning_db.record_dork_usage(
+            query=query,
+            leads_found=len(leads),
+            phone_leads=leads_with_phone,
+            results=len(citations),
+            db_path=self.db_path
+        )
+        
+        # Use unified adapter for source tracking
+        for citation in citations:
+            domain = self._extract_domain(citation)
+            if domain:
+                # Find leads from this domain
+                leads_from_domain = [l for l in leads if domain in l.get("quelle", "")]
+                if leads_from_domain:
+                    with_phone = sum(1 for l in leads_from_domain if l.get("telefon"))
+                    quality = success_rate  # Use overall success rate as quality metric
+                    
+                    learning_db.record_source_hit(
+                        domain=domain,
+                        leads_found=len(leads_from_domain),
+                        has_phone=with_phone > 0,
+                        quality=quality,
+                        db_path=self.db_path
+                    )
+        
+        # Also maintain legacy perplexity tables for compatibility
+        conn = sqlite3.connect(self.db_path)
         
         conn.execute("""
             INSERT INTO perplexity_queries 
@@ -264,6 +298,7 @@ class PerplexityLearning:
     def get_best_sources(self, min_leads: int = 5) -> List[Dict]:
         """
         Get the most successful source domains.
+        Uses unified learning_db adapter.
         
         Args:
             min_leads: Minimum number of leads to consider a source
@@ -271,20 +306,24 @@ class PerplexityLearning:
         Returns:
             List of dicts with domain stats, sorted by success rate
         """
-        conn = sqlite3.connect(self.db_path)
-        cur = conn.execute("""
-            SELECT domain, total_leads, leads_with_phone, success_rate
-            FROM perplexity_sources
-            WHERE total_leads >= ?
-            ORDER BY success_rate DESC, total_leads DESC
-            LIMIT 20
-        """, (min_leads,))
+        # Use unified learning database adapter
+        sources = learning_db.get_best_sources(
+            limit=20,
+            min_leads=min_leads,
+            exclude_blocked=True,
+            db_path=self.db_path
+        )
         
-        results = [
-            {"domain": r[0], "total": r[1], "with_phone": r[2], "success_rate": r[3]}
-            for r in cur.fetchall()
-        ]
-        conn.close()
+        # Convert to legacy format for compatibility
+        results = []
+        for s in sources:
+            results.append({
+                "domain": s['domain'],
+                "total": s['leads_found'],
+                "with_phone": s['leads_with_phone'],
+                "success_rate": s['avg_quality']  # Use avg_quality as success_rate
+            })
+        
         return results
     
     def generate_optimized_queries(self, base_keywords: List[str]) -> List[str]:
