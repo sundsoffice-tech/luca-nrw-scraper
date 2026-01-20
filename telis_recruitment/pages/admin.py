@@ -8,7 +8,7 @@ from . import models
 from .models import (
     Project, LandingPage, PageVersion, PageComponent, PageSubmission, 
     UploadedFile, DomainConfiguration, PageAsset, BrandSettings, PageTemplate,
-    FileVersion, ProjectTemplate
+    FileVersion, ProjectTemplate, ChangeLog, UndoRedoStack, VersionSnapshot
 )
 
 
@@ -765,3 +765,188 @@ class ProjectDeploymentAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         # Allow deletion of old deployments
         return True
+
+
+# ============================================================================
+# UNIFIED VERSION CONTROL ADMIN
+# ============================================================================
+
+@admin.register(ChangeLog)
+class ChangeLogAdmin(ModelAdmin):
+    """Admin interface for change logs"""
+    
+    list_display = ['version', 'landing_page', 'change_type', 'target_path', 
+                   'is_snapshot', 'snapshot_name', 'created_by', 'created_at', 'integrity_status']
+    list_filter = ['change_type', 'is_snapshot', 'landing_page', 'created_at']
+    search_fields = ['landing_page__slug', 'target_path', 'note', 'snapshot_name']
+    readonly_fields = ['version', 'transaction_id', 'content_hash', 'created_at', 
+                      'created_by', 'integrity_verified']
+    date_hierarchy = 'created_at'
+    ordering = ['-version', '-created_at']
+    
+    fieldsets = [
+        ('Version Information', {
+            'fields': ['landing_page', 'version', 'parent_version', 'transaction_id']
+        }),
+        ('Change Details', {
+            'fields': ['change_type', 'target_path', 'note', 'tags']
+        }),
+        ('Content', {
+            'fields': ['content_before', 'content_after', 'content_delta', 
+                      'content_hash', 'integrity_verified'],
+            'classes': ['collapse'],
+        }),
+        ('Snapshot', {
+            'fields': ['is_snapshot', 'snapshot_name'],
+        }),
+        ('Metadata', {
+            'fields': ['metadata', 'created_by', 'created_at'],
+            'classes': ['collapse'],
+        }),
+    ]
+    
+    def integrity_status(self, obj):
+        """Show content integrity status as badge"""
+        is_valid = obj.verify_integrity()
+        
+        if not obj.content_hash:
+            return format_html(
+                '<span style="background-color: #6b7280; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px;">No Hash</span>'
+            )
+        
+        if is_valid:
+            return format_html(
+                '<span style="background-color: #22c55e; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px;">✓ Valid</span>'
+            )
+        else:
+            return format_html(
+                '<span style="background-color: #ef4444; color: white; padding: 3px 10px; '
+                'border-radius: 12px; font-size: 11px;">✗ Corrupt</span>'
+            )
+    integrity_status.short_description = 'Integrity'
+    
+    def integrity_verified(self, obj):
+        """Display integrity verification result"""
+        is_valid = obj.verify_integrity()
+        if is_valid:
+            return format_html('<strong style="color: #22c55e;">✓ Content is valid</strong>')
+        else:
+            return format_html('<strong style="color: #ef4444;">✗ Content may be corrupted</strong>')
+    integrity_verified.short_description = 'Integrity Check'
+    
+    def has_add_permission(self, request):
+        # Change logs are created programmatically
+        return False
+
+
+@admin.register(UndoRedoStack)
+class UndoRedoStackAdmin(ModelAdmin):
+    """Admin interface for undo/redo stacks"""
+    
+    list_display = ['landing_page', 'user', 'current_version', 'last_action', 
+                   'undo_count', 'redo_count', 'last_action_at']
+    list_filter = ['last_action', 'user', 'landing_page', 'last_action_at']
+    search_fields = ['landing_page__slug', 'user__username', 'session_key']
+    readonly_fields = ['landing_page', 'user', 'session_key', 'current_version', 
+                      'max_version', 'last_action', 'last_action_at', 'created_at']
+    date_hierarchy = 'last_action_at'
+    ordering = ['-last_action_at']
+    
+    fieldsets = [
+        ('Stack Information', {
+            'fields': ['landing_page', 'user', 'session_key']
+        }),
+        ('Version Pointers', {
+            'fields': ['current_version', 'max_version']
+        }),
+        ('Stacks', {
+            'fields': ['undo_stack', 'redo_stack'],
+            'classes': ['collapse'],
+        }),
+        ('Activity', {
+            'fields': ['last_action', 'last_action_at', 'created_at']
+        }),
+    ]
+    
+    def undo_count(self, obj):
+        """Show number of undoable actions"""
+        count = len(obj.undo_stack)
+        return format_html(
+            '<span style="font-weight: 500;">{} action{}</span>',
+            count, 's' if count != 1 else ''
+        )
+    undo_count.short_description = 'Undo Stack'
+    
+    def redo_count(self, obj):
+        """Show number of redoable actions"""
+        count = len(obj.redo_stack)
+        return format_html(
+            '<span style="font-weight: 500;">{} action{}</span>',
+            count, 's' if count != 1 else ''
+        )
+    redo_count.short_description = 'Redo Stack'
+    
+    def has_add_permission(self, request):
+        # Stacks are created automatically
+        return False
+
+
+@admin.register(VersionSnapshot)
+class VersionSnapshotAdmin(ModelAdmin):
+    """Admin interface for version snapshots"""
+    
+    list_display = ['name', 'landing_page', 'snapshot_type_badge', 'semver_display', 
+                   'version_number', 'created_by', 'created_at']
+    list_filter = ['snapshot_type', 'landing_page', 'created_at']
+    search_fields = ['name', 'description', 'landing_page__slug', 'tags']
+    readonly_fields = ['changelog_version', 'created_by', 'created_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+    
+    fieldsets = [
+        ('Snapshot Information', {
+            'fields': ['name', 'landing_page', 'snapshot_type', 'description']
+        }),
+        ('Version Reference', {
+            'fields': ['changelog_version']
+        }),
+        ('Semantic Versioning', {
+            'fields': ['semver_major', 'semver_minor', 'semver_patch', 'semver_prerelease'],
+            'classes': ['collapse'],
+        }),
+        ('Metadata', {
+            'fields': ['tags', 'created_by', 'created_at']
+        }),
+    ]
+    
+    def snapshot_type_badge(self, obj):
+        """Show snapshot type as colored badge"""
+        colors = {
+            'manual': '#6b7280',
+            'auto': '#3b82f6',
+            'release': '#22c55e',
+            'backup': '#f59e0b',
+        }
+        color = colors.get(obj.snapshot_type, '#6b7280')
+        
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; '
+            'border-radius: 12px; font-size: 11px; font-weight: 500;">{}</span>',
+            color, obj.get_snapshot_type_display()
+        )
+    snapshot_type_badge.short_description = 'Type'
+    
+    def semver_display(self, obj):
+        """Display semantic version if available"""
+        semver = obj.semver
+        if semver:
+            return format_html('<code style="font-weight: 600;">{}</code>', semver)
+        return '-'
+    semver_display.short_description = 'Version'
+    
+    def version_number(self, obj):
+        """Display changelog version number"""
+        return obj.changelog_version.version
+    version_number.short_description = 'Changelog Version'
