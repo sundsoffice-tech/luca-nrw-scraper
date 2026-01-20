@@ -4,6 +4,7 @@ Email threading service for grouping related emails into conversations.
 import re
 from typing import Optional, List
 from django.utils import timezone
+from django.db import transaction
 from mailbox.models import EmailConversation, EmailAccount
 import logging
 
@@ -54,6 +55,7 @@ class EmailThreadingService:
         return normalized.strip()
     
     @staticmethod
+    @transaction.atomic
     def find_or_create_conversation(
         account: EmailAccount,
         message_id: str,
@@ -89,7 +91,7 @@ class EmailThreadingService:
         # 1. Try to find conversation by In-Reply-To
         if in_reply_to:
             try:
-                parent_email = Email.objects.filter(message_id=in_reply_to).first()
+                parent_email = Email.objects.select_for_update().filter(message_id=in_reply_to).first()
                 if parent_email:
                     logger.info(f"Found conversation via In-Reply-To: {parent_email.conversation_id}")
                     return parent_email.conversation
@@ -103,7 +105,7 @@ class EmailThreadingService:
                 try:
                     # Try the most recent reference first (usually the last one)
                     for ref_id in reversed(reference_ids):
-                        parent_email = Email.objects.filter(message_id=ref_id).first()
+                        parent_email = Email.objects.select_for_update().filter(message_id=ref_id).first()
                         if parent_email:
                             logger.info(f"Found conversation via References: {parent_email.conversation_id}")
                             return parent_email.conversation
@@ -125,8 +127,10 @@ class EmailThreadingService:
         if normalized_subject and contact_email:
             try:
                 # Look for conversation with same normalized subject and contact within last 30 days
+                # Use select_for_update to acquire row-level locks and prevent concurrent 
+                # conversation creation with the same subject and contact email
                 thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
-                conversation = EmailConversation.objects.filter(
+                conversation = EmailConversation.objects.select_for_update().filter(
                     account=account,
                     subject_normalized__iexact=normalized_subject,
                     contact_email__iexact=contact_email,
@@ -139,25 +143,32 @@ class EmailThreadingService:
             except Exception as e:
                 logger.warning(f"Error finding conversation by subject: {e}")
         
-        # 4. Create new conversation
+        # 4. Create new conversation with get_or_create to prevent duplicates
         logger.info(f"Creating new conversation for subject: {subject}")
         
         # Extract contact name from from_email if available
         contact_name = ""
         # You could parse "Name <email@example.com>" format here if needed
         
-        conversation = EmailConversation.objects.create(
+        # Use get_or_create with unique fields to prevent race conditions
+        conversation, created = EmailConversation.objects.get_or_create(
             account=account,
-            subject=subject,
             subject_normalized=normalized_subject,
             contact_email=contact_email,
-            contact_name=contact_name,
-            last_message_at=timezone.now(),
-            message_count=0,
-            unread_count=0
+            defaults={
+                'subject': subject,
+                'contact_name': contact_name,
+                'last_message_at': timezone.now(),
+                'message_count': 0,
+                'unread_count': 0
+            }
         )
         
-        logger.info(f"Created new conversation {conversation.id}")
+        if created:
+            logger.info(f"Created new conversation {conversation.id}")
+        else:
+            logger.info(f"Found existing conversation {conversation.id} via get_or_create")
+        
         return conversation
     
     @staticmethod
