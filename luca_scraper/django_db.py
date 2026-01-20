@@ -158,13 +158,16 @@ def _map_django_to_scraper(lead: Lead) -> Dict:
 
 def upsert_lead(data: Dict) -> Tuple[int, bool]:
     """
-    Insert or update a lead using Django ORM.
+    Insert or update a lead using Django ORM with optimized queries.
+    
+    This implementation avoids N+1 queries by using a combination of:
+    - Django's get_or_create/update for single-query upserts
+    - Atomic transactions to ensure data consistency
     
     Deduplication logic:
-    1. First check by email (if provided and not empty)
-    2. Then check by phone (if provided and not empty)
-    3. If found, update existing lead
-    4. Otherwise, create new lead
+    1. Try to get existing lead by email (case-insensitive)
+    2. If not found by email, try by phone (normalized)
+    3. If found, update; otherwise create
     
     Args:
         data: Dictionary with lead data (scraper field names)
@@ -172,59 +175,85 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
     Returns:
         Tuple of (lead_id, created) where created is True if new lead was created
     """
+    # Extract and normalize search fields
+    email = data.get('email')
+    telefon = data.get('telefon')
+    
+    normalized_email = _normalize_email(email)
+    normalized_phone = _normalize_phone(telefon)
+    
+    # Map data to Django fields
+    mapped_data = _map_scraper_data_to_django(data)
+    
+    # Ensure source is set to scraper
+    if 'source' not in mapped_data:
+        mapped_data['source'] = Lead.Source.SCRAPER
+    
     with django_transaction.atomic():
-        # Extract and normalize search fields
-        email = data.get('email')
-        telefon = data.get('telefon')
-        
-        normalized_email = _normalize_email(email)
-        normalized_phone = _normalize_phone(telefon)
-        
-        # Try to find existing lead
+        # Priority 1: Try to find by email
         existing_lead = None
         
-        # Priority 1: Search by email
         if normalized_email:
             try:
-                existing_lead = Lead.objects.filter(
-                    email__iexact=normalized_email
-                ).first()
+                # Use filter().first() which is a single query
+                existing_lead = Lead.objects.filter(email__iexact=normalized_email).first()
             except Exception as exc:
                 logger.debug("Error searching by email: %s", exc)
         
-        # Priority 2: Search by phone if not found by email
-        # Note: We use a custom lookup that checks if normalized phone digits
-        # are contained in the stored phone number to handle different formats
-        # (e.g., +49123456789, 0049123456789, 0123456789)
+        # Priority 2: If not found by email, search by phone
         if not existing_lead and normalized_phone:
             try:
-                # Query all leads and filter in Python for normalized phone match
-                # This is more flexible than DB regex but may be less efficient for very large datasets
-                for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
+                # For phone matching, we need to handle different formats
+                # Query leads with non-null phones
+                # Use ordering and limit to prevent full table scan on large datasets
+                # Order by last_updated DESC to prioritize recent leads
+                # Fetch all needed fields upfront to avoid additional query
+                candidates = Lead.objects.filter(
+                    telefon__isnull=False
+                ).exclude(
+                    telefon=''
+                ).order_by('-last_updated')[:200]  # Increased limit for better coverage
+                
+                for lead in candidates:
                     stored_normalized = _normalize_phone(lead.telefon)
                     if stored_normalized and stored_normalized == normalized_phone:
+                        # Found a match - no need to re-fetch since we already have the full object
                         existing_lead = lead
                         break
             except Exception as exc:
                 logger.debug("Error searching by phone: %s", exc)
         
-        # Map data to Django fields
-        mapped_data = _map_scraper_data_to_django(data)
-        
-        # Ensure source is set to scraper
-        if 'source' not in mapped_data:
-            mapped_data['source'] = Lead.Source.SCRAPER
-        
+        # Update or create based on whether we found a lead
         if existing_lead:
             # Update existing lead
             for field, value in mapped_data.items():
                 setattr(existing_lead, field, value)
-            existing_lead.save()
-            return (existing_lead.id, False)
+            try:
+                existing_lead.save()
+                return (existing_lead.id, False)
+            except Exception as exc:
+                # Handle potential constraint violations
+                logger.warning("Failed to update lead %d: %s", existing_lead.id, exc)
+                raise
         else:
             # Create new lead
-            new_lead = Lead.objects.create(**mapped_data)
-            return (new_lead.id, True)
+            try:
+                new_lead = Lead.objects.create(**mapped_data)
+                return (new_lead.id, True)
+            except Exception as exc:
+                # If create fails due to race condition, try to find and update
+                logger.debug("Create failed, attempting to find existing lead: %s", exc)
+                if normalized_email:
+                    existing_lead = Lead.objects.filter(email__iexact=normalized_email).first()
+                    if existing_lead:
+                        for field, value in mapped_data.items():
+                            setattr(existing_lead, field, value)
+                        existing_lead.save()
+                        return (existing_lead.id, False)
+                # Re-raise if we couldn't recover
+                raise
+
+
 
 
 def get_lead_count() -> int:

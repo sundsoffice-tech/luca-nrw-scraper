@@ -267,16 +267,100 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     if "whatsapp_link" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN whatsapp_link TEXT")
     
-    # SQLite-specific functions
-    upsert_lead_sqlite,
-    lead_exists_sqlite,
-    is_url_seen_sqlite,
-    mark_url_seen_sqlite,
-    is_query_done_sqlite,
-    mark_query_done_sqlite,
-    start_scraper_run_sqlite,
-    finish_scraper_run_sqlite,
-    get_lead_count_sqlite,
+    # Lead type column
+    try:
+        cur.execute("ALTER TABLE leads ADD COLUMN lead_type TEXT")
+    except Exception:
+        pass  # Already exists
+    
+    # Additional contact columns
+    if "private_address" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN private_address TEXT")
+    if "social_profile_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN social_profile_url TEXT")
+    
+    # AI enrichment columns
+    if "ai_category" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN ai_category TEXT")
+    if "ai_summary" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN ai_summary TEXT")
+    if "crm_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN crm_status TEXT")
+    
+    # Candidate-specific columns
+    if "experience_years" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN experience_years INTEGER")
+    if "skills" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN skills TEXT")  # JSON array
+    if "availability" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN availability TEXT")
+    if "current_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN current_status TEXT")
+    if "industries" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN industries TEXT")  # JSON array
+    if "location" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN location TEXT")
+    if "profile_text" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN profile_text TEXT")
+    
+    # New candidate-focused columns
+    if "candidate_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN candidate_status TEXT")
+    if "mobility" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN mobility TEXT")
+    if "industries_experience" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN industries_experience TEXT")
+    if "source_type" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN source_type TEXT")
+    if "profile_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN profile_url TEXT")
+    if "cv_url" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN cv_url TEXT")
+    if "contact_preference" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN contact_preference TEXT")
+    if "last_activity" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN last_activity TEXT")
+    if "name_validated" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN name_validated INTEGER")
+    
+    con.commit()
+
+    # Create unique indexes (partial - only when values present)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_email
+        ON leads(email) WHERE email IS NOT NULL AND email <> ''
+    """)
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_leads_tel
+        ON leads(telefon) WHERE telefon IS NOT NULL AND telefon <> ''
+    """)
+    con.commit()
+
+
+# Define allowed column names for security - whitelist approach
+ALLOWED_LEAD_COLUMNS = frozenset({
+    'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 'tags', 'region',
+    'role_guess', 'lead_type', 'salary_hint', 'commission_hint', 'opening_line',
+    'ssl_insecure', 'company_name', 'company_size', 'hiring_volume', 'industry',
+    'recency_indicator', 'location_specific', 'confidence_score', 'last_updated',
+    'data_quality', 'phone_type', 'whatsapp_link', 'private_address',
+    'social_profile_url', 'ai_category', 'ai_summary', 'crm_status',
+    'experience_years', 'skills', 'availability', 'current_status', 'industries',
+    'location', 'profile_text', 'candidate_status', 'mobility',
+    'industries_experience', 'source_type', 'profile_url', 'cv_url',
+    'contact_preference', 'last_activity', 'name_validated'
+})
+
+
+def migrate_db_unique_indexes():
+    """
+    Fallback migration for very old schemas with hard UNIQUE constraints.
+    Only run if inserts continue to fail.
+    
+    This recreates the leads table without UNIQUE constraints.
+    """
+    con = db()
+    cur = con.cursor()
     
     # Sync function
     sync_status_to_scraper,
@@ -406,17 +490,96 @@ def sync_status_to_scraper() -> Dict[str, int]:
 
 def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
     """
-    Insert or update a lead in SQLite.
+    Insert or update a lead in SQLite using optimized INSERT OR IGNORE + UPDATE.
+    
+    This implementation avoids N+1 queries by using a two-step approach:
+    1. Try INSERT OR IGNORE (succeeds if no conflict)
+    2. If no insert happened (rowcount=0), do UPDATE
+    
+    This is more efficient than SELECT + INSERT/UPDATE as it reduces roundtrips.
     
     Args:
         data: Dictionary with lead data (scraper field names)
         
     Returns:
         Tuple of (lead_id, created) where created is True if new lead was created
+        
+    Raises:
+        ValueError: If data contains invalid column names (security measure)
     """
     con = db()
     cur = con.cursor()
     
+    try:
+        # Extract search fields for lookup
+        email = data.get('email')
+        telefon = data.get('telefon')
+        
+        normalized_email = _normalize_email(email)
+        normalized_phone = _normalize_phone(telefon)
+        
+        # Validate column names against whitelist to prevent SQL injection
+        invalid_columns = set(data.keys()) - ALLOWED_LEAD_COLUMNS
+        if invalid_columns:
+            raise ValueError(f"Invalid column names: {invalid_columns}")
+        
+        # Prepare data for insertion
+        columns = list(data.keys())
+        placeholders = ['?'] * len(columns)
+        values = [data[col] for col in columns]
+        
+        # Step 1: Try INSERT OR IGNORE
+        # This will succeed if no unique constraint is violated
+        # Column names are validated above, safe to use in f-string
+        sql = f"INSERT OR IGNORE INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+        cur.execute(sql, values)
+        
+        # Check if insert succeeded
+        if cur.rowcount > 0:
+            # Insert succeeded - new lead created
+            new_id = cur.lastrowid
+            con.commit()
+            return (new_id, True)
+        
+        # Step 2: Insert failed due to unique constraint, find and update existing lead
+        existing_id = None
+        
+        # Priority 1: Search by email
+        if normalized_email:
+            cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
+            row = cur.fetchone()
+            if row:
+                existing_id = row[0]
+        
+        # Priority 2: Search by phone if not found by email
+        if not existing_id and telefon:
+            cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
+            row = cur.fetchone()
+            if row:
+                existing_id = row[0]
+        
+        if existing_id:
+            # Update existing lead
+            # Column names are validated above, safe to use in f-string
+            set_clauses = [f"{key} = ?" for key in data.keys() if key != 'id']
+            update_values = [data[key] for key in data.keys() if key != 'id']
+            update_values.append(existing_id)
+            
+            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+            cur.execute(sql, update_values)
+            con.commit()
+            return (existing_id, False)
+        else:
+            # This shouldn't happen, but handle gracefully
+            # Try one more INSERT without IGNORE to get the error
+            sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+            cur.execute(sql, values)
+            new_id = cur.lastrowid
+            con.commit()
+            return (new_id, True)
+            
+    finally:
+        con.close()
     # Extract search fields
     email = data.get('email')
     telefon = data.get('telefon')
