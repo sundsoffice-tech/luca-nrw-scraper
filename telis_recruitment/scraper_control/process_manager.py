@@ -129,7 +129,7 @@ class ProcessManager:
         else:
             # Normal completion - reset error counters
             self.retry_controller.record_success()
-            self.circuit_breaker.record_success(self.output_monitor.log_error)
+            self.circuit_breaker.record_success()
     
     def _handle_error(self, error_type: str):
         """

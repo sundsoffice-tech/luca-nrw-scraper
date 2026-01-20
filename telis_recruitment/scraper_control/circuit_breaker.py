@@ -62,16 +62,13 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.CLOSED and self.failures >= self.failure_threshold:
             self.open(log_callback)
 
-    def record_success(self, log_callback: Optional[Callable[[str], None]] = None):
+    def record_success(self):
         """
         Record a success and potentially close the circuit breaker.
-
-        Args:
-            log_callback: Optional callback to log messages
         """
         # If circuit breaker is half-open, close it on success
         if self.state == CircuitBreakerState.HALF_OPEN:
-            self.close(log_callback)
+            self.close()
 
     def open(self, log_callback: Optional[Callable[[str], None]] = None):
         """
