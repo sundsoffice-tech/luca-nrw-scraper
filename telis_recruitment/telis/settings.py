@@ -511,3 +511,65 @@ UNFOLD = {
         ],
     },
 }
+
+
+# =================================================================
+# PRODUCTION ENVIRONMENT VALIDATION
+# =================================================================
+# Validate required configuration in production mode
+# This prevents the application from running with insecure defaults
+
+def validate_production_config():
+    """
+    Validate that required environment variables are set in production mode.
+    
+    Raises:
+        RuntimeError: If critical configuration is missing in production
+    """
+    if not DEBUG:
+        errors = []
+        warnings = []
+        
+        # Critical: SECRET_KEY must be changed from default
+        if SECRET_KEY == 'django-insecure-please-change-me-in-production':
+            errors.append(
+                "SECRET_KEY is using the default insecure value. "
+                "Generate a unique secret key for production:\n"
+                "  python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+            )
+        
+        # Critical: ALLOWED_HOSTS must be configured
+        if not ALLOWED_HOSTS or ALLOWED_HOSTS == ['localhost', '127.0.0.1']:
+            errors.append(
+                "ALLOWED_HOSTS must be configured with your production domain(s). "
+                "Set the ALLOWED_HOSTS environment variable."
+            )
+        
+        # Warning: Brevo API key should be set for email functionality
+        brevo_api_key = os.getenv('BREVO_API_KEY', '')
+        if not brevo_api_key or brevo_api_key == '':
+            warnings.append(
+                "BREVO_API_KEY is not set. Email marketing features will not work. "
+                "Set the BREVO_API_KEY environment variable if email functionality is needed."
+            )
+        
+        # Log warnings
+        if warnings:
+            import logging
+            logger = logging.getLogger(__name__)
+            for warning in warnings:
+                logger.warning(f"Production config warning: {warning}")
+        
+        # Raise error if critical configuration is missing
+        if errors:
+            error_message = "PRODUCTION CONFIGURATION ERRORS:\n\n" + "\n\n".join(f"❌ {error}" for error in errors)
+            error_message += "\n\n" + "="*70
+            error_message += "\nThe application cannot start in production mode with these configuration errors."
+            error_message += "\nPlease set the required environment variables and restart the application."
+            error_message += "\n" + "="*70
+            raise RuntimeError(error_message)
+
+
+# Run validation on startup (only in production)
+if not DEBUG:
+    validate_production_config()

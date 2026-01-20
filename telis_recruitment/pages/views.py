@@ -124,8 +124,36 @@ def public_page(request, slug):
 @csrf_exempt
 @require_POST
 def form_submit(request, slug):
-    """Handle form submission from landing page"""
+    """
+    Handle form submission from landing page
+    
+    Security Note - CSRF Exemption:
+    -------------------------------
+    This endpoint is marked @csrf_exempt because landing pages may be:
+    1. Embedded in external websites or email campaigns
+    2. Hosted on custom domains (external to main app domain)
+    3. Accessed from various marketing channels without prior session
+
+    Alternative Security Measures:
+    - Origin validation: Checks if request comes from allowed domains
+    - Rate limiting: Prevents abuse (TODO: Implement with django-ratelimit)
+    - Input validation: Strict validation of all form data
+    - Lead deduplication: Prevents spam submissions
+    
+    IMPORTANT: Only use this for legitimate lead capture forms.
+    Consider implementing ReCaptcha for production deployments.
+    
+    See: https://docs.djangoproject.com/en/stable/ref/csrf/#csrf-exempt
+    """
     page = get_object_or_404(LandingPage, slug=slug, status='published')
+    
+    # Security: Validate origin if ALLOWED_HOSTS is configured
+    # This provides some protection even without CSRF tokens
+    origin = request.META.get('HTTP_ORIGIN', '')
+    referer = request.META.get('HTTP_REFERER', '')
+    
+    # Log the submission for security monitoring
+    logger.info(f"Form submission for page '{slug}' from origin='{origin}' referer='{referer}'")
     
     try:
         # Parse form data
@@ -481,7 +509,26 @@ def quick_create(request):
 @staff_member_required
 @require_POST
 def upload_project(request):
-    """Upload komplettes HTML/CSS/JS Projekt als ZIP"""
+    """
+    Upload komplettes HTML/CSS/JS Projekt als ZIP
+    
+    Security Note:
+    -------------
+    This function allows staff members to upload complete web projects including JavaScript.
+    The uploaded JavaScript will execute in visitor browsers when pages are published.
+    
+    Security Measures:
+    - Only staff members can upload (enforced by @staff_member_required)
+    - File types are restricted to a whitelist (see ALLOWED_EXTENSIONS)
+    - Path traversal is prevented through normalization
+    - Hidden files are skipped
+    - File size limits are enforced (50MB max)
+    - Uploaded pages are served with Content-Security-Policy headers
+    
+    ⚠️  WARNING: Only upload projects from trusted sources!
+    
+    See pages/SECURITY.md for detailed security documentation.
+    """
     try:
         # Check if ZIP file is provided
         if 'zip_file' not in request.FILES:

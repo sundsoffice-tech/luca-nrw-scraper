@@ -21,20 +21,28 @@ This module has been refactored into three separate modules:
 
 This file now serves as a backward compatibility layer, re-exporting
 functions from the new modules.
+
+SECURITY NOTE:
+--------------
+SQL Injection Protection: All database operations validate column names
+against the ALLOWED_LEAD_COLUMNS whitelist before constructing dynamic SQL.
+Column values are always parameterized using SQLite's ? placeholder syntax.
+Never pass user input directly to column name construction.
 """
 
 import logging
 import sqlite3
 import threading
 from contextlib import contextmanager
-from typing import Dict, Optional, Tuple
+from typing import Optional, Dict, Tuple
 
 # Import DB_PATH and DATABASE_BACKEND from config
-from .config import DATABASE_BACKEND, DB_PATH
+from .config import DATABASE_BACKEND
+from .config.env_loader import DB_PATH
 
 logger = logging.getLogger(__name__)
 
-# Thread-local storage for DB connection
+# Thread-local storage for database connections
 _db_local = threading.local()
 _DB_READY = False
 _DB_READY_LOCK = threading.Lock()
@@ -368,15 +376,18 @@ def migrate_db_unique_indexes():
     
     This recreates the leads table without UNIQUE constraints.
     """
-    logger.info("migrate_db_unique_indexes has been deprecated. Schema updates are handled by _ensure_schema().")
-    pass
+    con = db()
+    cur = con.cursor()
+    # Implementation removed - old schema migration no longer needed
+    logger.warning("migrate_db_unique_indexes called but not implemented")
 
 
-def _normalize_email(email: Optional[str]) -> Optional[str]:
-    """Normalize email for lookup."""
-    if not email:
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    """Normalize email for lookup (lowercase, strip whitespace)."""
+    if not value:
         return None
-    return email.strip().lower()
+    normalized = value.strip().lower()
+    return normalized if normalized else None
 
 
 def _normalize_phone(value: Optional[str]) -> Optional[str]:
@@ -589,10 +600,9 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
             new_id = cur.lastrowid
             con.commit()
             return (new_id, True)
-    except Exception as exc:
-        logger.error("Error in upsert_lead_sqlite: %s", exc)
-        con.rollback()
-        raise
+            
+    finally:
+        con.close()
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:
