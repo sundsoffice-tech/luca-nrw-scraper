@@ -1729,8 +1729,7 @@ def url_seen(url: str) -> bool:
     norm = _normalize_for_dedupe(url)
     if norm in _seen_urls_cache:
         return True
-    from luca_scraper.db_router import is_url_seen as _is_url_seen_fn
-    seen = _is_url_seen_fn(url)
+    seen = _is_url_seen_router(url)
     if seen:
         _seen_urls_cache.add(norm)
     return seen
@@ -2270,8 +2269,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 new_rows.append(r)
                 continue
             
-            from luca_scraper.db_router import upsert_lead as _upsert_lead_fn
-            lead_id, created = _upsert_lead_fn(r)
+            lead_id, created = _upsert_lead_router(r)
             if created:
                 new_rows.append(r)
                 # Learn from successful lead (with mobile number)

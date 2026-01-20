@@ -1707,18 +1707,21 @@ def migrate_db_unique_indexes():
 
 def is_query_done(q: str) -> bool:
     """Check if query has been done. Uses db_router for backend abstraction."""
-    return is_query_done_direct(q)
+    from luca_scraper.db_router import is_query_done as _is_query_done_fn
+    return _is_query_done_fn(q)
 
 def mark_query_done(q: str, run_id: int):
     """Mark query as done. Uses db_router for backend abstraction."""
-    mark_query_done_direct(q, run_id)
+    from luca_scraper.db_router import mark_query_done as _mark_query_done_fn
+    _mark_query_done_fn(q, run_id)
 
 _seen_urls_cache: set[str] = set()
 
 def mark_url_seen(url: str, run_id: int):
     """Mark URL as seen. Uses db_router for backend abstraction."""
     global _seen_urls_cache
-    mark_url_seen_direct(url, run_id)
+    from luca_scraper. db_router import mark_url_seen as _mark_url_seen_fn
+    _mark_url_seen_fn(url, run_id)
     _seen_urls_cache.add(_normalize_for_dedupe(url))
 
 def url_seen(url: str) -> bool:
@@ -1726,7 +1729,8 @@ def url_seen(url: str) -> bool:
     norm = _normalize_for_dedupe(url)
     if norm in _seen_urls_cache:
         return True
-    seen = is_url_seen_direct(url)
+    from luca_scraper.db_router import is_url_seen as _is_url_seen_fn
+        seen = _is_url_seen_fn(url)
     if seen:
         _seen_urls_cache.add(norm)
     return seen
@@ -2266,7 +2270,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 new_rows.append(r)
                 continue
             
-            lead_id, created = upsert_lead_direct(r)
+            lead_id, created = _upsert_lead_router(r)
             if created:
                 new_rows.append(r)
                 # Learn from successful lead (with mobile number)
@@ -2715,45 +2719,6 @@ async def robots_allowed_async(url: str) -> bool:
 # =========================
 # Suche (modular)
 # =========================
-
-
-# === AUTO-GENERATED ROUTER HELPERS ===
-def start_scraper_run():
-    from luca_scraper.db_router import start_scraper_run as _fn
-    return _fn()
-
-def finish_scraper_run(*args, **kwargs):
-    from luca_scraper.db_router import finish_scraper_run as _fn
-    return _fn(*args, **kwargs)
-
-def is_query_done_direct(q):
-    from luca_scraper.db_router import is_query_done as _fn
-    return _fn(q)
-
-def mark_query_done_direct(q, run_id=None):
-    from luca_scraper.db_router import mark_query_done as _fn
-    return _fn(q, run_id)
-
-def is_url_seen_direct(url):
-    from luca_scraper. db_router import is_url_seen as _fn
-    return _fn(url)
-
-def mark_url_seen_direct(url, run_id=None):
-    from luca_scraper.db_router import mark_url_seen as _fn
-    return _fn(url, run_id)
-
-def upsert_lead_direct(data):
-    from luca_scraper.db_router import upsert_lead as _fn
-    return _fn(data)
-
-def lead_exists_direct(email=None, telefon=None):
-    from luca_scraper.db_router import lead_exists as _fn
-    return _fn(email, telefon)
-
-def get_lead_count_direct():
-    from luca_scraper.db_router import get_lead_count as _fn
-    return _fn()
-# === END AUTO-GENERATED ROUTER HELPERS ===
 
 def _normalize_cx(s: str) -> str:
     if not s: return ""

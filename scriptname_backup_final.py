@@ -1707,21 +1707,18 @@ def migrate_db_unique_indexes():
 
 def is_query_done(q: str) -> bool:
     """Check if query has been done. Uses db_router for backend abstraction."""
-    from luca_scraper.db_router import is_query_done as _is_query_done_fn
-    return _is_query_done_fn(q)
+    return _is_query_done_router(q)
 
 def mark_query_done(q: str, run_id: int):
     """Mark query as done. Uses db_router for backend abstraction."""
-    from luca_scraper.db_router import mark_query_done as _mark_query_done_fn
-    _mark_query_done_fn(q, run_id)
+    _mark_query_done_router(q, run_id)
 
 _seen_urls_cache: set[str] = set()
 
 def mark_url_seen(url: str, run_id: int):
     """Mark URL as seen. Uses db_router for backend abstraction."""
     global _seen_urls_cache
-    from luca_scraper. db_router import mark_url_seen as _mark_url_seen_fn
-    _mark_url_seen_fn(url, run_id)
+    _mark_url_seen_router(url, run_id)
     _seen_urls_cache.add(_normalize_for_dedupe(url))
 
 def url_seen(url: str) -> bool:
@@ -1729,8 +1726,7 @@ def url_seen(url: str) -> bool:
     norm = _normalize_for_dedupe(url)
     if norm in _seen_urls_cache:
         return True
-    from luca_scraper.db_router import is_url_seen as _is_url_seen_fn
-    seen = _is_url_seen_fn(url)
+    seen = _is_url_seen_router(url)
     if seen:
         _seen_urls_cache.add(norm)
     return seen
@@ -2270,8 +2266,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 new_rows.append(r)
                 continue
             
-            from luca_scraper.db_router import upsert_lead as _upsert_lead_fn
-            lead_id, created = _upsert_lead_fn(r)
+            lead_id, created = _upsert_lead_router(r)
             if created:
                 new_rows.append(r)
                 # Learn from successful lead (with mobile number)
