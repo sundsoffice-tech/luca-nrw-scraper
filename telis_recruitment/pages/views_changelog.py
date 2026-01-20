@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods, require_POST, require_GET
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
+from django.core.exceptions import ValidationError
 
 from ..models import LandingPage, ChangeLog, VersionSnapshot
 from ..services.changelog_service import (
@@ -18,6 +19,16 @@ from ..services.changelog_service import (
 logger = logging.getLogger(__name__)
 
 
+def get_session_key(request):
+    """Helper function to get session key from request"""
+    return (
+        request.session.session_key or 
+        request.POST.get('session_key') or
+        request.GET.get('session_key') or
+        'default'
+    )
+
+
 # ===== Undo/Redo Endpoints =====
 
 @staff_member_required
@@ -27,7 +38,7 @@ def undo(request, slug):
     page = get_object_or_404(LandingPage, slug=slug)
     
     try:
-        session_key = request.session.session_key or request.POST.get('session_key', 'default')
+        session_key = get_session_key(request)
         
         undo_redo_service = UndoRedoService(page, request.user, session_key)
         result = undo_redo_service.undo()
@@ -44,8 +55,14 @@ def undo(request, slug):
             'data': result
         })
     
+    except (ChangeLogServiceError, ValidationError) as e:
+        logger.error(f"Error undoing changes for {slug}: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
     except Exception as e:
-        logger.error(f"Error undoing changes for {slug}: {e}")
+        logger.error(f"Unexpected error undoing changes for {slug}: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': 'Error undoing changes'
@@ -59,7 +76,7 @@ def redo(request, slug):
     page = get_object_or_404(LandingPage, slug=slug)
     
     try:
-        session_key = request.session.session_key or request.POST.get('session_key', 'default')
+        session_key = get_session_key(request)
         
         undo_redo_service = UndoRedoService(page, request.user, session_key)
         result = undo_redo_service.redo()
@@ -76,8 +93,14 @@ def redo(request, slug):
             'data': result
         })
     
+    except (ChangeLogServiceError, ValidationError) as e:
+        logger.error(f"Error redoing changes for {slug}: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
     except Exception as e:
-        logger.error(f"Error redoing changes for {slug}: {e}")
+        logger.error(f"Unexpected error redoing changes for {slug}: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': 'Error redoing changes'
@@ -91,7 +114,7 @@ def undo_redo_state(request, slug):
     page = get_object_or_404(LandingPage, slug=slug)
     
     try:
-        session_key = request.session.session_key or request.GET.get('session_key', 'default')
+        session_key = get_session_key(request)
         
         undo_redo_service = UndoRedoService(page, request.user, session_key)
         state = undo_redo_service.get_stack_state()
@@ -101,8 +124,14 @@ def undo_redo_state(request, slug):
             'data': state
         })
     
+    except (ChangeLogServiceError, ValidationError) as e:
+        logger.error(f"Error getting undo/redo state for {slug}: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
     except Exception as e:
-        logger.error(f"Error getting undo/redo state for {slug}: {e}")
+        logger.error(f"Unexpected error getting undo/redo state for {slug}: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': 'Error getting undo/redo state'
@@ -146,8 +175,14 @@ def changelog_history(request, slug):
             }
         })
     
+    except (ChangeLogServiceError, ValidationError, ValueError) as e:
+        logger.error(f"Error getting changelog history for {slug}: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
     except Exception as e:
-        logger.error(f"Error getting changelog history for {slug}: {e}")
+        logger.error(f"Unexpected error getting changelog history for {slug}: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': 'Error getting changelog history'

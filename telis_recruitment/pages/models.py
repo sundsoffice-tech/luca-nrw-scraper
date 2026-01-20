@@ -126,16 +126,7 @@ class LandingPage(models.Model):
     robots_meta = models.CharField(max_length=100, blank=True, default='index, follow',
                                    help_text="Robots meta tag (e.g., 'index, follow', 'noindex, nofollow')")
     
-    # Open Graph fields
-    og_title = models.CharField(max_length=255, blank=True, help_text="Open Graph title (defaults to seo_title)")
-    og_description = models.TextField(blank=True, help_text="Open Graph description (defaults to seo_description)")
-    og_image = models.URLField(blank=True, help_text="Open Graph image URL (defaults to seo_image)")
-    og_type = models.CharField(max_length=50, blank=True, default='website', 
-                               help_text="Open Graph type (website, article, etc.)")
-    
-    # Twitter Card fields
-    twitter_card = models.CharField(max_length=50, blank=True, default='summary_large_image',
-                                   help_text="Twitter card type")
+    # Twitter metadata extensions
     twitter_site = models.CharField(max_length=100, blank=True, help_text="Twitter @username for site")
     twitter_creator = models.CharField(max_length=100, blank=True, help_text="Twitter @username for creator")
     
