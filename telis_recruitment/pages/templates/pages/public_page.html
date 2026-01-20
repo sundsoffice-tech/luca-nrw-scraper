@@ -8,14 +8,18 @@
     <title>{{ seo_title }}</title>
     {% if seo_description %}
     <meta name="description" content="{{ seo_description }}">
+    {% endif %}
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TELIS Recruitment">
+    <meta property="og:title" content="{{ seo_title }}">
+    {% if seo_description %}
     <meta property="og:description" content="{{ seo_description }}">
     {% endif %}
     {% if seo_image %}
     <meta property="og:image" content="{{ seo_image }}">
     {% endif %}
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="{{ seo_title }}">
-    <meta property="og:site_name" content="TELIS">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
