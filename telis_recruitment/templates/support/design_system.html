@@ -1,0 +1,418 @@
+{% extends 'crm/base.html' %}
+{% load static %}
+
+{% block title %}Design System Demo - TELIS CRM{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-400 mx-2">/</span>
+<span class="text-gray-400">Support</span>
+<span class="text-gray-400 mx-2">/</span>
+<span class="text-primary">Design System</span>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold text-gray-100 mb-3">🎨 Design System Demo</h1>
+        <p class="text-lg text-gray-400">
+            Übersicht aller Design-System Komponenten für konsistentes Branding
+        </p>
+    </div>
+
+    <!-- Quick Info -->
+    <div class="card mb-8 bg-primary/10 border-primary">
+        <div class="flex items-start gap-4">
+            <span class="text-4xl">💡</span>
+            <div>
+                <h3 class="text-xl font-bold text-primary mb-2">Dokumentation</h3>
+                <p class="text-gray-300 mb-3">
+                    Vollständige Dokumentation verfügbar in <code class="bg-dark-900 px-2 py-1 rounded text-primary">telis_recruitment/DESIGN_SYSTEM.md</code>
+                </p>
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper/blob/main/telis_recruitment/DESIGN_SYSTEM.md" 
+                   target="_blank" 
+                   class="btn btn-primary btn-sm">
+                    📚 Dokumentation öffnen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Color Palette -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Farbpalette</h2>
+        
+        <!-- Primary Colors -->
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Primärfarben</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-primary);"></div>
+                    <p class="font-mono text-sm text-gray-400">primary</p>
+                    <p class="font-mono text-xs text-gray-500">#06b6d4</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-primary-light);"></div>
+                    <p class="font-mono text-sm text-gray-400">primary-light</p>
+                    <p class="font-mono text-xs text-gray-500">#22d3ee</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-primary-dark);"></div>
+                    <p class="font-mono text-sm text-gray-400">primary-dark</p>
+                    <p class="font-mono text-xs text-gray-500">#0891b2</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-secondary);"></div>
+                    <p class="font-mono text-sm text-gray-400">secondary</p>
+                    <p class="font-mono text-xs text-gray-500">#8b5cf6</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Colors -->
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Statusfarben</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-success);"></div>
+                    <p class="font-mono text-sm text-gray-400">success</p>
+                    <p class="font-mono text-xs text-gray-500">#10b981</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-error);"></div>
+                    <p class="font-mono text-sm text-gray-400">error</p>
+                    <p class="font-mono text-xs text-gray-500">#ef4444</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-warning);"></div>
+                    <p class="font-mono text-sm text-gray-400">warning</p>
+                    <p class="font-mono text-xs text-gray-500">#f59e0b</p>
+                </div>
+                <div class="card text-center">
+                    <div class="h-24 rounded-lg mb-3" style="background-color: var(--color-info);"></div>
+                    <p class="font-mono text-sm text-gray-400">info</p>
+                    <p class="font-mono text-xs text-gray-500">#06b6d4</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Typography -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Typographie</h2>
+        <div class="card">
+            <h1 style="font-size: var(--font-size-5xl)" class="mb-2">Headline XL (48px)</h1>
+            <h2 style="font-size: var(--font-size-4xl)" class="mb-2">Headline L (36px)</h2>
+            <h3 style="font-size: var(--font-size-3xl)" class="mb-2">Headline M (30px)</h3>
+            <h4 style="font-size: var(--font-size-2xl)" class="mb-2">Headline S (24px)</h4>
+            <h5 style="font-size: var(--font-size-xl)" class="mb-2">Headline XS (20px)</h5>
+            <p style="font-size: var(--font-size-base)" class="mb-2">Body Text (16px) - Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+            <p style="font-size: var(--font-size-sm)" class="mb-2">Small Text (14px) - Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+            <p style="font-size: var(--font-size-xs)">Extra Small Text (12px) - Lorem ipsum dolor sit amet.</p>
+        </div>
+    </section>
+
+    <!-- Buttons -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Buttons</h2>
+        
+        <!-- Button Variants -->
+        <div class="card mb-6">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Button Varianten</h3>
+            <div class="flex flex-wrap gap-3">
+                <button class="btn btn-primary">Primary</button>
+                <button class="btn btn-secondary">Secondary</button>
+                <button class="btn btn-success">Success</button>
+                <button class="btn btn-error">Error</button>
+                <button class="btn btn-warning">Warning</button>
+                <button class="btn btn-ghost">Ghost</button>
+                <button class="btn btn-outline">Outline</button>
+                <button class="btn btn-primary" disabled>Disabled</button>
+            </div>
+        </div>
+
+        <!-- Button Sizes -->
+        <div class="card mb-6">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Button Größen</h3>
+            <div class="flex flex-wrap items-center gap-3">
+                <button class="btn btn-primary btn-xs">Extra Small</button>
+                <button class="btn btn-primary btn-sm">Small</button>
+                <button class="btn btn-primary">Normal</button>
+                <button class="btn btn-primary btn-lg">Large</button>
+                <button class="btn btn-primary btn-xl">Extra Large</button>
+            </div>
+        </div>
+
+        <!-- Button with Icons -->
+        <div class="card">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Buttons mit Icons</h3>
+            <div class="flex flex-wrap gap-3">
+                <button class="btn btn-primary flex items-center gap-2">
+                    <span>🚀</span>
+                    <span>Start</span>
+                </button>
+                <button class="btn btn-success flex items-center gap-2">
+                    <span>✓</span>
+                    <span>Speichern</span>
+                </button>
+                <button class="btn btn-error flex items-center gap-2">
+                    <span>🗑️</span>
+                    <span>Löschen</span>
+                </button>
+                <button class="btn btn-outline flex items-center gap-2">
+                    <span>📥</span>
+                    <span>Download</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cards -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Cards</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Basic Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Basic Card</h3>
+                    <p class="card-subtitle">Standard card mit Header</p>
+                </div>
+                <div class="card-body">
+                    <p class="text-gray-300">Dies ist eine Standard-Card Komponente mit Header, Body und Footer.</p>
+                </div>
+                <div class="card-footer">
+                    <button class="btn btn-primary btn-sm">Action</button>
+                </div>
+            </div>
+
+            <!-- Elevated Card -->
+            <div class="card card-elevated">
+                <div class="card-header">
+                    <h3 class="card-title">Elevated Card</h3>
+                    <p class="card-subtitle">Mit Schatten-Effekt</p>
+                </div>
+                <div class="card-body">
+                    <p class="text-gray-300">Diese Card hat einen Schatten-Effekt für mehr Tiefe.</p>
+                </div>
+            </div>
+
+            <!-- Interactive Card -->
+            <div class="card card-interactive">
+                <div class="card-header">
+                    <h3 class="card-title">Interactive Card</h3>
+                    <p class="card-subtitle">Hover für Effekt</p>
+                </div>
+                <div class="card-body">
+                    <p class="text-gray-300">Diese Card reagiert auf Hover mit Animation.</p>
+                </div>
+            </div>
+
+            <!-- Card without sections -->
+            <div class="card">
+                <p class="text-gray-300">Einfache Card ohne Header und Footer Sektionen.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Forms -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Formulare</h2>
+        
+        <div class="card">
+            <form class="space-y-6">
+                <!-- Text Input -->
+                <div>
+                    <label class="form-label" for="demo-name">Name</label>
+                    <input type="text" id="demo-name" class="form-input" placeholder="Ihr Name">
+                    <p class="form-help">Bitte geben Sie Ihren vollständigen Namen ein</p>
+                </div>
+
+                <!-- Email Input -->
+                <div>
+                    <label class="form-label" for="demo-email">E-Mail</label>
+                    <input type="email" id="demo-email" class="form-input" placeholder="name@example.com">
+                </div>
+
+                <!-- Textarea -->
+                <div>
+                    <label class="form-label" for="demo-message">Nachricht</label>
+                    <textarea id="demo-message" class="form-textarea" rows="4" placeholder="Ihre Nachricht..."></textarea>
+                </div>
+
+                <!-- Select -->
+                <div>
+                    <label class="form-label" for="demo-status">Status</label>
+                    <select id="demo-status" class="form-select">
+                        <option>Aktiv</option>
+                        <option>Inaktiv</option>
+                        <option>Ausstehend</option>
+                    </select>
+                </div>
+
+                <!-- Error State -->
+                <div>
+                    <label class="form-label" for="demo-error">E-Mail (Error State)</label>
+                    <input type="email" id="demo-error" class="form-input form-input-error" value="invalid-email">
+                    <p class="form-error">Bitte geben Sie eine gültige E-Mail ein</p>
+                </div>
+
+                <!-- Success State -->
+                <div>
+                    <label class="form-label" for="demo-success">E-Mail (Success State)</label>
+                    <input type="email" id="demo-success" class="form-input form-input-success" value="valid@example.com">
+                </div>
+
+                <!-- Disabled State -->
+                <div>
+                    <label class="form-label" for="demo-disabled">Deaktiviert</label>
+                    <input type="text" id="demo-disabled" class="form-input" value="Deaktiviert" disabled>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex gap-3">
+                    <button type="submit" class="btn btn-primary">Absenden</button>
+                    <button type="reset" class="btn btn-secondary">Zurücksetzen</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Badges -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Badges</h2>
+        
+        <div class="card">
+            <div class="flex flex-wrap gap-3">
+                <span class="badge badge-primary">Primary</span>
+                <span class="badge badge-secondary">Secondary</span>
+                <span class="badge badge-success">Success</span>
+                <span class="badge badge-error">Error</span>
+                <span class="badge badge-warning">Warning</span>
+                <span class="badge badge-info">Info</span>
+            </div>
+
+            <div class="mt-6">
+                <h3 class="text-lg font-semibold text-gray-200 mb-3">Praktische Beispiele</h3>
+                <div class="flex flex-wrap gap-3">
+                    <span class="badge badge-success">✓ Aktiv</span>
+                    <span class="badge badge-error">✕ Inaktiv</span>
+                    <span class="badge badge-warning">⚠ Ausstehend</span>
+                    <span class="badge badge-primary">42 Neu</span>
+                    <span class="badge badge-info">ℹ Info</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Utility Classes -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Utility Classes</h2>
+        
+        <!-- Text Colors -->
+        <div class="card mb-6">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Textfarben</h3>
+            <div class="space-y-2">
+                <p class="text-primary">text-primary - Primärfarbe</p>
+                <p class="text-secondary">text-secondary - Sekundäre Textfarbe</p>
+                <p class="text-muted">text-muted - Gedämpfter Text</p>
+                <p class="text-success">text-success - Erfolg</p>
+                <p class="text-error">text-error - Fehler</p>
+                <p class="text-warning">text-warning - Warnung</p>
+            </div>
+        </div>
+
+        <!-- Border Radius -->
+        <div class="card mb-6">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Border Radius</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-primary/20 p-4 rounded-sm text-center">rounded-sm</div>
+                <div class="bg-primary/20 p-4 rounded text-center">rounded</div>
+                <div class="bg-primary/20 p-4 rounded-md text-center">rounded-md</div>
+                <div class="bg-primary/20 p-4 rounded-lg text-center">rounded-lg</div>
+                <div class="bg-primary/20 p-4 rounded-xl text-center">rounded-xl</div>
+                <div class="bg-primary/20 p-4 rounded-2xl text-center">rounded-2xl</div>
+                <div class="bg-primary/20 p-4 rounded-full text-center">rounded-full</div>
+            </div>
+        </div>
+
+        <!-- Shadows -->
+        <div class="card">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Schatten</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div class="bg-dark-800 p-4 shadow-sm text-center rounded-lg">shadow-sm</div>
+                <div class="bg-dark-800 p-4 shadow text-center rounded-lg">shadow</div>
+                <div class="bg-dark-800 p-4 shadow-md text-center rounded-lg">shadow-md</div>
+                <div class="bg-dark-800 p-4 shadow-lg text-center rounded-lg">shadow-lg</div>
+                <div class="bg-dark-800 p-4 shadow-xl text-center rounded-lg">shadow-xl</div>
+                <div class="bg-dark-800 p-4 shadow-2xl text-center rounded-lg">shadow-2xl</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Examples -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Code-Beispiele</h2>
+        
+        <div class="card">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">Button Beispiel</h3>
+            <pre class="bg-dark-900 p-4 rounded-lg overflow-x-auto"><code class="text-primary font-mono text-sm">&lt;button class="btn btn-primary"&gt;
+    Primary Button
+&lt;/button&gt;
+
+&lt;button class="btn btn-success btn-lg"&gt;
+    Large Success Button
+&lt;/button&gt;</code></pre>
+        </div>
+
+        <div class="card mt-6">
+            <h3 class="text-xl font-semibold text-gray-200 mb-4">CSS Variables Beispiel</h3>
+            <pre class="bg-dark-900 p-4 rounded-lg overflow-x-auto"><code class="text-primary font-mono text-sm">&lt;div style="
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    padding: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+"&gt;
+    Custom styled element
+&lt;/div&gt;</code></pre>
+        </div>
+    </section>
+
+    <!-- Resources -->
+    <section class="mb-12">
+        <h2 class="text-3xl font-bold text-gray-100 mb-6">Ressourcen</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="card card-interactive">
+                <div class="text-4xl mb-3">📚</div>
+                <h3 class="text-xl font-semibold text-gray-200 mb-2">Dokumentation</h3>
+                <p class="text-gray-400 mb-4">Vollständige Design System Dokumentation</p>
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper/blob/main/telis_recruitment/DESIGN_SYSTEM.md" 
+                   target="_blank" 
+                   class="btn btn-outline btn-sm">
+                    Ansehen →
+                </a>
+            </div>
+
+            <div class="card card-interactive">
+                <div class="text-4xl mb-3">🎨</div>
+                <h3 class="text-xl font-semibold text-gray-200 mb-2">CSS Datei</h3>
+                <p class="text-gray-400 mb-4">Design System CSS Source Code</p>
+                <code class="text-xs bg-dark-900 px-2 py-1 rounded text-primary block mb-4">
+                    static/css/design-system.css
+                </code>
+            </div>
+
+            <div class="card card-interactive">
+                <div class="text-4xl mb-3">🔧</div>
+                <h3 class="text-xl font-semibold text-gray-200 mb-2">Support</h3>
+                <p class="text-gray-400 mb-4">Fragen oder Feedback?</p>
+                <a href="{% url 'support-bundle' %}" class="btn btn-outline btn-sm">
+                    Support →
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
