@@ -383,7 +383,7 @@ class ProcessManager:
             'error_rate': self.retry_controller.calculate_error_rate(),
             # Circuit breaker information
             'circuit_breaker_state': self.circuit_breaker.state.value,
-            'circuit_breaker_failures': self.circuit_breaker.failure_count,
+            'circuit_breaker_failures': self.circuit_breaker.failures,
         }
         
         # Add circuit breaker penalty info if open
