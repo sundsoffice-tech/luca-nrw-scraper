@@ -237,7 +237,7 @@
 
 <script>
 async function deleteProject() {
-    if (!confirm('Projekt "{{ project.name }}" wirklich löschen? Alle zugehörigen Seiten werden ebenfalls gelöscht.')) {
+    if (!confirm('Projekt "{{ project.name|escapejs }}" wirklich löschen? Alle zugehörigen Seiten werden ebenfalls gelöscht.')) {
         return;
     }
     

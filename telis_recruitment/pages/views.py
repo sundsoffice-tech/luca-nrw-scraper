@@ -1,6 +1,10 @@
 """Views for pages app - builder and public page rendering"""
 import json
 import logging
+import os
+import zipfile
+import shutil
+from pathlib import Path
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -8,9 +12,15 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils import timezone
+from django.utils.text import slugify
 from django.db import transaction, models as db_models
+from django.db.models import Count
+from django.conf import settings
 
-from .models import LandingPage, PageVersion, PageComponent, PageSubmission, PageAsset, BrandSettings, PageTemplate
+from .models import (
+    Project, LandingPage, PageVersion, PageComponent, PageSubmission, 
+    PageAsset, BrandSettings, PageTemplate
+)
 from leads.models import Lead
 from leads.services.brevo import sync_lead_to_brevo
 
@@ -472,13 +482,6 @@ def quick_create(request):
 @require_POST
 def upload_project(request):
     """Upload komplettes HTML/CSS/JS Projekt als ZIP"""
-    import zipfile
-    import os
-    from pathlib import Path
-    from django.conf import settings
-    from django.utils.text import slugify
-    from .models import Project
-    
     try:
         # Check if ZIP file is provided
         if 'zip_file' not in request.FILES:
@@ -660,13 +663,9 @@ def upload_project(request):
 @staff_member_required
 def project_list(request):
     """Liste aller hochgeladenen Projekte"""
-    from .models import Project
-    
-    projects = Project.objects.all().select_related('main_page', 'created_by')
-    
-    # Add page count to each project
-    for project in projects:
-        project.page_count = project.pages.count()
+    projects = Project.objects.annotate(
+        page_count=Count('pages')
+    ).select_related('main_page', 'created_by')
     
     return render(request, 'pages/project_list.html', {
         'projects': projects
@@ -676,8 +675,6 @@ def project_list(request):
 @staff_member_required
 def project_detail(request, slug):
     """Projektdetails mit allen Seiten"""
-    from .models import Project
-    
     project = get_object_or_404(Project.objects.select_related('main_page', 'created_by'), slug=slug)
     pages = project.pages.all().order_by('title')
     
@@ -691,9 +688,6 @@ def project_detail(request, slug):
 @require_POST
 def project_delete(request, slug):
     """Projekt und alle zugehörigen Seiten löschen"""
-    from .models import Project
-    import shutil
-    
     project = get_object_or_404(Project, slug=slug)
     
     try:
