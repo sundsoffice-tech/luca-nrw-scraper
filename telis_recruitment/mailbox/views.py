@@ -1,14 +1,92 @@
-"""
-Web views for Mailbox app
-"""
+"""Web views for Mailbox app"""
+from __future__ import annotations
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import FileResponse, Http404
 from django.core.paginator import Paginator
+from django.db.models import Q
+from django.contrib.auth.models import User
+from urllib.parse import quote
 
-from .models import EmailAccount, EmailConversation, Email, EmailSignature, QuickReply, EmailLabel
+from .models import EmailAccount, EmailConversation, Email, EmailSignature, QuickReply, EmailLabel, EmailAttachment
 from email_templates.models import EmailTemplate
+from leads.models import Lead
+
+
+def collect_recipient_suggestions(user_accounts):
+    """
+    Build a deduplicated suggestion list for the compose recipient field.
+    Includes past conversation contacts, lead emails, and active team members.
+    """
+    seen = set()
+    suggestions = []
+
+    def add_entry(name, email, source):
+        if not email:
+            return
+        normalized = email.strip()
+        if not normalized:
+            return
+        key = normalized.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        display_name = name.strip() if name else ''
+        suggestions.append({
+            'name': display_name or normalized.split('@')[0],
+            'email': normalized,
+            'source': source,
+        })
+
+    contact_qs = EmailConversation.objects.filter(
+        account__in=user_accounts
+    ).order_by('-last_message_at').values_list('contact_name', 'contact_email')[:160]
+    for contact_name, contact_email in contact_qs:
+        add_entry(contact_name, contact_email, 'Kontakt')
+
+    lead_qs = Lead.objects.filter(email__isnull=False).order_by('-updated_at').values_list('name', 'email')[:200]
+    for lead_name, lead_email in lead_qs:
+        add_entry(lead_name, lead_email, 'Lead')
+
+    team_members = User.objects.filter(is_active=True).exclude(email__isnull=True).exclude(email='').order_by('first_name', 'last_name')[:120]
+    for member in team_members:
+        full_name = ' '.join(filter(None, [member.first_name, member.last_name]))
+        add_entry(full_name, member.email, 'Team')
+
+    return suggestions
+
+
+def assign_lead_from_email(conversation: EmailConversation) -> Lead | None:
+    if conversation.lead_id or not conversation.contact_email:
+        return conversation.lead
+    lead = Lead.objects.filter(email__iexact=conversation.contact_email).first()
+    if lead:
+        conversation.lead = lead
+        conversation.save(update_fields=['lead'])
+    return conversation.lead
+
+
+@login_required
+def download_attachment(request, attachment_id):
+    attachment = get_object_or_404(EmailAttachment, id=attachment_id)
+    email = attachment.email
+    user_accounts = EmailAccount.objects.filter(
+        owner=request.user
+    ) | EmailAccount.objects.filter(
+        shared_with=request.user
+    )
+    if email.account not in user_accounts:
+        raise Http404()
+
+    inline = request.GET.get('inline') == '1' and (attachment.content_type or '').startswith('image/')
+    response = FileResponse(attachment.file.open('rb'), as_attachment=not inline)
+    disposition = 'inline' if inline else 'attachment'
+    filename = quote(attachment.filename or 'attachment', safe='')
+    response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
+    response['Content-Type'] = attachment.content_type or 'application/octet-stream'
+    return response
 
 
 @login_required
@@ -59,15 +137,18 @@ def inbox(request):
     # Apply search
     if search:
         conversations = conversations.filter(
-            subject__icontains=search
-        ) | conversations.filter(
-            contact_email__icontains=search
-        )
+            Q(subject__icontains=search) |
+            Q(contact_email__icontains=search) |
+            Q(messages__from_email__icontains=search) |
+            Q(messages__body_text__icontains=search)
+        ).distinct()
     
     # Paginate
     paginator = Paginator(conversations, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    for conv in page_obj.object_list:
+        assign_lead_from_email(conv)
     
     # Get unread count
     unread_count = EmailConversation.objects.filter(
@@ -109,6 +190,8 @@ def conversation_detail(request, conversation_id):
         messages.error(request, "Sie haben keine Berechtigung für diese Konversation.")
         return redirect('mailbox:inbox')
     
+    assign_lead_from_email(conversation)
+
     # Get messages in conversation
     emails = conversation.messages.all().select_related(
         'account', 'template_used'
@@ -134,9 +217,50 @@ def conversation_detail(request, conversation_id):
 
 
 @login_required
+def create_lead_from_conversation(request, conversation_id):
+    conversation = get_object_or_404(EmailConversation, id=conversation_id)
+    user_accounts = EmailAccount.objects.filter(
+        owner=request.user
+    ) | EmailAccount.objects.filter(
+        shared_with=request.user
+    )
+
+    if conversation.account not in user_accounts:
+        messages.error(request, "Sie haben keine Berechtigung für diese Konversation.")
+        return redirect('mailbox:inbox')
+
+    if request.method != 'POST':
+        return redirect('mailbox:conversation', conversation_id=conversation.id)
+
+    if conversation.lead:
+        messages.info(request, "Diese Konversation ist bereits einem Lead zugeordnet.")
+        return redirect('mailbox:conversation', conversation_id=conversation.id)
+
+    lead = Lead.objects.filter(email__iexact=conversation.contact_email).first()
+    if not lead:
+        lead = Lead.objects.create(
+            name=conversation.contact_name or conversation.contact_email,
+            email=conversation.contact_email,
+            status=Lead.Status.NEW
+        )
+        messages.success(request, "Lead angelegt und verknüpft.")
+    else:
+        messages.success(request, "Lead gefunden und verknüpft.")
+
+    conversation.lead = lead
+    conversation.save(update_fields=['lead'])
+
+    return redirect('mailbox:conversation', conversation_id=conversation.id)
+
+
+@login_required
 def compose(request):
     """Neue Email schreiben"""
-    # Get user's accounts
+    user_accounts = EmailAccount.objects.filter(
+        owner=request.user, is_active=True
+    ) | EmailAccount.objects.filter(
+        shared_with=request.user, is_active=True
+    )
     accounts = EmailAccount.objects.filter(
         owner=request.user, is_active=True
     )
@@ -255,6 +379,7 @@ def compose(request):
         'quick_replies': quick_replies,
         'to_email': to_email,
         'lead_id': lead_id,
+        'recipient_suggestions': collect_recipient_suggestions(user_accounts),
     }
     
     return render(request, 'mailbox/compose.html', context)

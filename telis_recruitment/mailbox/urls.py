@@ -22,11 +22,13 @@ urlpatterns = [
     path('', views.inbox, name='inbox'),
     path('compose/', views.compose, name='compose'),
     path('conversation/<int:conversation_id>/', views.conversation_detail, name='conversation'),
+    path('conversation/<int:conversation_id>/create-lead/', views.create_lead_from_conversation, name='conversation-create-lead'),
     path('reply/<int:email_id>/', views.reply, name='reply'),
     path('forward/<int:email_id>/', views.forward, name='forward'),
     path('settings/', views.account_settings, name='settings'),
     path('signatures/', views.signatures, name='signatures'),
     path('quick-replies/', views.quick_replies_view, name='quick-replies'),
+    path('attachment/<int:attachment_id>/download/', views.download_attachment, name='attachment-download'),
     
     # API
     path('api/', include(router.urls)),

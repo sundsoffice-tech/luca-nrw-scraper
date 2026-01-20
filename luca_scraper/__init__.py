@@ -165,6 +165,7 @@ from .database import (
     init_db,
     transaction,
     migrate_db_unique_indexes,
+    sync_status_to_scraper,
 )
 
 # =========================
@@ -422,6 +423,7 @@ __all__ = [
     "init_db",
     "transaction",
     "migrate_db_unique_indexes",
+    "sync_status_to_scraper",
     
     # Search Module (Phase 3)
     "DEFAULT_QUERIES",

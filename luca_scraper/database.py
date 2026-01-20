@@ -5,11 +5,12 @@ SQLite Connection und Schema Management
 Phase 1 der Modularisierung.
 """
 
+import logging
 import sqlite3
 import threading
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 # Import DB_PATH from config
 from .config import DB_PATH as _DB_PATH_STR
@@ -23,6 +24,8 @@ _db_local = threading.local()
 # Global flag for schema initialization with thread lock
 _DB_READY = False
 _DB_READY_LOCK = threading.Lock()
+
+logger = logging.getLogger(__name__)
 
 
 def db() -> sqlite3.Connection:
@@ -145,7 +148,8 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       private_address TEXT,
       social_profile_url TEXT,
       ai_category TEXT,
-      ai_summary TEXT
+      ai_summary TEXT,
+      crm_status TEXT
       -- neue Spalten werden unten per ALTER TABLE nachgezogen
     );
 
@@ -208,6 +212,8 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_category TEXT")
     if "ai_summary" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_summary TEXT")
+    if "crm_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN crm_status TEXT")
     
     # Candidate-specific columns
     if "experience_years" not in existing_cols:
@@ -289,7 +295,7 @@ def migrate_db_unique_indexes():
           recency_indicator TEXT, location_specific TEXT, confidence_score INT,
           last_updated TEXT, data_quality INT, phone_type TEXT, whatsapp_link TEXT,
           private_address TEXT, social_profile_url TEXT, ai_category TEXT,
-          ai_summary TEXT, lead_type TEXT, experience_years INTEGER, skills TEXT,
+          ai_summary TEXT, crm_status TEXT, lead_type TEXT, experience_years INTEGER, skills TEXT,
           availability TEXT, current_status TEXT, industries TEXT, location TEXT,
           profile_text TEXT, candidate_status TEXT, mobility TEXT,
           industries_experience TEXT, source_type TEXT, profile_url TEXT,
@@ -311,5 +317,85 @@ def migrate_db_unique_indexes():
         print("Successfully migrated database schema")
 
 
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    """Normalize emails for matching by trimming and lower-casing."""
+    if not value:
+        return None
+    return value.strip().lower()
+
+
+def _normalize_phone(value: Optional[str]) -> Optional[str]:
+    """Keep only digits when normalizing phone numbers for lookup."""
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return digits or None
+
+
+def _build_crm_status_index() -> Optional[Tuple[Dict[str, str], Dict[str, str]]]:
+    """Load CRM lead statuses indexed by email and phone."""
+    try:
+        from telis_recruitment.leads.models import Lead
+    except Exception as exc:
+        logger.debug("CRM models unavailable for status sync: %s", exc)
+        return None
+
+    email_index: Dict[str, str] = {}
+    phone_index: Dict[str, str] = {}
+
+    try:
+        queryset = Lead.objects.filter(source=Lead.Source.SCRAPER).values("email", "telefon", "status")
+    except Exception as exc:
+        logger.warning("Failed to load CRM lead statuses: %s", exc)
+        return None
+
+    for row in queryset:
+        status = row.get("status")
+        if not status:
+            continue
+        normalized_email = _normalize_email(row.get("email"))
+        if normalized_email:
+            email_index[normalized_email] = status
+        normalized_phone = _normalize_phone(row.get("telefon"))
+        if normalized_phone:
+            phone_index[normalized_phone] = status
+
+    return email_index, phone_index
+
+
+def sync_status_to_scraper() -> Dict[str, int]:
+    """
+    Synchronize CRM lead statuses back into the scraper database.
+
+    This keeps the local SQLite DB aware of which leads were already acted upon
+    so the scraper can avoid reprocessing them.
+    """
+    index = _build_crm_status_index()
+    if not index:
+        return {"checked": 0, "updated": 0}
+
+    email_index, phone_index = index
+    stats = {"checked": 0, "updated": 0}
+
+    with transaction() as con:
+        cur = con.cursor()
+        cur.execute("SELECT id, email, telefon, crm_status FROM leads WHERE email IS NOT NULL OR telefon IS NOT NULL")
+        rows = cur.fetchall()
+        stats["checked"] = len(rows)
+
+        for row in rows:
+            new_status = None
+            if row["email"]:
+                new_status = email_index.get(_normalize_email(row["email"]))
+            if not new_status and row["telefon"]:
+                new_status = phone_index.get(_normalize_phone(row["telefon"]))
+            if new_status and new_status != row["crm_status"]:
+                cur.execute("UPDATE leads SET crm_status = ? WHERE id = ?", (new_status, row["id"]))
+                stats["updated"] += 1
+
+    logger.debug("sync_status_to_scraper updated %d rows (checked %d)", stats["updated"], stats["checked"])
+    return stats
+
+
 # Export the global ready flag for external access
-__all__ = ['db', 'init_db', 'transaction', 'DB_PATH', 'migrate_db_unique_indexes']
+__all__ = ['db', 'init_db', 'transaction', 'DB_PATH', 'migrate_db_unique_indexes', 'sync_status_to_scraper']

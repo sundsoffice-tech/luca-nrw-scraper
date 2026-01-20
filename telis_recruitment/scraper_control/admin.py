@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 from .models import ScraperConfig, ScraperRun, ScraperLog, ErrorLog, SearchRegion, SearchDork, PortalSource, BlacklistEntry
@@ -12,11 +13,11 @@ if admin.site.is_registered(ScraperConfig):
 class ScraperConfigAdmin(ModelAdmin):
     """Admin interface for ScraperConfig"""
     
-    list_display = ['id', 'industry', 'mode', 'qpi', 'smart', 'force', 'once', 'dry_run', 'updated_at', 'updated_by']
+    list_display = ['id', 'industry', 'mode', 'qpi', 'smart', 'force', 'once', 'dry_run', 'config_version', 'updated_at', 'updated_by']
     list_filter = ['industry', 'mode', 'smart', 'force', 'once', 'dry_run']
-    readonly_fields = ['updated_at', 'updated_by']
+    readonly_fields = ['config_version', 'updated_at', 'updated_by']
     
-    fieldsets = (
+    BASE_FIELDSETS = (
         ('Basis-Einstellungen', {
             'fields': ('industry', 'mode', 'qpi', 'daterestrict'),
         }),
@@ -49,10 +50,25 @@ class ScraperConfigAdmin(ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Metadaten', {
-            'fields': ('updated_at', 'updated_by'),
+            'fields': ('config_version', 'updated_at', 'updated_by'),
             'classes': ('collapse',),
         }),
     )
+    fieldsets = BASE_FIELDSETS
+    SECURITY_FIELDSET = (
+        'Sicherheit',
+        {
+            'fields': ('allow_insecure_ssl',),
+            'classes': ('collapse',),
+            'description': 'Unsichere SSL-Verbindungen nur im Debug-Modus ändern.',
+        }
+    )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = list(self.BASE_FIELDSETS)
+        if settings.DEBUG:
+            fieldsets.append(self.SECURITY_FIELDSET)
+        return tuple(fieldsets)
     
     def save_model(self, request, obj, form, change):
         """Set updated_by to current user"""

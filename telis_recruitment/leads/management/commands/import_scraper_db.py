@@ -349,6 +349,11 @@ class Command(BaseCommand):
             if parsed_value is not None:
                 field_data[django_field] = parsed_value
         
+        # Normalize AI-derived arrays before special handling
+        for list_field in ('skills', 'qualifications'):
+            if list_field in field_data and not isinstance(field_data[list_field], list):
+                field_data[list_field] = [field_data[list_field]]
+
         # Handle special cases
         # Extract role (prefer role_guess over rolle)
         if 'role' not in field_data:

@@ -64,6 +64,7 @@ def get_scraper_config() -> Dict[str, Any]:
             
             # Security
             'allow_insecure_ssl': config.allow_insecure_ssl,
+            'config_version': config.config_version,
         }
     except Exception as e:
         logger.warning(f"Could not load scraper config from DB: {e}")

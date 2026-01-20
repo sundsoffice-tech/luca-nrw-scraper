@@ -5,6 +5,8 @@ Handles scraper start/stop/status and live logs via SSE.
 
 import json
 import time
+import psutil
+from django.conf import settings
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.contrib.admin.views.decorators import staff_member_required
@@ -18,6 +20,57 @@ from .models import ScraperRun, ScraperConfig, ScraperLog
 import logging
 
 logger = logging.getLogger(__name__)
+
+TRUTHY_VALUES = {"1", "true", "yes", "on"}
+
+
+def _get_client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "unknown")
+
+
+def _sanitize_scraper_params(raw_params):
+    """Validate and normalize scraper parameters before building a command."""
+    params = raw_params.copy()
+    valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
+    valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
+
+    industry = params.get('industry', 'recruiter')
+    if industry not in valid_industries:
+        raise ValueError(f"Ungültige Industry: {industry}. Erlaubt: {', '.join(valid_industries)}")
+    params['industry'] = industry
+
+    mode = params.get('mode', 'standard')
+    if mode not in valid_modes:
+        logger.warning(f"Unknown mode '{mode}', falling back to 'standard'")
+        mode = 'standard'
+    params['mode'] = mode
+
+    try:
+        qpi = int(params.get('qpi', 15))
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid QPI value '{params.get('qpi')}', using default 15")
+        qpi = 15
+    qpi = max(1, min(100, qpi))
+    params['qpi'] = qpi
+
+    daterestrict = params.get('daterestrict', '')
+    if daterestrict and daterestrict.strip():
+        params['daterestrict'] = daterestrict.strip()
+    else:
+        params['daterestrict'] = ''
+
+    for flag in ['smart', 'force', 'once', 'dry_run']:
+        if flag in params:
+            params[flag] = bool(params[flag])
+
+    if params.get('dry_run') and params.get('mode') == 'aggressive':
+        logger.warning("dry_run + aggressive mode is not recommended, falling back to standard")
+        params['mode'] = 'standard'
+
+    return params
 
 
 @staff_member_required
@@ -101,43 +154,7 @@ def api_scraper_start(request):
     }
     """
     try:
-        # Get available choices from model
-        from .models import ScraperConfig
-        valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
-        valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
-        
-        params = request.data.copy()  # Mutable copy - request.data is immutable, we need to modify for parameter sanitization
-        
-        # Validate and set defaults for industry
-        industry = params.get('industry', 'recruiter')
-        if industry not in valid_industries:
-            return Response({
-                'success': False,
-                'error': f'Ungültige Industry: {industry}. Erlaubt: {", ".join(valid_industries)}'
-            }, status=http_status.HTTP_400_BAD_REQUEST)
-        
-        # Validate and sanitize mode with fallback
-        mode = params.get('mode', 'standard')
-        if mode not in valid_modes:
-            logger.warning(f"Unknown mode '{mode}', falling back to 'standard'")
-            params['mode'] = 'standard'
-        
-        # Validate and clamp QPI
-        qpi = params.get('qpi', 15)
-        try:
-            qpi = int(qpi)
-            qpi = max(1, min(100, qpi))  # Clamp between 1 and 100
-            params['qpi'] = qpi
-        except (ValueError, TypeError):
-            logger.warning(f"Invalid QPI value '{qpi}', using default 15")
-            params['qpi'] = 15
-        
-        # Check parameter dependencies
-        if params.get('dry_run') and params.get('mode') == 'aggressive':
-            logger.warning("dry_run + aggressive mode is not recommended, falling back to standard")
-            params['mode'] = 'standard'
-        
-        # Start scraper with validated params
+        params = _sanitize_scraper_params(request.data)
         manager = get_manager()
         result = manager.start(params, user=request.user)
         
@@ -151,6 +168,34 @@ def api_scraper_start(request):
         return Response({
             'success': False,
             'error': str(e)
+        }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def api_preview_command(request):
+    """
+    POST /crm/scraper/api/scraper/preview-command/
+
+    Return a preview of the scraper command based on supplied parameters.
+    """
+    try:
+        params = _sanitize_scraper_params(request.data)
+        manager = get_manager()
+        command = manager.preview_command(params)
+        return Response({
+            'command': command
+        }, status=http_status.HTTP_200_OK)
+    except ValueError as exc:
+        return Response({
+            'success': False,
+            'error': str(exc)
+        }, status=http_status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        logger.error(f"Error previewing scraper command: {exc}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(exc)
         }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -245,6 +290,39 @@ def api_scraper_logs_stream(request):
     return response
 
 
+@require_GET
+@staff_member_required
+def api_metrics_stream(request):
+    """
+    GET /crm/scraper/api/metrics-stream/
+    Stream CPU, memory, and leads metrics every 2 seconds.
+    """
+    def event_stream():
+        manager = get_manager()
+        while True:
+            try:
+                stats = manager.get_status()
+                payload = {
+                    'cpu_percent': psutil.cpu_percent(interval=None),
+                    'memory_mb': psutil.virtual_memory().used / (1024 * 1024),
+                    'leads_found': stats.get('leads_found', 0),
+                    'uptime_seconds': stats.get('uptime_seconds', 0),
+                }
+                event = json.dumps({'type': 'metrics', 'payload': payload})
+                yield f"data: {event}\n\n"
+                time.sleep(2)
+            except GeneratorExit:
+                break
+            except Exception as exc:
+                logger.error(f"Error streaming metrics: {exc}", exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+                break
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def api_scraper_config(request):
@@ -300,44 +378,27 @@ def api_scraper_config_update(request):
     try:
         config = ScraperConfig.get_config()
         
-        # Get available choices for validation
-        valid_industries = [c[0] for c in ScraperConfig.INDUSTRY_CHOICES]
-        valid_modes = [c[0] for c in ScraperConfig.MODE_CHOICES]
+        if 'allow_insecure_ssl' in request.data:
+            if not settings.DEBUG:
+                client_ip = _get_client_ip(request)
+                logger.warning(
+                    "Blocked production API attempt to change allow_insecure_ssl from %s (user=%s)",
+                    client_ip,
+                    request.user.username,
+                )
+                return Response({
+                    'success': False,
+                    'error': 'allow_insecure_ssl darf in der Produktionsumgebung nicht per API geändert werden.',
+                }, status=http_status.HTTP_403_FORBIDDEN)
+            config.allow_insecure_ssl = str(request.data['allow_insecure_ssl']).lower() in TRUTHY_VALUES
         
-        # Update fields with validation
+        # Update fields
         if 'industry' in request.data:
-            industry = request.data['industry']
-            if industry not in valid_industries:
-                return Response({
-                    'success': False,
-                    'error': f'Ungültige Industry. Erlaubt: {", ".join(valid_industries)}'
-                }, status=http_status.HTTP_400_BAD_REQUEST)
-            config.industry = industry
-            
+            config.industry = request.data['industry']
         if 'mode' in request.data:
-            mode = request.data['mode']
-            if mode not in valid_modes:
-                return Response({
-                    'success': False,
-                    'error': f'Ungültiger Mode. Erlaubt: {", ".join(valid_modes)}'
-                }, status=http_status.HTTP_400_BAD_REQUEST)
-            config.mode = mode
-            
+            config.mode = request.data['mode']
         if 'qpi' in request.data:
-            try:
-                qpi = int(request.data['qpi'])
-                if not 1 <= qpi <= 100:
-                    return Response({
-                        'success': False,
-                        'error': 'QPI muss zwischen 1 und 100 liegen'
-                    }, status=http_status.HTTP_400_BAD_REQUEST)
-                config.qpi = qpi
-            except (ValueError, TypeError):
-                return Response({
-                    'success': False,
-                    'error': 'QPI muss eine Zahl sein'
-                }, status=http_status.HTTP_400_BAD_REQUEST)
-                
+            config.qpi = int(request.data['qpi'])
         if 'daterestrict' in request.data:
             config.daterestrict = request.data['daterestrict']
         if 'smart' in request.data:
@@ -372,48 +433,8 @@ def api_scraper_runs(request):
     GET /crm/scraper/api/scraper/runs/
     
     Get list of recent scraper runs.
-    
-    Query params:
-    - run_id: Optional - Get details for a specific run
     """
     try:
-        run_id = request.query_params.get('run_id')
-        
-        if run_id:
-            # Get specific run with full details
-            try:
-                run = ScraperRun.objects.get(id=run_id)
-                duration = run.duration
-                duration_seconds = int(duration.total_seconds()) if duration else 0
-                
-                return Response({
-                    'id': run.id,
-                    'status': run.status,
-                    'started_at': run.started_at.isoformat(),
-                    'finished_at': run.finished_at.isoformat() if run.finished_at else None,
-                    'duration_seconds': duration_seconds,
-                    'leads_found': run.leads_found,
-                    'api_cost': float(run.api_cost),
-                    'started_by': run.started_by.username if run.started_by else None,
-                    'pid': run.pid,
-                    'params_snapshot': run.params_snapshot,  # Full params
-                    # Enhanced metrics
-                    'links_checked': run.links_checked,
-                    'leads_accepted': run.leads_accepted,
-                    'leads_rejected': run.leads_rejected,
-                    'block_rate': run.block_rate,
-                    'timeout_rate': run.timeout_rate,
-                    'avg_request_time_ms': run.avg_request_time_ms,
-                    'success_rate': run.success_rate,
-                    'lead_acceptance_rate': run.lead_acceptance_rate,
-                }, status=http_status.HTTP_200_OK)
-            except ScraperRun.DoesNotExist:
-                return Response({
-                    'success': False,
-                    'error': 'Run nicht gefunden'
-                }, status=http_status.HTTP_404_NOT_FOUND)
-        
-        # Get list of runs
         runs = ScraperRun.objects.all()[:20]
         
         data = []
@@ -805,11 +826,11 @@ def api_reset_circuit_breaker(request):
     """
     POST /crm/scraper/api/control/circuit-breaker/reset/
     
-    Manually reset circuit breaker for a portal or the process manager.
+    Manually reset circuit breaker for a portal.
     
     POST data:
     {
-        "portal": "portal_name"  # Optional - if not provided, resets process manager circuit breaker
+        "portal": "portal_name"
     }
     """
     try:
@@ -817,37 +838,30 @@ def api_reset_circuit_breaker(request):
         
         portal = request.data.get('portal')
         
-        if portal:
-            # Reset portal circuit breaker
-            try:
-                portal_obj = PortalSource.objects.get(name=portal)
-                portal_obj.circuit_breaker_tripped = False
-                portal_obj.circuit_breaker_reset_at = None
-                portal_obj.consecutive_errors = 0
-                portal_obj.save()
-                
-                logger.info(f"Circuit breaker reset for portal {portal} by {request.user.username}")
-                
-                return Response({
-                    'success': True,
-                    'message': f'Circuit Breaker für {portal} zurückgesetzt'
-                }, status=http_status.HTTP_200_OK)
-            except PortalSource.DoesNotExist:
-                return Response({
-                    'success': False,
-                    'error': f'Portal {portal} nicht gefunden'
-                }, status=http_status.HTTP_404_NOT_FOUND)
-        else:
-            # Reset process manager circuit breaker
-            manager = get_manager()
-            manager.reset_error_tracking()
+        if not portal:
+            return Response({
+                'success': False,
+                'error': 'Portal-Name ist erforderlich'
+            }, status=http_status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            portal_obj = PortalSource.objects.get(name=portal)
+            portal_obj.circuit_breaker_tripped = False
+            portal_obj.circuit_breaker_reset_at = None
+            portal_obj.consecutive_errors = 0
+            portal_obj.save()
             
-            logger.info(f"Process manager circuit breaker reset by {request.user.username}")
+            logger.info(f"Circuit breaker reset for portal {portal} by {request.user.username}")
             
             return Response({
                 'success': True,
-                'message': 'Process Manager Circuit Breaker zurückgesetzt'
+                'message': f'Circuit Breaker für {portal} zurückgesetzt'
             }, status=http_status.HTTP_200_OK)
+        except PortalSource.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Portal {portal} nicht gefunden'
+            }, status=http_status.HTTP_404_NOT_FOUND)
             
     except Exception as e:
         logger.error(f"Error resetting circuit breaker: {e}", exc_info=True)

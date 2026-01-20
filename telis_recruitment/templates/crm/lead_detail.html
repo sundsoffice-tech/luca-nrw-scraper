@@ -197,10 +197,30 @@
                     </div>
                     {% endif %}
                     
-                    {% if lead.ai_summary %}
-                    <div class="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-                        <div class="text-sm text-gray-400 mb-2">🤖 AI-Zusammenfassung</div>
+                    {% if lead.ai_summary or lead.ai_category or lead.skills or lead.qualifications %}
+                    <div class="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-lg space-y-3">
+                        <div class="text-sm text-gray-400">🤖 AI Insights</div>
+                        {% if lead.ai_summary %}
                         <div class="text-gray-300">{{ lead.ai_summary }}</div>
+                        {% endif %}
+                        {% if lead.ai_category %}
+                        <div class="text-sm text-primary">
+                            <span class="font-semibold text-gray-100">Kategorie:</span>
+                            <span class="ml-1">{{ lead.ai_category }}</span>
+                        </div>
+                        {% endif %}
+                        {% if lead.skills %}
+                        <div class="text-sm text-gray-200">
+                            <span class="text-gray-400">Skills:</span>
+                            <span class="ml-1">{{ lead.skills|join:", " }}</span>
+                        </div>
+                        {% endif %}
+                        {% if lead.qualifications %}
+                        <div class="text-sm text-gray-200">
+                            <span class="text-gray-400">Qualifikationen:</span>
+                            <span class="ml-1">{{ lead.qualifications|join:", " }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                     {% endif %}
                     

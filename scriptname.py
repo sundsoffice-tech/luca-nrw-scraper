@@ -480,11 +480,11 @@ ENH_FIELDS = [
     "industry","recency_indicator","location_specific",
     "confidence_score","last_updated","data_quality",
     "phone_type","whatsapp_link","private_address","social_profile_url",
-    "ai_category","ai_summary",
+    "ai_category","ai_summary","crm_status",
     "experience_years","skills","availability","current_status","industries","location","profile_text",
     # New candidate-focused fields
     "candidate_status","mobility","industries_experience","source_type",
-    "profile_url","cv_url","contact_preference","last_activity","name_validated"
+    "profile_url","cv_url","contact_preference","last_activity","name_validated","crm_status"
 ]
 
 def export_xlsx(filename: str, rows=None):
@@ -1434,7 +1434,8 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
       private_address TEXT,
       social_profile_url TEXT,
       ai_category TEXT,
-      ai_summary TEXT
+      ai_summary TEXT,
+      crm_status TEXT
       -- neue Spalten werden unten per ALTER TABLE nachgezogen
     );
 
@@ -1491,6 +1492,8 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_category TEXT")
     if "ai_summary" not in existing_cols:
         cur.execute("ALTER TABLE leads ADD COLUMN ai_summary TEXT")
+    if "crm_status" not in existing_cols:
+        cur.execute("ALTER TABLE leads ADD COLUMN crm_status TEXT")
     
     # Candidate-specific columns (existing)
     if "experience_years" not in existing_cols:
@@ -1630,7 +1633,7 @@ def migrate_db_unique_indexes():
           company_name TEXT, company_size TEXT, hiring_volume TEXT, industry TEXT,
           recency_indicator TEXT, location_specific TEXT, confidence_score INT,
           last_updated TEXT, data_quality INT,
-          phone_type TEXT, whatsapp_link TEXT,
+          phone_type TEXT, whatsapp_link TEXT, crm_status TEXT,
           lead_type TEXT,
           private_address TEXT, social_profile_url TEXT,
           experience_years INTEGER, skills TEXT, availability TEXT,
@@ -1641,14 +1644,14 @@ def migrate_db_unique_indexes():
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          phone_type,whatsapp_link,lead_type,private_address,social_profile_url,
+          phone_type,whatsapp_link,crm_status,lead_type,private_address,social_profile_url,
           experience_years,skills,availability,current_status,industries,location,profile_text
         )
         SELECT
           id,name,rolle,email,telefon,quelle,score,tags,region,role_guess,salary_hint,
           commission_hint,opening_line,ssl_insecure,company_name,company_size,hiring_volume,
           industry,recency_indicator,location_specific,confidence_score,last_updated,data_quality,
-          '' AS phone_type, '' AS whatsapp_link, '' AS lead_type,
+          '' AS phone_type, '' AS whatsapp_link, '' AS crm_status, '' AS lead_type,
           '' AS private_address, '' AS social_profile_url,
           NULL AS experience_years, '' AS skills, '' AS availability,
           '' AS current_status, '' AS industries, '' AS location, '' AS profile_text
@@ -2274,6 +2277,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("social_profile_url",""),
                 r.get("ai_category",""),
                 r.get("ai_summary",""),
+                r.get("crm_status",""),
                 # New candidate fields
                 r.get("candidate_status",""),
                 r.get("experience_years",0),
@@ -2337,6 +2341,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 r.get("social_profile_url",""),
                 r.get("ai_category",""),
                 r.get("ai_summary",""),
+                r.get("crm_status",""),
                 # New candidate fields
                 r.get("candidate_status",""),
                 r.get("experience_years",0),

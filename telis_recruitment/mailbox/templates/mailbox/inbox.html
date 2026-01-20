@@ -1,95 +1,67 @@
 {% extends "crm/base.html" %}
-{% load static %}
+{% load static mailbox_extras %}
 
 {% block title %}📬 Posteingang - Mailbox{% endblock %}
 
 {% block extra_head %}
 <style>
-    /* Mailbox Navigation Tabs */
-    .mailbox-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 1.5rem;
-        padding: 1rem;
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
+    .mailbox-sidebar {
+        background: #1a1a2e;
+        border-right: 1px solid #2d2d44;
+        min-height: calc(100vh - 60px);
     }
-    .nav-tab {
-        display: inline-flex;
-        align-items: center;
-        color: #94a3b8;
-        padding: 10px 16px;
+    .mailbox-sidebar .nav-link {
+        color: #a0a0b0;
+        padding: 12px 20px;
         border-radius: 8px;
+        margin: 4px 12px;
         transition: all 0.2s;
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 500;
-        border: 1px solid transparent;
     }
-    .nav-tab:hover {
+    .mailbox-sidebar .nav-link:hover {
         background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
+        color: #fff;
     }
-    .nav-tab.active {
+    .mailbox-sidebar .nav-link.active {
         background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         color: #fff;
-        border-color: #6366f1;
-    }
-    .nav-tab .badge-count {
-        background: rgba(255, 255, 255, 0.2);
-        color: #fff;
-        font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 12px;
-        margin-left: 8px;
-    }
-    .nav-tab:not(.active) .badge-count {
-        background: #6366f1;
-    }
-    .compose-btn {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        color: #fff;
-        font-weight: 600;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        font-size: 14px;
-        margin-left: auto;
-    }
-    .compose-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
     }
     .conversation-item {
         padding: 16px 20px;
-        border-bottom: 1px solid #334155;
+        border-bottom: 1px solid #2d2d44;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: box-shadow 0.3s ease, background 0.25s ease, border-left 0.25s ease;
+        will-change: box-shadow, background;
     }
     .conversation-item:hover {
         background: rgba(99, 102, 241, 0.05);
     }
     .conversation-item.unread {
-        background: rgba(99, 102, 241, 0.1);
-        border-left: 3px solid #6366f1;
+        background: rgba(99, 102, 241, 0.18);
+        border-left: 4px solid #5b2df4;
+        font-weight: 600;
+        animation: unreadEntrance 0.4s ease-out;
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.4);
+    }
+    @keyframes unreadEntrance {
+        from {
+            transform: translateY(6px);
+            opacity: 0.4;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
     }
     .conversation-item .subject {
         font-weight: 500;
-        color: #f1f5f9;
+        color: #fff;
         margin-bottom: 4px;
     }
     .conversation-item.unread .subject {
         font-weight: 700;
     }
     .conversation-item .snippet {
-        color: #64748b;
+        color: #888;
         font-size: 14px;
         white-space: nowrap;
         overflow: hidden;
@@ -102,270 +74,335 @@
         margin-bottom: 8px;
     }
     .conversation-item .contact {
-        color: #94a3b8;
+        color: #a0a0b0;
         font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .conversation-item.unread .contact::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        background: #60a5fa;
+        border-radius: 999px;
+        display: inline-block;
+        box-shadow: 0 0 8px rgba(96, 165, 250, 0.9);
     }
     .conversation-item .time {
-        color: #64748b;
+        color: #666;
         font-size: 12px;
     }
-    /* Badge styles */
-    .badge-base {
+    .badge-count {
+        background: #6366f1;
         color: #fff;
         font-size: 11px;
         padding: 2px 8px;
-        display: inline-block;
-    }
-    .badge-info {
-        background: #06b6d4;
-        border-radius: 4px;
-    }
-    .badge-count-conversation {
-        background: #6366f1;
         border-radius: 12px;
     }
     .star-btn {
-        color: #64748b;
+        color: #666;
         background: none;
         border: none;
         cursor: pointer;
         font-size: 18px;
-        transition: color 0.2s;
-    }
-    .star-btn:hover {
-        color: #94a3b8;
     }
     .star-btn.starred {
         color: #fbbf24;
     }
-    .mailbox-content {
-        background: #0f172a;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        overflow: hidden;
+    .compose-btn {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 600;
+        width: 100%;
+        margin-bottom: 20px;
     }
-    .search-actions-bar {
-        padding: 1rem;
-        border-bottom: 1px solid #334155;
-        display: flex;
-        gap: 0.75rem;
-        align-items: center;
-    }
-    .search-actions-bar form {
-        flex-grow: 1;
+    .compose-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
     }
     .search-box {
-        background: #1e293b;
-        border: 1px solid #334155;
+        background: #16162a;
+        border: 1px solid #2d2d44;
         border-radius: 8px;
         padding: 12px 16px;
-        color: #f1f5f9;
-        width: 100%;
+        color: #fff;
     }
     .search-box:focus {
         border-color: #6366f1;
         outline: none;
         box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
     }
-    .action-btn, .action-btn-danger {
-        padding: 8px 16px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        border: 1px solid #334155;
-        background: #1e293b;
-        color: #94a3b8;
-        cursor: pointer;
-        transition: all 0.2s;
+    .shortcut-help {
+        position: relative;
     }
-    .action-btn:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
-    }
-    .action-btn-danger {
-        border-color: #991b1b;
-        color: #fca5a5;
-    }
-    .action-btn-danger:hover {
-        background: rgba(220, 38, 38, 0.1);
-        border-color: #dc2626;
-        color: #fee2e2;
-    }
-    .checkbox-input {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-        accent-color: #6366f1;
-    }
-    .conversation-list {
-        min-height: 400px;
-    }
-    .pagination-link {
-        padding: 6px 12px;
-        border-radius: 6px;
-        background: #1e293b;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        text-decoration: none;
-        transition: all 0.2s;
-    }
-    .pagination-link:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
-    }
-    .pagination-info {
-        padding: 6px 12px;
-        color: #94a3b8;
-        font-size: 14px;
-    }
-    .pagination-container {
-        padding: 1rem;
-        border-top: 1px solid #334155;
-    }
-    /* Secondary Navigation */
-    .secondary-nav-container {
+    .shortcut-help-button {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 1px solid #2d2d44;
+        background: #0f0f1a;
+        color: #a0a0b0;
+        font-weight: 700;
+        font-size: 18px;
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        padding: 1rem;
-        background: #1e293b;
-        border: 1px solid #334155;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+    }
+    .shortcut-help-button:hover {
+        border-color: #6366f1;
+        color: #fff;
+        background: #13162a;
+    }
+    .shortcut-help-box {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        background: #0f0f1a;
         border-radius: 12px;
+        border: 1px solid #1f2937;
+        padding: 12px;
+        min-width: 220px;
+        box-shadow: 0 14px 35px rgba(15, 23, 42, 0.6);
+        z-index: 20;
     }
-    .secondary-nav-title {
-        color: #64748b;
-        font-size: 12px;
+    .shortcut-help-box ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: #cbd5f5;
+    }
+    .shortcut-help-box .shortcut-key {
+        display: inline-flex;
+        border-radius: 6px;
+        padding: 1px 6px;
+        background: #111426;
+        border: 1px solid #2d2d44;
+        font-size: 11px;
         font-weight: 600;
+        margin-right: 6px;
         text-transform: uppercase;
-        margin-bottom: 0.5rem;
-        padding: 0 1rem;
     }
-    /* Utility classes */
-    .flex { display: flex; }
-    .flex-col { flex-direction: column; }
-    .flex-grow { flex-grow: 1; }
-    .items-start { align-items: flex-start; }
-    .items-center { align-items: center; }
-    .justify-center { justify-content: center; }
-    .gap-2 { gap: 0.5rem; }
-    .gap-3 { gap: 0.75rem; }
-    .mr-3 { margin-right: 0.75rem; }
-    .ml-2 { margin-left: 0.5rem; }
-    .mt-1 { margin-top: 0.25rem; }
-    .mb-2 { margin-bottom: 0.5rem; }
-    .mb-0 { margin-bottom: 0; }
-    .p-3 { padding: 0.75rem; }
-    .py-12 { padding-top: 3rem; padding-bottom: 3rem; }
-    .w-full { width: 100%; }
-    .border-b { border-bottom-width: 1px; }
-    .border-t { border-top-width: 1px; }
-    .text-center { text-align: center; }
-    .text-gray-500 { color: #64748b; }
-    .no-underline { text-decoration: none; }
-    .block { display: block; }
-    .float-right { float: right; }
+    .shortcut-help-box .shortcut-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .shortcut-help-box .shortcut-row span {
+        color: #e2e8f0;
+    }
+    .mobile-menu-button {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: #13162a;
+        border: 1px solid #2d2d44;
+        color: #a0a0b0;
+        font-size: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+    .mobile-menu-button:hover {
+        border-color: #6366f1;
+        color: #fff;
+    }
+    .conversation-item {
+        touch-action: pan-y;
+    }
+
+    @media (max-width: 1100px) {
+        .mailbox-sidebar {
+            position: fixed;
+            z-index: 40;
+            top: 60px;
+            left: -320px;
+            width: 280px;
+            height: calc(100vh - 60px);
+            transition: left 0.3s ease;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.65);
+        }
+        .mailbox-sidebar.sidebar-open {
+            left: 0;
+        }
+        .mailbox-sidebar .compose-btn {
+            width: auto;
+        }
+        .conversation-item {
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 12px;
+            border: 1px solid #1f2937;
+        }
+        .conversation-list {
+            padding: 16px;
+        }
+        .mailbox-sidebar + .flex-grow-1 {
+            margin-left: 0;
+        }
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 35;
+            display: none;
+        }
+        .sidebar-overlay.visible {
+            display: block;
+        }
+        .search-box {
+            font-size: 14px;
+            padding: 10px 12px;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto">
-    <!-- Mailbox Navigation Tabs -->
-    <div class="mailbox-nav">
-        <a href="?folder=all" class="nav-tab {% if folder == 'all' %}active{% endif %}">
-            📥 Posteingang
-            {% if unread_count %}<span class="badge-count">{{ unread_count }}</span>{% endif %}
-        </a>
-        <a href="?folder=unread" class="nav-tab {% if folder == 'unread' %}active{% endif %}">
-            📧 Ungelesen
-        </a>
-        <a href="?folder=starred" class="nav-tab {% if folder == 'starred' %}active{% endif %}">
-            ⭐ Markiert
-        </a>
-        <a href="?folder=sent" class="nav-tab {% if folder == 'sent' %}active{% endif %}">
-            📤 Gesendet
-        </a>
-        <a href="?folder=drafts" class="nav-tab {% if folder == 'drafts' %}active{% endif %}">
-            📝 Entwürfe
-        </a>
-        <a href="?folder=scheduled" class="nav-tab {% if folder == 'scheduled' %}active{% endif %}">
-            ⏰ Geplant
-        </a>
-        <a href="?folder=trash" class="nav-tab {% if folder == 'trash' %}active{% endif %}">
-            🗑️ Papierkorb
-        </a>
-        <a href="{% url 'mailbox:compose' %}" class="compose-btn">
-            ✉️ Neue Email
-        </a>
+<div class="d-flex" style="min-height: calc(100vh - 60px);">
+    <!-- Sidebar -->
+    <div class="mailbox-sidebar" style="width: 280px; flex-shrink: 0;">
+        <div class="p-3">
+            <a href="{% url 'mailbox:compose' %}" class="compose-btn d-block text-center text-decoration-none">
+                ✉️ Neue Email
+            </a>
+            
+            <nav class="nav flex-column">
+                <a href="?folder=all" class="nav-link {% if folder == 'all' %}active{% endif %}">
+                    📥 Posteingang
+                    {% if unread_count %}<span class="badge-count float-end">{{ unread_count }}</span>{% endif %}
+                </a>
+                <a href="?folder=unread" class="nav-link {% if folder == 'unread' %}active{% endif %}">
+                    📧 Ungelesen
+                </a>
+                <a href="?folder=starred" class="nav-link {% if folder == 'starred' %}active{% endif %}">
+                    ⭐ Markiert
+                </a>
+                <a href="?folder=sent" class="nav-link {% if folder == 'sent' %}active{% endif %}">
+                    📤 Gesendet
+                </a>
+                <a href="?folder=drafts" class="nav-link {% if folder == 'drafts' %}active{% endif %}">
+                    📝 Entwürfe
+                </a>
+                <a href="?folder=scheduled" class="nav-link {% if folder == 'scheduled' %}active{% endif %}">
+                    ⏰ Geplant
+                </a>
+                <a href="?folder=trash" class="nav-link {% if folder == 'trash' %}active{% endif %}">
+                    🗑️ Papierkorb
+                </a>
+            </nav>
+            
+            {% if labels %}
+            <hr style="border-color: #2d2d44;">
+            <h6 class="px-3 text-muted mb-2">Labels</h6>
+            <nav class="nav flex-column">
+                {% for label in labels %}
+                <a href="?label={{ label.id }}" class="nav-link">
+                    <span style="color: {{ label.color }};">●</span> {{ label.name }}
+                </a>
+                {% endfor %}
+            </nav>
+            {% endif %}
+            
+            <hr style="border-color: #2d2d44;">
+            <nav class="nav flex-column">
+                <a href="{% url 'mailbox:settings' %}" class="nav-link">
+                    ⚙️ Einstellungen
+                </a>
+                <a href="{% url 'mailbox:signatures' %}" class="nav-link">
+                    ✍️ Signaturen
+                </a>
+                <a href="{% url 'mailbox:quick-replies' %}" class="nav-link">
+                    ⚡ Schnellantworten
+                </a>
+            </nav>
+        </div>
     </div>
     
-    <!-- Secondary Navigation (Settings) -->
-    <div class="secondary-nav-container" style="margin-top: 1rem;">
-        <div class="secondary-nav-title">Verwaltung</div>
-        <a href="{% url 'mailbox:settings' %}" class="nav-tab">
-            ⚙️ Einstellungen
-        </a>
-        <a href="{% url 'mailbox:signatures' %}" class="nav-tab">
-            ✍️ Signaturen
-        </a>
-        <a href="{% url 'mailbox:quick-replies' %}" class="nav-tab">
-            ⚡ Schnellantworten
-        </a>
-    </div>
-    
-    <!-- Main Mailbox Content -->
-    <div class="mailbox-content">
+    <!-- Main Content -->
+    <div class="flex-grow-1" style="background: #0f0f1a;">
         <!-- Search & Actions Bar -->
-        <div class="search-actions-bar">
-            <form method="get">
-                <input type="hidden" name="folder" value="{{ folder }}">
-                <input type="text" name="search" class="search-box w-full" 
-                       placeholder="🔍 Emails durchsuchen..." value="{{ search }}">
-            </form>
-            <button class="action-btn" onclick="markSelectedRead()">
-                ✓ Gelesen
-            </button>
-            <button class="action-btn" onclick="archiveSelected()">
-                📁 Archivieren
-            </button>
-            <button class="action-btn-danger" onclick="deleteSelected()">
-                🗑️ Löschen
-            </button>
+        <div class="p-3 border-bottom" style="border-color: #2d2d44 !important;">
+            <div class="d-flex gap-3 align-items-center">
+                <button type="button" id="mobile-menu-toggle" class="mobile-menu-button d-lg-none" aria-label="Sidebar öffnen">☰</button>
+                <form method="get" class="flex-grow-1">
+                    <input type="hidden" name="folder" value="{{ folder }}">
+                    <input type="text" name="search" class="search-box w-100" 
+                           placeholder="🔍 Emails durchsuchen..." value="{{ search }}">
+                </form>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="markSelectedRead()">
+                        ✓ Gelesen
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="archiveSelected()">
+                        📁 Archivieren
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteSelected()">
+                        🗑️ Löschen
+                    </button>
+                </div>
+                <div class="ms-auto position-relative shortcut-help">
+                    <button type="button" id="shortcut-help-toggle" class="shortcut-help-button" aria-label="Tastenkürzel anzeigen">?</button>
+                    <div id="shortcut-help-box" class="shortcut-help-box hidden">
+                        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Shortcuts</div>
+                        <ul>
+                            <li class="shortcut-row"><span class="shortcut-key">c</span><span>Neue E-Mail</span></li>
+                            <li class="shortcut-row"><span class="shortcut-key">r</span><span>Antworten (ausgewählt)</span></li>
+                            <li class="shortcut-row"><span class="shortcut-key">a</span><span>Alle markieren</span></li>
+                            <li class="shortcut-row"><span class="shortcut-key">s</span><span>Stern umschalten</span></li>
+                            <li class="shortcut-row"><span class="shortcut-key">Delete</span><span>In den Papierkorb</span></li>
+                            <li class="shortcut-row"><span class="shortcut-key">?</span><span>Hilfe anzeigen</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Conversation List -->
         <div class="conversation-list">
             {% for conv in page_obj %}
             <div class="conversation-item {% if not conv.is_read %}unread{% endif %}" 
+                 data-conversation-detail-url="{% url 'mailbox:conversation' conv.id %}"
+                 data-conv-id="{{ conv.id }}"
                  onclick="window.location='{% url 'mailbox:conversation' conv.id %}'">
-                <div class="flex items-start">
-                    <input type="checkbox" class="checkbox-input mr-3 mt-1" 
+                <div class="d-flex align-items-start">
+                    <input type="checkbox" class="form-check-input me-3 mt-1" 
                            onclick="event.stopPropagation();" data-id="{{ conv.id }}">
-                    <button class="star-btn mr-3 {% if conv.is_starred %}starred{% endif %}" 
+                    <button class="star-btn me-3 {% if conv.is_starred %}starred{% endif %}" 
                             onclick="event.stopPropagation(); toggleStar({{ conv.id }});">
                         {% if conv.is_starred %}★{% else %}☆{% endif %}
                     </button>
-                    <div class="flex-grow">
+                    <div class="flex-grow-1">
                         <div class="meta">
                             <span class="contact">
-                                {{ conv.contact_name|default:conv.contact_email }}
+                                {{ conv.contact_name|default:conv.contact_email|highlight:search }}
                                 {% if conv.lead %}
-                                    <span class="badge-base badge-info ml-2">Lead</span>
+                                    <span class="badge bg-info ms-2">Lead</span>
                                 {% endif %}
                             </span>
                             <span class="time">{{ conv.last_message_at|timesince }} ago</span>
                         </div>
-                        <div class="subject">{{ conv.subject|truncatewords:10 }}</div>
-                        <div class="snippet">{{ conv.messages.last.snippet|default:"" }}</div>
+                        <div class="subject">{{ conv.subject|truncatewords:10|highlight:search }}</div>
+                        <div class="snippet">{{ conv.messages.last.snippet|default:""|highlight:search }}</div>
                     </div>
                     {% if conv.message_count > 1 %}
-                    <span class="badge-base badge-count-conversation">{{ conv.message_count }}</span>
+                    <span class="badge-count">{{ conv.message_count }}</span>
                     {% endif %}
                 </div>
             </div>
             {% empty %}
-            <div class="text-center py-12 text-gray-500">
+            <div class="text-center py-5 text-muted">
                 <p style="font-size: 48px;">📭</p>
                 <p>Keine Emails in diesem Ordner</p>
             </div>
@@ -374,25 +411,38 @@
         
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
-        <div class="pagination-container">
+        <div class="p-3 border-top" style="border-color: #2d2d44 !important;">
             <nav>
-                <div class="flex justify-center items-center gap-2 mb-0">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
                     {% if page_obj.has_previous %}
-                    <a class="pagination-link" href="?page={{ page_obj.previous_page_number }}&folder={{ folder }}">←</a>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&folder={{ folder }}">←</a>
+                    </li>
                     {% endif %}
-                    <span class="pagination-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                    <li class="page-item disabled">
+                        <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                    </li>
                     {% if page_obj.has_next %}
-                    <a class="pagination-link" href="?page={{ page_obj.next_page_number }}&folder={{ folder }}">→</a>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&folder={{ folder }}">→</a>
+                    </li>
                     {% endif %}
-                </div>
+                </ul>
             </nav>
         </div>
         {% endif %}
     </div>
+    <div id="mobile-sidebar-overlay" class="sidebar-overlay"></div>
 </div>
 
 <script>
 const csrfToken = '{{ csrf_token }}';
+const composeUrl = '{% url "mailbox:compose" %}';
+const shortcutHelpButton = document.getElementById('shortcut-help-toggle');
+const shortcutHelpBox = document.getElementById('shortcut-help-box');
+const mobileSidebar = document.querySelector('.mailbox-sidebar');
+const mobileOverlay = document.getElementById('mobile-sidebar-overlay');
+const mobileToggleBtn = document.getElementById('mobile-menu-toggle');
 
 async function toggleStar(convId) {
     try {
@@ -450,13 +500,206 @@ async function deleteSelected() {
     location.reload();
 }
 
-// Keyboard shortcuts
-document.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    
-    if (e.key === 'c') {
-        window.location = '{% url "mailbox:compose" %}';
+function openMobileSidebar() {
+    if (!mobileSidebar) return;
+    mobileSidebar.classList.add('sidebar-open');
+    mobileOverlay?.classList.add('visible');
+}
+
+function closeMobileSidebar() {
+    mobileSidebar?.classList.remove('sidebar-open');
+    mobileOverlay?.classList.remove('visible');
+}
+
+mobileToggleBtn?.addEventListener('click', openMobileSidebar);
+mobileOverlay?.addEventListener('click', closeMobileSidebar);
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 1100) {
+        closeMobileSidebar();
     }
+});
+
+function toggleShortcutHelp(force) {
+    if (!shortcutHelpBox) {
+        return;
+    }
+    const currentlyVisible = !shortcutHelpBox.classList.contains('hidden');
+    const shouldShow = typeof force === 'boolean' ? force : !currentlyVisible;
+    shortcutHelpBox.classList.toggle('hidden', !shouldShow);
+}
+
+function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.conversation-item input[type="checkbox"]');
+    if (!checkboxes.length) {
+        return;
+    }
+    const shouldCheck = Array.from(checkboxes).some(cb => !cb.checked);
+    checkboxes.forEach(cb => cb.checked = shouldCheck);
+}
+
+function getFirstSelectedRow() {
+    const checkbox = document.querySelector('.conversation-item input[type="checkbox"]:checked');
+    return checkbox ? checkbox.closest('.conversation-item') : null;
+}
+
+shortcutHelpButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleShortcutHelp();
+});
+
+document.addEventListener('click', (event) => {
+    if (!shortcutHelpBox || shortcutHelpBox.classList.contains('hidden')) {
+        return;
+    }
+    if (shortcutHelpButton?.contains(event.target) || shortcutHelpBox.contains(event.target)) {
+        return;
+    }
+    toggleShortcutHelp(false);
+});
+
+document.addEventListener('keydown', function(e) {
+    const target = e.target;
+    const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    if (isTyping) {
+        return;
+    }
+
+    const key = e.key.toLowerCase();
+
+    if (key === '?') {
+        e.preventDefault();
+        toggleShortcutHelp();
+        return;
+    }
+
+    if (key === 'c') {
+        e.preventDefault();
+        window.location = composeUrl;
+        return;
+    }
+
+    if (key === 'r') {
+        const row = getFirstSelectedRow();
+        if (row) {
+            const url = row.dataset.conversationDetailUrl;
+            if (url) {
+                e.preventDefault();
+                window.location = url;
+            }
+        }
+        return;
+    }
+
+    if (key === 'a') {
+        e.preventDefault();
+        toggleSelectAll();
+        return;
+    }
+
+    if (key === 's') {
+        const row = getFirstSelectedRow();
+        if (row) {
+            const checkbox = row.querySelector('input[type="checkbox"]');
+            const convId = checkbox?.dataset?.id;
+            if (convId) {
+                e.preventDefault();
+                toggleStar(convId);
+            }
+        }
+        return;
+    }
+
+    if (key === 'delete') {
+        if (getSelectedIds().length > 0) {
+            e.preventDefault();
+            deleteSelected();
+        }
+        return;
+    }
+});
+
+async function archiveConversation(convId) {
+    try {
+        const response = await fetch(`/crm/mailbox/api/conversations/${convId}/archive/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        });
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        console.error('Archive swipe failed:', error);
+    }
+}
+
+const SWIPE_THRESHOLD = 70;
+
+function addSwipeHandlers(row) {
+    let startX = 0;
+    let startY = 0;
+    let swiped = false;
+
+    row.addEventListener('touchstart', (event) => {
+        if (event.touches.length > 1) return;
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        swiped = false;
+        row.dataset.swipeAction = '';
+        row.style.transition = 'none';
+    });
+
+    row.addEventListener('touchmove', (event) => {
+        if (event.touches.length > 1) return;
+        const currentX = event.touches[0].clientX;
+        const currentY = event.touches[0].clientY;
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            return;
+        }
+        event.preventDefault();
+        const clamped = Math.max(Math.min(deltaX, 120), -120);
+        row.style.transform = `translateX(${clamped}px)`;
+
+        if (Math.abs(deltaX) >= SWIPE_THRESHOLD && !swiped) {
+            swiped = true;
+            row.dataset.swipeAction = 'true';
+            const convId = row.dataset.convId;
+            if (!convId) return;
+            if (deltaX < 0) {
+                archiveConversation(convId);
+            } else {
+                toggleStar(convId);
+            }
+        }
+    });
+
+    row.addEventListener('touchend', () => {
+        row.style.transition = 'transform 0.25s ease';
+        row.style.transform = '';
+        setTimeout(() => {
+            row.style.transition = '';
+        }, 250);
+    });
+}
+
+const conversationRows = Array.from(document.querySelectorAll('.conversation-item'));
+conversationRows.forEach((row) => {
+    addSwipeHandlers(row);
+    row.addEventListener('click', (event) => {
+        if (row.dataset.swipeAction === 'true') {
+            event.stopPropagation();
+            row.dataset.swipeAction = '';
+            return;
+        }
+        const detailUrl = row.dataset.conversationDetailUrl;
+        if (detailUrl) {
+            window.location = detailUrl;
+        }
+    });
 });
 </script>
 {% endblock %}

@@ -1,303 +1,333 @@
 {% extends "crm/base.html" %}
+{% load static %}
 
-{% block title %}Signaturen verwalten - Mailbox{% endblock %}
+{% block title %}Signaturen - Mailbox{% endblock %}
+
+{% block breadcrumbs %}
+<span class="text-gray-400">Mail</span>
+<span class="text-gray-600">/</span>
+<span class="text-white">Signaturen</span>
+{% endblock %}
 
 {% block extra_head %}
 <style>
-    .signatures-container {
-        max-width: 1200px;
-        margin: 0 auto;
+    .signature-table th,
+    .signature-table td {
+        border-color: #1f2937;
+    }
+    .signature-table tbody tr[data-signature-default="true"] {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(15, 23, 42, 0.8));
     }
     .signature-card {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 1rem;
-        transition: all 0.2s;
-    }
-    .signature-card:hover {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2);
-    }
-    .signature-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        border-bottom: 1px solid #334155;
-    }
-    .signature-name {
-        color: #f1f5f9;
-        font-weight: 600;
-        font-size: 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-    }
-    .badge-default {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        color: #fff;
-    }
-    .signature-actions {
-        display: flex;
-        gap: 8px;
-    }
-    .signature-body {
-        padding: 20px;
-        border-top: 1px solid #334155;
+        border-color: #1f2937;
     }
     .signature-preview {
-        background: #0f172a;
-        padding: 16px;
-        border-radius: 8px;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        min-height: 100px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid #1f2937;
     }
-    .btn-icon {
-        background: #0f172a;
-        border: 1px solid #334155;
-        padding: 8px 12px;
-        border-radius: 6px;
-        color: #94a3b8;
-        font-size: 14px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .btn-icon:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
-    }
-    .btn-danger {
-        border-color: #991b1b;
-        color: #fca5a5;
-    }
-    .btn-danger:hover {
-        background: rgba(220, 38, 38, 0.1);
-        border-color: #dc2626;
-        color: #fee2e2;
-    }
-    .btn-primary {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        color: #fff;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-    }
-    .btn-secondary {
-        background: #1e293b;
-        border: 1px solid #334155;
-        padding: 12px 24px;
-        border-radius: 8px;
-        color: #94a3b8;
-        font-weight: 500;
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-block;
-        transition: all 0.2s;
-    }
-    .btn-secondary:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
-    }
-    .form-card {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 1.5rem;
-    }
-    .form-label {
-        display: block;
-        color: #94a3b8;
-        font-weight: 500;
-        margin-bottom: 8px;
-    }
-    .form-control, .form-select, .form-textarea {
-        width: 100%;
-        background: #0f172a;
-        border: 1px solid #334155;
-        color: #f1f5f9;
-        border-radius: 8px;
-        padding: 12px;
-    }
-    .form-control:focus, .form-select:focus, .form-textarea:focus {
-        background: #0f172a;
-        border-color: #6366f1;
-        color: #f1f5f9;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        outline: none;
-    }
-    .form-textarea {
-        min-height: 200px;
-        font-family: monospace;
-        font-size: 13px;
-    }
-    .form-checkbox {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #94a3b8;
-    }
-    .form-checkbox input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-        accent-color: #6366f1;
-    }
-    .empty-state {
-        text-align: center;
-        padding: 4rem 1rem;
-        color: #64748b;
-    }
-    .empty-state .icon {
-        font-size: 64px;
-        margin-bottom: 1rem;
-    }
-    /* Utilities */
-    h2 { color: #f1f5f9; margin-bottom: 1.5rem; }
-    h3 { color: #f1f5f9; margin-bottom: 1rem; font-size: 20px; }
-    .mb-3 { margin-bottom: 1rem; }
-    .mb-4 { margin-bottom: 1.5rem; }
-    .flex { display: flex; }
-    .justify-between { justify-content: space-between; }
-    .items-center { align-items: center; }
-    .gap-2 { gap: 0.5rem; }
-    .hidden { display: none; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="signatures-container">
-    <div class="flex justify-between items-center mb-4">
-        <h2>✍️ Signaturen verwalten</h2>
-        <div class="flex gap-2">
-            <button onclick="showCreateForm()" class="btn-primary">
-                ➕ Neue Signatur
-            </button>
-            <a href="{% url 'mailbox:settings' %}" class="btn-secondary">
-                ← Zurück zu Einstellungen
-            </a>
+<div class="space-y-6">
+    <section class="bg-dark-900/60 border border-dark-700 rounded-2xl p-6 shadow-lg shadow-black/30">
+        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+                <p class="text-xs uppercase tracking-wide text-gray-500">Mailbox</p>
+                <h1 class="text-3xl font-semibold text-white">Signaturen verwalten</h1>
+                <p class="text-sm text-gray-400 max-w-3xl">
+                    Erstelle, bearbeite und lege fest, welche Signatur standardmäßig bei neuen Mails verwendet wird.
+                    Verwende den Rich-Text-Editor, um deine Signatur detailgetreu zu gestalten.
+                </p>
+            </div>
+            <div class="text-right text-xs text-gray-400">
+                <p>Aktuelle Signaturen: <span class="text-white font-semibold">{{ signatures|length }}</span></p>
+            </div>
         </div>
-    </div>
-    
-    <!-- Create/Edit Form (Initially hidden) -->
-    <div id="signature-form" class="form-card hidden">
-        <h3 id="form-title">Neue Signatur erstellen</h3>
-        <form method="post" action="/admin/mailbox/emailsignature/add/">
-            {% csrf_token %}
-            
-            <div class="mb-3">
-                <label for="name" class="form-label">Name der Signatur</label>
-                <input type="text" class="form-control" id="name" name="name" required placeholder="z.B. Geschäftlich, Persönlich">
-            </div>
-            
-            <div class="mb-3">
-                <label for="content_html" class="form-label">HTML-Inhalt</label>
-                <textarea id="content_html" name="content_html" class="form-textarea" placeholder="<p>Mit freundlichen Grüßen,<br>Ihr Name</p>"></textarea>
-                <small style="color: #64748b; display: block; margin-top: 4px;">
-                    💡 Tipp: Verwenden Sie HTML für formatierte Signaturen. Ein Rich-Text-Editor kann hier integriert werden.
-                </small>
-            </div>
-            
-            <div class="mb-3">
-                <label class="form-checkbox">
-                    <input type="checkbox" name="is_default" id="is_default">
-                    <span>Als Standard-Signatur festlegen</span>
-                </label>
-            </div>
-            
-            <div class="flex gap-2">
-                <button type="submit" class="btn-primary">
-                    💾 Signatur speichern
-                </button>
-                <button type="button" onclick="hideForm()" class="btn-secondary">
-                    ✕ Abbrechen
-                </button>
-            </div>
-        </form>
-    </div>
-    
-    <!-- Signatures List -->
-    <div id="signatures-list">
-        {% if signatures %}
-            {% for sig in signatures %}
-            <div class="signature-card">
-                <div class="signature-header">
-                    <div class="signature-name">
-                        {{ sig.name }}
-                        {% if sig.is_default %}
-                        <span class="badge badge-default">Standard</span>
-                        {% endif %}
-                    </div>
-                    <div class="signature-actions">
-                        <a href="/admin/mailbox/emailsignature/{{ sig.id }}/change/" class="btn-icon" title="Bearbeiten">
-                            ✏️
-                        </a>
-                        <button onclick="deleteSignature({{ sig.id }}, '{{ sig.name|escapejs }}')" class="btn-icon btn-danger" title="Löschen">
-                            🗑️
-                        </button>
-                    </div>
+    </section>
+
+    <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <section class="bg-dark-900/60 border border-dark-700 rounded-2xl p-5 signature-card shadow-lg shadow-black/20">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">Alle Signaturen</h2>
+                    <p class="text-sm text-gray-400">Übersicht deiner gespeicherten Signaturen mit Standard-Indikator.</p>
                 </div>
-                <div class="signature-body">
-                    <div class="signature-preview">
-                        {{ sig.content_html|safe|default:"<em>Keine Vorschau verfügbar</em>" }}
-                    </div>
+                <span class="text-xs text-gray-400">Live Sync</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm text-gray-300 signature-table">
+                    <thead class="text-xs uppercase text-gray-500 bg-dark-800/40">
+                        <tr>
+                            <th class="px-3 py-2">Name</th>
+                            <th class="px-3 py-2">Aktualisiert</th>
+                            <th class="px-3 py-2">Standard</th>
+                            <th class="px-3 py-2 text-right">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for signature in signatures %}
+                        <tr class="align-top transition hover:bg-dark-800/60" data-signature-id="{{ signature.id }}"
+                            data-signature-name="{{ signature.name|default_if_none:''|escape }}"
+                            data-signature-html="{{ signature.content_html|default_if_none:''|escape }}"
+                            data-signature-text="{{ signature.content_text|default_if_none:''|escape }}"
+                            data-signature-default="{{ signature.is_default|yesno:'true,false' }}">
+                            <td class="px-3 py-3 border-t border-dark-700">
+                                <div class="font-semibold text-white">{{ signature.name }}</div>
+                                <div class="text-xs text-gray-400 truncate max-w-sm">
+                                    {{ signature.content_text|default_if_none:"" |truncatechars:80 }}
+                                </div>
+                            </td>
+                            <td class="px-3 py-3 border-t border-dark-700 text-gray-400" style="min-width: 160px;">
+                                {{ signature.updated_at|date:"d.m.Y H:i" }}
+                            </td>
+                            <td class="px-3 py-3 border-t border-dark-700">
+                                {% if signature.is_default %}
+                                <span class="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-xs font-semibold">
+                                    <span>Standard</span>
+                                    <span class="text-white text-sm">★</span>
+                                </span>
+                                {% else %}
+                                <span class="text-xs uppercase text-gray-400 tracking-wider">Nein</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-3 border-t border-dark-700 text-right space-x-2">
+                                <button type="button"
+                                        class="edit-signature-btn px-3 py-1 text-xs font-semibold text-white bg-primary/20 hover:bg-primary/30 rounded-lg transition"
+                                        data-action="edit">
+                                    Bearbeiten
+                                </button>
+                                {% if not signature.is_default %}
+                                <button type="button"
+                                        class="set-default-btn px-3 py-1 text-xs font-semibold text-white bg-emerald-600/80 hover:bg-emerald-500 rounded-lg transition"
+                                        data-action="set-default" data-signature-id="{{ signature.id }}">
+                                    Als Standard setzen
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-3 py-6 text-center text-sm text-gray-500">
+                                Noch keine Signaturen vorhanden.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="bg-dark-900/60 border border-dark-700 rounded-2xl p-5 signature-card shadow-lg shadow-black/20 space-y-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">Signatur bearbeiten</h2>
+                    <p class="text-sm text-gray-400">Wähle eine bestehende Signatur oder lege eine neue an.</p>
                 </div>
+                <span class="text-xs uppercase text-gray-500 tracking-widest">TinyMCE</span>
             </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state">
-                <div class="icon">✍️</div>
-                <h3>Noch keine Signaturen vorhanden</h3>
-                <p>Erstellen Sie Ihre erste Email-Signatur, um sie in ausgehenden Nachrichten zu verwenden.</p>
-                <button onclick="showCreateForm()" class="btn-primary">
-                    ➕ Erste Signatur erstellen
-                </button>
+
+            <div id="signature-alert" class="hidden rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300"></div>
+
+            <form id="signature-form" class="space-y-4">
+                <div class="space-y-1">
+                    <label for="signature-name" class="text-xs font-semibold uppercase tracking-wide text-gray-400">Signatur Name</label>
+                    <input type="text" id="signature-name" name="name" required
+                           class="w-full rounded-lg border border-dark-700 bg-dark-900 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div class="flex items-center gap-3 text-sm text-gray-400">
+                    <input type="checkbox" id="signature-default" class="h-4 w-4 rounded border-dark-600 bg-dark-900 text-primary focus:ring-primary">
+                    <label for="signature-default">Als Standard markieren</label>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2 block">HTML-Signatur</label>
+                    <textarea id="signature-editor" class="hidden"></textarea>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button type="submit"
+                            class="flex-1 rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-900/50">
+                        Signatur speichern
+                    </button>
+                    <button type="button" id="reset-form"
+                            class="text-xs font-semibold text-gray-400 hover:text-white">
+                        Bearbeitung zurücksetzen
+                    </button>
+                </div>
+            </form>
+
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">Live Vorschau</p>
+                    <small class="text-xs text-gray-500">Aktualisiert bei jeder Änderung</small>
+                </div>
+                <div id="signature-preview" class="signature-preview min-h-[160px] rounded-2xl p-4 text-sm leading-relaxed text-gray-100"></div>
             </div>
-        {% endif %}
+        </section>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 <script>
-function showCreateForm() {
-    document.getElementById('signature-form').classList.remove('hidden');
-    document.getElementById('signatures-list').style.opacity = '0.5';
-    document.getElementById('form-title').textContent = 'Neue Signatur erstellen';
-}
+    const csrfToken = '{{ csrf_token }}';
+    const signatureApiBase = '{% url "mailbox:signature-list" %}';
+    let editingSignatureId = null;
+    let alertTimeout = null;
 
-function hideForm() {
-    document.getElementById('signature-form').classList.add('hidden');
-    document.getElementById('signatures-list').style.opacity = '1';
-}
-
-function deleteSignature(id, name) {
-    if (confirm(`Möchten Sie die Signatur "${name}" wirklich löschen?`)) {
-        // This would normally post to a delete endpoint
-        // For now, redirect to admin delete confirmation
-        window.location.href = `/admin/mailbox/emailsignature/${id}/delete/`;
+    function showAlert(message, variant = 'success') {
+        const alertEl = document.getElementById('signature-alert');
+        if (!alertEl) return;
+        alertEl.textContent = message;
+        alertEl.classList.remove('hidden', 'border-rose-500/50', 'bg-rose-500/10', 'text-rose-300');
+        alertEl.classList.remove('border-emerald-500/50', 'bg-emerald-500/10', 'text-emerald-300');
+        if (variant === 'error') {
+            alertEl.classList.add('border-rose-500/50', 'bg-rose-500/10', 'text-rose-300');
+        } else {
+            alertEl.classList.add('border-emerald-500/50', 'bg-emerald-500/10', 'text-emerald-300');
+        }
+        if (alertTimeout) {
+            clearTimeout(alertTimeout);
+        }
+        alertTimeout = setTimeout(() => {
+            alertEl.classList.add('hidden');
+        }, 3500);
     }
-}
+
+    function decodeHtmlEntities(value = '') {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = value;
+        return textarea.value;
+    }
+
+    function refreshPreview(content = '') {
+        const preview = document.getElementById('signature-preview');
+        if (!preview) return;
+        preview.innerHTML = content || '<p class="text-gray-500">Hier erscheint die Live-Vorschau deiner HTML-Signatur.</p>';
+    }
+
+    function resetForm() {
+        editingSignatureId = null;
+        document.getElementById('signature-name').value = '';
+        document.getElementById('signature-default').checked = false;
+        if (tinymce.get('signature-editor')) {
+            tinymce.get('signature-editor').setContent('');
+        }
+        refreshPreview('');
+    }
+
+    function fillFormFromRow(row) {
+        if (!row) return;
+        editingSignatureId = row.dataset.signatureId;
+        document.getElementById('signature-name').value = row.dataset.signatureName || '';
+        document.getElementById('signature-default').checked = row.dataset.signatureDefault === 'true';
+        const html = decodeHtmlEntities(row.dataset.signatureHtml || '');
+        if (tinymce.get('signature-editor')) {
+            tinymce.get('signature-editor').setContent(html);
+        }
+        refreshPreview(html);
+    }
+
+    async function saveSignature(event) {
+        event.preventDefault();
+        const name = document.getElementById('signature-name').value.trim();
+        const isDefault = document.getElementById('signature-default').checked;
+        const editor = tinymce.get('signature-editor');
+        const htmlContent = editor ? editor.getContent() : '';
+        const textOnly = editor ? editor.getContent({ format: 'text' }).trim() : '';
+
+        if (!name) {
+            showAlert('Bitte gib deiner Signatur einen Namen.', 'error');
+            return;
+        }
+
+        const payload = {
+            name,
+            content_html: htmlContent,
+            content_text: textOnly,
+            is_default: isDefault
+        };
+
+        const url = editingSignatureId ? `${signatureApiBase}${editingSignatureId}/` : signatureApiBase;
+        const method = editingSignatureId ? 'PATCH' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || 'Fehler beim Speichern der Signatur.');
+            }
+            showAlert('Signatur gespeichert.');
+            setTimeout(() => location.reload(), 300);
+        } catch (err) {
+            console.error(err);
+            showAlert('Fehler: ' + err.message, 'error');
+        }
+    }
+
+    async function setDefaultSignature(signatureId) {
+        try {
+            const response = await fetch(`${signatureApiBase}${signatureId}/`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ is_default: true })
+            });
+            if (!response.ok) {
+                throw new Error('Standard konnte nicht gesetzt werden.');
+            }
+            showAlert('Neue Standard-Signatur gespeichert.');
+            setTimeout(() => location.reload(), 300);
+        } catch (err) {
+            console.error(err);
+            showAlert('Fehler: ' + err.message, 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('signature-form');
+        form?.addEventListener('submit', saveSignature);
+        document.getElementById('reset-form')?.addEventListener('click', resetForm);
+
+        const table = document.querySelector('.signature-table tbody');
+        table?.addEventListener('click', (event) => {
+            const editBtn = event.target.closest('.edit-signature-btn');
+            const defaultBtn = event.target.closest('.set-default-btn');
+            if (editBtn) {
+                const row = editBtn.closest('tr');
+                fillFormFromRow(row);
+            }
+            if (defaultBtn) {
+                const signatureId = defaultBtn.dataset.signatureId;
+                setDefaultSignature(signatureId);
+            }
+        });
+
+        tinymce.init({
+            selector: '#signature-editor',
+            height: 240,
+            menubar: false,
+            statusbar: false,
+            skin: 'oxide-dark',
+            content_css: 'dark',
+            plugins: 'lists link autolink autoresize',
+            toolbar: 'undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist | link',
+            setup(editor) {
+                editor.on('keyup change blur', () => {
+                    const html = editor.getContent();
+                    refreshPreview(html);
+                });
+            }
+        });
+    });
 </script>
 {% endblock %}

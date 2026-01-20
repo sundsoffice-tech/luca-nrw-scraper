@@ -9,6 +9,7 @@ import os
 import subprocess
 import psutil
 import threading
+import shlex
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from django.conf import settings
@@ -256,6 +257,12 @@ class ProcessManager:
                 )
             except Exception as e:
                 logger.error(f"Failed to log error: {e}")
+
+    def _apply_env_overrides(self, env: Dict[str, str], overrides: Dict[str, str]):
+        """Apply ScraperConfig-provided environment overrides."""
+        for key, value in overrides.items():
+            if value:
+                env[key] = value
     
     def _track_error(self, error_type: str):
         """
@@ -530,6 +537,19 @@ class ProcessManager:
         
         logger.info(f"Built scraper command: {' '.join(cmd)}")
         return cmd
+
+    def preview_command(self, params: Dict[str, Any]) -> str:
+        """
+        Return the scraper command string for the current params without starting the process.
+        """
+        script_type, script_path = self._find_scraper_script()
+        if script_type is None:
+            raise ValueError("Scraper script not found (scriptname.py, luca_scraper/__main__.py, scriptname_backup.py)")
+
+        cmd = self._build_command(params, script_type, script_path)
+        preview = ' '.join(shlex.quote(part) for part in cmd)
+        logger.debug(f"Preview command: {preview}")
+        return preview
     
     def start(self, params: Dict[str, Any], user=None) -> Dict[str, Any]:
         """
@@ -614,6 +634,9 @@ class ProcessManager:
                     env.update(env_vars)
                 except ImportError:
                     pass
+            
+            overrides = config.env_overrides()
+            self._apply_env_overrides(env, overrides)
             
             # Start process
             self.process = subprocess.Popen(

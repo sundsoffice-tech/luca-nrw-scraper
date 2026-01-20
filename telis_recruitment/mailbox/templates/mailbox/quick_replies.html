@@ -1,290 +1,401 @@
 {% extends "crm/base.html" %}
+{% load static %}
 
-{% block title %}Schnellantworten verwalten - Mailbox{% endblock %}
+{% block title %}Schnellantworten - Mailbox{% endblock %}
 
 {% block extra_head %}
 <style>
-    .quick-replies-container {
-        max-width: 1400px;
-        margin: 0 auto;
-    }
-    .replies-section {
-        margin-bottom: 2rem;
-    }
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px;
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px 12px 0 0;
-        margin-bottom: 0;
-    }
-    .section-title {
-        color: #f1f5f9;
-        font-weight: 600;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .section-count {
-        background: #334155;
-        color: #94a3b8;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    .replies-grid {
+    .quick-replies-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 1rem;
-        background: #0f172a;
-        border: 1px solid #334155;
-        border-top: none;
-        border-radius: 0 0 12px 12px;
-        padding: 20px;
+        gap: 1.25rem;
     }
-    .reply-card {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 16px;
-        transition: all 0.2s;
-        cursor: pointer;
+    @media(min-width: 1024px) {
+        .quick-replies-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
-    .reply-card:hover {
-        border-color: #6366f1;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-        transform: translateY(-2px);
+    .quick-reply-card {
+        background: #111426;
+        border: 1px solid #2d2d44;
+        border-radius: 18px;
+        padding: 1.5rem;
+        box-shadow: 0 20px 40px rgba(9, 11, 24, 0.7);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
     }
-    .reply-header {
+    .quick-reply-card header {
         display: flex;
         justify-content: space-between;
-        align-items: start;
-        margin-bottom: 12px;
+        gap: 0.5rem;
+        align-items: center;
     }
-    .reply-shortcut {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        color: #fff;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
-        font-family: monospace;
+    .quick-reply-card .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        border-radius: 999px;
+        background: #1f2937;
+        color: #94a3b8;
     }
-    .reply-actions {
+    .quick-reply-card .actions {
         display: flex;
-        gap: 6px;
+        gap: 0.5rem;
     }
-    .reply-title {
-        color: #f1f5f9;
-        font-weight: 600;
-        font-size: 15px;
-        margin-bottom: 8px;
+    .quick-reply-card .actions button {
+        border: 1px solid transparent;
+        border-radius: 12px;
+        padding: 0.35rem 0.8rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        background: rgba(99, 102, 241, 0.15);
+        color: #e2e8f0;
+        transition: all 0.15s ease;
     }
-    .reply-content {
-        color: #94a3b8;
-        font-size: 14px;
+    .quick-reply-card .actions button.delete {
+        background: rgba(248, 113, 113, 0.15);
+        color: #fecaca;
+    }
+    .quick-reply-card .actions button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(99, 102, 241, 0.3);
+    }
+    .quick-reply-card .preview {
+        font-size: 0.9rem;
+        color: #cbd5f5;
         line-height: 1.5;
-        max-height: 60px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
+        min-height: 3.5rem;
     }
-    .btn-icon {
-        background: #0f172a;
-        border: 1px solid #334155;
-        padding: 6px 10px;
-        border-radius: 6px;
+    .hidden {
+        display: none !important;
+    }
+    .quick-reply-card .preview small {
+        display: block;
         color: #94a3b8;
-        font-size: 13px;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-block;
+        font-size: 0.75rem;
     }
-    .btn-icon:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
     }
-    .btn-danger {
-        border-color: #991b1b;
-        color: #fca5a5;
+    .modal-panel {
+        background: #0f0f1a;
+        border: 1px solid #1f2937;
+        border-radius: 20px;
+        width: min(520px, 90vw);
+        padding: 1.5rem;
+        box-shadow: 0 35px 70px rgba(9, 11, 24, 0.9);
     }
-    .btn-danger:hover {
-        background: rgba(220, 38, 38, 0.1);
-        border-color: #dc2626;
-        color: #fee2e2;
-    }
-    .btn-primary {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border: none;
-        padding: 12px 24px;
-        border-radius: 8px;
-        color: #fff;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-decoration: none;
-        display: inline-block;
-    }
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-    }
-    .btn-secondary {
-        background: #1e293b;
-        border: 1px solid #334155;
-        padding: 12px 24px;
-        border-radius: 8px;
-        color: #94a3b8;
-        font-weight: 500;
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-block;
-        transition: all 0.2s;
-    }
-    .btn-secondary:hover {
-        background: rgba(99, 102, 241, 0.1);
-        border-color: #6366f1;
-        color: #f1f5f9;
-    }
-    .empty-state {
-        text-align: center;
-        padding: 4rem 1rem;
-        color: #64748b;
-        background: #0f172a;
-        border: 1px solid #334155;
-        border-top: none;
-        border-radius: 0 0 12px 12px;
-    }
-    .empty-state .icon {
-        font-size: 64px;
+    .modal-panel header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 1rem;
     }
-    /* Utilities */
-    h2 { color: #f1f5f9; margin-bottom: 1.5rem; }
-    .flex { display: flex; }
-    .justify-between { justify-content: space-between; }
-    .items-center { align-items: center; }
-    .gap-2 { gap: 0.5rem; }
+    .modal-panel header h3 {
+        margin: 0;
+        color: #e2e8f0;
+    }
+    .close-modal {
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 1.1rem;
+        cursor: pointer;
+    }
+    .modal-panel form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .modal-panel label {
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #94a3b8;
+    }
+    .modal-panel input,
+    .modal-panel textarea {
+        width: 100%;
+        border-radius: 14px;
+        background: #111426;
+        border: 1px solid #2d2d44;
+        padding: 0.85rem 1rem;
+        color: #fff;
+        font-size: 0.95rem;
+        resize: vertical;
+    }
+    .modal-panel textarea {
+        min-height: 140px;
+    }
+    .modal-panel .submit-group {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        margin-top: 0.5rem;
+    }
+    .modal-panel button.primary {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border: none;
+        color: #fff;
+        font-weight: 600;
+        padding: 0.9rem 1.5rem;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+    .modal-panel button.secondary {
+        border-radius: 999px;
+        border: 1px solid #2d2d44;
+        background: transparent;
+        color: #cbd5f5;
+        padding: 0.9rem 1.5rem;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="quick-replies-container">
-    <div class="flex justify-between items-center" style="margin-bottom: 1.5rem;">
-        <h2>⚡ Schnellantworten verwalten</h2>
-        <div class="flex gap-2">
-            <a href="/admin/mailbox/quickreply/add/" class="btn-primary">
-                ➕ Neue Schnellantwort
-            </a>
-            <a href="{% url 'mailbox:settings' %}" class="btn-secondary">
-                ← Zurück zu Einstellungen
-            </a>
-        </div>
-    </div>
-    
-    <!-- User's Quick Replies -->
-    {% if user_quick_replies %}
-    <div class="replies-section">
-        <div class="section-header">
-            <div class="section-title">
-                👤 Meine Schnellantworten
-                <span class="section-count">{{ user_quick_replies|length }}</span>
+<div class="space-y-6">
+    <section class="border border-dark-700 rounded-2xl bg-dark-900/30 p-6 shadow-lg shadow-black/30">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <p class="text-xs text-gray-400 uppercase mb-1">Mailbox</p>
+                <h1 class="text-3xl text-white mb-1">Schnellantworten</h1>
+                <p class="text-sm text-gray-400 max-w-2xl">
+                    Erstelle wiederverwendbare Antworten, die du im Compose-Editor mit einem Klick einfügen kannst.
+                    Nutze Templates, Shortcuts und schnelle Vorschauen für deinen Workflow.
+                </p>
             </div>
+            <button id="open-quick-reply-modal" class="compose-btn d-inline-flex align-items-center justify-content-center" style="width:auto;">
+                + Neue Schnellantwort
+            </button>
         </div>
-        <div class="replies-grid">
-            {% for reply in user_quick_replies %}
-            <div class="reply-card" onclick="viewReply({{ reply.id }})">
-                <div class="reply-header">
-                    {% if reply.shortcut %}
-                    <span class="reply-shortcut">{{ reply.shortcut }}</span>
-                    {% else %}
-                    <span style="color: #64748b; font-size: 12px;">Kein Kürzel</span>
-                    {% endif %}
-                    <div class="reply-actions" onclick="event.stopPropagation()">
-                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/change/" class="btn-icon">✏️</a>
-                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/delete/" class="btn-icon btn-danger">🗑️</a>
+    </section>
+
+    <div class="quick-replies-grid">
+        <section>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0 text-white">Deine Schnellantworten</h2>
+                <span class="badge">Privat</span>
+            </div>
+            {% if user_quick_replies %}
+            <div class="space-y-4">
+                {% for reply in user_quick_replies %}
+                <article class="quick-reply-card" data-qr-id="{{ reply.id }}"
+                         data-qr-name="{{ reply.name|escape }}"
+                         data-qr-shortcut="{{ reply.shortcut|default:''|escape }}"
+                         data-qr-subject="{{ reply.subject|default:''|escape }}"
+                         data-qr-html="{{ reply.content_html|escape }}">
+                    <header>
+                        <div>
+                            <p class="text-lg font-semibold text-white mb-0">{{ reply.name }}</p>
+                            <p class="text-sm text-gray-400 mb-0">
+                                Shortcut: <span class="text-primary">{{ reply.shortcut|default:"-" }}</span>
+                            </p>
+                        </div>
+                        <div class="actions">
+                            <button type="button" class="edit">Bearbeiten</button>
+                            <button type="button" class="delete">Löschen</button>
+                        </div>
+                    </header>
+                    <div class="preview">
+                        <small>{{ reply.subject|default:"Ohne Betreff" }}</small>
+                        <span>{{ reply.content_text|truncatechars:120|default:"Keine Vorschau vorhanden" }}</span>
                     </div>
-                </div>
-                <div class="reply-title">{{ reply.name }}</div>
-                <div class="reply-content">{{ reply.content_text|truncatewords:20 }}</div>
-                {% if reply.usage_count %}
-                <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
-                    📊 {{ reply.usage_count }}x verwendet
-                </div>
-                {% endif %}
+                </article>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-    
-    <!-- Shared Quick Replies -->
-    {% if shared_quick_replies %}
-    <div class="replies-section">
-        <div class="section-header">
-            <div class="section-title">
-                🌐 Geteilte Schnellantworten
-                <span class="section-count">{{ shared_quick_replies|length }}</span>
+            {% else %}
+            <p class="text-sm text-gray-400">Du hast noch keine Schnellantworten. Nutze den Button oben, um loszulegen.</p>
+            {% endif %}
+        </section>
+
+        <section>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="mb-0 text-white">Geteilte Schnellantworten</h2>
+                <span class="badge">Team</span>
             </div>
-        </div>
-        <div class="replies-grid">
-            {% for reply in shared_quick_replies %}
-            <div class="reply-card" onclick="viewReply({{ reply.id }})">
-                <div class="reply-header">
-                    {% if reply.shortcut %}
-                    <span class="reply-shortcut">{{ reply.shortcut }}</span>
-                    {% else %}
-                    <span style="color: #64748b; font-size: 12px;">Kein Kürzel</span>
-                    {% endif %}
-                    <div class="reply-actions" onclick="event.stopPropagation()">
-                        <a href="/admin/mailbox/quickreply/{{ reply.id }}/" class="btn-icon">👁️</a>
+            {% if shared_quick_replies %}
+            <div class="space-y-4">
+                {% for reply in shared_quick_replies %}
+                <article class="quick-reply-card">
+                    <header>
+                        <div>
+                            <p class="text-lg font-semibold text-white mb-0">{{ reply.name }}</p>
+                            <p class="text-sm text-gray-400 mb-0">
+                                Shortcut: <span class="text-primary">{{ reply.shortcut|default:"-" }}</span>
+                            </p>
+                        </div>
+                        <span class="badge">Geteilt</span>
+                    </header>
+                    <div class="preview">
+                        <small>{{ reply.subject|default:"Ohne Betreff" }}</small>
+                        <span>{{ reply.content_text|truncatechars:120|default:"Keine Vorschau vorhanden" }}</span>
                     </div>
-                </div>
-                <div class="reply-title">{{ reply.name }}</div>
-                <div class="reply-content">{{ reply.content_text|truncatewords:20 }}</div>
-                <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
-                    👤 Von: {{ reply.owner.username|default:"System" }}
-                    {% if reply.usage_count %}
-                    • 📊 {{ reply.usage_count }}x verwendet
-                    {% endif %}
-                </div>
+                </article>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
+            {% else %}
+            <p class="text-sm text-gray-400">Keine öffentlichen Schnellantworten vorhanden.</p>
+            {% endif %}
+        </section>
     </div>
-    {% endif %}
-    
-    <!-- Empty State -->
-    {% if not user_quick_replies and not shared_quick_replies %}
-    <div class="replies-section">
-        <div class="section-header">
-            <div class="section-title">⚡ Schnellantworten</div>
-        </div>
-        <div class="empty-state">
-            <div class="icon">⚡</div>
-            <h3 style="color: #f1f5f9; margin-bottom: 1rem; font-size: 20px;">Noch keine Schnellantworten vorhanden</h3>
-            <p>Erstellen Sie Schnellantworten, um häufig verwendete Texte schnell einzufügen.</p>
-            <a href="/admin/mailbox/quickreply/add/" class="btn-primary">
-                ➕ Erste Schnellantwort erstellen
-            </a>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
+<div id="quick-reply-modal" class="modal-backdrop hidden">
+    <div class="modal-panel">
+        <header>
+            <h3 id="modal-title">Schnellantwort erstellen</h3>
+            <button type="button" class="close-modal" data-close-modal aria-label="Schließen">&times;</button>
+        </header>
+        <form id="quick-reply-form">
+            <input type="hidden" id="quick-reply-id">
+            <div>
+                <label for="qr-name">Name</label>
+                <input type="text" id="qr-name" required placeholder="z.B. Danke für deine Nachricht">
+            </div>
+            <div>
+                <label for="qr-shortcut">Shortcut (optional)</label>
+                <input type="text" id="qr-shortcut" placeholder="z.B. /danke">
+            </div>
+            <div>
+                <label for="qr-subject">Betreff (optional)</label>
+                <input type="text" id="qr-subject" placeholder="z.B. Danke für die Info">
+            </div>
+            <div>
+                <label for="qr-html">Antwortinhalt (HTML)</label>
+                <textarea id="qr-html" required placeholder="Hier die Antwort einfügen..."></textarea>
+            </div>
+            <div class="submit-group">
+                <button type="button" class="secondary" data-close-modal>Abbrechen</button>
+                <button type="submit" class="primary">Speichern</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
 <script>
-function viewReply(id) {
-    // This could open a modal or expand the card to show full content
-    console.log('View reply:', id);
-}
+    const csrfToken = '{{ csrf_token }}';
+    const quickReplyApiBase = '{% url "mailbox:quickreply-list" %}';
+    const modal = document.getElementById('quick-reply-modal');
+    const form = document.getElementById('quick-reply-form');
+    const qrIdInput = document.getElementById('quick-reply-id');
+    const qrName = document.getElementById('qr-name');
+    const qrShortcut = document.getElementById('qr-shortcut');
+    const qrSubject = document.getElementById('qr-subject');
+    const qrHtml = document.getElementById('qr-html');
+    const modalTitle = document.getElementById('modal-title');
+
+    function openModal(mode = 'create', data = null) {
+        qrIdInput.value = data?.id || '';
+        qrName.value = data?.name || '';
+        qrShortcut.value = data?.shortcut || '';
+        qrSubject.value = data?.subject || '';
+        qrHtml.value = data?.content_html || '';
+        modalTitle.textContent = mode === 'edit' ? 'Schnellantwort bearbeiten' : 'Schnellantwort erstellen';
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        form.reset();
+    }
+
+    document.getElementById('open-quick-reply-modal').addEventListener('click', () => {
+        openModal('create');
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', closeModal);
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const payload = {
+            name: qrName.value.trim(),
+            shortcut: qrShortcut.value.trim(),
+            subject: qrSubject.value.trim(),
+            content_html: qrHtml.value.trim(),
+            content_text: (() => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = qrHtml.value.trim();
+                return wrapper.textContent.trim();
+            })(),
+        };
+        const quickReplyId = qrIdInput.value;
+        const url = quickReplyId ? `${quickReplyApiBase}${quickReplyId}/` : quickReplyApiBase;
+        const method = quickReplyId ? 'PATCH' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                throw new Error('Speichern fehlgeschlagen');
+            }
+            closeModal();
+            location.reload();
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    document.querySelectorAll('.quick-reply-card button.edit').forEach(button => {
+        button.addEventListener('click', () => {
+            const card = button.closest('.quick-reply-card');
+            const data = {
+                id: card.dataset.qrId,
+                name: card.dataset.qrName,
+                shortcut: card.dataset.qrShortcut,
+                subject: card.dataset.qrSubject,
+                content_html: card.dataset.qrHtml,
+            };
+            openModal('edit', data);
+        });
+    });
+
+    document.querySelectorAll('.quick-reply-card button.delete').forEach(button => {
+        button.addEventListener('click', async () => {
+            const confirmed = confirm('Schnellantwort wirklich löschen?');
+            if (!confirmed) return;
+            const card = button.closest('.quick-reply-card');
+            const quickReplyId = card.dataset.qrId;
+            if (!quickReplyId) return;
+            try {
+                const response = await fetch(`${quickReplyApiBase}${quickReplyId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+                if (!response.ok) {
+                    throw new Error('Löschen fehlgeschlagen');
+                }
+                location.reload();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+    });
 </script>
 {% endblock %}

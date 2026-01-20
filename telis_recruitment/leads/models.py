@@ -90,6 +90,12 @@ class Lead(models.Model):
     # === STRUKTURIERTE DATEN (JSON) ===
     tags = models.JSONField(null=True, blank=True, verbose_name="Tags", help_text="Array von Tags")
     skills = models.JSONField(null=True, blank=True, verbose_name="Fähigkeiten", help_text="Array von Fähigkeiten")
+    qualifications = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Qualifikationen",
+        help_text="Array von Qualifikationen",
+    )
     
     # === KANDIDATEN-SPEZIFISCH ===
     availability = models.CharField(max_length=100, null=True, blank=True, verbose_name="Verfügbarkeit")

@@ -44,6 +44,8 @@ Use get_config() to access AI configuration with automatic fallback.
 
 import os
 import random
+import threading
+import time
 import urllib.parse
 from typing import List, Dict, Set, Tuple, Optional, Any
 import logging
@@ -77,6 +79,10 @@ except (ImportError, Exception):
 
 logger = logging.getLogger(__name__)
 
+# Default fallback for the insecure SSL flag (0 = secure)
+ALLOW_INSECURE_SSL_ENV_DEFAULT = "0"
+ALLOW_INSECURE_SSL_DEFAULT = ALLOW_INSECURE_SSL_ENV_DEFAULT == "1"
+
 
 # =========================
 # ENVIRONMENT VARIABLES
@@ -108,7 +114,7 @@ _CONFIG_DEFAULTS = {
     
     # SSL & PDF
     'allow_pdf': False,
-    'allow_insecure_ssl': False,
+    'allow_insecure_ssl': ALLOW_INSECURE_SSL_DEFAULT,
     'allow_pdf_non_cv': False,
     
     # Rate Limiting
@@ -132,6 +138,7 @@ _CONFIG_DEFAULTS = {
     
     # Content
     'max_content_length': 2 * 1024 * 1024,  # 2MB
+    'config_version': 0,
 }
 
 def get_scraper_config(param: Optional[str] = None) -> Any:
@@ -202,6 +209,109 @@ def get_scraper_config(param: Optional[str] = None) -> Any:
     if param:
         return config.get(param)
     return config
+
+
+try:
+    _CONFIG_REFRESH_INTERVAL_SECONDS = max(1, int(os.getenv("CONFIG_REFRESH_INTERVAL_SECONDS", "30")))
+except ValueError:
+    _CONFIG_REFRESH_INTERVAL_SECONDS = 30
+
+_loaded_config: Dict[str, Any] = {}
+_config_watcher_thread: Optional[threading.Thread] = None
+
+
+def _apply_runtime_config(config_dict: Dict[str, Any]) -> None:
+    """Update runtime globals from the provided config dictionary."""
+    global _loaded_config, HTTP_TIMEOUT, MAX_FETCH_SIZE, POOL_SIZE, ASYNC_LIMIT, ASYNC_PER_HOST, HTTP2_ENABLED
+    global ALLOW_PDF, ALLOW_INSECURE_SSL, ALLOW_PDF_NON_CV, SLEEP_BETWEEN_QUERIES, MAX_GOOGLE_PAGES
+    global CB_BASE_PENALTY, CB_API_PENALTY, RETRY_MAX_PER_URL, MIN_SCORE_ENV, MAX_PER_DOMAIN
+    global DEFAULT_QUALITY_SCORE, MAX_CONTENT_LENGTH, ENABLE_KLEINANZEIGEN, TELEFONBUCH_ENRICHMENT_ENABLED
+    global PARALLEL_PORTAL_CRAWL, MAX_CONCURRENT_PORTALS
+
+    if not config_dict:
+        return
+
+    old_config = dict(_loaded_config) if isinstance(_loaded_config, dict) else {}
+    _loaded_config = config_dict
+
+    HTTP_TIMEOUT = config_dict.get('http_timeout', old_config.get('http_timeout'))
+    computed_max_fetch = config_dict.get('max_fetch_size', old_config.get('max_fetch_size'))
+    MAX_FETCH_SIZE = computed_max_fetch
+    POOL_SIZE = config_dict.get('pool_size', old_config.get('pool_size'))
+    ASYNC_LIMIT = config_dict.get('async_limit', old_config.get('async_limit'))
+    ASYNC_PER_HOST = config_dict.get('async_per_host', old_config.get('async_per_host'))
+    HTTP2_ENABLED = config_dict.get('http2_enabled', old_config.get('http2_enabled'))
+    ALLOW_PDF = config_dict.get('allow_pdf', old_config.get('allow_pdf'))
+    ALLOW_INSECURE_SSL = config_dict.get('allow_insecure_ssl', old_config.get('allow_insecure_ssl'))
+    ALLOW_PDF_NON_CV = config_dict.get('allow_pdf_non_cv', old_config.get('allow_pdf_non_cv'))
+    SLEEP_BETWEEN_QUERIES = config_dict.get('sleep_between_queries', old_config.get('sleep_between_queries'))
+    MAX_GOOGLE_PAGES = config_dict.get('max_google_pages', old_config.get('max_google_pages'))
+    CB_BASE_PENALTY = config_dict.get('circuit_breaker_penalty', old_config.get('circuit_breaker_penalty'))
+    CB_API_PENALTY = config_dict.get(
+        'circuit_breaker_api_penalty',
+        old_config.get('circuit_breaker_api_penalty', 15)
+    )
+    RETRY_MAX_PER_URL = config_dict.get('retry_max_per_url', old_config.get('retry_max_per_url'))
+    MIN_SCORE_ENV = config_dict.get('min_score', old_config.get('min_score'))
+    MAX_PER_DOMAIN = config_dict.get('max_per_domain', old_config.get('max_per_domain'))
+    DEFAULT_QUALITY_SCORE = config_dict.get('default_quality_score', old_config.get('default_quality_score'))
+    MAX_CONTENT_LENGTH = config_dict.get(
+        'max_content_length',
+        computed_max_fetch or old_config.get('max_content_length')
+    )
+    ENABLE_KLEINANZEIGEN = config_dict.get('enable_kleinanzeigen', old_config.get('enable_kleinanzeigen'))
+    TELEFONBUCH_ENRICHMENT_ENABLED = config_dict.get('enable_telefonbuch', old_config.get('enable_telefonbuch'))
+    PARALLEL_PORTAL_CRAWL = config_dict.get('parallel_portal_crawl', old_config.get('parallel_portal_crawl'))
+    MAX_CONCURRENT_PORTALS = config_dict.get('max_concurrent_portals', old_config.get('max_concurrent_portals'))
+
+
+def _start_config_version_watcher() -> None:
+    """Background watcher that reloads runtime config when the DB version changes."""
+    global _config_watcher_thread
+
+    if _config_watcher_thread is not None:
+        return
+
+    def _watcher_loop() -> None:
+        last_version = (
+            _loaded_config.get('config_version', 0)
+            if isinstance(_loaded_config, dict)
+            else 0
+        )
+        interval = _CONFIG_REFRESH_INTERVAL_SECONDS
+
+        while True:
+            time.sleep(interval)
+            try:
+                new_config = get_scraper_config()
+            except Exception as exc:
+                logger.warning("Could not refresh scraper config: %s", exc)
+                continue
+
+            if not new_config:
+                continue
+
+            new_version = new_config.get('config_version', last_version)
+            if new_version == last_version:
+                continue
+
+            logger.info(
+                "Detected scraper config version change %s -> %s, reloading runtime settings",
+                last_version,
+                new_version,
+            )
+            _apply_runtime_config(new_config)
+            last_version = new_version
+
+    thread = threading.Thread(target=_watcher_loop, name="ScraperConfigWatcher", daemon=True)
+    thread.start()
+    _config_watcher_thread = thread
+
+
+_apply_runtime_config(get_scraper_config())
+
+if SCRAPER_CONFIG_AVAILABLE:
+    _start_config_version_watcher()
 
 
 # =========================
@@ -617,7 +727,7 @@ ENH_FIELDS: List[str] = [
     "ai_category", "ai_summary",
     "experience_years", "skills", "availability", "current_status", "industries", "location", "profile_text",
     "candidate_status", "mobility", "industries_experience", "source_type",
-    "profile_url", "cv_url", "contact_preference", "last_activity", "name_validated"
+    "profile_url", "cv_url", "contact_preference", "last_activity", "name_validated", "crm_status"
 ]
 
 LEAD_FIELDS: List[str] = [
@@ -627,6 +737,7 @@ LEAD_FIELDS: List[str] = [
     "recency_indicator", "location_specific", "confidence_score",
     "last_updated", "data_quality", "phone_type", "whatsapp_link",
     "private_address", "social_profile_url", "ai_category", "ai_summary",
+    "crm_status",
     "lead_type",
 ]
 

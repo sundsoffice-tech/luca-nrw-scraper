@@ -121,6 +121,7 @@ def validate_new_fields():
         'opening_line',
         'tags',
         'skills',
+        'qualifications',
         'availability',
         'candidate_status',
         'mobility',

@@ -128,21 +128,50 @@
         </form>
     </div>
 
-    <!-- Live Logs -->
-    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-semibold text-gray-100">Live-Logs</h2>
-            <button id="btn-clear-logs" class="text-gray-400 hover:text-primary text-sm transition duration-150">
-                Logs löschen
-            </button>
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Live Logs -->
+        <div class="lg:col-span-2 bg-dark-800 rounded-lg border border-dark-700 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-100">Live-Logs</h2>
+                <button id="btn-clear-logs" class="text-gray-400 hover:text-primary text-sm transition duration-150">
+                    Logs löschen
+                </button>
+            </div>
+
+            <div id="log-container" class="bg-dark-900 rounded-lg p-4 h-96 overflow-y-auto font-mono text-sm text-gray-300">
+                <div class="text-gray-500">Warte auf Logs...</div>
+            </div>
         </div>
-        
-        <div id="log-container" class="bg-dark-900 rounded-lg p-4 h-96 overflow-y-auto font-mono text-sm text-gray-300">
-            <div class="text-gray-500">Warte auf Logs...</div>
+
+        <!-- Metrics Stream Widget -->
+        <div class="bg-dark-800 rounded-lg border border-dark-700 p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-100">Live-Metriken</h2>
+                <span class="text-xs text-gray-500 uppercase tracking-wide">Alle 2s</span>
+            </div>
+            <div class="bg-dark-900 rounded-lg p-4 space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-sm">CPU (%)</span>
+                    <span class="text-white font-semibold" id="metric-cpu">-</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-sm">RAM (MB)</span>
+                    <span class="text-white font-semibold" id="metric-memory">-</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-sm">Leads gefunden</span>
+                    <span class="text-primary font-semibold" id="metric-leads">0</span>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500">
+                    <span>Letzte Aktualisierung</span>
+                    <span id="metric-updated">-</span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Recent Runs -->
+    
+<!-- Recent Runs -->
     <div class="bg-dark-800 rounded-lg border border-dark-700 p-6">
         <h2 class="text-xl font-semibold text-gray-100 mb-4">Letzte Läufe</h2>
         
@@ -210,10 +239,11 @@
 <script>
 // Initialize scraper control
 const scraperControl = new ScraperControl({
-    statusEndpoint: '{% url "scraper-status" %}',
-    startEndpoint: '{% url "scraper-start" %}',
-    stopEndpoint: '{% url "scraper-stop" %}',
-    logsEndpoint: '{% url "scraper-logs" %}',
+    statusEndpoint: '{% url "scraper_control:api-status" %}',
+    startEndpoint: '{% url "scraper_control:api-start" %}',
+    stopEndpoint: '{% url "scraper_control:api-stop" %}',
+    logsEndpoint: '{% url "scraper_control:api-logs-stream" %}',
+    metricsEndpoint: '{% url "scraper_control:api-metrics-stream" %}',
     csrfToken: '{{ csrf_token }}'
 });
 </script>

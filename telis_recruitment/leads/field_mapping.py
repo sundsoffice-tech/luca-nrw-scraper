@@ -22,6 +22,10 @@ FIELD_SCHEMA = {
     'source': ['quelle', 'source_url', 'source'],
     'email': ['email', 'e_mail', 'mail'],
     'name': ['name', 'full_name', 'contact_name'],
+    'ai_category': ['ai_category', 'ai_label', 'ai_kategorie'],
+    'ai_summary': ['ai_summary', 'ai_zusammenfassung', 'ai_insight', 'ai_note'],
+    'skills': ['skills', 'skillset', 'kompetenzen', 'skill_tags'],
+    'qualifications': ['qualifications', 'qualification', 'qualifikationen', 'education', 'certifications'],
 }
 
 # Scraper DB → Django Model field mapping
@@ -67,6 +71,7 @@ SCRAPER_TO_DJANGO_MAPPING = {
     # Arrays/Lists (stored as JSON)
     'tags': 'tags',
     'skills': 'skills',
+    'qualifications': 'qualifications',
     
     # Candidate-specific
     'availability': 'availability',
@@ -118,7 +123,7 @@ for scraper_field, django_field in SCRAPER_TO_DJANGO_MAPPING.items():
         DJANGO_TO_SCRAPER_MAPPING[django_field] = scraper_field
 
 # Fields that should be treated as JSON arrays
-JSON_ARRAY_FIELDS = ['tags', 'skills']
+JSON_ARRAY_FIELDS = ['tags', 'skills', 'qualifications']
 
 # Fields that should be treated as JSON objects
 JSON_OBJECT_FIELDS = []

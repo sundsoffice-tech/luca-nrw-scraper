@@ -22,6 +22,11 @@ class ScraperControl {
         this.btnStop = document.getElementById('btn-stop');
         this.btnClearLogs = document.getElementById('btn-clear-logs');
         this.form = document.getElementById('scraper-form');
+        this.metricCpu = document.getElementById('metric-cpu');
+        this.metricMemory = document.getElementById('metric-memory');
+        this.metricLeads = document.getElementById('metric-leads');
+        this.metricUpdated = document.getElementById('metric-updated');
+        this.metricsSource = null;
         
         // Bind events
         this.bindEvents();
@@ -31,6 +36,7 @@ class ScraperControl {
         
         // Poll status every 3 seconds
         this.statusInterval = setInterval(() => this.updateStatus(), 3000);
+        this.startMetricsStream();
     }
     
     bindEvents() {
@@ -253,6 +259,52 @@ class ScraperControl {
         };
     }
     
+    startMetricsStream() {
+        if (!this.config.metricsEndpoint || this.metricsSource) {
+            return;
+        }
+
+        this.metricsSource = new EventSource(this.config.metricsEndpoint);
+        this.metricsSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'metrics') {
+                    this.updateMetrics(data.payload);
+                }
+            } catch (error) {
+                console.error('Error parsing metrics event:', error);
+            }
+        };
+
+        this.metricsSource.onerror = (error) => {
+            console.error('Metrics EventSource error:', error);
+            this.stopMetricsStream();
+            setTimeout(() => this.startMetricsStream(), 5000);
+        };
+    }
+
+    stopMetricsStream() {
+        if (this.metricsSource) {
+            this.metricsSource.close();
+            this.metricsSource = null;
+        }
+    }
+
+    updateMetrics(payload) {
+        if (this.metricCpu) {
+            this.metricCpu.textContent = payload.cpu_percent.toFixed(1) + '%';
+        }
+        if (this.metricMemory) {
+            this.metricMemory.textContent = payload.memory_mb.toFixed(0) + 'MB';
+        }
+        if (this.metricLeads) {
+            this.metricLeads.textContent = payload.leads_found || 0;
+        }
+        if (this.metricUpdated) {
+            const ts = new Date().toLocaleTimeString();
+            this.metricUpdated.textContent = ts;
+        }
+    }
     stopLogStream() {
         if (this.eventSource) {
             this.eventSource.close();
@@ -327,6 +379,7 @@ class ScraperControl {
             clearInterval(this.statusInterval);
         }
         this.stopLogStream();
+        this.stopMetricsStream();
     }
 }
 

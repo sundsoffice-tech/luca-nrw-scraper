@@ -59,6 +59,14 @@ class ScraperConfigModelTest(TestCase):
         self.assertEqual(config1.pk, config2.pk)
         self.assertEqual(config1.pk, 1)
 
+    def test_config_version_bumps_on_save(self):
+        """Every save should increment the version counter."""
+        config = ScraperConfig.get_config()
+        initial_version = config.config_version
+        config.mode = 'learning' if config.mode != 'learning' else 'standard'
+        config.save()
+        self.assertEqual(config.config_version, initial_version + 1)
+
 
 class ScraperConfigPersistenceTest(APITestCase):
     """Test that scraper settings persist after starting."""

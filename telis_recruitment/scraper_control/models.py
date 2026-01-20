@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from typing import Dict
 
 
 class ScraperConfig(models.Model):
@@ -139,6 +140,60 @@ class ScraperConfig(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(10)],
         verbose_name="Max. Retries pro URL"
     )
+
+    # === ENVIRONMENT VARIABLE OVERRIDES ===
+    openai_api_key = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="OpenAI API Key",
+        help_text="Override für die OpenAI API (z.B. sk-...)"
+    )
+    gcs_keys = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="Google CSE API Keys",
+        help_text="Komma-separierte Google CSE Keys"
+    )
+    gcs_cxs = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="Google CSE CXs",
+        help_text="Comma-separierte Custom Search Identifiers"
+    )
+    google_cse_api_key = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="Google CSE API Key",
+        help_text="Einzelkey für Google Custom Search"
+    )
+    bing_api_key = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="Bing API Key"
+    )
+    perplexity_api_key = models.CharField(
+        max_length=512,
+        blank=True,
+        default='',
+        verbose_name="Perplexity API Key"
+    )
+
+    def env_overrides(self) -> Dict[str, str]:
+        """Return configured environment overrides for scraper startups."""
+        overrides = {
+            'OPENAI_API_KEY': self.openai_api_key,
+            'GCS_KEYS': self.gcs_keys,
+            'GCS_CXS': self.gcs_cxs,
+            'GOOGLE_CSE_API_KEY': self.google_cse_api_key,
+            'BING_API_KEY': self.bing_api_key,
+            'PERPLEXITY_API_KEY': self.perplexity_api_key,
+        }
+        return {k: v for k, v in overrides.items() if v}
     
     # === NEUE FELDER: Process Manager Retry & Circuit Breaker ===
     process_max_retry_attempts = models.IntegerField(
@@ -223,6 +278,13 @@ class ScraperConfig(models.Model):
         help_text="⚠️ WARNUNG: Deaktiviert SSL-Zertifikat-Validierung. Nur für Entwicklung/Testing!"
     )
     
+    config_version = models.IntegerField(
+        default=1,
+        editable=False,
+        verbose_name="Konfigurationsversion",
+        help_text="Steigt bei jeder Speicherung, damit laufende Scraper Änderungen erkennen"
+    )
+
     # Metadata
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Aktualisiert am")
     updated_by = models.ForeignKey(
@@ -248,8 +310,12 @@ class ScraperConfig(models.Model):
         return config
     
     def save(self, *args, **kwargs):
-        """Ensure only one instance exists"""
+        """Ensure only one instance exists and bump the config version."""
         self.pk = 1
+        if self._state.adding:
+            self.config_version = self.config_version or 1
+        else:
+            self.config_version = (self.config_version or 0) + 1
         super().save(*args, **kwargs)
 
 
