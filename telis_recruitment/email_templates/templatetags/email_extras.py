@@ -21,6 +21,16 @@ def sanitize_email_template(value):
 def json_encode(value):
     """
     Safely encode Python data as JSON for use in JavaScript.
+    Only use this for data structures, not user-generated content.
     Usage: {{ data|json_encode }}
     """
+    # Validate that value is a safe data structure (dict, list, etc.)
+    # Do not use this for arbitrary user input
+    if value is None:
+        return mark_safe('null')
+    
+    if not isinstance(value, (dict, list, tuple, str, int, float, bool)):
+        # Reject unsafe types
+        raise ValueError(f"json_encode only accepts basic Python types, got {type(value)}")
+    
     return mark_safe(json.dumps(value))

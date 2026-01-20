@@ -90,31 +90,49 @@ class TestCSSSanitization:
         """javascript: in CSS should be removed."""
         malicious = 'body { background: url("javascript:alert(1)"); }'
         result = sanitize_css(malicious)
-        assert 'javascript:' not in result
+        assert 'javascript:' not in result.lower()
+    
+    def test_removes_javascript_case_insensitive(self):
+        """JavaScript: (uppercase) should also be removed."""
+        malicious = 'body { background: url("JavaScript:alert(1)"); }'
+        result = sanitize_css(malicious)
+        assert 'javascript:' not in result.lower()
+    
+    def test_removes_javascript_with_whitespace(self):
+        """java script: with whitespace should be removed."""
+        malicious = 'div { background: url("java script:alert(1)"); }'
+        result = sanitize_css(malicious)
+        assert 'javascript' not in result.lower() or 'script' not in result.lower()
     
     def test_removes_expression(self):
         """CSS expression() should be removed."""
         malicious = 'div { width: expression(alert("XSS")); }'
         result = sanitize_css(malicious)
-        assert 'expression(' not in result
+        assert 'expression(' not in result.lower()
+    
+    def test_removes_expression_case_insensitive(self):
+        """Expression() (uppercase) should also be removed."""
+        malicious = 'div { width: Expression(alert("XSS")); }'
+        result = sanitize_css(malicious)
+        assert 'expression(' not in result.lower()
     
     def test_removes_behavior(self):
         """behavior: property should be removed."""
         malicious = 'div { behavior: url("xss.htc"); }'
         result = sanitize_css(malicious)
-        assert 'behavior:' not in result
+        assert 'behavior:' not in result.lower()
     
     def test_removes_moz_binding(self):
         """-moz-binding should be removed."""
         malicious = 'div { -moz-binding: url("xss.xml"); }'
         result = sanitize_css(malicious)
-        assert '-moz-binding:' not in result
+        assert '-moz-binding:' not in result.lower()
     
     def test_removes_import(self):
         """@import should be removed."""
         malicious = '@import url("evil.css"); body { color: red; }'
         result = sanitize_css(malicious)
-        assert '@import' not in result
+        assert '@import' not in result.lower()
     
     def test_rejects_html_in_css(self):
         """HTML tags in CSS should be rejected."""

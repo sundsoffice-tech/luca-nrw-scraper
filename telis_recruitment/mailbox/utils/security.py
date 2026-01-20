@@ -58,7 +58,7 @@ ALLOWED_PAGE_TAGS = ALLOWED_EMAIL_TAGS + [
     'form', 'input', 'textarea', 'button', 'select', 'option', 'label',
 ]
 
-# Allowed attributes for landing pages
+# Allowed attributes for landing pages (more restrictive on iframe)
 ALLOWED_PAGE_ATTRIBUTES = {
     **ALLOWED_EMAIL_ATTRIBUTES,
     '*': ALLOWED_EMAIL_ATTRIBUTES['*'] + ['data-*', 'aria-*'],
@@ -72,7 +72,9 @@ ALLOWED_PAGE_ATTRIBUTES = {
     'video': ['src', 'controls', 'autoplay', 'loop', 'muted', 'poster', 'width', 'height'],
     'audio': ['src', 'controls', 'autoplay', 'loop'],
     'source': ['src', 'type'],
-    'iframe': ['src', 'width', 'height', 'frameborder', 'allowfullscreen'],
+    # Iframe with restricted attributes (no arbitrary src for security)
+    # Note: iframes are a security risk - consider removing if not needed
+    'iframe': ['width', 'height', 'frameborder', 'allowfullscreen'],
 }
 
 
@@ -147,23 +149,25 @@ def sanitize_css(css_content):
     if not css_content:
         return ""
     
-    # Remove potentially dangerous CSS patterns
+    import re
+    
+    # Remove potentially dangerous CSS patterns (case-insensitive, whitespace-tolerant)
     dangerous_patterns = [
-        'javascript:',
-        'expression(',
-        'behavior:',
-        '-moz-binding:',
-        '@import',
-        'vbscript:',
-        'data:text/html',
+        r'javascript\s*:',  # javascript: URLs
+        r'expression\s*\(',  # IE CSS expressions
+        r'behavior\s*:',  # IE CSS behaviors
+        r'-moz-binding\s*:',  # Mozilla binding
+        r'@import',  # CSS imports
+        r'vbscript\s*:',  # VBScript URLs
+        r'data\s*:\s*text\s*/\s*html',  # Data URLs with HTML
     ]
     
     cleaned = css_content
     for pattern in dangerous_patterns:
-        cleaned = cleaned.replace(pattern, '')
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
     
     # Basic validation: CSS should not contain script tags or other HTML
-    if '<script' in cleaned.lower() or 'javascript:' in cleaned.lower():
+    if re.search(r'<script', cleaned, re.IGNORECASE):
         return ""
     
     return mark_safe(cleaned)
