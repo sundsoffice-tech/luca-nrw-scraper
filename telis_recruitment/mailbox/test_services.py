@@ -176,10 +176,12 @@ class EmailThreadingRaceConditionTest(TransactionTestCase):
         threads = []
         results = []
         
+        def thread_target(thread_id):
+            """Thread target function for creating conversations"""
+            results.append(create_conversation(thread_id))
+        
         for i in range(5):
-            thread = python_threading.Thread(
-                target=lambda i=i: results.append(create_conversation(i))
-            )
+            thread = python_threading.Thread(target=thread_target, args=(i,))
             threads.append(thread)
         
         # Start all threads at once

@@ -133,7 +133,7 @@ class EmailReceiverService:
             # Process most recent emails first
             if len(email_ids) > limit:
                 email_ids = email_ids[-limit:]  # Get most recent
-                logger.info(f"Batch processing: {len(email_ids)} of {total_available} available emails (limit: {limit})")
+                logger.info(f"Processing {len(email_ids)}/{total_available} emails (limit: {limit})")
             else:
                 logger.info(f"Found {len(email_ids)} emails to fetch")
             

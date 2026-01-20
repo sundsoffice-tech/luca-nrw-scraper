@@ -127,7 +127,8 @@ class EmailThreadingService:
         if normalized_subject and contact_email:
             try:
                 # Look for conversation with same normalized subject and contact within last 30 days
-                # Use select_for_update to prevent race conditions
+                # Use select_for_update to acquire row-level locks and prevent concurrent 
+                # conversation creation with the same subject and contact email
                 thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
                 conversation = EmailConversation.objects.select_for_update().filter(
                     account=account,
