@@ -117,21 +117,25 @@ class EmailReceiverService:
                 since_date = (timezone.now() - timedelta(days=30)).strftime('%d-%b-%Y')
                 search_criteria = f'(SINCE {since_date})'
             
-            # Search for emails
-            typ, data = self.connection.search(None, search_criteria)
+            # Search for emails using UID to avoid sequence number issues
+            typ, data = self.connection.uid('search', None, search_criteria)
             
             if typ != 'OK':
                 logger.error(f"IMAP search failed: {typ}")
                 return created_emails
             
-            # Get email IDs
+            # Get email UIDs (not sequence numbers)
             email_ids = data[0].split()
             
-            # Limit number of emails
+            total_available = len(email_ids)
+            
+            # Limit number of emails to process in this batch
+            # Process most recent emails first
             if len(email_ids) > limit:
                 email_ids = email_ids[-limit:]  # Get most recent
-            
-            logger.info(f"Found {len(email_ids)} emails to fetch")
+                logger.info(f"Batch processing: {len(email_ids)} of {total_available} available emails (limit: {limit})")
+            else:
+                logger.info(f"Found {len(email_ids)} emails to fetch")
             
             # Fetch each email
             for email_id in email_ids:
@@ -140,7 +144,7 @@ class EmailReceiverService:
                     if email:
                         created_emails.append(email)
                 except Exception as e:
-                    logger.error(f"Error fetching email {email_id}: {e}")
+                    logger.error(f"Error fetching email UID {email_id}: {e}")
                     continue
             
             # Update last sync time
@@ -162,18 +166,18 @@ class EmailReceiverService:
         Fetch and parse a single email.
         
         Args:
-            email_id: IMAP email ID
+            email_id: IMAP email UID (not sequence number)
             folder: IMAP folder name
             
         Returns:
             Created Email instance or None
         """
         try:
-            # Fetch email data
-            typ, data = self.connection.fetch(email_id, '(RFC822)')
+            # Fetch email data using UID to avoid sequence number issues
+            typ, data = self.connection.uid('fetch', email_id, '(RFC822)')
             
             if typ != 'OK':
-                logger.error(f"Failed to fetch email {email_id}")
+                logger.error(f"Failed to fetch email UID {email_id}")
                 return None
             
             # Parse email
