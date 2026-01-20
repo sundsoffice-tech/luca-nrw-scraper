@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('query', models.TextField(db_index=True, verbose_name='Search Query')),
-                ('query_hash', models.CharField(help_text='MD5 hash of the query for fast lookups', max_length=64, unique=True, verbose_name='Query Hash')),
+                ('query_hash', models.CharField(help_text='SHA-256 hash of the query for fast lookups', max_length=64, unique=True, verbose_name='Query Hash')),
                 ('times_used', models.IntegerField(default=0, validators=[django.core.validators.MinValueValidator(0)], verbose_name='Times Used')),
                 ('leads_found', models.IntegerField(default=0, validators=[django.core.validators.MinValueValidator(0)], verbose_name='Leads Found')),
                 ('phone_leads', models.IntegerField(default=0, validators=[django.core.validators.MinValueValidator(0)], verbose_name='Leads with Phone')),

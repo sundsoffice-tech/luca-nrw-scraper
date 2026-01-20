@@ -6,6 +6,7 @@ Provides AI-powered contact extraction, name validation, and content analysis.
 All functions gracefully handle missing API keys by returning empty results or fallbacks.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -16,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import aiohttp
 import tldextract
 
+from cache import get_ai_response_cache
 from luca_scraper.config import OPENAI_API_KEY, HTTP_TIMEOUT
 
 
@@ -75,6 +77,24 @@ def normalize_phone(p: str) -> str:
     if s.startswith("+") and len(s) >= 8:
         return s
     return ""
+
+
+AI_RESPONSE_CACHE = get_ai_response_cache()
+
+
+def _build_ai_cache_key(prefix: str, url: str, text: str) -> str:
+    """Create a stable cache key for AI requests."""
+    key_material = f"{prefix}:{url}:{text}"
+    digest = hashlib.sha256(key_material.encode("utf-8")).hexdigest()
+    return f"{prefix}:{digest}"
+
+
+def _clone_cached_value(value: Any) -> Any:
+    """Return a deep copy of cached data to prevent mutations."""
+    try:
+        return json.loads(json.dumps(value))
+    except Exception:
+        return value
 
 
 # Constants needed for validation
@@ -288,6 +308,10 @@ async def analyze_content_async(text: str, url: str) -> Dict[str, Any]:
         return {"score": 100, "category": "Unchecked", "summary": "No AI Key"}
 
     clean_text = (text or "")[:2000].replace("\n", " ")
+    cache_key = _build_ai_cache_key("analysis", url, clean_text)
+    cached = AI_RESPONSE_CACHE.get(cache_key)
+    if cached is not None:
+        return _clone_cached_value(cached)
     endpoint = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -331,11 +355,13 @@ async def analyze_content_async(text: str, url: str) -> Dict[str, Any]:
                             lead_type = parsed.get("lead_type", "Unknown")
                             score = parsed.get("score", 50)
                             reason = parsed.get("reason", "")
-                            return {
+                            result = {
                                 "score": score if is_relevant else 0,
                                 "category": lead_type,
                                 "summary": reason
                             }
+                            AI_RESPONSE_CACHE.set(cache_key, _clone_cached_value(result))
+                            return result
                         except json.JSONDecodeError:
                             log("warn", "AI analysis JSON parse error", url=url)
                     else:
@@ -345,7 +371,9 @@ async def analyze_content_async(text: str, url: str) -> Dict[str, Any]:
     except Exception as e:
         log("warn", "AI Analysis failed", url=url, error=str(e))
 
-    return {"score": 50, "category": "Error", "summary": "Analysis failed"}
+    fallback = {"score": 50, "category": "Error", "summary": "Analysis failed"}
+    AI_RESPONSE_CACHE.set(cache_key, _clone_cached_value(fallback))
+    return fallback
 
 
 # =========================
@@ -368,6 +396,14 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
         return []
 
     clean_text = (text_content or "")[:3000].replace("\n", " ")
+    cache_key = _build_ai_cache_key("contacts", url, clean_text)
+    cached = AI_RESPONSE_CACHE.get(cache_key)
+    if cached is not None:
+        return _clone_cached_value(cached)
+
+    def _store_contacts(result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        AI_RESPONSE_CACHE.set(cache_key, _clone_cached_value(result))
+        return result
     endpoint = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -424,11 +460,11 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
                 is_job_seeker = parsed.get("is_job_seeker") if isinstance(parsed, dict) else None
                 if is_job_seeker is False:
                     log("debug", "AI: Not a job seeker profile", url=url)
-                    return []
+                    return _store_contacts([])
                 
                 contacts_raw = parsed.get("contacts") if isinstance(parsed, dict) else None
                 if not isinstance(contacts_raw, list):
-                    return []
+                    return _store_contacts([])
                 
                 cleaned: List[Dict[str, Any]] = []
                 for c in contacts_raw:
@@ -456,9 +492,9 @@ async def extract_contacts_with_ai(text_content: str, url: str) -> List[Dict[str
                         contact_record["location"] = location
                     if availability:
                         contact_record["availability"] = availability
-                    
+                   
                     cleaned.append(contact_record)
-                return cleaned
+                return _store_contacts(cleaned)
     except Exception as e:
         log("warn", "AI contact extraction failed", url=url, error=str(e))
         return []

@@ -23,8 +23,9 @@ except Exception as exc:
     logging.warning("Django setup failed: %s", exc)
 
 # Now we can import Django models and utilities
-from django.db import transaction as django_transaction
+from django.db import IntegrityError, transaction as django_transaction
 from telis_recruitment.leads.models import Lead
+from telis_recruitment.leads.utils.normalization import normalize_email, normalize_phone
 from telis_recruitment.leads.field_mapping import (
     SCRAPER_TO_DJANGO_MAPPING,
     JSON_ARRAY_FIELDS,
@@ -33,22 +34,6 @@ from telis_recruitment.leads.field_mapping import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_email(value: Optional[str]) -> Optional[str]:
-    """Normalize emails for matching by trimming and lower-casing."""
-    if not value:
-        return None
-    return value.strip().lower()
-
-
-def _normalize_phone(value: Optional[str]) -> Optional[str]:
-    """Keep only digits when normalizing phone numbers for lookup."""
-    if not value:
-        return None
-    digits = "".join(ch for ch in value if ch.isdigit())
-    return digits or None
-
 
 def _map_scraper_data_to_django(data: Dict) -> Dict:
     """
@@ -179,8 +164,8 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
     email = data.get('email')
     telefon = data.get('telefon')
     
-    normalized_email = _normalize_email(email)
-    normalized_phone = _normalize_phone(telefon)
+    normalized_email = normalize_email(email)
+    normalized_phone = normalize_phone(telefon)
     
     # Map data to Django fields
     mapped_data = _map_scraper_data_to_django(data)
@@ -195,33 +180,16 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
         
         if normalized_email:
             try:
-                # Use filter().first() which is a single query
-                existing_lead = Lead.objects.filter(email__iexact=normalized_email).first()
+                existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
             except Exception as exc:
-                logger.debug("Error searching by email: %s", exc)
+                logger.debug("Error searching by normalized email: %s", exc)
         
-        # Priority 2: If not found by email, search by phone
+        # Priority 2: If not found by email, search by normalized phone
         if not existing_lead and normalized_phone:
             try:
-                # For phone matching, we need to handle different formats
-                # Query leads with non-null phones
-                # Use ordering and limit to prevent full table scan on large datasets
-                # Order by last_updated DESC to prioritize recent leads
-                # Fetch all needed fields upfront to avoid additional query
-                candidates = Lead.objects.filter(
-                    telefon__isnull=False
-                ).exclude(
-                    telefon=''
-                ).order_by('-last_updated')[:200]  # Increased limit for better coverage
-                
-                for lead in candidates:
-                    stored_normalized = _normalize_phone(lead.telefon)
-                    if stored_normalized and stored_normalized == normalized_phone:
-                        # Found a match - no need to re-fetch since we already have the full object
-                        existing_lead = lead
-                        break
+                existing_lead = Lead.objects.filter(normalized_phone=normalized_phone).first()
             except Exception as exc:
-                logger.debug("Error searching by phone: %s", exc)
+                logger.debug("Error searching by normalized phone: %s", exc)
         
         # Update or create based on whether we found a lead
         if existing_lead:
@@ -244,7 +212,7 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
                 # If create fails due to race condition, try to find and update
                 logger.debug("Create failed, attempting to find existing lead: %s", exc)
                 if normalized_email:
-                    existing_lead = Lead.objects.filter(email__iexact=normalized_email).first()
+                    existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
                     if existing_lead:
                         for field, value in mapped_data.items():
                             setattr(existing_lead, field, value)
@@ -280,21 +248,16 @@ def lead_exists(email: Optional[str] = None, telefon: Optional[str] = None) -> b
     if not email and not telefon:
         return False
     
-    normalized_email = _normalize_email(email)
-    normalized_phone = _normalize_phone(telefon)
+    normalized_email = normalize_email(email)
+    normalized_phone = normalize_phone(telefon)
     
     # Check by email first
-    if normalized_email:
-        if Lead.objects.filter(email__iexact=normalized_email).exists():
-            return True
-    
-    # Check by phone
-    if normalized_phone:
-        # Query all leads and filter in Python for normalized phone match
-        for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
-            stored_normalized = _normalize_phone(lead.telefon)
-            if stored_normalized and stored_normalized == normalized_phone:
-                return True
+    if normalized_email and Lead.objects.filter(email_normalized=normalized_email).exists():
+        return True
+
+    # Check by normalized phone column
+    if normalized_phone and Lead.objects.filter(normalized_phone=normalized_phone).exists():
+        return True
     
     return False
 
@@ -368,20 +331,15 @@ def mark_url_seen(url: str, run_id: Optional[int] = None) -> None:
     """
     from telis_recruitment.scraper_control.models import UrlSeen, ScraperRun
     
-    # Check if URL already exists
-    if UrlSeen.objects.filter(url=url).exists():
-        return
-    
-    # Get ScraperRun if run_id is provided
-    scraper_run = None
+    defaults = {}
+
     if run_id:
-        try:
-            scraper_run = ScraperRun.objects.get(id=run_id)
-        except ScraperRun.DoesNotExist:
+        if ScraperRun.objects.filter(id=run_id).exists():
+            defaults['first_run_id'] = run_id
+        else:
             logger.warning(f"ScraperRun with id {run_id} not found")
-    
-    # Create UrlSeen entry
-    UrlSeen.objects.create(url=url, first_run=scraper_run)
+
+    UrlSeen.objects.get_or_create(url=url, defaults=defaults)
 
 
 def is_query_done(query: str) -> bool:
@@ -406,18 +364,15 @@ def mark_query_done(query: str, run_id: Optional[int] = None) -> None:
         query: Search query to mark as done
         run_id: Optional scraper run ID
     """
-    from telis_recruitment.scraper_control.models import QueryDone, ScraperRun
+    from telis_recruitment.scraper_control.models import QueryDone
     
     # Get or create QueryDone entry
-    query_done, created = QueryDone.objects.get_or_create(query=query)
-    
-    # Update last_run if run_id is provided
+    query_done, _ = QueryDone.objects.get_or_create(query=query)
+
     if run_id:
         try:
-            scraper_run = ScraperRun.objects.get(id=run_id)
-            query_done.last_run = scraper_run
-            query_done.save()
-        except ScraperRun.DoesNotExist:
+            QueryDone.objects.filter(pk=query_done.pk).update(last_run_id=run_id)
+        except IntegrityError:
             logger.warning(f"ScraperRun with id {run_id} not found")
 
 

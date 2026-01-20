@@ -51,6 +51,8 @@ async def crawl_kalaydo_listings_async(
     
     for base_url in urls:
         for page in range(1, max_pages + 1):
+            seen_urls = []
+            seen_local = set()
             if page == 1:
                 url = base_url
             else:
@@ -97,7 +99,7 @@ async def crawl_kalaydo_listings_async(
                     break
                 
                 for ad_url in ad_links:
-                    if url_seen_func and url_seen_func(ad_url):
+                    if url_seen_func and (url_seen_func(ad_url) or ad_url in seen_local):
                         continue
                     
                     jitter = jitter_func(0.5, 1.0) if jitter_func else 0.5
@@ -108,9 +110,10 @@ async def crawl_kalaydo_listings_async(
                         leads.append(lead)
                         if log_func:
                             log_func("info", "Kalaydo: Lead extrahiert", url=ad_url, has_phone=True)
-                        
+
                         if mark_url_seen_func:
-                            mark_url_seen_func(ad_url, source="Kalaydo")
+                            seen_urls.append(ad_url)
+                            seen_local.add(ad_url)
                     else:
                         if log_func:
                             log_func("debug", "Kalaydo: Keine Handynummer", url=ad_url)
@@ -119,6 +122,9 @@ async def crawl_kalaydo_listings_async(
                 if log_func:
                     log_func("error", "Kalaydo: Fehler beim Crawlen", url=url, error=str(e))
                 break
+            finally:
+                if mark_url_seen_func and seen_urls:
+                    mark_url_seen_func(seen_urls, source="Kalaydo")
     
     if log_func:
         log_func("info", "Kalaydo: Crawling abgeschlossen", total_leads=len(leads))

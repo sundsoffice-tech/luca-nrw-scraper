@@ -4,6 +4,7 @@ Cache module for query results and URL seen-set tracking.
 Implements TTL-based caching for cost and performance optimization.
 """
 
+import os
 import time
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Set
@@ -257,7 +258,8 @@ class QueryCache:
         return self._cache.stats()
 
 
-# Global cache instances
+_AI_RESPONSE_CACHE: Optional[TTLCache] = None
+_DOMAIN_RATING_CACHE: Optional[TTLCache] = None
 _QUERY_CACHE: Optional[QueryCache] = None
 _URL_SEEN_SET: Optional[URLSeenSet] = None
 
@@ -276,3 +278,41 @@ def get_url_seen_set(ttl_seconds: int = 604800) -> URLSeenSet:
     if _URL_SEEN_SET is None:
         _URL_SEEN_SET = URLSeenSet(ttl_seconds=ttl_seconds)
     return _URL_SEEN_SET
+
+
+def get_ai_response_cache(
+    ttl_seconds: Optional[int] = None,
+    max_size: int = 1500,
+) -> TTLCache:
+    """
+    Get or create global AI response cache.
+
+    Args:
+        ttl_seconds: TTL for cached AI responses
+        max_size: Max number of cached items
+    """
+    global _AI_RESPONSE_CACHE
+    if ttl_seconds is None:
+        ttl_seconds = int(os.getenv("AI_RESPONSE_CACHE_TTL", "1800"))
+    if _AI_RESPONSE_CACHE is None:
+        _AI_RESPONSE_CACHE = TTLCache(ttl_seconds=ttl_seconds, max_size=max_size)
+    return _AI_RESPONSE_CACHE
+
+
+def get_domain_rating_cache(
+    ttl_seconds: Optional[int] = None,
+    max_size: int = 5000,
+) -> TTLCache:
+    """
+    Get or create global domain rating cache (e.g., domain priority scores).
+
+    Args:
+        ttl_seconds: TTL for cached ratings
+        max_size: Max number of cached domains
+    """
+    global _DOMAIN_RATING_CACHE
+    if ttl_seconds is None:
+        ttl_seconds = int(os.getenv("DOMAIN_RATING_CACHE_TTL", "43200"))
+    if _DOMAIN_RATING_CACHE is None:
+        _DOMAIN_RATING_CACHE = TTLCache(ttl_seconds=ttl_seconds, max_size=max_size)
+    return _DOMAIN_RATING_CACHE

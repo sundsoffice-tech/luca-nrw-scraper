@@ -8,10 +8,11 @@ portal crawlers.
 """
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional, Union
 
 from bs4 import BeautifulSoup
 
+from luca_scraper.database import db as default_db
 from luca_scraper.extraction.lead_builder import build_lead_data
 
 
@@ -239,30 +240,73 @@ async def extract_detail_generic(
         return None
 
 
-def _mark_url_seen(url: str, source: str = "", db_func=None, log_func=None, seen_cache=None, normalize_func=None):
+def _mark_url_seen(
+    url: Union[str, Iterable[str]],
+    source: str = "",
+    db_func=None,
+    log_func=None,
+    seen_cache=None,
+    normalize_func=None,
+):
     """
-    Helper function to mark a URL as seen in the database.
+    Helper function to mark one or more URLs as seen in the database.
 
     Args:
-        url: The URL to mark as seen
+        url: Single URL or iterable of URLs to mark as seen
         source: Optional source name for logging (e.g., "Markt.de", "Quoka")
         db_func: Database connection function
         log_func: Logging function
         seen_cache: Cache set for seen URLs
         normalize_func: URL normalization function
     """
+    if db_func is None:
+        db_func = default_db
+
+    if isinstance(url, str):
+        candidates = [url]
+    else:
+        try:
+            candidates = list(url)
+        except TypeError:
+            candidates = [str(url)]
+
+    seen_urls = []
+    seen_urls_set = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate_str = candidate if isinstance(candidate, str) else str(candidate)
+        if candidate_str in seen_urls_set:
+            continue
+        seen_urls_set.add(candidate_str)
+        seen_urls.append(candidate_str)
+
+    if not seen_urls:
+        return
+
+    log_prefix = f"{source}: " if source else ""
     try:
         con = db_func()
         cur = con.cursor()
-        cur.execute("INSERT OR IGNORE INTO urls_seen (url) VALUES (?)", (url,))
+        cur.executemany(
+            "INSERT OR IGNORE INTO urls_seen (url) VALUES (?)",
+            ((u,) for u in seen_urls),
+        )
         con.commit()
-        con.close()
         if seen_cache is not None and normalize_func:
-            seen_cache.add(normalize_func(url))
-    except Exception as e:
+            for seen_url in seen_urls:
+                normalized = normalize_func(seen_url)
+                if normalized:
+                    seen_cache.add(normalized)
+    except Exception as exc:
         if log_func:
-            log_prefix = f"{source}: " if source else ""
-            log_func("warn", f"{log_prefix}Konnte URL nicht als gesehen markieren", url=url, error=str(e))
+            log_func(
+                "warn",
+                f"{log_prefix}Konnte URLs ({len(seen_urls)}) nicht als gesehen markieren",
+                source=source,
+                count=len(seen_urls),
+                error=str(exc),
+            )
 
 
 # Backward compatibility alias

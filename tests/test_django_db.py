@@ -231,6 +231,21 @@ class TestDjangoDBAdapter(TransactionTestCase):
         
         # Different phone should not exist
         assert lead_exists(telefon='+49987654321') is False
+
+    def test_lead_normalized_fields_are_set(self):
+        """Ensure normalized email/phone fields are populated."""
+        from luca_scraper.django_db import upsert_lead
+
+        data = {
+            'name': 'Normalized Lead',
+            'email': 'NORM@Example.COM ',
+            'telefon': '+49 (123) 456-789',
+        }
+        lead_id, _ = upsert_lead(data)
+
+        lead = Lead.objects.get(id=lead_id)
+        assert lead.email_normalized == 'norm@example.com'
+        assert lead.normalized_phone == '49123456789'
     
     def test_lead_exists_no_params(self):
         """Test that lead_exists returns False when no params provided."""

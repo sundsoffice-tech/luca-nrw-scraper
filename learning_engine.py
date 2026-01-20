@@ -11,6 +11,7 @@ Falls back gracefully to default constants when Django is not available.
 CONSOLIDATED: Uses luca_scraper.learning_db for unified database layer.
 """
 
+import hashlib
 import json
 import sqlite3
 from datetime import datetime, timezone, timedelta
@@ -20,6 +21,7 @@ import re
 import logging
 
 # Import unified learning database adapter
+from cache import get_domain_rating_cache
 from luca_scraper import learning_db
 
 # Import thread-safe database utilities
@@ -62,13 +64,13 @@ except (ImportError, Exception):
             'default_provider': 'OpenAI',
             'default_model': 'gpt-4o-mini',
         }
-    
+
     def get_prompt(slug: str):
         return None
-    
+
     def log_usage(*args, **kwargs):
         pass
-    
+
     def check_budget():
         return True, {
             'daily_spent': 0.0,
@@ -78,6 +80,19 @@ except (ImportError, Exception):
             'monthly_budget': 150.0,
             'monthly_remaining': 150.0,
         }
+
+
+_DOMAIN_RATING_CACHE = get_domain_rating_cache()
+
+
+def _normalize_domain(domain: str) -> str:
+    """Normalize host names for consistent caching."""
+    if not domain:
+        return ""
+    domain = domain.lower()
+    if domain.startswith("www."):
+        return domain[4:]
+    return domain
 
 logger = logging.getLogger(__name__)
 
@@ -607,21 +622,18 @@ class LearningEngine:
             quality: Quality score (0.0-1.0)
             has_phone: Whether leads have phone numbers
         """
-        if not domain:
+        normalized_domain = _normalize_domain(domain)
+        if not normalized_domain:
             return
-        
-        # Remove www. prefix if present
-        if domain.startswith("www."):
-            domain = domain[4:]
         
         # Use unified learning database adapter
         learning_db.record_source_hit(
-            domain=domain,
+            domain=normalized_domain,
             leads_found=leads_found,
             has_phone=has_phone,
             quality=quality,
-            db_path=self.db_path
-        )
+                db_path=self.db_path
+            )
         
         # Also maintain legacy learning_domains table for compatibility
         con = sqlite3.connect(self.db_path)
@@ -644,11 +656,11 @@ class LearningEngine:
                     last_visit = CURRENT_TIMESTAMP,
                     score = MIN(1.0, score + ?)
             """, (
-                domain, 
-                1 if leads_found > 0 else 0, 
-                leads_found, 
-                quality, 
-                initial_score,
+                normalized_domain,
+                 1 if leads_found > 0 else 0, 
+                 leads_found, 
+                 quality, 
+                 initial_score,
                 1 if leads_found > 0 else 0,
                 leads_found,
                 quality,
@@ -656,6 +668,11 @@ class LearningEngine:
             ))
             
             con.commit()
+            # Refresh cache after a successful update
+            cur.execute("SELECT score FROM learning_domains WHERE domain = ?", (normalized_domain,))
+            row = cur.fetchone()
+            if row:
+                _DOMAIN_RATING_CACHE.set(normalized_domain, row[0])
         except Exception:
             pass
         finally:
@@ -693,20 +710,23 @@ class LearningEngine:
         Returns:
             Priority score (higher is better), defaults to 0.5 for unknown domains
         """
-        if not domain:
+        normalized_domain = _normalize_domain(domain)
+        if not normalized_domain:
             return 0.5
-        
-        # Remove www. prefix if present
-        if domain.startswith("www."):
-            domain = domain[4:]
-        
+
+        cached_score = _DOMAIN_RATING_CACHE.get(normalized_domain)
+        if cached_score is not None:
+            return cached_score
+
         con = sqlite3.connect(self.db_path)
         cur = con.cursor()
         
         try:
-            cur.execute("SELECT score FROM learning_domains WHERE domain = ?", (domain,))
+            cur.execute("SELECT score FROM learning_domains WHERE domain = ?", (normalized_domain,))
             row = cur.fetchone()
-            return row[0] if row else 0.5
+            score = row[0] if row else 0.5
+            _DOMAIN_RATING_CACHE.set(normalized_domain, score)
+            return score
         finally:
             con.close()
     
@@ -802,15 +822,13 @@ class LearningEngine:
         if not queries:
             return []
         
-        import hashlib
-        
         con = sqlite3.connect(self.db_path)
         cur = con.cursor()
         
         try:
             scored_queries = []
             for q in queries:
-                query_hash = hashlib.md5(q.encode()).hexdigest()[:16]
+                query_hash = hashlib.sha256(q.encode()).hexdigest()
                 cur.execute(
                     "SELECT effectiveness_score FROM learning_queries WHERE query_hash = ?", 
                     (query_hash,)

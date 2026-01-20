@@ -144,13 +144,13 @@ def _ensure_sqlite_tables(db_path: str) -> None:
 
 def _hash_query(query: str) -> str:
     """Generate a hash for a query string"""
-    return hashlib.md5(query.encode('utf-8')).hexdigest()
+    return hashlib.sha256(query.encode('utf-8')).hexdigest()
 
 
 def _hash_pattern(pattern_type: str, pattern_value: str) -> str:
     """Generate a hash for a pattern"""
     combined = f"{pattern_type}:{pattern_value}"
-    return hashlib.md5(combined.encode('utf-8')).hexdigest()
+    return hashlib.sha256(combined.encode('utf-8')).hexdigest()
 
 
 # ==================== DORK PERFORMANCE ====================

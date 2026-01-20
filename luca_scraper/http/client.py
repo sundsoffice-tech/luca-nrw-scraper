@@ -19,6 +19,8 @@ USER_AGENT = os.getenv("USER_AGENT", "Mozilla/5.0 (compatible; VertriebFinder/2.
 HTTP_TIMEOUT = int(os.getenv("HTTP_TIMEOUT", "10"))
 USE_TOR = False
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(2 * 1024 * 1024)))
+WORKER_PARALLELISM = max(1, int(os.getenv("WORKER_PARALLELISM", "35")))
+_HTTP_SEMAPHORE = asyncio.Semaphore(WORKER_PARALLELISM)
 
 # Content type guards
 BINARY_CT_PREFIXES = ("image/", "video/", "audio/")
@@ -160,7 +162,20 @@ def _acceptable_by_headers(hdrs: Dict[str, str]) -> Tuple[bool, str]:
     return True, ct or "unknown"
 
 
-async def http_get_async(url: str, headers: Optional[Dict] = None, params: Optional[Dict] = None, timeout: int = HTTP_TIMEOUT) -> Optional[Any]:
+def set_worker_parallelism(limit: int):
+    """
+    Adjust the global worker parallelism limit.
+    Should be called before starting heavy crawls so the semaphore reflects the active Wasserfall mode.
+    """
+    global WORKER_PARALLELISM, _HTTP_SEMAPHORE
+    limit = max(1, limit)
+    if limit == WORKER_PARALLELISM:
+        return
+    WORKER_PARALLELISM = limit
+    _HTTP_SEMAPHORE = asyncio.Semaphore(limit)
+
+
+async def http_get_async(url: str, headers: Optional[Dict] = None, params: Optional[Dict[str, Any]] = None, timeout: int = HTTP_TIMEOUT) -> Optional[Any]:
     """
     HTTP GET with optional HEAD preflight, proxy/UA rotation, and HTTP/2→1.1 fallback.
     
@@ -180,6 +195,11 @@ async def http_get_async(url: str, headers: Optional[Dict] = None, params: Optio
     Returns:
         Response object or None on failure
     """
+    async with _HTTP_SEMAPHORE:
+        return await _http_get_inner(url, headers=headers, params=params, timeout=timeout)
+
+async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Optional[Dict[str, Any]] = None, timeout: int = HTTP_TIMEOUT) -> Optional[Any]:
+
     # Choose rotation
     ua = random.choice(UA_POOL) if UA_POOL else USER_AGENT
     proxy = random.choice(PROXY_POOL) if PROXY_POOL else None

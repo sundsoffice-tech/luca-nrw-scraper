@@ -4,7 +4,7 @@ Adaptive dork selection using bandit-light algorithm.
 """
 
 import random
-from typing import Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Union
 
 from metrics import MetricsStore, DorkMetrics
 
@@ -18,22 +18,39 @@ class AdaptiveDorkSelector:
     def __init__(
         self,
         metrics_store: MetricsStore,
-        all_dorks: List[str],
+        all_dorks: Union[List[str], Callable[[], List[str]]],
         explore_rate: float = 0.15,
         min_core: int = 4,
         max_core: int = 6,
     ):
         self.metrics = metrics_store
-        self.all_dorks = list(all_dorks)
+        self._dork_loader = all_dorks
+        self._dorks_loaded = False
+        self.all_dorks: List[str] = []
         self.explore_rate = explore_rate
         self.min_core = min_core
         self.max_core = max_core
         self.core_dorks: List[str] = []
         self.explore_dorks: List[str] = []
-        self._update_pools()
-    
+        # Pools will be initialized lazily when needed
+   
+    def _load_all_dorks(self):
+        """Load all dorks only once, supporting callables."""
+        if self._dorks_loaded:
+            return
+        loader = self._dork_loader
+        try:
+            if callable(loader):
+                loaded = loader() or []
+            else:
+                loaded = loader or []
+            self.all_dorks = list(loaded)
+        except Exception:
+            self.all_dorks = []
+        self._dorks_loaded = True
     def _update_pools(self):
         """Update core and explore pools based on metrics."""
+        self._load_all_dorks()
         # Get all dork metrics
         dork_metrics = [self.metrics.get_dork_metrics(d) for d in self.all_dorks]
         
@@ -135,6 +152,7 @@ class AdaptiveDorkSelector:
     
     def promote_to_core(self, dork: str):
         """Manually promote a dork to core pool."""
+        self._update_pools()
         if dork in self.explore_dorks:
             self.explore_dorks.remove(dork)
             if dork not in self.core_dorks:
@@ -142,6 +160,7 @@ class AdaptiveDorkSelector:
     
     def demote_to_explore(self, dork: str):
         """Manually demote a dork to explore pool."""
+        self._update_pools()
         if dork in self.core_dorks:
             self.core_dorks.remove(dork)
             if dork not in self.explore_dorks:
@@ -149,6 +168,7 @@ class AdaptiveDorkSelector:
     
     def get_pool_info(self) -> Dict[str, any]:
         """Get information about current pools."""
+        self._update_pools()
         return {
             "core_dorks": len(self.core_dorks),
             "explore_dorks": len(self.explore_dorks),

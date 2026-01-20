@@ -342,7 +342,7 @@ class DorkPerformance(models.Model):
         max_length=64,
         unique=True,
         verbose_name="Query Hash",
-        help_text="MD5 hash of the query for fast lookups"
+        help_text="SHA-256 hash of the query for fast lookups"
     )
     times_used = models.IntegerField(
         default=0,

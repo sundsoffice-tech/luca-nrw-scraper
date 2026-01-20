@@ -61,6 +61,8 @@ async def crawl_markt_de_listings_async(
     
     for base_url in urls:
         for page in range(1, max_pages + 1):
+            seen_urls = []
+            seen_local = set()
             if page == 1:
                 url = base_url
             else:
@@ -118,7 +120,7 @@ async def crawl_markt_de_listings_async(
                 
                 # Extract details from each ad
                 for ad_url in ad_links:
-                    if url_seen_func and url_seen_func(ad_url):
+                    if url_seen_func and (url_seen_func(ad_url) or ad_url in seen_local):
                         continue
                     
                     # Rate limiting
@@ -130,10 +132,10 @@ async def crawl_markt_de_listings_async(
                         leads.append(lead)
                         if log_func:
                             log_func("info", "Markt.de: Lead extrahiert", url=ad_url, has_phone=True)
-                        
-                        # Mark as seen
+
                         if mark_url_seen_func:
-                            mark_url_seen_func(ad_url, source="Markt.de")
+                            seen_urls.append(ad_url)
+                            seen_local.add(ad_url)
                     else:
                         if log_func:
                             log_func("debug", "Markt.de: Keine Handynummer", url=ad_url)
@@ -142,6 +144,9 @@ async def crawl_markt_de_listings_async(
                 if log_func:
                     log_func("error", "Markt.de: Fehler beim Crawlen", url=url, error=str(e))
                 break
+            finally:
+                if mark_url_seen_func and seen_urls:
+                    mark_url_seen_func(seen_urls, source="Markt.de")
     
     if log_func:
         log_func("info", "Markt.de: Crawling abgeschlossen", total_leads=len(leads))

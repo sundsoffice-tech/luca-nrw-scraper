@@ -24,11 +24,20 @@ functions from the new modules.
 """
 
 import logging
+import sqlite3
+import threading
+from contextlib import contextmanager
+from typing import Dict, Optional, Tuple
 
 # Import DB_PATH and DATABASE_BACKEND from config
-from .config import DATABASE_BACKEND
+from .config import DATABASE_BACKEND, DB_PATH
 
 logger = logging.getLogger(__name__)
+
+# Thread-local storage for DB connection
+_db_local = threading.local()
+_DB_READY = False
+_DB_READY_LOCK = threading.Lock()
 
 
 # =========================
@@ -359,12 +368,15 @@ def migrate_db_unique_indexes():
     
     This recreates the leads table without UNIQUE constraints.
     """
-    con = db()
-    cur = con.cursor()
-    
-    # Sync function
-    sync_status_to_scraper,
-)
+    logger.info("migrate_db_unique_indexes has been deprecated. Schema updates are handled by _ensure_schema().")
+    pass
+
+
+def _normalize_email(email: Optional[str]) -> Optional[str]:
+    """Normalize email for lookup."""
+    if not email:
+        return None
+    return email.strip().lower()
 
 
 def _normalize_phone(value: Optional[str]) -> Optional[str]:
@@ -577,61 +589,13 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
             new_id = cur.lastrowid
             con.commit()
             return (new_id, True)
-            
-    finally:
-        con.close()
-    # Extract search fields
-    email = data.get('email')
-    telefon = data.get('telefon')
-    
-    normalized_email = _normalize_email(email)
-    normalized_phone = _normalize_phone(telefon)
-    
-    # Try to find existing lead
-    existing_id = None
-    
-    # Search by email first
-    if normalized_email:
-        cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
-        row = cur.fetchone()
-        if row:
-            existing_id = row[0]
-    
-    # Search by phone if not found by email
-    if not existing_id and telefon:
-        cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
-        row = cur.fetchone()
-        if row:
-            existing_id = row[0]
-    
-    if existing_id:
-        # Update existing lead
-        set_clauses = []
-        values = []
-        for key, value in data.items():
-            if key != 'id':
-                set_clauses.append(f"{key} = ?")
-                values.append(value)
-        
-        if set_clauses:
-            values.append(existing_id)
-            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
-            cur.execute(sql, values)
-            con.commit()
-        
-        return (existing_id, False)
-    else:
-        # Insert new lead
-        columns = list(data.keys())
-        placeholders = ['?'] * len(columns)
-        values = [data[col] for col in columns]
-        
-        sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
-        cur.execute(sql, values)
-        new_id = cur.lastrowid
         con.commit()
         
         return (new_id, True)
+    except Exception as exc:
+        logger.error("Error in upsert_lead_sqlite: %s", exc)
+        con.rollback()
+        raise
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:
