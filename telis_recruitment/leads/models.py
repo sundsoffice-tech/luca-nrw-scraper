@@ -14,6 +14,14 @@ class Lead(models.Model):
     name = models.CharField(max_length=255, verbose_name="Name")
     email = models.EmailField(null=True, blank=True, verbose_name="E-Mail")
     telefon = models.CharField(max_length=50, null=True, blank=True, verbose_name="Telefon")
+    normalized_phone = models.CharField(
+        max_length=20, 
+        null=True, 
+        blank=True, 
+        db_index=True,
+        verbose_name="Normalisierte Telefonnummer",
+        help_text="Nur Ziffern für Deduplizierung"
+    )
     phone_type = models.CharField(max_length=20, null=True, blank=True, verbose_name="Telefon-Typ")
     whatsapp_link = models.CharField(max_length=255, null=True, blank=True, verbose_name="WhatsApp-Link")
     
@@ -176,6 +184,16 @@ class Lead(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.get_status_display()})"
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-populate normalized_phone."""
+        # Normalize phone number: keep only digits
+        if self.telefon:
+            digits = "".join(ch for ch in self.telefon if ch.isdigit())
+            self.normalized_phone = digits or None
+        else:
+            self.normalized_phone = None
+        super().save(*args, **kwargs)
     
     @property
     def has_contact_info(self):

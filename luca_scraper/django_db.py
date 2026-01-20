@@ -192,21 +192,15 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
             except Exception as exc:
                 logger.debug("Error searching by email: %s", exc)
         
-        # Priority 2: Search by phone if not found by email
-        # Note: We use a custom lookup that checks if normalized phone digits
-        # are contained in the stored phone number to handle different formats
-        # (e.g., +49123456789, 0049123456789, 0123456789)
+        # Priority 2: Search by normalized phone if not found by email
+        # Use the indexed normalized_phone field for O(1) lookup instead of O(N) scan
         if not existing_lead and normalized_phone:
             try:
-                # Query all leads and filter in Python for normalized phone match
-                # This is more flexible than DB regex but may be less efficient for very large datasets
-                for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
-                    stored_normalized = _normalize_phone(lead.telefon)
-                    if stored_normalized and stored_normalized == normalized_phone:
-                        existing_lead = lead
-                        break
+                existing_lead = Lead.objects.filter(
+                    normalized_phone=normalized_phone
+                ).first()
             except Exception as exc:
-                logger.debug("Error searching by phone: %s", exc)
+                logger.debug("Error searching by normalized phone: %s", exc)
         
         # Map data to Django fields
         mapped_data = _map_scraper_data_to_django(data)
@@ -259,13 +253,10 @@ def lead_exists(email: Optional[str] = None, telefon: Optional[str] = None) -> b
         if Lead.objects.filter(email__iexact=normalized_email).exists():
             return True
     
-    # Check by phone
+    # Check by normalized phone using indexed field
     if normalized_phone:
-        # Query all leads and filter in Python for normalized phone match
-        for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
-            stored_normalized = _normalize_phone(lead.telefon)
-            if stored_normalized and stored_normalized == normalized_phone:
-                return True
+        if Lead.objects.filter(normalized_phone=normalized_phone).exists():
+            return True
     
     return False
 
