@@ -186,7 +186,10 @@ class ProcessManager:
             return {
                 'success': False,
                 'error': 'Scraper läuft bereits',
-                'status': self.status
+                'status': self.status,
+                'pid': self.launcher.pid,
+                'run_id': self.output_monitor.current_run_id,
+                'params': self.params
             }
         
         # Check circuit breaker
@@ -198,7 +201,10 @@ class ProcessManager:
                 'error': f'Circuit breaker is OPEN - please wait {remaining:.0f}s before retrying',
                 'status': 'circuit_breaker_open',
                 'circuit_breaker_state': self.circuit_breaker.state.value,
-                'remaining_penalty_seconds': remaining
+                'remaining_penalty_seconds': remaining,
+                'pid': None,
+                'run_id': None,
+                'params': {}
             }
         
         try:
@@ -224,7 +230,10 @@ class ProcessManager:
                 return {
                     'success': False,
                     'error': 'Scraper script nicht gefunden',
-                    'status': 'error'
+                    'status': 'error',
+                    'pid': None,
+                    'run_id': run.id,
+                    'params': params
                 }
             
             # Build command using launcher
@@ -290,7 +299,10 @@ class ProcessManager:
             return {
                 'success': False,
                 'error': str(e),
-                'status': self.status
+                'status': self.status,
+                'pid': self.launcher.pid if self.launcher else None,
+                'run_id': self.output_monitor.current_run_id,
+                'params': params
             }
     
     def stop(self) -> Dict[str, Any]:

@@ -65,6 +65,7 @@ def parse_args() -> Any:
         Parsed arguments namespace
     """
     # Complete industry list synchronized with ScraperConfig.INDUSTRY_CHOICES
+    # CRITICAL: This list MUST match ScraperConfig.INDUSTRY_CHOICES in telis_recruitment/scraper_control/models.py
     ALL_INDUSTRIES = [
         "all", "recruiter", "candidates", "talent_hunt", "handelsvertreter",
         "nrw", "social", "solar", "telekom", "versicherung",
@@ -84,6 +85,8 @@ def parse_args() -> Any:
     # Control flags
     ap.add_argument("--force", action="store_true", 
                     help="Ignoriere History (queries_done)")
+    ap.add_argument("--dry-run", dest="dry_run", action="store_true",
+                    help="Test-Modus ohne tatsächliche Ausführung (keine DB-Änderungen)")
     ap.add_argument("--tor", action="store_true", 
                     help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", 

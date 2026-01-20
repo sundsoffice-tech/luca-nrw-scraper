@@ -194,11 +194,25 @@ class OutputMonitor:
             try:
                 from .models import ScraperLog, ScraperRun
                 run = ScraperRun.objects.get(id=self.current_run_id)
+                
+                # Create ScraperLog entry for SSE streaming
                 ScraperLog.objects.create(
                     run=run,
                     level='ERROR',
                     message=message
                 )
+                
+                # CRITICAL FIX: Also append to run.logs for persistence
+                if run.logs:
+                    run.logs += f"\n{message}"
+                else:
+                    run.logs = message
+                
+                # Keep logs reasonable size
+                if len(run.logs) > 50000:  # ~50KB
+                    run.logs = run.logs[-50000:]
+                run.save(update_fields=['logs'])
+                
             except Exception as e:
                 logger.error(f"Failed to log error: {e}")
 

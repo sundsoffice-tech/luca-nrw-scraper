@@ -568,7 +568,13 @@ ALLOW_INSECURE_SSL = (os.getenv("ALLOW_INSECURE_SSL", "0") == "1")  # Secure by 
 ASYNC_LIMIT = int(os.getenv("ASYNC_LIMIT", "35"))
 ASYNC_PER_HOST = int(os.getenv("ASYNC_PER_HOST", "3"))
 HTTP2_ENABLED = (os.getenv("HTTP2", "1") == "1")
+
+# ========================================
+# Global flags set from CLI args
+# ========================================
 USE_TOR = False
+DRY_RUN = False  # Set to True for test mode without DB changes
+
 
 # Proxy environment variables to clear for nuclear cleanup
 PROXY_ENV_VARS = [
@@ -2269,6 +2275,12 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         
         # Use upsert_lead from db_router
         try:
+            # DRY RUN MODE: Skip database insert
+            if DRY_RUN:
+                log("info", "DRY RUN: Would insert lead", name=r.get('name'), phone=phone[:8]+"..." if phone else None)
+                new_rows.append(r)
+                continue
+            
             lead_id, created = _upsert_lead_router(r)
             if created:
                 new_rows.append(r)
@@ -9571,14 +9583,19 @@ def parse_args():
     if _LUCA_SCRAPER_AVAILABLE:
         return _parse_args()
     # Fallback: Inline implementation when luca_scraper not available
+    # CRITICAL: Industry list MUST match ScraperConfig.INDUSTRY_CHOICES in telis_recruitment/scraper_control/models.py
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")
     ap.add_argument("--interval", type=int, default=0, help="Pause in Sekunden zwischen den Durchläufen im Loop-Modus")
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
+    ap.add_argument("--dry-run", dest="dry_run", action="store_true", help="Test-Modus ohne tatsächliche Ausführung (keine DB-Änderungen)")
     ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
     ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
-    ap.add_argument("--industry", choices=["all","recruiter","candidates","talent_hunt"] + list(INDUSTRY_ORDER),
+    # Use base modes + INDUSTRY_ORDER to avoid duplicates
+    base_industries = ["all","recruiter","candidates","talent_hunt"]
+    all_industries = base_industries + [i for i in INDUSTRY_ORDER if i not in base_industries]
+    ap.add_argument("--industry", choices=all_industries,
                 default=os.getenv("INDUSTRY","all"),
                 help="Branche für diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
     ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
@@ -9604,6 +9621,10 @@ if __name__ == "__main__":
     try:
         args = parse_args()
         USE_TOR = bool(getattr(args, "tor", False))
+        # Set global DRY_RUN flag from args
+        DRY_RUN = bool(getattr(args, "dry_run", False))
+        if DRY_RUN:
+            log("warn", "DRY RUN MODE AKTIVIERT - Keine Datenbank-Änderungen werden durchgeführt!")
         if getattr(args, "no_google", False):
             os.environ["DISABLE_GOOGLE"] = "1"
         
