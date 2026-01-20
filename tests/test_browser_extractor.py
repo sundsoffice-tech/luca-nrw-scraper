@@ -186,7 +186,8 @@ def test_extract_phone_with_fallback_options_parameter(mock_sleep, mock_get_best
     # Chrome should be called with fallback options
     mock_chrome.assert_called_once()
     call_args = mock_chrome.call_args
-    options_used = call_args.kwargs['options']
+    # Get options from either kwargs or args
+    options_used = call_args.kwargs.get('options') if call_args.kwargs else call_args[1] if len(call_args[0]) > 0 else call_args[0][0]
     assert '--disable-webgl' in options_used.arguments
 
 
