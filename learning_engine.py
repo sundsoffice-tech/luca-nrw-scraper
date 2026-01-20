@@ -585,7 +585,7 @@ class LearningEngine:
                     total_visits = total_visits + 1,
                     successful_extractions = successful_extractions + ?,
                     leads_found = leads_found + ?,
-                    avg_quality = (avg_quality * (total_visits - 1) + ?) / total_visits,
+                    avg_quality = (avg_quality * total_visits + ?) / (total_visits + 1),
                     last_visit = CURRENT_TIMESTAMP,
                     score = MIN(1.0, score + ?)
             """, (
@@ -1231,7 +1231,7 @@ def extract_competitor_intel(url: str = "", title: str = "", snippet: str = "", 
     
     # Extract HR contact hints
     import re
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
     emails = re.findall(email_pattern, combined)
     if emails:
         intel["hr_emails"] = emails[:3]  # Keep first 3
