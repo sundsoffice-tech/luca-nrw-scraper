@@ -263,8 +263,11 @@ DAS_OERTLICHE_URLS: List[str] = [
 ]
 
 # Northdata - Company Register URLs
+# Note: Northdata requires API access or special search query handling
+# Currently disabled (DIRECT_CRAWL_SOURCES['northdata'] = False)
+# Future implementation should use their API or dynamic search queries
 NORTHDATA_URLS: List[str] = [
-    "https://www.northdata.de/",  # Main search - requires search query
+    "https://www.northdata.de/",  # Main search - requires API or dynamic query implementation
 ]
 
 # Firmen ABC - Business Directory URLs
