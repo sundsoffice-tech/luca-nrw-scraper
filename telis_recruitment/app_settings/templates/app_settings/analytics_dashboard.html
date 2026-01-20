@@ -1,0 +1,280 @@
+{% extends "crm/base.html" %}
+
+{% block title %}Analytics - TELIS CRM{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-100">Analytics & Statistiken</h1>
+            <p class="text-gray-400 mt-1">Übersicht über Seitenaufrufe und Benutzeraktivitäten</p>
+        </div>
+        
+        <!-- Time Range Filter -->
+        <div class="flex gap-2">
+            <a href="?days=7" class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg hover:bg-dark-700 {% if days == 7 %}bg-primary text-white{% endif %}">
+                7 Tage
+            </a>
+            <a href="?days=30" class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg hover:bg-dark-700 {% if days == 30 %}bg-primary text-white{% endif %}">
+                30 Tage
+            </a>
+            <a href="?days=90" class="px-4 py-2 bg-dark-800 text-gray-300 rounded-lg hover:bg-dark-700 {% if days == 90 %}bg-primary text-white{% endif %}">
+                90 Tage
+            </a>
+        </div>
+    </div>
+
+    <!-- Tracking Status -->
+    <div class="bg-dark-800 rounded-lg p-4 mb-6">
+        <h3 class="text-lg font-semibold text-gray-100 mb-3">🔍 Tracking-Status</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">{{ system_settings.enable_analytics|yesno:"✅,❌" }}</span>
+                <div>
+                    <div class="text-sm text-gray-400">Analytics</div>
+                    <div class="font-semibold">{{ system_settings.enable_analytics|yesno:"Aktiviert,Deaktiviert" }}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">{{ system_settings.google_analytics_id|yesno:"✅,❌" }}</span>
+                <div>
+                    <div class="text-sm text-gray-400">Google Analytics</div>
+                    <div class="font-semibold">{{ system_settings.google_analytics_id|default:"Nicht konfiguriert" }}</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">{{ system_settings.meta_pixel_id|yesno:"✅,❌" }}</span>
+                <div>
+                    <div class="text-sm text-gray-400">Meta Pixel</div>
+                    <div class="font-semibold">{{ system_settings.meta_pixel_id|default:"Nicht konfiguriert" }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <!-- Total Page Views -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Gesamt-Seitenaufrufe</p>
+                    <h3 class="text-3xl font-bold text-primary">{{ total_page_views|default:0 }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">Letzte {{ days }} Tage</p>
+                </div>
+                <span class="text-4xl">📊</span>
+            </div>
+        </div>
+
+        <!-- Unique Visitors -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Eindeutige Besucher</p>
+                    <h3 class="text-3xl font-bold text-green-500">{{ unique_visitors|default:0 }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">Nach Session</p>
+                </div>
+                <span class="text-4xl">👥</span>
+            </div>
+        </div>
+
+        <!-- Total Events -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm mb-1">Gesamt-Events</p>
+                    <h3 class="text-3xl font-bold text-yellow-500">{{ total_events|default:0 }}</h3>
+                    <p class="text-xs text-gray-500 mt-1">Interaktionen</p>
+                </div>
+                <span class="text-4xl">⚡</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- Page Views Chart -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">📈 Seitenaufrufe über Zeit</h3>
+            <canvas id="pageViewsChart" height="200"></canvas>
+        </div>
+
+        <!-- Events by Category -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">🎯 Events nach Kategorie</h3>
+            <canvas id="eventsCategoryChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- Top Pages & Events -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- Top Pages -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">🏆 Top Seiten</h3>
+            <div class="space-y-3">
+                {% for page in top_pages %}
+                <div class="flex items-center justify-between p-3 bg-dark-700 rounded">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-200 truncate">{{ page.page_title|default:page.path }}</div>
+                        <div class="text-xs text-gray-500 truncate">{{ page.path }}</div>
+                    </div>
+                    <span class="ml-3 px-3 py-1 bg-primary/20 text-primary rounded-full text-sm font-semibold">{{ page.count }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-center py-4">Keine Daten verfügbar</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Top Events -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">⚡ Top Events</h3>
+            <div class="space-y-3">
+                {% for event in top_events %}
+                <div class="flex items-center justify-between p-3 bg-dark-700 rounded">
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-gray-200">{{ event.action }}</div>
+                        <div class="text-xs text-gray-500">{{ event.category }} {% if event.label %}- {{ event.label }}{% endif %}</div>
+                    </div>
+                    <span class="ml-3 px-3 py-1 bg-yellow-500/20 text-yellow-500 rounded-full text-sm font-semibold">{{ event.count }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-center py-4">Keine Daten verfügbar</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- User Activity & Recent Views -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- User Activity -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">👤 Benutzeraktivität</h3>
+            <div class="space-y-3">
+                {% for user in user_activity %}
+                <div class="flex items-center justify-between p-3 bg-dark-700 rounded">
+                    <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-200">
+                            {% if user.user__first_name %}
+                                {{ user.user__first_name }} {{ user.user__last_name }}
+                            {% else %}
+                                {{ user.user__username }}
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-gray-500">@{{ user.user__username }}</div>
+                    </div>
+                    <span class="ml-3 px-3 py-1 bg-green-500/20 text-green-500 rounded-full text-sm font-semibold">{{ user.count }}</span>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-center py-4">Keine Daten verfügbar</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Page Views -->
+        <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 class="text-lg font-semibold text-gray-100 mb-4">🕒 Neueste Seitenaufrufe</h3>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                {% for view in recent_page_views %}
+                <div class="p-2 bg-dark-700 rounded text-xs">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-medium text-gray-300">{{ view.path }}</span>
+                        <span class="text-gray-500">{{ view.timestamp|date:"H:i" }}</span>
+                    </div>
+                    <div class="text-gray-500">
+                        {% if view.user %}@{{ view.user.username }}{% else %}Gast{% endif %} • {{ view.method }}
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-gray-500 text-center py-4">Keine Daten verfügbar</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Page Views Chart
+const pageViewsCtx = document.getElementById('pageViewsChart');
+if (pageViewsCtx) {
+    new Chart(pageViewsCtx, {
+        type: 'line',
+        data: {
+            labels: {{ page_views_by_day|safe|default:"[]" }}.map(item => new Date(item.date).toLocaleDateString('de-DE')),
+            datasets: [{
+                label: 'Seitenaufrufe',
+                data: {{ page_views_by_day|safe|default:"[]" }}.map(item => item.count),
+                borderColor: '#06b6d4',
+                backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#9ca3af'
+                    },
+                    grid: {
+                        color: '#334155'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#9ca3af'
+                    },
+                    grid: {
+                        color: '#334155'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Events Category Chart
+const eventsCategoryCtx = document.getElementById('eventsCategoryChart');
+if (eventsCategoryCtx) {
+    new Chart(eventsCategoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ events_by_category|safe|default:"[]" }}.map(item => item.category),
+            datasets: [{
+                data: {{ events_by_category|safe|default:"[]" }}.map(item => item.count),
+                backgroundColor: [
+                    '#06b6d4',
+                    '#10b981',
+                    '#f59e0b',
+                    '#ef4444',
+                    '#8b5cf6'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#9ca3af'
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

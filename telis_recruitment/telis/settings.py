@@ -119,6 +119,7 @@ TEMPLATES = [
                 'mailbox.context_processors.unread_email_count',
                 'telis.context_processors.version_context',
                 'telis.context_processors.tinymce_api_key',
+                'app_settings.context_processors.tracking_codes',
             ],
         },
     },

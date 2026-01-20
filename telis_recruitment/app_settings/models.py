@@ -121,6 +121,32 @@ class SystemSettings(models.Model):
         verbose_name='Max. Login-Versuche'
     )
     
+    # Analytics & Tracking
+    enable_analytics = models.BooleanField(
+        default=False,
+        verbose_name='Analytics aktivieren'
+    )
+    
+    google_analytics_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Google Analytics ID',
+        help_text='z.B. G-XXXXXXXXXX oder UA-XXXXXXXXX-X'
+    )
+    
+    meta_pixel_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Meta Pixel ID',
+        help_text='Facebook/Meta Pixel ID'
+    )
+    
+    custom_tracking_code = models.TextField(
+        blank=True,
+        verbose_name='Benutzerdefinierter Tracking-Code',
+        help_text='Benutzerdefinierte Tracking-Scripts (z.B. Matomo, Plausible, etc.)'
+    )
+    
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -144,3 +170,173 @@ class SystemSettings(models.Model):
     
     def __str__(self):
         return "Systemeinstellungen"
+
+
+class PageView(models.Model):
+    """
+    Track page views and user interactions for analytics
+    """
+    # User information
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Benutzer'
+    )
+    
+    session_key = models.CharField(
+        max_length=40,
+        db_index=True,
+        verbose_name='Sitzungsschlüssel'
+    )
+    
+    # Page information
+    path = models.CharField(
+        max_length=500,
+        db_index=True,
+        verbose_name='Pfad'
+    )
+    
+    page_title = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Seitentitel'
+    )
+    
+    # Request information
+    method = models.CharField(
+        max_length=10,
+        default='GET',
+        verbose_name='HTTP-Methode'
+    )
+    
+    referrer = models.URLField(
+        max_length=500,
+        blank=True,
+        verbose_name='Referrer'
+    )
+    
+    user_agent = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='User-Agent'
+    )
+    
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name='IP-Adresse'
+    )
+    
+    # Timestamps
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name='Zeitstempel'
+    )
+    
+    # Performance metrics
+    load_time = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Ladezeit (ms)'
+    )
+    
+    class Meta:
+        verbose_name = 'Seitenaufruf'
+        verbose_name_plural = 'Seitenaufrufe'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp', 'path']),
+            models.Index(fields=['session_key', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.path} - {self.timestamp.strftime('%d.%m.%Y %H:%M')}"
+
+
+class AnalyticsEvent(models.Model):
+    """
+    Track custom analytics events (button clicks, form submissions, etc.)
+    """
+    EVENT_CATEGORY_CHOICES = [
+        ('navigation', 'Navigation'),
+        ('interaction', 'Interaktion'),
+        ('conversion', 'Conversion'),
+        ('error', 'Fehler'),
+        ('engagement', 'Engagement'),
+    ]
+    
+    # User information
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Benutzer'
+    )
+    
+    session_key = models.CharField(
+        max_length=40,
+        db_index=True,
+        verbose_name='Sitzungsschlüssel'
+    )
+    
+    # Event information
+    category = models.CharField(
+        max_length=50,
+        choices=EVENT_CATEGORY_CHOICES,
+        db_index=True,
+        verbose_name='Kategorie'
+    )
+    
+    action = models.CharField(
+        max_length=100,
+        db_index=True,
+        verbose_name='Aktion'
+    )
+    
+    label = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='Label'
+    )
+    
+    value = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='Wert'
+    )
+    
+    # Context
+    page_path = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name='Seitenpfad'
+    )
+    
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Metadaten'
+    )
+    
+    # Timestamps
+    timestamp = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name='Zeitstempel'
+    )
+    
+    class Meta:
+        verbose_name = 'Analytics-Event'
+        verbose_name_plural = 'Analytics-Events'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp', 'category']),
+            models.Index(fields=['action', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.category} - {self.action} - {self.timestamp.strftime('%d.%m.%Y %H:%M')}"

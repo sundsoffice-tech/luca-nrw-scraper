@@ -1,7 +1,12 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import UserPreferences, SystemSettings
+from django.db.models import Count
+from django.db.models.functions import TruncDate
+from django.utils import timezone
+from datetime import timedelta
+
+from .models import UserPreferences, SystemSettings, PageView, AnalyticsEvent
 
 
 @login_required
@@ -99,6 +104,12 @@ def system_settings_view(request):
                 messages.error(request, 'Max. Login-Versuche müssen zwischen 3 und 10 liegen.')
                 return redirect('app_settings:system-settings')
             
+            # Analytics & Tracking settings
+            system_settings.enable_analytics = request.POST.get('enable_analytics') == 'on'
+            system_settings.google_analytics_id = request.POST.get('google_analytics_id', '').strip()
+            system_settings.meta_pixel_id = request.POST.get('meta_pixel_id', '').strip()
+            system_settings.custom_tracking_code = request.POST.get('custom_tracking_code', '').strip()
+            
             system_settings.save()
             messages.success(request, 'Systemeinstellungen wurden erfolgreich gespeichert.')
         except (ValueError, TypeError) as e:
@@ -129,3 +140,92 @@ def integrations_view(request):
     }
     
     return render(request, 'app_settings/integrations.html', context)
+
+
+@login_required
+def analytics_dashboard(request):
+    """
+    Display analytics dashboard with statistics and charts.
+    """
+    # Get date range from query params or default to last 30 days
+    days = int(request.GET.get('days', 30))
+    start_date = timezone.now() - timedelta(days=days)
+    
+    # Total page views
+    total_page_views = PageView.objects.filter(timestamp__gte=start_date).count()
+    
+    # Unique visitors (by session)
+    unique_visitors = PageView.objects.filter(
+        timestamp__gte=start_date
+    ).values('session_key').distinct().count()
+    
+    # Total events
+    total_events = AnalyticsEvent.objects.filter(timestamp__gte=start_date).count()
+    
+    # Page views by day
+    page_views_by_day = list(
+        PageView.objects.filter(timestamp__gte=start_date)
+        .annotate(date=TruncDate('timestamp'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+    
+    # Top pages
+    top_pages = list(
+        PageView.objects.filter(timestamp__gte=start_date)
+        .values('path', 'page_title')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:10]
+    )
+    
+    # Top events by category
+    events_by_category = list(
+        AnalyticsEvent.objects.filter(timestamp__gte=start_date)
+        .values('category')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+    
+    # Top events by action
+    top_events = list(
+        AnalyticsEvent.objects.filter(timestamp__gte=start_date)
+        .values('category', 'action', 'label')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:10]
+    )
+    
+    # Recent page views
+    recent_page_views = PageView.objects.filter(
+        timestamp__gte=start_date
+    ).select_related('user').order_by('-timestamp')[:20]
+    
+    # User activity
+    user_activity = list(
+        PageView.objects.filter(
+            timestamp__gte=start_date,
+            user__isnull=False
+        )
+        .values('user__username', 'user__first_name', 'user__last_name')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:10]
+    )
+    
+    # System settings for tracking code info
+    system_settings = SystemSettings.get_settings()
+    
+    context = {
+        'days': days,
+        'total_page_views': total_page_views,
+        'unique_visitors': unique_visitors,
+        'total_events': total_events,
+        'page_views_by_day': page_views_by_day,
+        'top_pages': top_pages,
+        'events_by_category': events_by_category,
+        'top_events': top_events,
+        'recent_page_views': recent_page_views,
+        'user_activity': user_activity,
+        'system_settings': system_settings,
+    }
+    
+    return render(request, 'app_settings/analytics_dashboard.html', context)
