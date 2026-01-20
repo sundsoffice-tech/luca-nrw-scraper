@@ -36,6 +36,7 @@ urlpatterns = [
     # Builder API endpoints
     path('api/<slug:slug>/save/', views.builder_save, name='builder-save'),
     path('api/<slug:slug>/load/', views.builder_load, name='builder-load'),
+    path('api/<slug:slug>/publish/', views.publish_page, name='publish-page'),
     
     # Asset Manager
     path('api/assets/upload/', views.upload_asset, name='upload-asset'),
