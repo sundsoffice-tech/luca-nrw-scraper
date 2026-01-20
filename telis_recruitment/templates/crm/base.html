@@ -31,6 +31,10 @@
             background-color: rgba(6, 182, 212, 0.1);
             border-left: 3px solid #06b6d4;
         }
+        .sidebar-link:focus {
+            outline: 2px solid #06b6d4;
+            outline-offset: -2px;
+        }
         .sidebar-link.active {
             background-color: rgba(6, 182, 212, 0.15);
             border-left: 3px solid #06b6d4;
@@ -56,9 +60,15 @@
         .sidebar-section-header {
             cursor: pointer;
             transition: all 0.2s ease-in-out;
+            border: none;
+            background: transparent;
         }
         .sidebar-section-header:hover {
             background-color: rgba(6, 182, 212, 0.05);
+        }
+        .sidebar-section-header:focus {
+            outline: 2px solid #06b6d4;
+            outline-offset: -2px;
         }
         .sidebar-section-header.active {
             background-color: rgba(6, 182, 212, 0.1);
@@ -77,6 +87,19 @@
         }
         .sidebar-mobile.open {
             transform: translateX(0);
+        }
+        
+        /* Screen reader only class */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
         }
         
         /* Toast Notifications */
@@ -171,19 +194,19 @@
             </div>
 
             <!-- Navigation -->
-            <nav class="flex-1 overflow-y-auto py-4">
-                <a href="{% url 'crm-dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'crm-dashboard' %}active{% endif %}">
-                    <span class="text-xl mr-3">📊</span>
+            <nav class="flex-1 overflow-y-auto py-4" role="navigation" aria-label="Hauptnavigation">
+                <a href="{% url 'crm-dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'crm-dashboard' %}active{% endif %}" {% if request.resolver_match.url_name == 'crm-dashboard' %}aria-current="page"{% endif %}>
+                    <span class="text-xl mr-3" aria-hidden="true">📊</span>
                     <span>Dashboard</span>
                 </a>
                 
-                <a href="{% url 'crm-leads' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'crm-leads' %}active{% endif %}">
-                    <span class="text-xl mr-3">👥</span>
+                <a href="{% url 'crm-leads' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'crm-leads' %}active{% endif %}" {% if request.resolver_match.url_name == 'crm-leads' %}aria-current="page"{% endif %}>
+                    <span class="text-xl mr-3" aria-hidden="true">👥</span>
                     <span>Leads</span>
                 </a>
                 
-                <a href="javascript:void(0);" class="sidebar-link disabled flex items-center px-4 py-3 text-gray-300">
-                    <span class="text-xl mr-3">📞</span>
+                <a href="javascript:void(0);" class="sidebar-link disabled flex items-center px-4 py-3 text-gray-300" aria-disabled="true">
+                    <span class="text-xl mr-3" aria-hidden="true">📞</span>
                     <span>Telefon</span>
                     <span class="ml-auto text-xs bg-gray-600/30 text-gray-400 px-2 py-1 rounded">Bald</span>
                 </a>
@@ -193,37 +216,37 @@
                 
                 <!-- Email Module Section (Collapsible) - Hidden on mailbox pages which have their own sidebar -->
                 {% if 'mailbox' not in request.resolver_match.namespace %}
-                <div class="sidebar-section-header flex items-center px-4 py-3 text-gray-300 {% if 'email_templates' in request.resolver_match.namespace %}active{% endif %}" onclick="toggleEmailSection()">
-                    <span class="sidebar-section-icon mr-2 text-sm {% if 'email_templates' in request.resolver_match.namespace %}expanded{% endif %}">▶</span>
-                    <span class="text-xl mr-3">📧</span>
+                <button type="button" class="sidebar-section-header flex items-center px-4 py-3 text-gray-300 w-full text-left {% if 'email_templates' in request.resolver_match.namespace %}active{% endif %}" onclick="toggleEmailSection()" onkeydown="handleEmailSectionKeydown(event)" role="button" aria-expanded="{% if 'email_templates' in request.resolver_match.namespace %}true{% else %}false{% endif %}" aria-controls="email-section" aria-label="Email Module ein-/ausklappen">
+                    <span class="sidebar-section-icon mr-2 text-sm {% if 'email_templates' in request.resolver_match.namespace %}expanded{% endif %}" aria-hidden="true">▶</span>
+                    <span class="text-xl mr-3" aria-hidden="true">📧</span>
                     <span class="font-semibold">Email Module</span>
                     {% if unread_email_count %}
-                    <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{{ unread_email_count }}</span>
+                    <span class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label="{{ unread_email_count }} ungelesene E-Mails">{{ unread_email_count }}</span>
                     {% endif %}
-                </div>
+                </button>
                 
                 <div id="email-section" class="sidebar-section {% if 'email_templates' not in request.resolver_match.namespace %}collapsed{% endif %}" style="max-height: {% if 'email_templates' in request.resolver_match.namespace %}500px{% else %}0{% endif %};">
                     <!-- Postfach -->
-                    <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12">
-                        <span class="text-lg mr-3">📬</span>
+                    <a href="{% url 'mailbox:inbox' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12" onclick="closeMobileSidebar()">
+                        <span class="text-lg mr-3" aria-hidden="true">📬</span>
                         <span>Postfach</span>
                     </a>
                     
                     <!-- Email Templates -->
-                    <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}">
-                        <span class="text-lg mr-3">📝</span>
+                    <a href="{% url 'email_templates:template-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}active{% endif %}" {% if request.resolver_match.url_name in 'template-list,template-editor,template-preview,brevo-settings' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                        <span class="text-lg mr-3" aria-hidden="true">📝</span>
                         <span>Templates</span>
                     </a>
                     
                     <!-- Flows -->
-                    <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}">
-                        <span class="text-lg mr-3">🔄</span>
+                    <a href="{% url 'email_templates:flow-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'flow' in request.resolver_match.url_name %}active{% endif %}" {% if 'flow' in request.resolver_match.url_name %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                        <span class="text-lg mr-3" aria-hidden="true">🔄</span>
                         <span>Flows</span>
                     </a>
                     
                     <!-- Versand-Logs -->
-                    <a href="{% url 'email_templates:send-logs' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'send-logs' in request.resolver_match.url_name %}active{% endif %}">
-                        <span class="text-lg mr-3">📊</span>
+                    <a href="{% url 'email_templates:send-logs' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 pl-12 {% if 'send-logs' in request.resolver_match.url_name %}active{% endif %}" {% if 'send-logs' in request.resolver_match.url_name %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                        <span class="text-lg mr-3" aria-hidden="true">📊</span>
                         <span>Logs</span>
                     </a>
                 </div>
@@ -240,8 +263,8 @@
                     <div class="text-xs text-gray-500 uppercase font-semibold">Management</div>
                 </div>
                 
-                <a href="{% url 'reports:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'reports' %}active{% endif %}">
-                    <span class="text-xl mr-3">📈</span>
+                <a href="{% url 'reports:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'reports' %}active{% endif %}" {% if request.resolver_match.namespace == 'reports' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">📈</span>
                     <span>Reports</span>
                 </a>
                         {% endif %}
@@ -256,23 +279,23 @@
                     <div class="text-xs text-gray-500 uppercase font-semibold">Administration</div>
                 </div>
                 
-                <a href="{% url 'scraper_control:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'scraper_control' %}active{% endif %}">
-                    <span class="text-xl mr-3">🤖</span>
+                <a href="{% url 'scraper_control:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'scraper_control' %}active{% endif %}" {% if request.resolver_match.namespace == 'scraper_control' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">🤖</span>
                     <span>Scraper</span>
                 </a>
                 
-                <a href="{% url 'pages:builder-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'pages' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="text-xl mr-3">📄</span>
+                <a href="{% url 'pages:builder-list' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if 'pages' in request.resolver_match.url_name %}active{% endif %}" {% if 'pages' in request.resolver_match.url_name %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">📄</span>
                     <span>Landing Pages</span>
                 </a>
                 
-                <a href="{% url 'app_settings:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'app_settings' %}active{% endif %}">
-                    <span class="text-xl mr-3">⚙️</span>
+                <a href="{% url 'app_settings:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'app_settings' %}active{% endif %}" {% if request.resolver_match.namespace == 'app_settings' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">⚙️</span>
                     <span>Einstellungen</span>
                 </a>
                 
-                <a href="#" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
-                    <span class="text-xl mr-3">👤</span>
+                <a href="javascript:void(0);" class="sidebar-link flex items-center px-4 py-3 text-gray-300" aria-disabled="true">
+                    <span class="text-xl mr-3" aria-hidden="true">👤</span>
                     <span>Benutzer</span>
                     <span class="ml-auto text-xs bg-primary/20 text-primary px-2 py-1 rounded">Bald</span>
                 </a>
@@ -285,30 +308,30 @@
                     <div class="text-xs text-gray-500 uppercase font-semibold">Support</div>
                 </div>
                 
-                <a href="{% url 'support-bundle' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
-                    <span class="text-xl mr-3">📦</span>
+                <a href="{% url 'support-bundle' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300" onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">📦</span>
                     <span>Support Bundle</span>
                 </a>
                 
-                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper/blob/main/docs/SECURITY_CHECKLIST.md" target="_blank" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
-                    <span class="text-xl mr-3">🔒</span>
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper/blob/main/docs/SECURITY_CHECKLIST.md" target="_blank" rel="noopener noreferrer" class="sidebar-link flex items-center px-4 py-3 text-gray-300" aria-label="Sicherheit (öffnet in neuem Fenster)">
+                    <span class="text-xl mr-3" aria-hidden="true">🔒</span>
                     <span>Sicherheit</span>
-                    <span class="ml-auto text-xs">↗</span>
+                    <span class="ml-auto text-xs" aria-hidden="true">↗</span>
                 </a>
                 
-                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper" target="_blank" class="sidebar-link flex items-center px-4 py-3 text-gray-300">
-                    <span class="text-xl mr-3">📚</span>
+                <a href="https://github.com/sundsoffice-tech/luca-nrw-scraper" target="_blank" rel="noopener noreferrer" class="sidebar-link flex items-center px-4 py-3 text-gray-300" aria-label="Dokumentation (öffnet in neuem Fenster)">
+                    <span class="text-xl mr-3" aria-hidden="true">📚</span>
                     <span>Dokumentation</span>
-                    <span class="ml-auto text-xs">↗</span>
+                    <span class="ml-auto text-xs" aria-hidden="true">↗</span>
                 </a>
                 
                 <!-- Admin Center Link (only for staff) -->
                 {% if user.is_staff %}
                 <div class="my-4 mx-4 border-t border-dark-700"></div>
-                <a href="{% url 'admin:index' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300" target="_blank">
-                    <span class="text-xl mr-3">⚙️</span>
+                <a href="{% url 'admin:index' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300" target="_blank" rel="noopener noreferrer" aria-label="Admin Center (öffnet in neuem Fenster)">
+                    <span class="text-xl mr-3" aria-hidden="true">⚙️</span>
                     <span>Admin Center</span>
-                    <span class="ml-auto text-xs">↗</span>
+                    <span class="ml-auto text-xs" aria-hidden="true">↗</span>
                 </a>
                 {% endif %}
             </nav>
@@ -355,35 +378,38 @@
             <header class="bg-dark-800 border-b border-dark-700 px-4 py-3">
                 <div class="flex items-center justify-between">
                     <!-- Mobile menu button -->
-                    <button onclick="toggleSidebar()" class="lg:hidden text-gray-300 hover:text-primary transition duration-150">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button type="button" onclick="toggleSidebar()" class="lg:hidden text-gray-300 hover:text-primary transition duration-150" aria-label="Navigation öffnen" aria-expanded="false" aria-controls="sidebar">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
                     </button>
 
                     <!-- Breadcrumbs -->
-                    <div class="flex items-center space-x-2 text-sm">
+                    <nav class="flex items-center space-x-2 text-sm" aria-label="Breadcrumb">
                         <a href="{% url 'crm-dashboard' %}" class="text-gray-400 hover:text-primary transition duration-150">Home</a>
                         {% block breadcrumbs %}{% endblock %}
-                    </div>
+                    </nav>
 
                     <!-- Right side: Search & Notifications -->
                     <div class="flex items-center space-x-4">
                         <!-- Search (placeholder) -->
                         <div class="hidden md:block">
+                            <label for="global-search" class="sr-only">Suchen</label>
                             <input 
+                                id="global-search"
                                 type="search" 
                                 placeholder="Suchen..." 
                                 class="bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary w-64"
+                                aria-label="Globale Suche"
                             >
                         </div>
 
                         <!-- Notifications (placeholder) -->
-                        <button class="relative text-gray-400 hover:text-primary transition duration-150">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button type="button" class="relative text-gray-400 hover:text-primary transition duration-150" aria-label="Benachrichtigungen anzeigen">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                             </svg>
-                            <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500"></span>
+                            <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500" aria-label="Neue Benachrichtigungen"></span>
                         </button>
 
                         <!-- User avatar (desktop) -->
@@ -399,7 +425,7 @@
             <!-- Page Content -->
             <main class="flex-1 overflow-y-auto p-6">
                 <!-- Toast Notification Container -->
-                <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md"></div>
+                <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md" role="region" aria-live="polite" aria-label="Benachrichtigungen"></div>
                 
                 <!-- Django Messages as Toasts -->
                 {% if messages %}
@@ -414,29 +440,75 @@
     </div>
 
     <script>
+        // State management for sidebar
+        let sidebarOpen = false;
+        
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
+            const button = document.querySelector('[aria-controls="sidebar"]');
+            
+            sidebarOpen = !sidebarOpen;
             sidebar.classList.toggle('open');
             overlay.classList.toggle('hidden');
+            
+            // Update ARIA state
+            if (button) {
+                button.setAttribute('aria-expanded', sidebarOpen);
+                button.setAttribute('aria-label', sidebarOpen ? 'Navigation schließen' : 'Navigation öffnen');
+            }
+            
+            // Lock body scroll when sidebar is open on mobile
+            if (sidebarOpen) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = '';
+            }
+        }
+        
+        function closeMobileSidebar() {
+            // Only close on mobile screens
+            if (window.innerWidth < 1024 && sidebarOpen) {
+                toggleSidebar();
+            }
         }
         
         function toggleEmailSection() {
             const section = document.getElementById('email-section');
-            const icon = document.querySelector('.sidebar-section-header .sidebar-section-icon');
+            const button = document.querySelector('.sidebar-section-header');
+            const icon = button?.querySelector('.sidebar-section-icon');
             
-            if (!section || !icon) return;
+            if (!section || !button || !icon) return;
             
-            if (section.classList.contains('collapsed')) {
+            const isCollapsed = section.classList.contains('collapsed');
+            
+            if (isCollapsed) {
                 section.classList.remove('collapsed');
-                section.style.maxHeight = '500px';
+                section.style.maxHeight = section.scrollHeight + 'px';
                 icon.classList.add('expanded');
+                button.setAttribute('aria-expanded', 'true');
             } else {
                 section.classList.add('collapsed');
                 section.style.maxHeight = '0';
                 icon.classList.remove('expanded');
+                button.setAttribute('aria-expanded', 'false');
             }
         }
+        
+        function handleEmailSectionKeydown(event) {
+            // Support keyboard navigation: Enter or Space to toggle
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleEmailSection();
+            }
+        }
+        
+        // Close sidebar on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && sidebarOpen) {
+                toggleSidebar();
+            }
+        });
         
         // Toast Notification System
         function showToast(message, level = 'info', duration = 5000) {
