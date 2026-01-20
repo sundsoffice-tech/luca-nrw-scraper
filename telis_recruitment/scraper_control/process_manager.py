@@ -228,13 +228,13 @@ class ProcessManager:
                             elif 'rate limit' in message_lower:
                                 self._log_error("Rate limit hit - consider reducing QPI")
                                 self._track_error('rate_limit')
-                            elif 'ConnectionError' in line or 'connection' in message_lower and 'error' in message_lower:
+                            elif 'ConnectionError' in line or ('connection' in message_lower and 'error' in message_lower):
                                 self._log_error("Connection error detected")
                                 self._track_error('connection_error')
                             elif 'TimeoutError' in line or 'timeout' in message_lower:
                                 self._log_error("Timeout error detected")
                                 self._track_error('timeout')
-                            elif 'ParseError' in line or 'parsing' in message_lower and 'error' in message_lower:
+                            elif 'ParseError' in line or ('parsing' in message_lower and 'error' in message_lower):
                                 self._log_error("Parsing error detected")
                                 self._track_error('parsing_error')
                             

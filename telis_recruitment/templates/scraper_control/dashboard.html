@@ -264,13 +264,13 @@
                         <td class="py-3 px-4 text-gray-400 text-sm">{{ run.started_at|date:"d.m.Y H:i" }}</td>
                         <td class="py-3 px-4 text-gray-400 text-sm">
                             {% if run.duration %}
-                                {% with total_seconds=run.duration.total_seconds %}
-                                    {% if total_seconds >= 3600 %}
-                                        {{ total_seconds|floatformat:0|add:"0"|floatformat:0 }}h
-                                    {% elif total_seconds >= 60 %}
-                                        {{ total_seconds|floatformat:0|add:"0"|floatformat:0 }}m
+                                {% with total_seconds=run.duration.total_seconds|floatformat:0 %}
+                                    {% if total_seconds >= '3600' %}
+                                        {{ total_seconds|floatformat:0 }}h
+                                    {% elif total_seconds >= '60' %}
+                                        {{ total_seconds|floatformat:0 }}m
                                     {% else %}
-                                        {{ total_seconds|floatformat:0 }}s
+                                        {{ total_seconds }}s
                                     {% endif %}
                                 {% endwith %}
                             {% else %}
@@ -802,19 +802,23 @@ window.showRunDetails = async function(runId) {
         // API Cost
         document.getElementById('detail-cost').textContent = run.api_cost ? run.api_cost.toFixed(2) : '0.00';
         
-        // Parameters (fetch from run endpoint to get params_snapshot)
-        const detailResponse = await fetch(`/crm/scraper/api/scraper/runs/?run_id=${runId}`, {
+        // Parameters - fetch full details from API
+        const detailResponse = await fetch(`{% url "scraper_control:api-runs" %}?run_id=${runId}`, {
             headers: {
                 'X-CSRFToken': '{{ csrf_token }}'
             }
         });
         
-        // For now, show basic params
-        document.getElementById('detail-params').textContent = JSON.stringify({
-            industry: 'N/A (fetch from API)',
-            qpi: 'N/A',
-            mode: 'N/A'
-        }, null, 2);
+        if (detailResponse.ok) {
+            const runDetail = await detailResponse.json();
+            if (runDetail.params_snapshot) {
+                document.getElementById('detail-params').textContent = JSON.stringify(runDetail.params_snapshot, null, 2);
+            } else {
+                document.getElementById('detail-params').textContent = 'Parameter nicht verfügbar';
+            }
+        } else {
+            document.getElementById('detail-params').textContent = 'Fehler beim Laden der Parameter';
+        }
         
         // Performance metrics
         document.getElementById('detail-links-checked').textContent = run.links_checked || 0;

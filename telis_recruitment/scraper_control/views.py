@@ -372,8 +372,48 @@ def api_scraper_runs(request):
     GET /crm/scraper/api/scraper/runs/
     
     Get list of recent scraper runs.
+    
+    Query params:
+    - run_id: Optional - Get details for a specific run
     """
     try:
+        run_id = request.query_params.get('run_id')
+        
+        if run_id:
+            # Get specific run with full details
+            try:
+                run = ScraperRun.objects.get(id=run_id)
+                duration = run.duration
+                duration_seconds = int(duration.total_seconds()) if duration else 0
+                
+                return Response({
+                    'id': run.id,
+                    'status': run.status,
+                    'started_at': run.started_at.isoformat(),
+                    'finished_at': run.finished_at.isoformat() if run.finished_at else None,
+                    'duration_seconds': duration_seconds,
+                    'leads_found': run.leads_found,
+                    'api_cost': float(run.api_cost),
+                    'started_by': run.started_by.username if run.started_by else None,
+                    'pid': run.pid,
+                    'params_snapshot': run.params_snapshot,  # Full params
+                    # Enhanced metrics
+                    'links_checked': run.links_checked,
+                    'leads_accepted': run.leads_accepted,
+                    'leads_rejected': run.leads_rejected,
+                    'block_rate': run.block_rate,
+                    'timeout_rate': run.timeout_rate,
+                    'avg_request_time_ms': run.avg_request_time_ms,
+                    'success_rate': run.success_rate,
+                    'lead_acceptance_rate': run.lead_acceptance_rate,
+                }, status=http_status.HTTP_200_OK)
+            except ScraperRun.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'Run nicht gefunden'
+                }, status=http_status.HTTP_404_NOT_FOUND)
+        
+        # Get list of runs
         runs = ScraperRun.objects.all()[:20]
         
         data = []
@@ -769,7 +809,7 @@ def api_reset_circuit_breaker(request):
     
     POST data:
     {
-        "portal": "portal_name"  # Optional, if not provided resets process manager CB
+        "portal": "portal_name"  # Optional - if not provided, resets process manager circuit breaker
     }
     """
     try:
