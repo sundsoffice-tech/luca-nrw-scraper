@@ -7,8 +7,11 @@ after fixing the import issue.
 import sys
 import os
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Get the directory of this test file
+TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+# Add it to path if not already there (for running tests from root directory)
+if TEST_DIR not in sys.path:
+    sys.path.insert(0, TEST_DIR)
 
 
 def test_import_scriptname():
