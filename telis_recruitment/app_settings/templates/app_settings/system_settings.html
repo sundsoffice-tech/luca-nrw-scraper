@@ -145,6 +145,44 @@
             </div>
         </div>
 
+        <!-- Analytics & Tracking -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-6 pb-3 border-b border-gray-700">
+                📊 Analytics & Tracking
+            </h2>
+            
+            <div class="space-y-4">
+                <label class="flex items-center justify-between cursor-pointer p-3 bg-dark-700/50 rounded hover:bg-dark-700">
+                    <div class="flex items-center">
+                        <span class="text-xl mr-3">📈</span>
+                        <div>
+                            <div class="text-gray-300 font-medium">Analytics aktivieren</div>
+                            <div class="text-sm text-gray-500">Tracking-Codes und Statistiken einschalten</div>
+                        </div>
+                    </div>
+                    <input type="checkbox" name="enable_analytics" class="w-5 h-5 rounded bg-dark-700 border-gray-600 text-primary focus:ring-2 focus:ring-primary" {% if system_settings.enable_analytics %}checked{% endif %}>
+                </label>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Google Analytics ID</label>
+                    <input type="text" name="google_analytics_id" value="{{ system_settings.google_analytics_id }}" placeholder="G-XXXXXXXXXX oder UA-XXXXXXXXX-X" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <p class="text-xs text-gray-500 mt-1">z.B. G-XXXXXXXXXX oder UA-XXXXXXXXX-X</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Meta Pixel ID</label>
+                    <input type="text" name="meta_pixel_id" value="{{ system_settings.meta_pixel_id }}" placeholder="123456789012345" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                    <p class="text-xs text-gray-500 mt-1">Facebook/Meta Pixel ID (nur Zahlen)</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Benutzerdefinierter Tracking-Code</label>
+                    <textarea name="custom_tracking_code" rows="6" placeholder="<!-- Ihr benutzerdefinierter Tracking-Code -->" class="w-full px-4 py-2 bg-dark-700 border border-gray-600 rounded text-white focus:ring-2 focus:ring-primary focus:border-transparent font-mono text-sm">{{ system_settings.custom_tracking_code }}</textarea>
+                    <p class="text-xs text-gray-500 mt-1">Benutzerdefinierte Scripts (z.B. Matomo, Plausible, etc.)</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Action Buttons -->
         <div class="flex gap-4 justify-end">
             <a href="{% url 'app_settings:dashboard' %}" class="px-6 py-3 bg-dark-700 hover:bg-dark-600 text-white font-semibold rounded-lg transition">

@@ -9,4 +9,5 @@ urlpatterns = [
     path('user/', views.user_preferences_view, name='user-preferences'),
     path('system/', views.system_settings_view, name='system-settings'),
     path('integrations/', views.integrations_view, name='integrations'),
+    path('analytics/', views.analytics_dashboard, name='analytics'),
 ]

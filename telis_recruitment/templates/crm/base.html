@@ -34,6 +34,10 @@
     </script>
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/common.css' %}">
+    
+    <!-- Analytics & Tracking Codes -->
+    {% include 'includes/tracking_codes.html' %}
+    
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-dark-900 text-gray-100 min-h-screen">
@@ -155,6 +159,11 @@
                 <a href="{% url 'app_settings:dashboard' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.namespace == 'app_settings' %}active{% endif %}" {% if request.resolver_match.namespace == 'app_settings' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
                     <span class="text-xl mr-3" aria-hidden="true">⚙️</span>
                     <span>Einstellungen</span>
+                </a>
+                
+                <a href="{% url 'app_settings:analytics' %}" class="sidebar-link flex items-center px-4 py-3 text-gray-300 {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}" {% if request.resolver_match.url_name == 'analytics' %}aria-current="page"{% endif %} onclick="closeMobileSidebar()">
+                    <span class="text-xl mr-3" aria-hidden="true">📊</span>
+                    <span>Analytics</span>
                 </a>
                 
                 <a href="javascript:void(0);" class="sidebar-link flex items-center px-4 py-3 text-gray-300" aria-disabled="true">
