@@ -193,11 +193,18 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
                 logger.debug("Error searching by email: %s", exc)
         
         # Priority 2: Search by phone if not found by email
+        # Note: We use a custom lookup that checks if normalized phone digits
+        # are contained in the stored phone number to handle different formats
+        # (e.g., +49123456789, 0049123456789, 0123456789)
         if not existing_lead and normalized_phone:
             try:
-                existing_lead = Lead.objects.filter(
-                    telefon__icontains=normalized_phone
-                ).first()
+                # Query all leads and filter in Python for normalized phone match
+                # This is more flexible than DB regex but may be less efficient for very large datasets
+                for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
+                    stored_normalized = _normalize_phone(lead.telefon)
+                    if stored_normalized and stored_normalized == normalized_phone:
+                        existing_lead = lead
+                        break
             except Exception as exc:
                 logger.debug("Error searching by phone: %s", exc)
         
@@ -254,8 +261,11 @@ def lead_exists(email: Optional[str] = None, telefon: Optional[str] = None) -> b
     
     # Check by phone
     if normalized_phone:
-        if Lead.objects.filter(telefon__icontains=normalized_phone).exists():
-            return True
+        # Query all leads and filter in Python for normalized phone match
+        for lead in Lead.objects.exclude(telefon__isnull=True).exclude(telefon=''):
+            stored_normalized = _normalize_phone(lead.telefon)
+            if stored_normalized and stored_normalized == normalized_phone:
+                return True
     
     return False
 
