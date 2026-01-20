@@ -1346,7 +1346,7 @@
                         
                         <div id="preview-tab" class="social-tab-content">
                             <p>Preview how your page will appear when shared on social media.</p>
-                            <a href="{% url 'pages:social-preview' page.slug %}" target="_blank" class="btn-preview">
+                            <a href="{% url 'pages:social-preview' page.slug %}" target="_blank" rel="noopener noreferrer" class="btn-preview">
                                 Open Social Media Preview
                             </a>
                         </div>
@@ -1515,7 +1515,10 @@
         document.querySelectorAll('.social-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        event.target.classList.add('active');
+        // Use event.currentTarget instead of event.target for better reliability
+        if (window.event && window.event.currentTarget) {
+            window.event.currentTarget.classList.add('active');
+        }
         
         // Update tab content
         document.querySelectorAll('.social-tab-content').forEach(content => {

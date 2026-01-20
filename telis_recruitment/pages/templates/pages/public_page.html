@@ -37,19 +37,18 @@
     
     <!-- WhatsApp / Facebook optimizations -->
     <meta property="og:locale" content="de_DE">
-    <meta name="description" content="{{ page.get_og_description }}">
     
     <!-- Structured Data for Rich Previews -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebPage",
-        "name": "{{ page.get_og_title }}",
-        "description": "{{ page.get_og_description }}",
+        "name": "{{ page.get_og_title|escapejs }}",
+        "description": "{{ page.get_og_description|escapejs }}",
         {% if page.get_og_image %}
-        "image": "{{ page.get_og_image }}",
+        "image": "{{ page.get_og_image|escapejs }}",
         {% endif %}
-        "url": "{{ request.build_absolute_uri }}"
+        "url": "{{ request.build_absolute_uri|escapejs }}"
     }
     </script>
     

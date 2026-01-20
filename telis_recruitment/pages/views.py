@@ -66,16 +66,22 @@ def builder_save(request, slug):
         # Update social media settings if provided
         social_media = data.get('social_media', {})
         if social_media:
-            page.og_title = social_media.get('og_title', '')
-            page.og_description = social_media.get('og_description', '')
-            page.og_image = social_media.get('og_image', '')
-            page.twitter_card = social_media.get('twitter_card', 'summary_large_image')
-            page.twitter_title = social_media.get('twitter_title', '')
-            page.twitter_description = social_media.get('twitter_description', '')
-            page.twitter_image = social_media.get('twitter_image', '')
-            page.enable_share_buttons = social_media.get('enable_share_buttons', False)
-            page.share_button_position = social_media.get('share_button_position', 'bottom-right')
-            page.share_platforms = social_media.get('share_platforms', ['facebook', 'twitter', 'whatsapp', 'linkedin'])
+            # Define field mappings for cleaner code
+            social_fields = {
+                'og_title': '',
+                'og_description': '',
+                'og_image': '',
+                'twitter_card': 'summary_large_image',
+                'twitter_title': '',
+                'twitter_description': '',
+                'twitter_image': '',
+                'enable_share_buttons': False,
+                'share_button_position': 'bottom-right',
+                'share_platforms': ['facebook', 'twitter', 'whatsapp', 'linkedin']
+            }
+            
+            for field, default_value in social_fields.items():
+                setattr(page, field, social_media.get(field, default_value))
         
         page.save()
         
