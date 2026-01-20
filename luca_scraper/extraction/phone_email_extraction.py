@@ -4,7 +4,7 @@ Phone and Email Extraction Module
 Centralized extraction logic for contact information.
 
 This module consolidates phone, WhatsApp, and email extraction logic that was
-previously duplicated in luca_scraper/crawlers/generic.py and 
+previously duplicated in luca_scraper/crawlers/generic.py and
 luca_scraper/crawlers/kleinanzeigen.py.
 
 Functions:
@@ -111,13 +111,6 @@ def extract_phone_numbers(
                             pattern_type=f"{portal_tag}_enhanced" if portal_tag else "enhanced",
                             example=normalized[:8]+"..."
                         )
-                    # Learn phone pattern for AI Learning Engine
-                    try:
-                        from ai_learning_engine import ActiveLearningEngine
-                        learning = ActiveLearningEngine()
-                        learning.learn_phone_pattern(best_phone, normalized, portal_tag or "generic")
-                    except Exception:
-                        pass  # Learning is optional
         except Exception as e:
             if log_func:
                 log_prefix = f"{portal_tag}: " if portal_tag else ""
