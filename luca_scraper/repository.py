@@ -12,6 +12,7 @@ This module provides:
 """
 
 import logging
+import time
 from typing import Dict, Optional, Tuple
 
 from .config import DATABASE_BACKEND
@@ -154,76 +155,122 @@ def sync_status_to_scraper() -> Dict[str, int]:
 # SQLite-specific implementations for routing layer
 # =========================
 
-def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
+def upsert_lead_sqlite(data: Dict, max_retries: int = 3, retry_delay: float = 0.1) -> Tuple[int, bool]:
     """
-    Insert or update a lead in SQLite.
+    Insert or update a lead in SQLite with retry logic for handling database locks.
     
     Args:
         data: Dictionary with lead data (scraper field names)
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_delay: Initial delay between retries in seconds (default: 0.1)
         
     Returns:
         Tuple of (lead_id, created) where created is True if new lead was created
+        
+    Raises:
+        Exception: If all retry attempts fail
     """
     from .connection import db
     
-    con = db()
-    cur = con.cursor()
+    last_exception = None
     
-    try:
-        # Extract search fields
-        email = data.get('email')
-        telefon = data.get('telefon')
-        
-        normalized_email = _normalize_email(email)
-        normalized_phone = _normalize_phone(telefon)
-        
-        # Try to find existing lead
-        existing_id = None
-        
-        # Search by email first
-        if normalized_email:
-            cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
-            row = cur.fetchone()
-            if row:
-                existing_id = row[0]
-        
-        # Search by phone if not found by email
-        if not existing_id and telefon:
-            cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
-            row = cur.fetchone()
-            if row:
-                existing_id = row[0]
-        
-        if existing_id:
-            # Update existing lead
-            set_clauses = []
-            values = []
-            for key, value in data.items():
-                if key != 'id':
-                    set_clauses.append(f"{key} = ?")
-                    values.append(value)
+    for attempt in range(max_retries):
+        con = None
+        try:
+            con = db()
+            cur = con.cursor()
             
-            if set_clauses:
-                values.append(existing_id)
-                sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+            # Extract search fields
+            email = data.get('email')
+            telefon = data.get('telefon')
+            
+            normalized_email = _normalize_email(email)
+            normalized_phone = _normalize_phone(telefon)
+            
+            # Try to find existing lead
+            existing_id = None
+            
+            # Search by email first
+            if normalized_email:
+                cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
+                row = cur.fetchone()
+                if row:
+                    existing_id = row[0]
+            
+            # Search by phone if not found by email
+            if not existing_id and telefon:
+                cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
+                row = cur.fetchone()
+                if row:
+                    existing_id = row[0]
+            
+            if existing_id:
+                # Update existing lead
+                set_clauses = []
+                values = []
+                for key, value in data.items():
+                    if key != 'id':
+                        set_clauses.append(f"{key} = ?")
+                        values.append(value)
+                
+                if set_clauses:
+                    values.append(existing_id)
+                    sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
+                    cur.execute(sql, values)
+                    con.commit()
+                    logger.debug(f"Successfully updated lead {existing_id} in SQLite")
+                
+                return (existing_id, False)
+            else:
+                # Insert new lead
+                columns = list(data.keys())
+                placeholders = ['?'] * len(columns)
+                values = [data[col] for col in columns]
+                
+                sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
                 cur.execute(sql, values)
+                new_id = cur.lastrowid
                 con.commit()
+                logger.debug(f"Successfully created lead {new_id} in SQLite")
+                
+                return (new_id, True)
+        
+        except Exception as exc:
+            last_exception = exc
             
-            return (existing_id, False)
-        else:
-            # Insert new lead
-            columns = list(data.keys())
-            placeholders = ['?'] * len(columns)
-            values = [data[col] for col in columns]
+            # Check if this is a database lock error that we should retry
+            error_str = str(exc).lower()
+            is_lock_error = any(keyword in error_str for keyword in [
+                'database is locked',
+                'locked',
+                'busy'
+            ])
             
-            sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
-            cur.execute(sql, values)
-            new_id = cur.lastrowid
-            con.commit()
-            
-            return (new_id, True)
-    finally:
-        con.close()
+            if is_lock_error and attempt < max_retries - 1:
+                # Calculate exponential backoff delay
+                delay = retry_delay * (2 ** attempt)
+                logger.warning(
+                    f"Database lock error on attempt {attempt + 1}/{max_retries} for lead save: {exc}. "
+                    f"Retrying in {delay:.2f} seconds..."
+                )
+                time.sleep(delay)
+            else:
+                # Either not a lock error or we're out of retries
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"Failed to save lead to SQLite after {max_retries} attempts. Last error: {exc}"
+                    )
+                raise
+        finally:
+            if con:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+    
+    # If we somehow get here, re-raise the last exception
+    if last_exception:
+        raise last_exception
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:

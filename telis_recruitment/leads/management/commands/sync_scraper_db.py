@@ -48,7 +48,7 @@ class Command(BaseCommand):
             '--interval',
             type=int,
             default=300,  # 5 minutes default
-            help='Interval in seconds for watch mode (default: 300)'
+            help='Interval in seconds for watch mode (default: 300, minimum: 1 for real-time sync)'
         )
         parser.add_argument(
             '--dry-run',
@@ -68,6 +68,13 @@ class Command(BaseCommand):
         dry_run = options.get('dry_run', False)
         force = options.get('force', False)
         
+        # Validate interval - minimum 1 second
+        if interval < 1:
+            self.stdout.write(
+                self.style.ERROR('⚠️  Interval must be at least 1 second. Setting to 1 second.\n')
+            )
+            interval = 1
+        
         self.stdout.write(
             self.style.SUCCESS(
                 '\n' + '=' * 60 +
@@ -77,12 +84,22 @@ class Command(BaseCommand):
         )
         
         if watch_mode:
+            sync_mode = "real-time (every second)" if interval == 1 else f"every {interval} seconds"
             self.stdout.write(
                 self.style.WARNING(
-                    f'👁️  Watch mode enabled - syncing every {interval} seconds\n'
+                    f'👁️  Watch mode enabled - syncing {sync_mode}\n'
                     f'   Press Ctrl+C to stop\n'
                 )
             )
+            
+            # Warn about performance for very low intervals
+            if interval <= 5:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f'⚠️  High-frequency sync mode ({interval}s interval) may impact performance.\n'
+                        f'   Ensure your database can handle this load.\n'
+                    )
+                )
         
         if dry_run:
             self.stdout.write(

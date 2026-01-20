@@ -10,6 +10,7 @@ but uses the Django ORM to interact with the Lead model in the CRM.
 import logging
 import os
 import json
+import time
 from typing import Dict, Optional, Tuple
 
 # Django setup - must happen before any Django imports
@@ -141,13 +142,14 @@ def _map_django_to_scraper(lead: Lead) -> Dict:
     return {k: v for k, v in data.items() if v is not None}
 
 
-def upsert_lead(data: Dict) -> Tuple[int, bool]:
+def upsert_lead(data: Dict, max_retries: int = 3, retry_delay: float = 0.1) -> Tuple[int, bool]:
     """
-    Insert or update a lead using Django ORM with optimized queries.
+    Insert or update a lead using Django ORM with optimized queries and retry logic.
     
     This implementation avoids N+1 queries by using a combination of:
     - Django's get_or_create/update for single-query upserts
     - Atomic transactions to ensure data consistency
+    - Retry logic with exponential backoff for transient errors
     
     Deduplication logic:
     1. Try to get existing lead by email (case-insensitive)
@@ -156,70 +158,114 @@ def upsert_lead(data: Dict) -> Tuple[int, bool]:
     
     Args:
         data: Dictionary with lead data (scraper field names)
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_delay: Initial delay between retries in seconds (default: 0.1)
         
     Returns:
         Tuple of (lead_id, created) where created is True if new lead was created
+        
+    Raises:
+        Exception: If all retry attempts fail
     """
-    # Extract and normalize search fields
-    email = data.get('email')
-    telefon = data.get('telefon')
+    last_exception = None
     
-    normalized_email = normalize_email(email)
-    normalized_phone = normalize_phone(telefon)
-    
-    # Map data to Django fields
-    mapped_data = _map_scraper_data_to_django(data)
-    
-    # Ensure source is set to scraper
-    if 'source' not in mapped_data:
-        mapped_data['source'] = Lead.Source.SCRAPER
-    
-    with django_transaction.atomic():
-        # Priority 1: Try to find by email
-        existing_lead = None
-        
-        if normalized_email:
-            try:
-                existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
-            except Exception as exc:
-                logger.debug("Error searching by normalized email: %s", exc)
-        
-        # Priority 2: If not found by email, search by normalized phone
-        if not existing_lead and normalized_phone:
-            try:
-                existing_lead = Lead.objects.filter(normalized_phone=normalized_phone).first()
-            except Exception as exc:
-                logger.debug("Error searching by normalized phone: %s", exc)
-        
-        # Update or create based on whether we found a lead
-        if existing_lead:
-            # Update existing lead
-            for field, value in mapped_data.items():
-                setattr(existing_lead, field, value)
-            try:
-                existing_lead.save()
-                return (existing_lead.id, False)
-            except Exception as exc:
-                # Handle potential constraint violations
-                logger.warning("Failed to update lead %d: %s", existing_lead.id, exc)
-                raise
-        else:
-            # Create new lead
-            try:
-                new_lead = Lead.objects.create(**mapped_data)
-                return (new_lead.id, True)
-            except Exception as exc:
-                # If create fails due to race condition, try to find and update
-                logger.debug("Create failed, attempting to find existing lead: %s", exc)
+    for attempt in range(max_retries):
+        try:
+            # Extract and normalize search fields
+            email = data.get('email')
+            telefon = data.get('telefon')
+            
+            normalized_email = normalize_email(email)
+            normalized_phone = normalize_phone(telefon)
+            
+            # Map data to Django fields
+            mapped_data = _map_scraper_data_to_django(data)
+            
+            # Ensure source is set to scraper
+            if 'source' not in mapped_data:
+                mapped_data['source'] = Lead.Source.SCRAPER
+            
+            with django_transaction.atomic():
+                # Priority 1: Try to find by email
+                existing_lead = None
+                
                 if normalized_email:
-                    existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
-                    if existing_lead:
-                        for field, value in mapped_data.items():
-                            setattr(existing_lead, field, value)
+                    try:
+                        existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
+                    except Exception as exc:
+                        logger.debug("Error searching by normalized email: %s", exc)
+                
+                # Priority 2: If not found by email, search by normalized phone
+                if not existing_lead and normalized_phone:
+                    try:
+                        existing_lead = Lead.objects.filter(normalized_phone=normalized_phone).first()
+                    except Exception as exc:
+                        logger.debug("Error searching by normalized phone: %s", exc)
+                
+                # Update or create based on whether we found a lead
+                if existing_lead:
+                    # Update existing lead
+                    for field, value in mapped_data.items():
+                        setattr(existing_lead, field, value)
+                    try:
                         existing_lead.save()
+                        logger.debug(f"Successfully updated lead {existing_lead.id}")
                         return (existing_lead.id, False)
-                # Re-raise if we couldn't recover
+                    except Exception as exc:
+                        # Handle potential constraint violations
+                        logger.warning("Failed to update lead %d: %s", existing_lead.id, exc)
+                        raise
+                else:
+                    # Create new lead
+                    try:
+                        new_lead = Lead.objects.create(**mapped_data)
+                        logger.debug(f"Successfully created lead {new_lead.id}")
+                        return (new_lead.id, True)
+                    except Exception as exc:
+                        # If create fails due to race condition, try to find and update
+                        logger.debug("Create failed, attempting to find existing lead: %s", exc)
+                        if normalized_email:
+                            existing_lead = Lead.objects.filter(email_normalized=normalized_email).first()
+                            if existing_lead:
+                                for field, value in mapped_data.items():
+                                    setattr(existing_lead, field, value)
+                                existing_lead.save()
+                                logger.debug(f"Recovered and updated lead {existing_lead.id} after race condition")
+                                return (existing_lead.id, False)
+                        # Re-raise if we couldn't recover
+                        raise
+        
+        except Exception as exc:
+            last_exception = exc
+            # Check if this is a transient error that we should retry
+            error_str = str(exc).lower()
+            is_transient = any(keyword in error_str for keyword in [
+                'database is locked',
+                'connection',
+                'timeout',
+                'deadlock',
+                'temporary'
+            ])
+            
+            if is_transient and attempt < max_retries - 1:
+                # Calculate exponential backoff delay
+                delay = retry_delay * (2 ** attempt)
+                logger.warning(
+                    f"Transient error on attempt {attempt + 1}/{max_retries} for lead save: {exc}. "
+                    f"Retrying in {delay:.2f} seconds..."
+                )
+                time.sleep(delay)
+            else:
+                # Either not a transient error or we're out of retries
+                if attempt == max_retries - 1:
+                    logger.error(
+                        f"Failed to save lead after {max_retries} attempts. Last error: {exc}"
+                    )
                 raise
+    
+    # If we somehow get here, re-raise the last exception
+    if last_exception:
+        raise last_exception
 
 
 
