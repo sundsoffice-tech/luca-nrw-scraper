@@ -126,5 +126,5 @@ def get_backend_info() -> Dict[str, str]:
     """
     return {
         'backend': DATABASE_BACKEND,
-        'module': 'django_db' if DATABASE_BACKEND == 'django' else 'database',
+        'module': 'django_db' if DATABASE_BACKEND == 'django' else 'repository',
     }

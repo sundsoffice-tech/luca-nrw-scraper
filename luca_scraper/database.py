@@ -72,6 +72,9 @@ from .repository import (
     sync_status_to_scraper,
 )
 
+# Re-export DATABASE_BACKEND from config
+from .config import DATABASE_BACKEND
+
 
 # =========================
 # EXPORTS
