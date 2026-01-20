@@ -137,12 +137,14 @@ def test_collapsible_section_is_accessible():
     template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
     content = template_path.read_text()
     
-    # Find email section - need to include the full button and section div
-    email_section_start = content.find('<!-- Email Module Section')
-    # Find the closing div of the email-section div, which is after the {% endif %} for the mailbox check
-    first_endif = content.find('{% endif %}', email_section_start)
-    email_section_end = content.find('</div>', first_endif) + 6
-    email_section = content[email_section_start:email_section_end]
+    # Find email section - search for the button and the section div
+    email_button_start = content.find('<!-- Email Module Section')
+    email_section_marker = 'id="email-section"'
+    email_section_div_start = content.find(email_section_marker, email_button_start)
+    # Find the next closing div after all the email links
+    email_logs_link = content.find('Logs</span>', email_section_div_start)
+    email_section_end = content.find('</div>', email_logs_link)
+    email_section = content[email_button_start:email_section_end]
     
     # Check for button element instead of div
     assert '<button type="button"' in email_section, "Email section header should be a button"
@@ -180,12 +182,14 @@ def test_external_links_have_security():
     template_path = Path(__file__).parent / 'templates' / 'crm' / 'base.html'
     content = template_path.read_text()
     
-    # Find external links
-    github_links = content.count('target="_blank"')
-    noopener_count = content.count('rel="noopener noreferrer"')
+    # Count external links (those with target="_blank")
+    import re
+    external_links = re.findall(r'<a[^>]*target="_blank"[^>]*>', content)
+    noopener_links = [link for link in external_links if 'rel="noopener noreferrer"' in link]
     
     # All external links should have noopener noreferrer
-    assert noopener_count >= 3, f"External links should have rel='noopener noreferrer', found {noopener_count}"
+    assert len(external_links) == len(noopener_links), \
+        f"All {len(external_links)} external links should have rel='noopener noreferrer', but only {len(noopener_links)} do"
     
     print("✅ External links have security attributes")
 
