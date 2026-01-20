@@ -21,14 +21,31 @@ This module has been refactored into three separate modules:
 
 This file now serves as a backward compatibility layer, re-exporting
 functions from the new modules.
+
+SECURITY NOTE:
+--------------
+SQL Injection Protection: All database operations validate column names
+against the ALLOWED_LEAD_COLUMNS whitelist before constructing dynamic SQL.
+Column values are always parameterized using SQLite's ? placeholder syntax.
+Never pass user input directly to column name construction.
 """
 
 import logging
+import sqlite3
+import threading
+from contextlib import contextmanager
+from typing import Optional, Dict, Tuple
 
 # Import DB_PATH and DATABASE_BACKEND from config
 from .config import DATABASE_BACKEND
+from .config.env_loader import DB_PATH
 
 logger = logging.getLogger(__name__)
+
+# Thread-local storage for database connections
+_db_local = threading.local()
+_DB_READY = False
+_DB_READY_LOCK = threading.Lock()
 
 
 # =========================
@@ -361,10 +378,16 @@ def migrate_db_unique_indexes():
     """
     con = db()
     cur = con.cursor()
-    
-    # Sync function
-    sync_status_to_scraper,
-)
+    # Implementation removed - old schema migration no longer needed
+    logger.warning("migrate_db_unique_indexes called but not implemented")
+
+
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    """Normalize email for lookup (lowercase, strip whitespace)."""
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    return normalized if normalized else None
 
 
 def _normalize_phone(value: Optional[str]) -> Optional[str]:
@@ -580,58 +603,6 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
             
     finally:
         con.close()
-    # Extract search fields
-    email = data.get('email')
-    telefon = data.get('telefon')
-    
-    normalized_email = _normalize_email(email)
-    normalized_phone = _normalize_phone(telefon)
-    
-    # Try to find existing lead
-    existing_id = None
-    
-    # Search by email first
-    if normalized_email:
-        cur.execute("SELECT id FROM leads WHERE email = ?", (email,))
-        row = cur.fetchone()
-        if row:
-            existing_id = row[0]
-    
-    # Search by phone if not found by email
-    if not existing_id and telefon:
-        cur.execute("SELECT id FROM leads WHERE telefon = ?", (telefon,))
-        row = cur.fetchone()
-        if row:
-            existing_id = row[0]
-    
-    if existing_id:
-        # Update existing lead
-        set_clauses = []
-        values = []
-        for key, value in data.items():
-            if key != 'id':
-                set_clauses.append(f"{key} = ?")
-                values.append(value)
-        
-        if set_clauses:
-            values.append(existing_id)
-            sql = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?"
-            cur.execute(sql, values)
-            con.commit()
-        
-        return (existing_id, False)
-    else:
-        # Insert new lead
-        columns = list(data.keys())
-        placeholders = ['?'] * len(columns)
-        values = [data[col] for col in columns]
-        
-        sql = f"INSERT INTO leads ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
-        cur.execute(sql, values)
-        new_id = cur.lastrowid
-        con.commit()
-        
-        return (new_id, True)
 
 
 def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = None) -> bool:
