@@ -141,6 +141,7 @@ from login_handler import (
     get_login_handler,
     check_and_handle_login,
 )
+from luca_scraper.query_generator import get_dynamic_queries
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -9688,6 +9689,13 @@ if __name__ == "__main__":
             QUERIES = build_queries(selected_industry, per_industry_limit)
             log("info", "Query-Set gebaut", industry=selected_industry,
                 per_industry_limit=per_industry_limit, count=len(QUERIES))
+            
+            # Automatically generate queries if queue is empty
+            if not QUERIES:
+                log("info", "Query-Queue leer, generiere dynamische Queries", 
+                    industry=selected_industry, count=20)
+                QUERIES = get_dynamic_queries(selected_industry, count=20)
+                log("info", "Dynamische Queries generiert", count=len(QUERIES))
             
             # Optimize query order if learning mode is active
             if mode_config.get("query_optimization") and _LEARNING_ENGINE:
