@@ -8464,6 +8464,63 @@ def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
     return unique_dorks[:count]
 
 
+async def get_dynamic_queries(industry: str, count: int = 5, learning_engine=None) -> List[str]:
+    """
+    Generiert dynamisch neue Queries zur Laufzeit.
+    
+    Diese Funktion wird aufgerufen, sobald Tasks abgeschlossen sind, um neue
+    Queries nachzuladen.
+    
+    Args:
+        industry: Branche (z.B. "candidates", "vertrieb", "handelsvertreter")
+        count: Anzahl der zu generierenden Queries
+        learning_engine: Optional ActiveLearningEngine für optimierte Queries
+    
+    Returns:
+        Liste von dynamisch generierten Query-Strings
+    """
+    dynamic_queries = []
+    
+    try:
+        # 1. AI-generierte Smart Dorks (wenn OpenAI verfügbar)
+        if os.getenv("OPENAI_API_KEY"):
+            try:
+                smart_dorks = await generate_smart_dorks(industry, count=count)
+                dynamic_queries.extend(smart_dorks)
+                log("info", "Dynamische Queries generiert (AI)", count=len(smart_dorks), industry=industry)
+            except Exception as e:
+                log("warn", "Smart dorks generation failed in get_dynamic_queries", error=str(e))
+        
+        # 2. Learning-basierte Top-Performer (wenn Learning Engine verfügbar)
+        if learning_engine and hasattr(learning_engine, 'get_best_dorks'):
+            try:
+                best_dorks = learning_engine.get_best_dorks(count // 2)
+                dynamic_queries.extend(best_dorks)
+                log("info", "Dynamische Queries aus Learning", count=len(best_dorks))
+            except Exception as e:
+                log("warn", "Learning-based queries failed", error=str(e))
+        
+        # 3. Fallback: Extended Dorks
+        if not dynamic_queries:
+            extended = get_smart_dorks_extended(industry, count=count)
+            dynamic_queries.extend(extended)
+            log("info", "Dynamische Queries (Fallback Extended)", count=len(extended))
+        
+    except Exception as e:
+        log("error", "get_dynamic_queries failed", error=str(e), industry=industry)
+    
+    # Deduplizieren
+    seen = set()
+    unique = []
+    for q in dynamic_queries:
+        q_lower = q.lower()
+        if q_lower not in seen:
+            seen.add(q_lower)
+            unique.append(q)
+    
+    return unique[:count]
+
+
 # =========================
 # Export (CSV/XLSX append)
 # =========================
@@ -8774,6 +8831,227 @@ async def process_retry_urls(run_id: int, rate: _Rate) -> Tuple[int, int]:
         log("info", "Retry wave completed", retries_total=retries_total, retries_exhausted=retries_exhausted, pending=len(_RETRY_URLS))
     return retries_total, retries_exhausted
 
+async def process_query_async(
+    query: str,
+    run_id: int,
+    rate: _Rate,
+    run_flag: Optional[dict] = None,
+    force: bool = False,
+    date_restrict: Optional[str] = None
+) -> Tuple[int, List[Dict[str, Any]]]:
+    """
+    Prozessiert eine einzelne Query asynchron.
+    
+    Args:
+        query: Suchquery-String
+        run_id: Run ID für Tracking
+        rate: Rate-Limiter für parallele Anfragen
+        run_flag: Dict mit "running" Flag zum Stoppen
+        force: Ob bereits erledigte Queries nochmal durchlaufen sollen
+        date_restrict: Optional Datumsbeschränkung für Suchmaschinen
+    
+    Returns:
+        Tuple[links_checked, collected_leads]
+    """
+    # Performance params
+    current_request_delay = get_performance_params().get('request_delay', SLEEP_BETWEEN_QUERIES)
+    
+    # Check if we should skip this query
+    if run_flag and not run_flag.get("running", True):
+        log("debug", "Query übersprungen (STOP erkannt)", q=query)
+        return (0, [])
+    
+    if (not force) and is_query_done(query):
+        log("info", "Query bereits erledigt (skip)", q=query)
+        await asyncio.sleep(current_request_delay)
+        return (0, [])
+    
+    log("info", "Starte Query", q=query)
+    total_links_checked = 0
+    collected_rows = []
+    links: List[UrlLike] = []
+    had_429_flag = False
+    
+    # 1. Search across multiple search engines
+    try:
+        g_links, had_429 = await google_cse_search_async(query, max_results=60, date_restrict=date_restrict)
+        links.extend(g_links)
+        had_429_flag |= had_429
+    except Exception as e:
+        log("error", "Google-Suche explodiert", q=query, error=str(e))
+    
+    if had_429_flag or not links:
+        try:
+            log("info", "Nutze DuckDuckGo (Fallback)...", q=query)
+            ddg_links = await duckduckgo_search_async(query, max_results=30, date_restrict=date_restrict)
+            links.extend(ddg_links)
+        except Exception as e:
+            log("error", "DuckDuckGo-Suche explodiert", q=query, error=str(e))
+    
+    if had_429_flag or len(links) < 3:
+        try:
+            log("info", "Nutze Perplexity (sonar)...", q=query)
+            pplx_links = await search_perplexity_async(query)
+            links.extend(pplx_links)
+        except Exception as e:
+            log("error", "Perplexity-Suche explodiert", q=query, error=str(e))
+    
+    if not links:
+        try:
+            ddg_links = await duckduckgo_search_async(query, max_results=30, date_restrict=date_restrict)
+            links.extend(ddg_links)
+        except Exception as e:
+            log("error", "DuckDuckGo-Suche explodiert", q=query, error=str(e))
+    
+    if not links:
+        log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG).", q=query)
+        await asyncio.sleep(current_request_delay + _jitter(1.5, 2.5))
+    
+    try:
+        ka_links = await kleinanzeigen_search_async(query, max_results=KLEINANZEIGEN_MAX_RESULTS)
+        if ka_links:
+            links.extend(ka_links)
+    except Exception as e:
+        log("warn", "Kleinanzeigen-Suche explodiert", q=query, error=str(e))
+    
+    # 2. Deduplicate links
+    if links:
+        uniq_links: List[UrlLike] = []
+        seen_links = set()
+        for item in links:
+            raw_url = _extract_url(item)
+            if not raw_url:
+                continue
+            nu = _normalize_for_dedupe(raw_url)
+            if nu in seen_links:
+                continue
+            seen_links.add(nu)
+            if isinstance(item, dict):
+                uniq_links.append({**item, "url": nu})
+            else:
+                uniq_links.append(nu)
+        links = uniq_links
+    
+    if not links:
+        if had_429_flag:
+            log("warn", "Keine Links (429) - Query NICHT als erledigt markieren", q=query)
+        await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4, 1.2))
+        return (0, [])
+    
+    # 3. Filter links by domain limits and learning
+    per_domain_count = {}
+    prim: List[UrlLike] = []
+    skipped_by_learning = 0
+    for link in links:
+        url = _extract_url(link)
+        if not url:
+            continue
+        dom = urllib.parse.urlparse(url).netloc.lower()
+        
+        # Learning mode: Skip domains with poor performance
+        if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+            domain_clean = dom[4:] if dom.startswith("www.") else dom
+            if _LEARNING_ENGINE.should_skip_domain(domain_clean):
+                log("debug", "Learning: Domain übersprungen (schlechte Historie)", domain=domain_clean)
+                skipped_by_learning += 1
+                continue
+        
+        extra = any(k in url.lower() for k in ("/jobs", "/karriere", "/stellen", "/bewerb"))
+        limit = CFG.max_results_per_domain + (1 if extra else 0)
+        if per_domain_count.get(dom, 0) >= limit:
+            continue
+        per_domain_count[dom] = per_domain_count.get(dom, 0) + 1
+        if _url_seen_fast(url):
+            continue
+        if not url_seen(url):
+            prim.append(link)
+    
+    if skipped_by_learning > 0:
+        log("info", "Learning: Domains gefiltert", skipped=skipped_by_learning)
+    
+    # 4. Process primary links
+    chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
+    total_links_checked += chk
+    collected_rows.extend(rows)
+    
+    # 5. Domain pivot queries (parallel with asyncio.gather)
+    pivot_seeds: List[UrlLike] = []
+    pivot_tasks = []
+    for dom in per_domain_count.keys():
+        for dq in domain_pivot_queries(dom):
+            pivot_tasks.append(google_cse_search_async(dq, max_results=10, date_restrict=date_restrict))
+    if pivot_tasks:
+        pivot_results = await asyncio.gather(*pivot_tasks, return_exceptions=True)
+        for result in pivot_results:
+            if isinstance(result, Exception):
+                continue
+            if isinstance(result, tuple) and result[0]:
+                pivot_seeds.extend(result[0])
+    if pivot_seeds:
+        uniq_pivots = []
+        seen_p = set()
+        for item in pivot_seeds:
+            p_url = _extract_url(item)
+            if not p_url:
+                continue
+            norm = _normalize_for_dedupe(p_url)
+            if norm in seen_p:
+                continue
+            seen_p.add(norm)
+            uniq_pivots.append((norm, item))
+        ordered_p = prioritize_urls([u for u, _ in uniq_pivots]) if uniq_pivots else []
+        order_map_p = {u: i for i, u in enumerate(ordered_p)}
+        uniq_pivots.sort(key=lambda tpl: order_map_p.get(tpl[0], len(order_map_p)))
+        pivot_batch = [it for _, it in uniq_pivots][:CFG.internal_depth_per_domain]
+        if pivot_batch:
+            chk_p, rows_p = await _bounded_process(pivot_batch, run_id, rate=rate, force=False)
+            total_links_checked += chk_p
+            collected_rows.extend(rows_p)
+    
+    # 6. Process internal links (sitemaps & crawling)
+    for dom in list(per_domain_count.keys()):
+        base = f"https://{dom}"
+        internal = []
+        try:
+            sm = await try_sitemaps_async(base)
+        except:
+            sm = []
+        if sm:
+            internal.extend(sm[:CFG.internal_depth_per_domain])
+        if not internal:
+            for pl in prim:
+                pl_url = _extract_url(pl)
+                if not pl_url:
+                    continue
+                if urllib.parse.urlparse(pl_url).netloc.lower() != dom:
+                    continue
+                r = await http_get_async(pl_url, timeout=10)
+                if not r or r.status_code != 200:
+                    continue
+                more = find_internal_links(r.text, pl_url)
+                for u in more:
+                    if _url_seen_fast(u) or url_seen(u): continue
+                    if is_denied(u): continue
+                    if not path_ok(u): continue
+                    if urllib.parse.urlparse(u).netloc.lower() != dom: continue
+                    internal.append(u)
+                    if len(internal) >= CFG.internal_depth_per_domain:
+                        break
+                if len(internal) >= CFG.internal_depth_per_domain:
+                    break
+        if internal:
+            internal = prioritize_urls(internal)
+            chk2, rows2 = await _bounded_process(internal, run_id, rate=rate, force=False)
+            total_links_checked += chk2
+            collected_rows.extend(rows2)
+    
+    # 7. Mark query as done
+    mark_query_done(query, run_id)
+    
+    log("info", "Query abgeschlossen", q=query, links_checked=total_links_checked, leads=len(collected_rows))
+    return (total_links_checked, collected_rows)
+
+
 def emergency_save(run_id, links_checked=None, leads_new_total=None):
     """
     Not-Speicherung:
@@ -8991,8 +9269,30 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         _uilog("🎯 Talent-Hunt-Modus: Suche aktive Vertriebler über LinkedIn/Xing/Team-Seiten (keine Stellengesuche-Portale)")
 
     try:
-        for q in QUERIES:
-            # Periodically refresh performance params (every 30 seconds)
+        # ====================================================================
+        # NEW: Parallel Query Processing with Task Pool & Dynamic Query Loading
+        # ====================================================================
+        
+        # Configuration for parallel query processing
+        MAX_CONCURRENT_QUERIES = int(os.getenv("MAX_CONCURRENT_QUERIES", "3"))  # Process up to 3 queries in parallel
+        DYNAMIC_QUERY_INTERVAL = int(os.getenv("DYNAMIC_QUERY_INTERVAL", "5"))  # Generate new queries every 5 completed queries
+        
+        _uilog(f"🚀 Starte parallele Query-Verarbeitung (max. {MAX_CONCURRENT_QUERIES} gleichzeitig)")
+        log("info", "Parallele Query-Verarbeitung gestartet", 
+            max_concurrent=MAX_CONCURRENT_QUERIES, 
+            initial_queries=len(QUERIES),
+            dynamic_interval=DYNAMIC_QUERY_INTERVAL)
+        
+        # Track completed queries
+        processed_queries = set()
+        query_queue = list(QUERIES)  # Mutable queue for dynamic queries
+        completed_count = 0
+        
+        # Get industry for dynamic query generation
+        selected_industry = os.getenv("INDUSTRY", "all")
+        
+        while query_queue or completed_count < len(QUERIES):
+            # Periodically refresh performance params
             if time.time() - last_perf_check > 30:
                 perf_params = get_performance_params()
                 new_async_limit = perf_params.get('async_limit', ASYNC_LIMIT)
@@ -9003,320 +9303,196 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     log("info", "Performance params updated", async_limit=current_async_limit, request_delay=current_request_delay)
                 last_perf_check = time.time()
             
+            # Check stop flag
             if run_flag and not run_flag.get("running", True):
                 _uilog("STOP erkannt – breche ab")
                 break
-            if (not force) and is_query_done(q):
-                log("info", "Query bereits erledigt (skip)", q=q)
-                await asyncio.sleep(current_request_delay)
-                continue
-
-            log("info", "Starte Query", q=q)
-            had_429_flag = False
-            collected_rows = []
-            links: List[UrlLike] = []
-
-            try:
-                g_links, had_429 = await google_cse_search_async(q, max_results=60, date_restrict=date_restrict)
-                links.extend(g_links)
-                had_429_flag |= had_429
-            except Exception as e:
-                log("error", "Google-Suche explodiert", q=q, error=str(e))
-
-            if had_429_flag or not links:
-                try:
-                    log("info", "Nutze DuckDuckGo (Fallback)...", q=q)
-                    ddg_links = await duckduckgo_search_async(q, max_results=30, date_restrict=date_restrict)
-                    links.extend(ddg_links)
-                except Exception as e:
-                    log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
-
-            if had_429_flag or len(links) < 3:
-                try:
-                    log("info", "Nutze Perplexity (sonar)...", q=q)
-                    pplx_links = await search_perplexity_async(q)
-                    links.extend(pplx_links)
-                except Exception as e:
-                    log("error", "Perplexity-Suche explodiert", q=q, error=str(e))
-
-            if not links:
-                try:
-                    ddg_links = await duckduckgo_search_async(q, max_results=30, date_restrict=date_restrict)
-                    links.extend(ddg_links)
-                except Exception as e:
-                    log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
-
-            if not links:
-                log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG). Mache eine längere Pause.", q=q)
-                await asyncio.sleep(current_request_delay + _jitter(1.5,2.5))
-
-            try:
-                ka_links = await kleinanzeigen_search_async(q, max_results=KLEINANZEIGEN_MAX_RESULTS)
-                if ka_links:
-                    links.extend(ka_links)
-            except Exception as e:
-                log("warn", "Kleinanzeigen-Suche explodiert", q=q, error=str(e))
-
-            if links:
-                uniq_links: List[UrlLike] = []
-                seen_links = set()
-                for item in links:
-                    raw_url = _extract_url(item)
-                    if not raw_url:
-                        continue
-                    nu = _normalize_for_dedupe(raw_url)
-                    if nu in seen_links:
-                        continue
-                    seen_links.add(nu)
-                    if isinstance(item, dict):
-                        uniq_links.append({**item, "url": nu})
-                    else:
-                        uniq_links.append(nu)
-                links = uniq_links
-
-            if not links:
-                if had_429_flag:
-                    log("warn", "Keine Links (429) - Query NICHT als erledigt markieren", q=q)
-                await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4,1.2))
-                continue
-
-            per_domain_count = {}
-            prim: List[UrlLike] = []
-            skipped_by_learning = 0
-            for link in links:
-                url = _extract_url(link)
-                if not url:
-                    continue
-                dom = urllib.parse.urlparse(url).netloc.lower()
-                
-                # Learning mode: Skip domains with poor performance
-                if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
-                    domain_clean = dom[4:] if dom.startswith("www.") else dom
-                    if _LEARNING_ENGINE.should_skip_domain(domain_clean):
-                        log("debug", "Learning: Domain übersprungen (schlechte Historie)", domain=domain_clean)
-                        skipped_by_learning += 1
-                        continue
-                
-                extra = any(k in url.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
-                limit = CFG.max_results_per_domain + (1 if extra else 0)
-                if per_domain_count.get(dom,0) >= limit:
-                    continue
-                per_domain_count[dom] = per_domain_count.get(dom,0)+1
-                if _url_seen_fast(url):
-                    continue
-                if not url_seen(url):
-                    prim.append(link)
             
-            if skipped_by_learning > 0:
-                log("info", "Learning: Domains gefiltert", skipped=skipped_by_learning)
-
-            chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
-            total_links_checked += chk
-            collected_rows.extend(rows)
-
-            pivot_seeds: List[UrlLike] = []
-            pivot_tasks = []
-            for dom in per_domain_count.keys():
-                for dq in domain_pivot_queries(dom):
-                    pivot_tasks.append(google_cse_search_async(dq, max_results=10, date_restrict=date_restrict))
-            if pivot_tasks:
-                pivot_results = await asyncio.gather(*pivot_tasks, return_exceptions=True)
-                for result in pivot_results:
-                    if isinstance(result, Exception):
-                        continue
-                    if isinstance(result, tuple) and result[0]:
-                        pivot_seeds.extend(result[0])
-            if pivot_seeds:
-                uniq_pivots = []
-                seen_p = set()
-                for item in pivot_seeds:
-                    p_url = _extract_url(item)
-                    if not p_url:
-                        continue
-                    norm = _normalize_for_dedupe(p_url)
-                    if norm in seen_p:
-                        continue
-                    seen_p.add(norm)
-                    uniq_pivots.append((norm, item))
-                ordered_p = prioritize_urls([u for u, _ in uniq_pivots]) if uniq_pivots else []
-                order_map_p = {u: i for i, u in enumerate(ordered_p)}
-                uniq_pivots.sort(key=lambda tpl: order_map_p.get(tpl[0], len(order_map_p)))
-                pivot_batch = [it for _, it in uniq_pivots][:CFG.internal_depth_per_domain]
-                if pivot_batch:
-                    chk_p, rows_p = await _bounded_process(pivot_batch, run_id, rate=rate, force=False)
-                    total_links_checked += chk_p
-                    collected_rows.extend(rows_p)
-
-            for dom in list(per_domain_count.keys()):
-                base = f"https://{dom}"
-                internal = []
-                try:
-                    sm = await try_sitemaps_async(base)
-                except:
-                    sm = []
-                if sm:
-                    internal.extend(sm[:CFG.internal_depth_per_domain])
-                if not internal:
-                    for pl in prim:
-                        pl_url = _extract_url(pl)
-                        if not pl_url:
-                            continue
-                        if urllib.parse.urlparse(pl_url).netloc.lower() != dom:
-                            continue
-                        r = await http_get_async(pl_url, timeout=10)
-                        if not r or r.status_code != 200:
-                            continue
-                        more = find_internal_links(r.text, pl_url)
-                        for u in more:
-                            if _url_seen_fast(u) or url_seen(u): continue
-                            if is_denied(u): continue
-                            if not path_ok(u): continue
-                            if urllib.parse.urlparse(u).netloc.lower() != dom: continue
-                            internal.append(u)
-                            if len(internal)>=CFG.internal_depth_per_domain:
-                                break
-                        if len(internal)>=CFG.internal_depth_per_domain:
-                            break
-                if internal:
-                    internal = prioritize_urls(internal)
-                    chk2, rows2 = await _bounded_process(internal, run_id, rate=rate, force=False)
-                    total_links_checked += chk2
-                    collected_rows.extend(rows2)
-
-            mark_query_done(q, run_id)
-
-            MIN_SCORE_TARGET = MIN_SCORE_ENV
-            found = len(collected_rows)
-            avg = int(sum(r.get("score",0) for r in collected_rows)/found) if found else 0
-            if found >= 20 and avg < MIN_SCORE_ENV:
-                MIN_SCORE_TARGET=min(80,MIN_SCORE_ENV+5)
-            elif found < 10 and MIN_SCORE_ENV>=45:
-                MIN_SCORE_TARGET=MIN_SCORE_ENV-10
-            elif found <5 and MIN_SCORE_ENV>=35:
-                MIN_SCORE_TARGET=MIN_SCORE_ENV-20
-
-            def _is_offtarget_lead(r: Dict[str, Any]) -> bool:
-                lead_type = (r.get("lead_type") or "").lower()
-                if lead_type == "employer":
-                    return True
-                role = (r.get("rolle") or r.get("role_guess") or "").lower()
-                company = (r.get("company_name") or "").lower()
-                src_url = (r.get("quelle") or "").lower()
-
-                hr_tokens = (
-                    "personalreferent",
-                    "personalreferentin",
-                    "sachbearbeiter personal",
-                    "sachbearbeiterin personal",
-                    "hr-manager",
-                    "hr manager",
-                    "human resources",
-                    "bewerbungen richten",
-                    "bewerbung richten"
-                )
-                press_tokens = (
-                    "pressesprecher",
-                    "pressesprecherin",
-                    "unternehmenskommunikation",
-                    "pressekontakt",
-                    "events",
-                    "veranstaltungen",
-                    "seminar",
-                    "seminare"
-                )
-                public_tokens = (
-                    "rathaus",
-                    "verwaltung",
-                    "gleichstellungsstelle",
-                    "grundsicherung",
-                    "bundestag",
-                    "/stadtwerke",
-                    "die-partei.de",
-                    "oberhausen.de"
-                )
-
-                role_hit = any(tok in role for tok in hr_tokens + press_tokens)
-                company_hit = any(tok in company for tok in ("stadtwerke", "bundestag", "die partei"))
-                url_hit = any(tok in src_url for tok in public_tokens)
-
-                return role_hit or company_hit or url_hit
-
-            # NUR Kandidaten exportieren, wenn wir im Recruiter/Candidates-Modus sind (NICHT talent_hunt)
-            # CRITICAL FIX: Also check for "candidates" in addition to "recruiter"
-            industry_env = os.getenv("INDUSTRY", "").lower()
-            if _is_candidates_mode() and not _is_talent_hunt_mode():
-                collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
-                log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
-            elif _is_talent_hunt_mode():
-                # Im talent_hunt Modus: Alle Lead-Types erlauben, besonders:
-                # - active_salesperson, team_member, freelancer, hr_contact
-                allowed_types = ("active_salesperson", "team_member", "freelancer", "hr_contact", "candidate", "company", "contact", None, "")
-                collected_rows = [r for r in collected_rows if r.get("lead_type", "") in allowed_types or not r.get("lead_type")]
-                log("info", "Talent-Hunt Filter: Alle Vertriebler-Typen erlaubt", remaining=len(collected_rows))
-
-            filtered = _dedup_run(
-                [
-                    r for r in collected_rows
-                    if r.get("score", 0) >= MIN_SCORE_TARGET and not _is_offtarget_lead(r)
-                ]
-            )
-            if filtered:
-                # Enrich leads without phone numbers using telefonbuch
-                filtered = await enrich_leads_with_telefonbuch(filtered)
-                inserted = insert_leads(filtered)
-                if inserted:
-                    append_csv(DEFAULT_CSV, inserted, ENH_FIELDS)
-                    append_xlsx(DEFAULT_XLSX, inserted, ENH_FIELDS)
-                    _uilog(f"Export: +{len(inserted)} neue Leads")
-                    leads_new_total += len(inserted)
+            # Select next batch of queries to process in parallel
+            batch_size = min(MAX_CONCURRENT_QUERIES, len(query_queue))
+            if batch_size == 0:
+                break
+            
+            batch_queries = []
+            for _ in range(batch_size):
+                if not query_queue:
+                    break
+                q = query_queue.pop(0)
+                if q not in processed_queries:
+                    batch_queries.append(q)
+            
+            if not batch_queries:
+                break
+            
+            log("info", "Verarbeite Query-Batch parallel", batch_size=len(batch_queries), remaining=len(query_queue))
+            _uilog(f"⚡ Verarbeite {len(batch_queries)} Queries parallel...")
+            
+            # Process queries in parallel using asyncio.gather
+            tasks = [
+                process_query_async(q, run_id, rate, run_flag, force, date_restrict)
+                for q in batch_queries
+            ]
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for q, result in zip(batch_queries, results):
+                processed_queries.add(q)
+                completed_count += 1
+                
+                if isinstance(result, Exception):
+                    log("error", "Query-Verarbeitung fehlgeschlagen", q=q, error=str(result))
+                    _uilog(f"❌ Query fehlgeschlagen: {q[:50]}...")
+                    continue
+                
+                links_checked, collected_rows = result
+                total_links_checked += links_checked
+                
+                # Filter and process leads
+                MIN_SCORE_TARGET = MIN_SCORE_ENV
+                found = len(collected_rows)
+                avg = int(sum(r.get("score", 0) for r in collected_rows) / found) if found else 0
+                if found >= 20 and avg < MIN_SCORE_ENV:
+                    MIN_SCORE_TARGET = min(80, MIN_SCORE_ENV + 5)
+                elif found < 10 and MIN_SCORE_ENV >= 45:
+                    MIN_SCORE_TARGET = MIN_SCORE_ENV - 10
+                elif found < 5 and MIN_SCORE_ENV >= 35:
+                    MIN_SCORE_TARGET = MIN_SCORE_ENV - 20
+                
+                def _is_offtarget_lead(r: Dict[str, Any]) -> bool:
+                    lead_type = (r.get("lead_type") or "").lower()
+                    if lead_type == "employer":
+                        return True
+                    role = (r.get("rolle") or r.get("role_guess") or "").lower()
+                    company = (r.get("company_name") or "").lower()
+                    src_url = (r.get("quelle") or "").lower()
                     
-                    # Learning mode: Track domain and query performance
-                    if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
-                        try:
-                            # Track query performance (old learning system)
-                            _LEARNING_ENGINE.record_query_performance(q, len(inserted))
-                            
-                            # Track dork performance (active learning system)
-                            if active_learning_engine:
-                                leads_with_phone = len([l for l in inserted if l.get('telefon')])
-                                active_learning_engine.record_dork_result(
-                                    dork=q,
-                                    results=len(links),  # Total search results
-                                    leads_found=len(inserted),  # Leads actually inserted
-                                    leads_with_phone=leads_with_phone  # Leads with phone numbers
-                                )
-                            
-                            # Track domain success for each lead
-                            domains_tracked = set()
-                            for lead in inserted:
-                                source_url = lead.get("quelle", "")
-                                if source_url:
-                                    parsed = urllib.parse.urlparse(source_url)
-                                    domain = parsed.netloc.lower()
-                                    if domain.startswith("www."):
-                                        domain = domain[4:]
-                                    if domain and domain not in domains_tracked:
-                                        # Calculate quality based on score and confidence (both expected to be 0-100)
-                                        # Normalize to 0.0-1.0 range and average them
-                                        score_val = max(0, min(100, lead.get("score", 0)))
-                                        confidence_val = max(0, min(100, lead.get("confidence_score", 0)))
-                                        quality = min(1.0, (score_val / 100.0 + confidence_val / 100.0) / 2)
-                                        _LEARNING_ENGINE.record_domain_success(domain, 1, quality)
-                                        domains_tracked.add(domain)
-                            
-                            if domains_tracked:
-                                log("info", "Learning: Domain-Erfolge gespeichert", domains=len(domains_tracked), query_leads=len(inserted))
-                        except Exception as e:
-                            log("debug", "Learning tracking failed", error=str(e))
-
+                    hr_tokens = (
+                        "personalreferent", "personalreferentin", "sachbearbeiter personal",
+                        "sachbearbeiterin personal", "hr-manager", "hr manager", "human resources",
+                        "bewerbungen richten", "bewerbung richten"
+                    )
+                    press_tokens = (
+                        "pressesprecher", "pressesprecherin", "unternehmenskommunikation",
+                        "pressekontakt", "events", "veranstaltungen", "seminar", "seminare"
+                    )
+                    public_tokens = (
+                        "rathaus", "verwaltung", "gleichstellungsstelle", "grundsicherung",
+                        "bundestag", "/stadtwerke", "die-partei.de", "oberhausen.de"
+                    )
+                    
+                    role_hit = any(tok in role for tok in hr_tokens + press_tokens)
+                    company_hit = any(tok in company for tok in ("stadtwerke", "bundestag", "die partei"))
+                    url_hit = any(tok in src_url for tok in public_tokens)
+                    
+                    return role_hit or company_hit or url_hit
+                
+                # Filter by mode
+                industry_env = os.getenv("INDUSTRY", "").lower()
+                if _is_candidates_mode() and not _is_talent_hunt_mode():
+                    collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
+                    log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
+                elif _is_talent_hunt_mode():
+                    allowed_types = ("active_salesperson", "team_member", "freelancer", "hr_contact", "candidate", "company", "contact", None, "")
+                    collected_rows = [r for r in collected_rows if r.get("lead_type", "") in allowed_types or not r.get("lead_type")]
+                    log("info", "Talent-Hunt Filter: Alle Vertriebler-Typen erlaubt", remaining=len(collected_rows))
+                
+                filtered = _dedup_run(
+                    [r for r in collected_rows if r.get("score", 0) >= MIN_SCORE_TARGET and not _is_offtarget_lead(r)]
+                )
+                
+                if filtered:
+                    # Enrich leads without phone numbers using telefonbuch
+                    filtered = await enrich_leads_with_telefonbuch(filtered)
+                    inserted = insert_leads(filtered)
+                    if inserted:
+                        append_csv(DEFAULT_CSV, inserted, ENH_FIELDS)
+                        append_xlsx(DEFAULT_XLSX, inserted, ENH_FIELDS)
+                        _uilog(f"✅ Query abgeschlossen: +{len(inserted)} neue Leads")
+                        leads_new_total += len(inserted)
+                        
+                        # Learning mode: Track domain and query performance
+                        if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
+                            try:
+                                # Track query performance (old learning system)
+                                _LEARNING_ENGINE.record_query_performance(q, len(inserted))
+                                
+                                # Track dork performance (active learning system)
+                                if active_learning_engine:
+                                    leads_with_phone = len([l for l in inserted if l.get('telefon')])
+                                    active_learning_engine.record_dork_result(
+                                        dork=q,
+                                        results=links_checked,  # Total links checked
+                                        leads_found=len(inserted),  # Leads actually inserted
+                                        leads_with_phone=leads_with_phone  # Leads with phone numbers
+                                    )
+                                
+                                # Track domain success for each lead
+                                domains_tracked = set()
+                                for lead in inserted:
+                                    source_url = lead.get("quelle", "")
+                                    if source_url:
+                                        parsed = urllib.parse.urlparse(source_url)
+                                        domain = parsed.netloc.lower()
+                                        if domain.startswith("www."):
+                                            domain = domain[4:]
+                                        if domain and domain not in domains_tracked:
+                                            score_val = max(0, min(100, lead.get("score", 0)))
+                                            confidence_val = max(0, min(100, lead.get("confidence_score", 0)))
+                                            quality = min(1.0, (score_val / 100.0 + confidence_val / 100.0) / 2)
+                                            _LEARNING_ENGINE.record_domain_success(domain, 1, quality)
+                                            domains_tracked.add(domain)
+                                
+                                if domains_tracked:
+                                    log("info", "Learning: Domain-Erfolge gespeichert", domains=len(domains_tracked), query_leads=len(inserted))
+                            except Exception as e:
+                                log("debug", "Learning tracking failed", error=str(e))
+                else:
+                    log("info", "Query abgeschlossen ohne neue Leads", q=q[:50])
+            
+            # Process retries after each batch
             if _RETRY_URLS:
                 try:
                     await process_retry_urls(run_id, rate)
                 except Exception as e:
                     log("warn", "Retry wave failed", error=str(e))
-
-            await asyncio.sleep(current_request_delay + _jitter(0.4,1.2))
-
+            
+            # Dynamic Query Loading: Generate new queries after every DYNAMIC_QUERY_INTERVAL completed queries
+            if completed_count > 0 and completed_count % DYNAMIC_QUERY_INTERVAL == 0:
+                try:
+                    log("info", "Generiere dynamische Queries", completed=completed_count, remaining=len(query_queue))
+                    _uilog(f"🔄 Generiere neue dynamische Queries (nach {completed_count} abgeschlossenen Queries)...")
+                    
+                    dynamic_queries = await get_dynamic_queries(
+                        industry=selected_industry,
+                        count=3,  # Generate 3 new queries at a time
+                        learning_engine=_LEARNING_ENGINE if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") else None
+                    )
+                    
+                    # Add new queries to the queue, avoiding duplicates
+                    new_count = 0
+                    for dq in dynamic_queries:
+                        if dq not in processed_queries and dq not in query_queue:
+                            query_queue.append(dq)
+                            new_count += 1
+                    
+                    if new_count > 0:
+                        log("info", "Dynamische Queries hinzugefügt", new_queries=new_count, total_in_queue=len(query_queue))
+                        _uilog(f"✨ {new_count} neue dynamische Queries zur Warteschlange hinzugefügt")
+                    else:
+                        log("info", "Keine neuen dynamischen Queries (alle bereits verarbeitet)")
+                except Exception as e:
+                    log("error", "Dynamische Query-Generierung fehlgeschlagen", error=str(e))
+            
+            # Small delay between batches to avoid overwhelming the system
+            await asyncio.sleep(current_request_delay + _jitter(0.4, 1.2))
+        
+        log("info", "Parallele Query-Verarbeitung abgeschlossen", 
+            total_processed=len(processed_queries), 
+            links_checked=total_links_checked,
+            leads_found=leads_new_total)
+        _uilog(f"🎉 Alle Queries abgeschlossen: {len(processed_queries)} Queries verarbeitet, {leads_new_total} Leads gefunden")
+        
         finish_run(run_id, total_links_checked, leads_new_total, "ok", metrics=dict(RUN_METRICS))
         
         # Post-run learning analysis
