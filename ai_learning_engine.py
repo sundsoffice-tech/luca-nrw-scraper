@@ -246,7 +246,9 @@ class ActiveLearningEngine:
             for row in cursor.fetchall():
                 stats[row[0]] = {
                     'avg_success': round(row[1] * 100, 1),
-                    'total_leads': row[2],
+                    'avg_success_rate': row[1],  # Original 0-1 Wert
+                    'total_leads':  row[2],
+                    'total_with_phone': row[2],  # Alias fuer Kompatibilitaet
                     'runs': row[3]
                 }
         return stats

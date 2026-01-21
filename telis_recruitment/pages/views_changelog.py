@@ -9,8 +9,8 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from ..models import LandingPage, ChangeLog, VersionSnapshot
-from ..services.changelog_service import (
+from .models import LandingPage, ChangeLog, VersionSnapshot
+from .services.changelog_service import (
     ChangeLogService,
     ChangeLogServiceError,
     UndoRedoService
