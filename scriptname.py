@@ -1295,6 +1295,103 @@ class ScraperConfig:
 
 CFG = ScraperConfig()
 
+
+# -------------- DynamicQueryGenerator --------------
+class DynamicQueryGenerator:
+    """
+    Tracks query results for machine learning optimization.
+    Records query performance including industry, lead counts, and phone number success rates.
+    """
+    
+    def __init__(self, db_path: str = "scraper.db"):
+        self.db_path = db_path
+        self._init_query_results_table()
+    
+    def _init_query_results_table(self):
+        """Initialize the query results tracking table"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS query_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                query_string TEXT NOT NULL,
+                industry TEXT,
+                leads_found INTEGER DEFAULT 0,
+                leads_with_phone INTEGER DEFAULT 0,
+                success_rate REAL DEFAULT 0.0,
+                run_id INTEGER
+            )''')
+            conn.commit()
+    
+    def record_query_result(
+        self,
+        query_string: str,
+        industry: str,
+        leads_found: int,
+        leads_with_phone: int,
+        run_id: int = 0
+    ):
+        """
+        Record the results of a search query for learning purposes.
+        
+        Args:
+            query_string: The search query that was executed
+            industry: The industry/Branche context for the query
+            leads_found: Total number of leads found by this query
+            leads_with_phone: Number of leads that have phone numbers
+            run_id: The run ID this query belongs to
+        """
+        success_rate = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT INTO query_results 
+                (query_string, industry, leads_found, leads_with_phone, success_rate, run_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (query_string, industry, leads_found, leads_with_phone, success_rate, run_id))
+            conn.commit()
+    
+    def get_query_stats(self, industry: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get statistics about query performance, optionally filtered by industry.
+        
+        Args:
+            industry: Optional industry filter
+            
+        Returns:
+            Dictionary with aggregated statistics
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            if industry:
+                cursor = conn.execute('''
+                    SELECT 
+                        COUNT(*) as total_queries,
+                        SUM(leads_found) as total_leads,
+                        SUM(leads_with_phone) as total_with_phone,
+                        AVG(success_rate) as avg_success_rate
+                    FROM query_results 
+                    WHERE industry = ?
+                ''', (industry,))
+            else:
+                cursor = conn.execute('''
+                    SELECT 
+                        COUNT(*) as total_queries,
+                        SUM(leads_found) as total_leads,
+                        SUM(leads_with_phone) as total_with_phone,
+                        AVG(success_rate) as avg_success_rate
+                    FROM query_results
+                ''')
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'total_queries': row[0] or 0,
+                    'total_leads': row[1] or 0,
+                    'total_with_phone': row[2] or 0,
+                    'avg_success_rate': round((row[3] or 0) * 100, 1)
+                }
+            return {'total_queries': 0, 'total_leads': 0, 'total_with_phone': 0, 'avg_success_rate': 0.0}
+
+
 # =========================
 # Use luca_scraper imports if available
 # =========================
@@ -1400,6 +1497,7 @@ if _LUCA_SCRAPER_AVAILABLE:
 
 _DB_READY = False  # einmaliges Schema-Setup pro Prozess
 _LEARNING_ENGINE: Optional[LearningEngine] = None  # Global learning engine instance
+_QUERY_GENERATOR: Optional[DynamicQueryGenerator] = None  # Global query results tracker
 
 LEAD_FIELDS = [
     "name","rolle","email","telefon","quelle","score","tags","region",
@@ -1580,7 +1678,7 @@ def db():
     # Fallback: Use inline implementation when luca_scraper not available
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    global _DB_READY, _LEARNING_ENGINE
+    global _DB_READY, _LEARNING_ENGINE, _QUERY_GENERATOR
     if not _DB_READY:
         _ensure_schema(con)
         # Dashboard schema initialization removed - migrated to Django CRM
@@ -1589,6 +1687,9 @@ def db():
     # Initialize learning engine on first DB access
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
+    # Initialize query generator on first DB access
+    if _QUERY_GENERATOR is None:
+        _QUERY_GENERATOR = DynamicQueryGenerator(DB_PATH)
     return con
 
 def init_db():
@@ -1605,6 +1706,14 @@ def get_learning_engine() -> Optional[LearningEngine]:
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
     return _LEARNING_ENGINE
+
+
+def get_query_generator() -> Optional[DynamicQueryGenerator]:
+    """Get the global query generator instance."""
+    global _QUERY_GENERATOR
+    if _QUERY_GENERATOR is None:
+        _QUERY_GENERATOR = DynamicQueryGenerator(DB_PATH)
+    return _QUERY_GENERATOR
 
 def init_mode(mode: str) -> Dict[str, Any]:
     """
@@ -9184,6 +9293,27 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     collected_rows.extend(rows2)
 
             mark_query_done(q, run_id)
+            
+            # Track query results for machine learning
+            try:
+                query_gen = get_query_generator()
+                if query_gen:
+                    # Count leads with phone numbers
+                    leads_with_phone = sum(1 for r in collected_rows if r.get("telefon"))
+                    # Get industry from environment
+                    industry = os.getenv("INDUSTRY", "unknown").lower()
+                    # Record the query result
+                    query_gen.record_query_result(
+                        query_string=q,
+                        industry=industry,
+                        leads_found=len(collected_rows),
+                        leads_with_phone=leads_with_phone,
+                        run_id=run_id
+                    )
+                    log("debug", "Query result recorded", q=q, leads=len(collected_rows), 
+                        with_phone=leads_with_phone, industry=industry)
+            except Exception as e:
+                log("error", "Failed to record query result", error=str(e), q=q)
 
             MIN_SCORE_TARGET = MIN_SCORE_ENV
             found = len(collected_rows)
