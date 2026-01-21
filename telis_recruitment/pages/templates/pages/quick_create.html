@@ -303,14 +303,76 @@ document.getElementById('code-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const formData = new FormData(e.target);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
     
-    // Create page via admin API (simplified)
-    alert('Code-Einfügen Feature: In Entwicklung');
+    // Disable submit button
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird erstellt...';
+    
+    try {
+        const response = await fetch("{% url 'pages:create-from-code' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Redirect to the newly created page
+            window.location.href = result.redirect_url || result.data.page_url;
+        } else {
+            alert('Fehler: ' + (result.error || 'Unbekannter Fehler'));
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Seite erstellen';
+        }
+    } catch (error) {
+        console.error('Error creating page from code:', error);
+        alert('Fehler beim Erstellen der Seite: ' + error.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Seite erstellen';
+    }
 });
 
-function selectTemplate(templateId, templateName) {
-    // Redirect to template application
-    alert('Template: ' + templateName + ' - Feature in Entwicklung');
+async function selectTemplate(templateId, templateName) {
+    if (!confirm(`Template "${templateName}" verwenden?`)) {
+        return;
+    }
+    
+    const projectName = prompt('Projektname eingeben:', templateName);
+    if (!projectName) {
+        return;
+    }
+    
+    try {
+        const response = await fetch("{% url 'pages:create-from-template' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                template_id: templateId,
+                project_name: projectName
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show success message
+            alert('Projekt erfolgreich erstellt!');
+            // Redirect to the new project
+            window.location.href = result.redirect_url || result.data.project_url;
+        } else {
+            alert('Fehler: ' + (result.error || 'Template konnte nicht angewendet werden'));
+        }
+    } catch (error) {
+        console.error('Error applying template:', error);
+        alert('Fehler beim Anwenden des Templates: ' + error.message);
+    }
 }
 </script>
 

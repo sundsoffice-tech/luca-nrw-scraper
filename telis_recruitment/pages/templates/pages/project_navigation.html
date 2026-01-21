@@ -265,22 +265,106 @@ function addExternalLink() {
     navTree.appendChild(newItem);
 }
 
-function editNavItem(id) {
-    // Show modal with item data
-    document.getElementById('editModal').classList.remove('hidden');
-    // Load item data...
+async function editNavItem(id) {
+    try {
+        // Fetch item data from server
+        const response = await fetch(`/pages/api/nav-items/${id}/`, {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load navigation item');
+        }
+        
+        const item = await response.json();
+        
+        // Populate modal with item data
+        document.getElementById('edit_item_id').value = item.id;
+        document.getElementById('edit_title').value = item.title || '';
+        document.getElementById('edit_icon').value = item.icon || '';
+        document.getElementById('edit_external_url').value = item.external_url || '';
+        document.getElementById('edit_is_visible').checked = item.is_visible !== false;
+        document.getElementById('edit_open_in_new_tab').checked = item.open_in_new_tab || false;
+        
+        // Show modal
+        document.getElementById('editModal').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading navigation item:', error);
+        alert('Fehler beim Laden des Navigation Items');
+    }
 }
 
-function deleteNavItem(id) {
-    if (confirm('Navigation Item wirklich löschen?')) {
+async function deleteNavItem(id) {
+    if (!confirm('Navigation Item wirklich löschen?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/pages/api/nav-items/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete navigation item');
+        }
+        
         // Remove from DOM
-        event.target.closest('.nav-item').remove();
+        const navItem = document.querySelector(`.nav-item[data-id="${id}"]`);
+        if (navItem) {
+            navItem.remove();
+        }
+        
+        alert('Navigation Item gelöscht!');
+    } catch (error) {
+        console.error('Error deleting navigation item:', error);
+        alert('Fehler beim Löschen des Navigation Items');
     }
 }
 
 function closeModal() {
     document.getElementById('editModal').classList.add('hidden');
 }
+
+// Handle edit form submission
+document.getElementById('editForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const itemId = document.getElementById('edit_item_id').value;
+    const data = {
+        title: document.getElementById('edit_title').value,
+        icon: document.getElementById('edit_icon').value,
+        external_url: document.getElementById('edit_external_url').value,
+        is_visible: document.getElementById('edit_is_visible').checked,
+        open_in_new_tab: document.getElementById('edit_open_in_new_tab').checked
+    };
+    
+    try {
+        const response = await fetch(`/pages/api/nav-items/${itemId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update navigation item');
+        }
+        
+        alert('Navigation Item aktualisiert!');
+        closeModal();
+        window.location.reload();
+    } catch (error) {
+        console.error('Error updating navigation item:', error);
+        alert('Fehler beim Aktualisieren des Navigation Items');
+    }
+});
 
 async function saveNavigation() {
     // Collect navigation data from DOM

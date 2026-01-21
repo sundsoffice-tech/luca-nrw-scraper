@@ -206,10 +206,123 @@
 </div>
 
 <script>
-function showDeploymentDetails(deploymentId) {
-    // Show modal with deployment details
-    document.getElementById('detailsModal').classList.remove('hidden');
-    // In a real implementation, you would fetch the details via AJAX
+async function showDeploymentDetails(deploymentId) {
+    const modal = document.getElementById('detailsModal');
+    const content = document.getElementById('detailsContent');
+    
+    // Show modal with loading state
+    modal.classList.remove('hidden');
+    content.innerHTML = '<div class="text-center text-gray-400 py-8">Lade Details...</div>';
+    
+    try {
+        const response = await fetch(`/pages/api/deployments/${deploymentId}/`, {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch deployment details');
+        }
+        
+        const deployment = await response.json();
+        
+        // Build details HTML
+        let html = `
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Status</div>
+                        <div class="text-white font-medium">${deployment.status}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Version</div>
+                        <div class="text-white font-mono">${deployment.version || '—'}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Gestartet</div>
+                        <div class="text-white">${new Date(deployment.started_at).toLocaleString('de-DE')}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Abgeschlossen</div>
+                        <div class="text-white">${deployment.completed_at ? new Date(deployment.completed_at).toLocaleString('de-DE') : '—'}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Dateien</div>
+                        <div class="text-white">${deployment.deployed_files_count || 0}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Größe</div>
+                        <div class="text-white">${formatBytes(deployment.deployed_size_bytes || 0)}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Von</div>
+                        <div class="text-white">${deployment.deployed_by || 'System'}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-400 mb-1">Commit/Build</div>
+                        <div class="text-white font-mono text-sm">${deployment.commit_hash ? deployment.commit_hash.substring(0, 8) : '—'}</div>
+                    </div>
+                </div>
+        `;
+        
+        // Add log if available
+        if (deployment.log) {
+            html += `
+                <div class="mt-6">
+                    <div class="text-sm font-semibold text-gray-300 mb-2">Build Log</div>
+                    <div class="bg-dark-900 rounded p-4 max-h-64 overflow-y-auto">
+                        <pre class="text-xs text-gray-300 font-mono whitespace-pre-wrap">${deployment.log}</pre>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add errors if any
+        if (deployment.errors && deployment.errors.length > 0) {
+            html += `
+                <div class="mt-4">
+                    <div class="text-sm font-semibold text-red-400 mb-2">Fehler</div>
+                    <div class="bg-red-900/20 border border-red-700 rounded p-4">
+                        <ul class="space-y-1 text-sm text-red-300">
+                            ${deployment.errors.map(error => `<li>• ${error}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Add deployed files list if available
+        if (deployment.deployed_files && deployment.deployed_files.length > 0) {
+            html += `
+                <div class="mt-6">
+                    <div class="text-sm font-semibold text-gray-300 mb-2">Deployed Files (${deployment.deployed_files.length})</div>
+                    <div class="bg-dark-900 rounded p-4 max-h-48 overflow-y-auto">
+                        <ul class="space-y-1 text-xs text-gray-400 font-mono">
+                            ${deployment.deployed_files.slice(0, 50).map(file => `<li>📄 ${file}</li>`).join('')}
+                            ${deployment.deployed_files.length > 50 ? `<li class="text-gray-500">... und ${deployment.deployed_files.length - 50} weitere</li>` : ''}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        content.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error fetching deployment details:', error);
+        content.innerHTML = '<div class="text-center text-red-400 py-8">Fehler beim Laden der Details</div>';
+    }
+}
+
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 function closeDetailsModal() {
