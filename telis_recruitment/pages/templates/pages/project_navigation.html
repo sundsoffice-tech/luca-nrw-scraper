@@ -280,13 +280,30 @@ async function editNavItem(id) {
         
         const item = await response.json();
         
-        // Populate modal with item data
-        document.getElementById('edit_item_id').value = item.id;
-        document.getElementById('edit_title').value = item.title || '';
-        document.getElementById('edit_icon').value = item.icon || '';
-        document.getElementById('edit_external_url').value = item.external_url || '';
-        document.getElementById('edit_is_visible').checked = item.is_visible !== false;
-        document.getElementById('edit_open_in_new_tab').checked = item.open_in_new_tab || false;
+        // Populate modal with item data - with null checks
+        const elements = {
+            edit_item_id: document.getElementById('edit_item_id'),
+            edit_title: document.getElementById('edit_title'),
+            edit_icon: document.getElementById('edit_icon'),
+            edit_external_url: document.getElementById('edit_external_url'),
+            edit_is_visible: document.getElementById('edit_is_visible'),
+            edit_open_in_new_tab: document.getElementById('edit_open_in_new_tab')
+        };
+        
+        // Validate all elements exist
+        for (const [key, element] of Object.entries(elements)) {
+            if (!element) {
+                throw new Error(`Form element ${key} not found`);
+            }
+        }
+        
+        // Populate form fields
+        elements.edit_item_id.value = item.id;
+        elements.edit_title.value = item.title || '';
+        elements.edit_icon.value = item.icon || '';
+        elements.edit_external_url.value = item.external_url || '';
+        elements.edit_is_visible.checked = item.is_visible !== false;
+        elements.edit_open_in_new_tab.checked = item.open_in_new_tab || false;
         
         // Show modal
         document.getElementById('editModal').classList.remove('hidden');
@@ -338,13 +355,32 @@ function closeModal() {
 document.getElementById('editForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const itemId = document.getElementById('edit_item_id').value;
+    // Gather form data with null checks
+    const elements = {
+        edit_item_id: document.getElementById('edit_item_id'),
+        edit_title: document.getElementById('edit_title'),
+        edit_icon: document.getElementById('edit_icon'),
+        edit_external_url: document.getElementById('edit_external_url'),
+        edit_is_visible: document.getElementById('edit_is_visible'),
+        edit_open_in_new_tab: document.getElementById('edit_open_in_new_tab')
+    };
+    
+    // Validate all elements exist
+    for (const [key, element] of Object.entries(elements)) {
+        if (!element) {
+            console.error(`Form element ${key} not found`);
+            alert('Formularfehler: Einige Felder fehlen');
+            return;
+        }
+    }
+    
+    const itemId = elements.edit_item_id.value;
     const data = {
-        title: document.getElementById('edit_title').value,
-        icon: document.getElementById('edit_icon').value,
-        external_url: document.getElementById('edit_external_url').value,
-        is_visible: document.getElementById('edit_is_visible').checked,
-        open_in_new_tab: document.getElementById('edit_open_in_new_tab').checked
+        title: elements.edit_title.value,
+        icon: elements.edit_icon.value,
+        external_url: elements.edit_external_url.value,
+        is_visible: elements.edit_is_visible.checked,
+        open_in_new_tab: elements.edit_open_in_new_tab.checked
     };
     
     try {

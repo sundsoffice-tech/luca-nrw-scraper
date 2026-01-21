@@ -234,6 +234,25 @@ async function showDeploymentDetails(deploymentId) {
             return div.innerHTML;
         }
         
+        // Helper function to safely format dates
+        function formatDate(dateString) {
+            try {
+                return dateString ? new Date(dateString).toLocaleString('de-DE') : '—';
+            } catch (error) {
+                console.warn('Invalid date:', dateString);
+                return '—';
+            }
+        }
+        
+        // Helper function to safely format commit hash
+        function formatCommitHash(hash) {
+            if (!hash) return '—';
+            if (hash.length >= 8) {
+                return escapeHtml(hash.substring(0, 8));
+            }
+            return escapeHtml(hash);
+        }
+        
         // Build details HTML
         let html = `
             <div class="space-y-4">
@@ -248,11 +267,11 @@ async function showDeploymentDetails(deploymentId) {
                     </div>
                     <div>
                         <div class="text-sm text-gray-400 mb-1">Gestartet</div>
-                        <div class="text-white">${new Date(deployment.started_at).toLocaleString('de-DE')}</div>
+                        <div class="text-white">${formatDate(deployment.started_at)}</div>
                     </div>
                     <div>
                         <div class="text-sm text-gray-400 mb-1">Abgeschlossen</div>
-                        <div class="text-white">${deployment.completed_at ? new Date(deployment.completed_at).toLocaleString('de-DE') : '—'}</div>
+                        <div class="text-white">${formatDate(deployment.completed_at)}</div>
                     </div>
                     <div>
                         <div class="text-sm text-gray-400 mb-1">Dateien</div>
@@ -268,7 +287,7 @@ async function showDeploymentDetails(deploymentId) {
                     </div>
                     <div>
                         <div class="text-sm text-gray-400 mb-1">Commit/Build</div>
-                        <div class="text-white font-mono text-sm">${deployment.commit_hash ? escapeHtml(deployment.commit_hash.substring(0, 8)) : '—'}</div>
+                        <div class="text-white font-mono text-sm">${formatCommitHash(deployment.commit_hash)}</div>
                     </div>
                 </div>
         `;
