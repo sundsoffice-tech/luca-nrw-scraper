@@ -289,9 +289,9 @@
                 <div>
                     <div class="text-sm text-gray-400 mb-2">Notizen</div>
                     {% if lead.notes %}
-                        <div class="p-4 bg-dark-900 rounded text-gray-300 text-sm whitespace-pre-wrap">{{ lead.notes }}</div>
+                        <div id="notesDisplay" class="p-4 bg-dark-900 rounded text-gray-300 text-sm whitespace-pre-wrap">{{ lead.notes }}</div>
                     {% else %}
-                        <div class="p-4 bg-dark-900 rounded text-gray-500 text-sm italic">Keine Notizen vorhanden</div>
+                        <div id="notesDisplay" class="p-4 bg-dark-900 rounded text-gray-500 text-sm italic">Keine Notizen vorhanden</div>
                     {% endif %}
                     <button class="mt-2 text-sm text-primary hover:underline" onclick="editNotes()">✏️ Notizen bearbeiten</button>
                 </div>
@@ -591,10 +591,15 @@ document.getElementById('notesForm').addEventListener('submit', async (e) => {
             showToast('✅ Notizen erfolgreich gespeichert', 'success');
             closeNotesModal();
             
-            // Reload page to show updated notes
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            // Update notes display in-place instead of reloading
+            const notesDisplay = document.getElementById('notesDisplay');
+            if (notes) {
+                notesDisplay.className = 'p-4 bg-dark-900 rounded text-gray-300 text-sm whitespace-pre-wrap';
+                notesDisplay.textContent = notes;
+            } else {
+                notesDisplay.className = 'p-4 bg-dark-900 rounded text-gray-500 text-sm italic';
+                notesDisplay.textContent = 'Keine Notizen vorhanden';
+            }
         } else {
             showToast('❌ Fehler: ' + (data.error || 'Unbekannter Fehler'), 'error');
         }
