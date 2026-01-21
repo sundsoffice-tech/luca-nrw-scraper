@@ -915,7 +915,7 @@ def api_health_check(request):
     Response format:
         {
             "healthy": true/false,
-            "timestamp": "2026-01-21T10:00:00Z",
+            "timestamp": "YYYY-MM-DDTHH:MM:SSZ",
             "checks": {
                 "scraper_process": true/false,
                 "database": true/false,

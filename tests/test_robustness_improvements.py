@@ -28,8 +28,6 @@ class TestBackoff:
     @pytest.mark.asyncio
     async def test_retry_with_backoff_success_first_attempt(self):
         """Test that successful first attempt doesn't retry."""
-        mock_func = Mock(return_value=asyncio.sleep(0))
-        
         async def func():
             return "success"
         

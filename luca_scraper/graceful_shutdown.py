@@ -8,7 +8,7 @@ and configurable timeout.
 import asyncio
 import signal
 import threading
-from typing import Optional, Callable, Set, Any
+from typing import Optional, Callable, Set, Any, List
 from datetime import datetime
 
 
@@ -65,7 +65,7 @@ class GracefulShutdown:
         self._shutdown_timeout = shutdown_timeout
         self._shutdown_requested = False
         self._active_tasks: Set[str] = set()
-        self._cleanup_callbacks: list[Callable] = []
+        self._cleanup_callbacks: List[Callable] = []
         self._tasks_lock = threading.Lock()
         self._callbacks_lock = threading.Lock()
         
