@@ -1045,3 +1045,58 @@ def api_health_check(request):
     status_code = http_status.HTTP_200_OK if all_healthy else http_status.HTTP_503_SERVICE_UNAVAILABLE
     
     return Response(response_data, status=status_code)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def api_postgres_listener_status(request):
+    """
+    GET /crm/scraper/api/postgres-listener/status/
+    
+    Get status of PostgreSQL LISTEN/NOTIFY listener and notification queues.
+    
+    Returns information about:
+    - Listener running status
+    - Connection health
+    - Reconnection attempts
+    - PostgreSQL notification queue usage
+    - Notification queue statistics
+    """
+    listener = get_global_listener()
+    notif_queue = get_notification_queue()
+    
+    # Check if PostgreSQL is available
+    is_postgresql = listener.is_postgresql()
+    
+    if not is_postgresql:
+        return Response({
+            'available': False,
+            'message': 'PostgreSQL LISTEN/NOTIFY not available (database is not PostgreSQL)',
+            'database_engine': settings.DATABASES.get('default', {}).get('ENGINE', 'unknown')
+        })
+    
+    # Get listener status
+    listener_status = {
+        'running': listener._running,
+        'connection_healthy': listener.check_connection_health() if listener._running else False,
+        'reconnect_attempts': listener._reconnect_attempts,
+        'max_reconnect_attempts': listener._max_reconnect_attempts,
+    }
+    
+    # Get PostgreSQL queue usage
+    queue_usage = listener.get_queue_usage()
+    if queue_usage is not None:
+        listener_status['pg_queue_usage_percent'] = round(queue_usage, 2)
+    
+    # Get notification queue stats
+    queue_stats = notif_queue.get_stats()
+    
+    # Build response
+    response_data = {
+        'available': True,
+        'listener': listener_status,
+        'notification_queues': queue_stats,
+        'timestamp': datetime.now(dt_timezone.utc).isoformat(),
+    }
+    
+    return Response(response_data)
