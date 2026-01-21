@@ -136,10 +136,11 @@ async def test_process_query_async_basic(monkeypatch):
     monkeypatch.setattr(sn, "domain_pivot_queries", lambda dom: [])
     monkeypatch.setattr(sn, "try_sitemaps_async", lambda base: [])
     
-    links_checked, leads = await sn.process_query_async(query, run_id, rate)
+    links_found, links_checked, leads = await sn.process_query_async(query, run_id, rate)
     
-    assert links_checked > 0
-    assert len(leads) > 0
+    assert links_found > 0  # Should have found links from search
+    assert links_checked > 0  # Should have processed links
+    assert len(leads) > 0  # Should have collected leads
 
 
 @pytest.mark.asyncio
@@ -152,8 +153,9 @@ async def test_process_query_async_skip_done(monkeypatch):
     # Mock is_query_done to return True
     monkeypatch.setattr(sn, "is_query_done", lambda q: True)
     
-    links_checked, leads = await sn.process_query_async(query, run_id, rate, force=False)
+    links_found, links_checked, leads = await sn.process_query_async(query, run_id, rate, force=False)
     
+    assert links_found == 0
     assert links_checked == 0
     assert len(leads) == 0
 
@@ -166,8 +168,9 @@ async def test_process_query_async_respects_stop_flag(monkeypatch):
     rate = sn._Rate(max_global=10, max_per_host=2)
     run_flag = {"running": False}
     
-    links_checked, leads = await sn.process_query_async(query, run_id, rate, run_flag=run_flag)
+    links_found, links_checked, leads = await sn.process_query_async(query, run_id, rate, run_flag=run_flag)
     
+    assert links_found == 0
     assert links_checked == 0
     assert len(leads) == 0
 
@@ -183,7 +186,7 @@ async def test_parallel_query_processing(monkeypatch):
     async def fake_process_query(q, run_id, rate, run_flag=None, force=False, date_restrict=None):
         processed_queries.append(q)
         await asyncio.sleep(0.01)  # Simulate some work
-        return (1, [])
+        return (1, 1, [])  # links_found, links_checked, leads
     
     # Mock all search functions
     async def fake_google(q, max_results=60, date_restrict=None):
@@ -238,7 +241,7 @@ async def test_dynamic_query_loading(monkeypatch):
     
     async def fake_process_query(q, run_id, rate, run_flag=None, force=False, date_restrict=None):
         await asyncio.sleep(0.01)
-        return (1, [])
+        return (1, 1, [])  # links_found, links_checked, leads
     
     async def fake_enrich(leads):
         return leads
@@ -325,7 +328,7 @@ async def test_query_deduplication_in_dynamic_loading(monkeypatch):
     async def fake_process_query(q, run_id, rate, run_flag=None, force=False, date_restrict=None):
         processed_queries.append(q)
         await asyncio.sleep(0.01)
-        return (1, [])
+        return (1, 1, [])  # links_found, links_checked, leads
     
     async def fake_enrich(leads):
         return leads

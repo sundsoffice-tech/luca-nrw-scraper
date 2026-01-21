@@ -8423,10 +8423,11 @@ def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
     dorks = []
     
     try:
+        # Issue #4 Fix: Use existing _LEARNING_ENGINE if available, don't create new instances
         # 1. Top-Performer aus Learning (50%)
-        if ActiveLearningEngine is not None:
-            learning = ActiveLearningEngine(DB_PATH)
-            best_dorks = learning.get_best_dorks(count // 2)
+        if ActiveLearningEngine is not None and _LEARNING_ENGINE is not None:
+            # Reuse existing learning engine to avoid repeated initialization
+            best_dorks = _LEARNING_ENGINE.get_best_dorks(count // 2)
             dorks.extend(best_dorks)
         
         # 2. Power-Dorks aus Extended (25%)
@@ -8838,7 +8839,7 @@ async def process_query_async(
     run_flag: Optional[dict] = None,
     force: bool = False,
     date_restrict: Optional[str] = None
-) -> Tuple[int, List[Dict[str, Any]]]:
+) -> Tuple[int, int, List[Dict[str, Any]]]:
     """
     Prozessiert eine einzelne Query asynchron.
     
@@ -8851,7 +8852,10 @@ async def process_query_async(
         date_restrict: Optional Datumsbeschränkung für Suchmaschinen
     
     Returns:
-        Tuple[links_checked, collected_leads]
+        Tuple[links_found, links_checked, collected_leads]
+        - links_found: Number of search results returned by search engines
+        - links_checked: Number of URLs actually processed
+        - collected_leads: List of collected leads
     """
     # Performance params
     current_request_delay = get_performance_params().get('request_delay', SLEEP_BETWEEN_QUERIES)
@@ -8859,15 +8863,16 @@ async def process_query_async(
     # Check if we should skip this query
     if run_flag and not run_flag.get("running", True):
         log("debug", "Query übersprungen (STOP erkannt)", q=query)
-        return (0, [])
+        return (0, 0, [])
     
     if (not force) and is_query_done(query):
         log("info", "Query bereits erledigt (skip)", q=query)
         await asyncio.sleep(current_request_delay)
-        return (0, [])
+        return (0, 0, [])
     
     log("info", "Starte Query", q=query)
     total_links_checked = 0
+    total_links_found = 0  # Issue #3 Fix: Track number of search results
     collected_rows = []
     links: List[UrlLike] = []
     had_429_flag = False
@@ -8914,6 +8919,9 @@ async def process_query_async(
     except Exception as e:
         log("warn", "Kleinanzeigen-Suche explodiert", q=query, error=str(e))
     
+    # Issue #3 Fix: Track number of search results found BEFORE deduplication
+    total_links_found = len(links)
+    
     # 2. Deduplicate links
     if links:
         uniq_links: List[UrlLike] = []
@@ -8936,7 +8944,7 @@ async def process_query_async(
         if had_429_flag:
             log("warn", "Keine Links (429) - Query NICHT als erledigt markieren", q=query)
         await asyncio.sleep(SLEEP_BETWEEN_QUERIES + _jitter(0.4, 1.2))
-        return (0, [])
+        return (0, 0, [])
     
     # 3. Filter links by domain limits and learning
     per_domain_count = {}
@@ -9048,8 +9056,8 @@ async def process_query_async(
     # 7. Mark query as done
     mark_query_done(query, run_id)
     
-    log("info", "Query abgeschlossen", q=query, links_checked=total_links_checked, leads=len(collected_rows))
-    return (total_links_checked, collected_rows)
+    log("info", "Query abgeschlossen", q=query, links_found=total_links_found, links_checked=total_links_checked, leads=len(collected_rows))
+    return (total_links_found, total_links_checked, collected_rows)
 
 
 def emergency_save(run_id, links_checked=None, leads_new_total=None):
@@ -9291,7 +9299,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
         # Get industry for dynamic query generation
         selected_industry = os.getenv("INDUSTRY", "all")
         
-        while query_queue or completed_count < len(QUERIES):
+        # Issue #1 Fix: Simplified loop condition - only check if query_queue has items
+        while query_queue:
             # Periodically refresh performance params
             if time.time() - last_perf_check > 30:
                 perf_params = get_performance_params()
@@ -9308,21 +9317,26 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 _uilog("STOP erkannt – breche ab")
                 break
             
-            # Select next batch of queries to process in parallel
+            # Issue #2 Fix: Select next batch of queries to process in parallel
+            # First filter out already processed queries, then take batch
+            batch_queries = []
             batch_size = min(MAX_CONCURRENT_QUERIES, len(query_queue))
             if batch_size == 0:
                 break
             
-            batch_queries = []
             for _ in range(batch_size):
                 if not query_queue:
                     break
                 q = query_queue.pop(0)
+                # Skip if already processed
                 if q not in processed_queries:
                     batch_queries.append(q)
+                # Note: if q is already processed, it's removed from queue but not added to batch
+                # This is correct - we just skip it
             
             if not batch_queries:
-                break
+                # All queries in this batch were duplicates, continue to next batch
+                continue
             
             log("info", "Verarbeite Query-Batch parallel", batch_size=len(batch_queries), remaining=len(query_queue))
             _uilog(f"⚡ Verarbeite {len(batch_queries)} Queries parallel...")
@@ -9345,7 +9359,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     _uilog(f"❌ Query fehlgeschlagen: {q[:50]}...")
                     continue
                 
-                links_checked, collected_rows = result
+                # Issue #3 Fix: Unpack three values now
+                links_found, links_checked, collected_rows = result
                 total_links_checked += links_checked
                 
                 # Filter and process leads
@@ -9422,7 +9437,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                                     leads_with_phone = len([l for l in inserted if l.get('telefon')])
                                     active_learning_engine.record_dork_result(
                                         dork=q,
-                                        results=links_checked,  # Total links checked
+                                        results=links_found,  # Issue #3 Fix: Use search results count, not processed URLs
                                         leads_found=len(inserted),  # Leads actually inserted
                                         leads_with_phone=leads_with_phone  # Leads with phone numbers
                                     )
