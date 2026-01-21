@@ -849,3 +849,39 @@ class QueryDone(models.Model):
     
     def __str__(self):
         return f"{self.query[:50]}..."
+
+
+# =========================
+# SIGNALS FOR CONFIG CHANGE DETECTION
+# =========================
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=ScraperConfig)
+def scraper_config_changed(sender, instance, created, **kwargs):
+    """
+    Signal handler for ScraperConfig changes.
+    
+    Logs configuration changes to help with debugging and observability.
+    The actual restart is handled by the ProcessManager's config watcher thread,
+    which polls the config_version field.
+    
+    Args:
+        sender: The model class (ScraperConfig)
+        instance: The ScraperConfig instance that was saved
+        created: Boolean indicating if this is a new instance
+        **kwargs: Additional signal arguments
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if created:
+        logger.info(f"ScraperConfig created with version {instance.config_version}")
+    else:
+        logger.info(
+            f"ScraperConfig updated to version {instance.config_version} "
+            f"(industry={instance.industry}, mode={instance.mode}, qpi={instance.qpi})"
+        )
+        logger.info("ProcessManager will automatically detect this change and restart the scraper if running")
