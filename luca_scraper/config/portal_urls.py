@@ -47,6 +47,25 @@ NRW_REGIONS = [
     "oberhausen", "hagen", "hamm", "mülheim", "leverkusen",
     "solingen", "herne", "neuss", "paderborn", "bottrop",
     "ruhrgebiet", "rheinland", "sauerland", "münsterland", "owl",
+    # Additional Bundesländer (Federal States)
+    "baden-württemberg", "bayern", "berlin", "brandenburg", "bremen",
+    "hamburg", "hessen", "mecklenburg-vorpommern", "niedersachsen",
+    "rheinland-pfalz", "saarland", "sachsen", "sachsen-anhalt",
+    "schleswig-holstein", "thüringen",
+    # Major cities from other Bundesländer
+    "stuttgart", "karlsruhe", "mannheim", "freiburg", "heidelberg",
+    "münchen", "nürnberg", "augsburg", "regensburg", "ingolstadt",
+    "frankfurt", "wiesbaden", "kassel", "darmstadt", "offenbach",
+    "hannover", "braunschweig", "osnabrück", "oldenburg", "göttingen",
+    "leipzig", "dresden", "chemnitz",
+    "magdeburg", "halle",
+    "mainz", "koblenz", "trier", "ludwigshafen",
+    "saarbrücken",
+    "kiel", "lübeck", "flensburg",
+    "erfurt", "jena", "gera",
+    "schwerin", "rostock",
+    # PLZ areas (postal code regions)
+    "plz 0", "plz 1", "plz 2", "plz 3", "plz 4", "plz 5", "plz 6", "plz 7", "plz 8", "plz 9",
 ]
 
 
@@ -72,7 +91,7 @@ MOBILE_PATTERNS = '("017" OR "016" OR "015" OR "+49 17" OR "+49 16" OR "+49 15" 
 
 # Search region and contact patterns
 REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
-CONTACT = '(kontakt OR impressum OR ansprechpartner OR "e-mail" OR email OR telefon OR whatsapp)'
+CONTACT = '(kontakt OR impressum OR ansprechpartner OR "e-mail" OR email OR telefon OR whatsapp OR signal OR telegram)'
 SALES = '(vertrieb OR d2d OR "call center" OR telesales OR outbound OR verkauf OR sales)'
 
 

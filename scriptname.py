@@ -141,6 +141,7 @@ from login_handler import (
     get_login_handler,
     check_and_handle_login,
 )
+from luca_scraper.query_generator import get_dynamic_queries
 
 # Suppress the noisy XML warning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -1295,6 +1296,103 @@ class ScraperConfig:
 
 CFG = ScraperConfig()
 
+
+# -------------- DynamicQueryGenerator --------------
+class DynamicQueryGenerator:
+    """
+    Tracks query results for machine learning optimization.
+    Records query performance including industry data, lead counts, and phone number success rates.
+    """
+    
+    def __init__(self, db_path: str = "scraper.db"):
+        self.db_path = db_path
+        self._init_query_results_table()
+    
+    def _init_query_results_table(self):
+        """Initialize the query results tracking table"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS query_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                query_string TEXT NOT NULL,
+                industry TEXT,
+                leads_found INTEGER DEFAULT 0,
+                leads_with_phone INTEGER DEFAULT 0,
+                success_rate REAL DEFAULT 0.0,
+                run_id INTEGER
+            )''')
+            conn.commit()
+    
+    def record_query_result(
+        self,
+        query_string: str,
+        industry: str,
+        leads_found: int,
+        leads_with_phone: int,
+        run_id: int = 0
+    ):
+        """
+        Record the results of a search query for learning purposes.
+        
+        Args:
+            query_string: The search query that was executed
+            industry: The industry/Branche (business sector) context for the query
+            leads_found: Total number of leads found by this query
+            leads_with_phone: Number of leads that have phone numbers
+            run_id: The run ID this query belongs to
+        """
+        success_rate = leads_with_phone / leads_found if leads_found > 0 else 0.0
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT INTO query_results 
+                (query_string, industry, leads_found, leads_with_phone, success_rate, run_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (query_string, industry, leads_found, leads_with_phone, success_rate, run_id))
+            conn.commit()
+    
+    def get_query_stats(self, industry: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get statistics about query performance, optionally filtered by industry.
+        
+        Args:
+            industry: Optional industry filter
+            
+        Returns:
+            Dictionary with aggregated statistics
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            if industry:
+                cursor = conn.execute('''
+                    SELECT 
+                        COUNT(*) as total_queries,
+                        SUM(leads_found) as total_leads,
+                        SUM(leads_with_phone) as total_with_phone,
+                        AVG(success_rate) as avg_success_rate
+                    FROM query_results 
+                    WHERE industry = ?
+                ''', (industry,))
+            else:
+                cursor = conn.execute('''
+                    SELECT 
+                        COUNT(*) as total_queries,
+                        SUM(leads_found) as total_leads,
+                        SUM(leads_with_phone) as total_with_phone,
+                        AVG(success_rate) as avg_success_rate
+                    FROM query_results
+                ''')
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'total_queries': row[0] or 0,
+                    'total_leads': row[1] or 0,
+                    'total_with_phone': row[2] or 0,
+                    'avg_success_rate': round((row[3] or 0) * 100, 1)
+                }
+            return {'total_queries': 0, 'total_leads': 0, 'total_with_phone': 0, 'avg_success_rate': 0.0}
+
+
 # =========================
 # Use luca_scraper imports if available
 # =========================
@@ -1400,6 +1498,7 @@ if _LUCA_SCRAPER_AVAILABLE:
 
 _DB_READY = False  # einmaliges Schema-Setup pro Prozess
 _LEARNING_ENGINE: Optional[LearningEngine] = None  # Global learning engine instance
+_QUERY_GENERATOR: Optional[DynamicQueryGenerator] = None  # Global query results tracker
 
 LEAD_FIELDS = [
     "name","rolle","email","telefon","quelle","score","tags","region",
@@ -1580,7 +1679,7 @@ def db():
     # Fallback: Use inline implementation when luca_scraper not available
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
-    global _DB_READY, _LEARNING_ENGINE
+    global _DB_READY, _LEARNING_ENGINE, _QUERY_GENERATOR
     if not _DB_READY:
         _ensure_schema(con)
         # Dashboard schema initialization removed - migrated to Django CRM
@@ -1589,6 +1688,9 @@ def db():
     # Initialize learning engine on first DB access
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
+    # Initialize query generator on first DB access
+    if _QUERY_GENERATOR is None:
+        _QUERY_GENERATOR = DynamicQueryGenerator(DB_PATH)
     return con
 
 def init_db():
@@ -1605,6 +1707,14 @@ def get_learning_engine() -> Optional[LearningEngine]:
     if _LEARNING_ENGINE is None:
         _LEARNING_ENGINE = LearningEngine(DB_PATH)
     return _LEARNING_ENGINE
+
+
+def get_query_generator() -> Optional[DynamicQueryGenerator]:
+    """Get the global query generator instance."""
+    global _QUERY_GENERATOR
+    if _QUERY_GENERATOR is None:
+        _QUERY_GENERATOR = DynamicQueryGenerator(DB_PATH)
+    return _QUERY_GENERATOR
 
 def init_mode(mode: str) -> Dict[str, Any]:
     """
@@ -9381,6 +9491,200 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     role = (r.get("rolle") or r.get("role_guess") or "").lower()
                     company = (r.get("company_name") or "").lower()
                     src_url = (r.get("quelle") or "").lower()
+                extra = any(k in url.lower() for k in ("/jobs","/karriere","/stellen","/bewerb"))
+                limit = CFG.max_results_per_domain + (1 if extra else 0)
+                if per_domain_count.get(dom,0) >= limit:
+                    continue
+                per_domain_count[dom] = per_domain_count.get(dom,0)+1
+                if _url_seen_fast(url):
+                    continue
+                if not url_seen(url):
+                    prim.append(link)
+            
+            if skipped_by_learning > 0:
+                log("info", "Learning: Domains gefiltert", skipped=skipped_by_learning)
+
+            chk, rows = await _bounded_process(prim, run_id, rate=rate, force=False)
+            total_links_checked += chk
+            collected_rows.extend(rows)
+
+            pivot_seeds: List[UrlLike] = []
+            pivot_tasks = []
+            for dom in per_domain_count.keys():
+                for dq in domain_pivot_queries(dom):
+                    pivot_tasks.append(google_cse_search_async(dq, max_results=10, date_restrict=date_restrict))
+            if pivot_tasks:
+                pivot_results = await asyncio.gather(*pivot_tasks, return_exceptions=True)
+                for result in pivot_results:
+                    if isinstance(result, Exception):
+                        continue
+                    if isinstance(result, tuple) and result[0]:
+                        pivot_seeds.extend(result[0])
+            if pivot_seeds:
+                uniq_pivots = []
+                seen_p = set()
+                for item in pivot_seeds:
+                    p_url = _extract_url(item)
+                    if not p_url:
+                        continue
+                    norm = _normalize_for_dedupe(p_url)
+                    if norm in seen_p:
+                        continue
+                    seen_p.add(norm)
+                    uniq_pivots.append((norm, item))
+                ordered_p = prioritize_urls([u for u, _ in uniq_pivots]) if uniq_pivots else []
+                order_map_p = {u: i for i, u in enumerate(ordered_p)}
+                uniq_pivots.sort(key=lambda tpl: order_map_p.get(tpl[0], len(order_map_p)))
+                pivot_batch = [it for _, it in uniq_pivots][:CFG.internal_depth_per_domain]
+                if pivot_batch:
+                    chk_p, rows_p = await _bounded_process(pivot_batch, run_id, rate=rate, force=False)
+                    total_links_checked += chk_p
+                    collected_rows.extend(rows_p)
+
+            for dom in list(per_domain_count.keys()):
+                base = f"https://{dom}"
+                internal = []
+                try:
+                    sm = await try_sitemaps_async(base)
+                except:
+                    sm = []
+                if sm:
+                    internal.extend(sm[:CFG.internal_depth_per_domain])
+                if not internal:
+                    for pl in prim:
+                        pl_url = _extract_url(pl)
+                        if not pl_url:
+                            continue
+                        if urllib.parse.urlparse(pl_url).netloc.lower() != dom:
+                            continue
+                        r = await http_get_async(pl_url, timeout=10)
+                        if not r or r.status_code != 200:
+                            continue
+                        more = find_internal_links(r.text, pl_url)
+                        for u in more:
+                            if _url_seen_fast(u) or url_seen(u): continue
+                            if is_denied(u): continue
+                            if not path_ok(u): continue
+                            if urllib.parse.urlparse(u).netloc.lower() != dom: continue
+                            internal.append(u)
+                            if len(internal)>=CFG.internal_depth_per_domain:
+                                break
+                        if len(internal)>=CFG.internal_depth_per_domain:
+                            break
+                if internal:
+                    internal = prioritize_urls(internal)
+                    chk2, rows2 = await _bounded_process(internal, run_id, rate=rate, force=False)
+                    total_links_checked += chk2
+                    collected_rows.extend(rows2)
+
+            mark_query_done(q, run_id)
+            
+            # Track query results for machine learning
+            try:
+                query_gen = get_query_generator()
+                if query_gen:
+                    # Calculate metrics in a single pass for efficiency
+                    leads_found = len(collected_rows)
+                    leads_with_phone = sum(1 for r in collected_rows if r.get("telefon"))
+                    # Get industry from environment
+                    industry = os.getenv("INDUSTRY", "unknown").lower()
+                    # Record the query result
+                    query_gen.record_query_result(
+                        query_string=q,
+                        industry=industry,
+                        leads_found=leads_found,
+                        leads_with_phone=leads_with_phone,
+                        run_id=run_id
+                    )
+                    log("debug", "Query result recorded", q=q, leads=leads_found, 
+                        with_phone=leads_with_phone, industry=industry)
+            except Exception as e:
+                log("error", "Failed to record query result", error=str(e), q=q)
+
+            MIN_SCORE_TARGET = MIN_SCORE_ENV
+            found = len(collected_rows)
+            avg = int(sum(r.get("score",0) for r in collected_rows)/found) if found else 0
+            if found >= 20 and avg < MIN_SCORE_ENV:
+                MIN_SCORE_TARGET=min(80,MIN_SCORE_ENV+5)
+            elif found < 10 and MIN_SCORE_ENV>=45:
+                MIN_SCORE_TARGET=MIN_SCORE_ENV-10
+            elif found <5 and MIN_SCORE_ENV>=35:
+                MIN_SCORE_TARGET=MIN_SCORE_ENV-20
+
+            def _is_offtarget_lead(r: Dict[str, Any]) -> bool:
+                lead_type = (r.get("lead_type") or "").lower()
+                if lead_type == "employer":
+                    return True
+                role = (r.get("rolle") or r.get("role_guess") or "").lower()
+                company = (r.get("company_name") or "").lower()
+                src_url = (r.get("quelle") or "").lower()
+
+                hr_tokens = (
+                    "personalreferent",
+                    "personalreferentin",
+                    "sachbearbeiter personal",
+                    "sachbearbeiterin personal",
+                    "hr-manager",
+                    "hr manager",
+                    "human resources",
+                    "bewerbungen richten",
+                    "bewerbung richten"
+                )
+                press_tokens = (
+                    "pressesprecher",
+                    "pressesprecherin",
+                    "unternehmenskommunikation",
+                    "pressekontakt",
+                    "events",
+                    "veranstaltungen",
+                    "seminar",
+                    "seminare"
+                )
+                public_tokens = (
+                    "rathaus",
+                    "verwaltung",
+                    "gleichstellungsstelle",
+                    "grundsicherung",
+                    "bundestag",
+                    "/stadtwerke",
+                    "die-partei.de",
+                    "oberhausen.de"
+                )
+
+                role_hit = any(tok in role for tok in hr_tokens + press_tokens)
+                company_hit = any(tok in company for tok in ("stadtwerke", "bundestag", "die partei"))
+                url_hit = any(tok in src_url for tok in public_tokens)
+
+                return role_hit or company_hit or url_hit
+
+            # NUR Kandidaten exportieren, wenn wir im Recruiter/Candidates-Modus sind (NICHT talent_hunt)
+            # CRITICAL FIX: Also check for "candidates" in addition to "recruiter"
+            industry_env = os.getenv("INDUSTRY", "").lower()
+            if _is_candidates_mode() and not _is_talent_hunt_mode():
+                collected_rows = [r for r in collected_rows if r.get("lead_type") in ("candidate", "group_invite")]
+                log("info", "Filter aktiv: Nur Candidates/Gruppen behalten", remaining=len(collected_rows))
+            elif _is_talent_hunt_mode():
+                # Im talent_hunt Modus: Alle Lead-Types erlauben, besonders:
+                # - active_salesperson, team_member, freelancer, hr_contact
+                allowed_types = ("active_salesperson", "team_member", "freelancer", "hr_contact", "candidate", "company", "contact", None, "")
+                collected_rows = [r for r in collected_rows if r.get("lead_type", "") in allowed_types or not r.get("lead_type")]
+                log("info", "Talent-Hunt Filter: Alle Vertriebler-Typen erlaubt", remaining=len(collected_rows))
+
+            filtered = _dedup_run(
+                [
+                    r for r in collected_rows
+                    if r.get("score", 0) >= MIN_SCORE_TARGET and not _is_offtarget_lead(r)
+                ]
+            )
+            if filtered:
+                # Enrich leads without phone numbers using telefonbuch
+                filtered = await enrich_leads_with_telefonbuch(filtered)
+                inserted = insert_leads(filtered)
+                if inserted:
+                    append_csv(DEFAULT_CSV, inserted, ENH_FIELDS)
+                    append_xlsx(DEFAULT_XLSX, inserted, ENH_FIELDS)
+                    _uilog(f"Export: +{len(inserted)} neue Leads")
+                    leads_new_total += len(inserted)
                     
                     hr_tokens = (
                         "personalreferent", "personalreferentin", "sachbearbeiter personal",
@@ -9879,6 +10183,13 @@ if __name__ == "__main__":
             QUERIES = build_queries(selected_industry, per_industry_limit)
             log("info", "Query-Set gebaut", industry=selected_industry,
                 per_industry_limit=per_industry_limit, count=len(QUERIES))
+            
+            # Automatically generate queries if queue is empty
+            if not QUERIES:
+                log("info", "Query-Queue leer, generiere dynamische Queries", 
+                    industry=selected_industry, count=20)
+                QUERIES = get_dynamic_queries(selected_industry, count=20)
+                log("info", "Dynamische Queries generiert", count=len(QUERIES))
             
             # Optimize query order if learning mode is active
             if mode_config.get("query_optimization") and _LEARNING_ENGINE:
