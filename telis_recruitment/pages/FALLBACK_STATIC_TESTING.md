@@ -133,8 +133,8 @@ html = '''
 
 warnings = validate_asset_references(html)
 print(warnings)
-# Expected: ['Möglicherweise fehlende Datei referenziert: /src/main.css', 
-#            'Möglicherweise fehlende Datei referenziert: /dist/bundle.js']
+# Expected: ['Possibly missing file referenced: /src/main.css', 
+#            'Possibly missing file referenced: /dist/bundle.js']
 ```
 
 ## Integration Test
