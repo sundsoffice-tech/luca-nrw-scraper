@@ -19,6 +19,7 @@ from .process_launcher import ProcessLauncher
 from .output_monitor import OutputMonitor
 from .retry_controller import RetryController
 from .circuit_breaker import CircuitBreaker, CircuitBreakerState
+from .error_types import ScraperErrorType, create_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,12 @@ class ProcessManager:
         self.params: Dict[str, Any] = {}
         self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
         
+        # Error context information
+        self.last_error_type: Optional[ScraperErrorType] = None
+        self.last_error_message: Optional[str] = None
+        self.last_error_details: Optional[str] = None
+        self.last_error_component: Optional[str] = None
+        
         # Auto-recovery state
         self.consecutive_failures: int = 0
         self.max_consecutive_failures: int = 5
@@ -84,6 +91,38 @@ class ProcessManager:
         except Exception as e:
             logger.warning(f"Failed to load config from database, using defaults: {e}")
     
+    def _set_error_context(
+        self,
+        error_type: ScraperErrorType,
+        error_message: str,
+        details: Optional[str] = None,
+        component: Optional[str] = None
+    ):
+        """
+        Store error context information for later retrieval.
+        
+        Args:
+            error_type: The type of error
+            error_message: Human-readable error message
+            details: Additional details about the error
+            component: The component that failed
+        """
+        self.last_error_type = error_type
+        self.last_error_message = error_message
+        self.last_error_details = details
+        self.last_error_component = component
+        logger.error(
+            f"Error set: {error_type.value} - {error_message} "
+            f"(component: {component}, details: {details})"
+        )
+    
+    def _clear_error_context(self):
+        """Clear stored error context."""
+        self.last_error_type = None
+        self.last_error_message = None
+        self.last_error_details = None
+        self.last_error_component = None
+    
     def _handle_process_completion(self, exit_code: int, runtime: float):
         """
         Handle process completion from OutputMonitor.
@@ -98,6 +137,14 @@ class ProcessManager:
             logger.error(error_msg)
             self.output_monitor.log_error(error_msg)
             self.output_monitor.log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
+            
+            # Set error context for early exit
+            self._set_error_context(
+                ScraperErrorType.PROCESS_EARLY_EXIT,
+                error_msg,
+                details=f"Runtime: {runtime:.1f}s",
+                component="process_monitor"
+            )
             
             # Track as crash and record failure
             self._handle_error('crash')
@@ -204,29 +251,41 @@ class ProcessManager:
             Dictionary with status and process info
         """
         if self.is_running():
-            return {
-                'success': False,
-                'error': 'Scraper läuft bereits',
-                'status': self.status,
-                'pid': self.launcher.pid,
-                'run_id': self.output_monitor.current_run_id,
-                'params': self.params
-            }
+            self._set_error_context(
+                ScraperErrorType.ALREADY_RUNNING,
+                "Scraper läuft bereits",
+                component="process_manager"
+            )
+            return create_error_response(
+                ScraperErrorType.ALREADY_RUNNING,
+                status=self.status,
+                pid=self.launcher.pid,
+                run_id=self.output_monitor.current_run_id,
+                params=self.params
+            )
         
         # Check circuit breaker
         if not self.circuit_breaker.check_and_update(self.output_monitor.log_error):
             remaining = self.circuit_breaker.get_remaining_penalty()
             
-            return {
-                'success': False,
-                'error': f'Circuit breaker is OPEN - please wait {remaining:.0f}s before retrying',
-                'status': 'circuit_breaker_open',
-                'circuit_breaker_state': self.circuit_breaker.state.value,
-                'remaining_penalty_seconds': remaining,
-                'pid': None,
-                'run_id': None,
-                'params': {}
-            }
+            self._set_error_context(
+                ScraperErrorType.CIRCUIT_BREAKER_OPEN,
+                f'Circuit breaker is OPEN - please wait {remaining:.0f}s before retrying',
+                details=f"Remaining: {remaining:.0f}s",
+                component="circuit_breaker"
+            )
+            
+            return create_error_response(
+                ScraperErrorType.CIRCUIT_BREAKER_OPEN,
+                details=f"Remaining: {remaining:.0f}s",
+                component="circuit_breaker",
+                status='circuit_breaker_open',
+                circuit_breaker_state=self.circuit_breaker.state.value,
+                remaining_penalty_seconds=remaining,
+                pid=None,
+                run_id=None,
+                params={}
+            )
         
         try:
             # Create ScraperRun record
@@ -248,14 +307,22 @@ class ProcessManager:
                 run.finished_at = timezone.now()
                 run.logs = "Scraper script not found (luca_scraper/cli.py or scriptname.py)"
                 run.save()
-                return {
-                    'success': False,
-                    'error': 'Scraper script nicht gefunden',
-                    'status': 'error',
-                    'pid': None,
-                    'run_id': run.id,
-                    'params': params
-                }
+                
+                self._set_error_context(
+                    ScraperErrorType.SCRIPT_NOT_FOUND,
+                    "Scraper script nicht gefunden",
+                    details="luca_scraper/cli.py or scriptname.py not found",
+                    component="script_loader"
+                )
+                
+                return create_error_response(
+                    ScraperErrorType.SCRIPT_NOT_FOUND,
+                    details="luca_scraper/cli.py or scriptname.py not found",
+                    component="script_loader",
+                    pid=None,
+                    run_id=run.id,
+                    params=params
+                )
             
             # Build command using launcher
             cmd = self.launcher.build_command(params, script_type, script_path)
@@ -285,6 +352,9 @@ class ProcessManager:
             # Reset consecutive failures on successful start
             self.reset_failure_counter()
             
+            # Clear any previous error context on successful start
+            self._clear_error_context()
+            
             # Update run record with PID
             run.pid = self.launcher.pid
             run.save(update_fields=['pid'])
@@ -307,9 +377,94 @@ class ProcessManager:
                 'params': self.params
             }
             
+        except PermissionError as e:
+            logger.error(f"Permission denied starting scraper: {e}", exc_info=True)
+            self.status = 'error'
+            
+            self._set_error_context(
+                ScraperErrorType.PERMISSION_DENIED,
+                "Permission denied",
+                details=str(e),
+                component="process_launcher"
+            )
+            
+            if self.output_monitor.current_run_id:
+                try:
+                    from .models import ScraperRun
+                    run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
+                    run.status = 'failed'
+                    run.logs = f"Permission denied: {str(e)}"
+                    run.finished_at = timezone.now()
+                    run.save()
+                except Exception:
+                    pass
+            
+            return create_error_response(
+                ScraperErrorType.PERMISSION_DENIED,
+                details=str(e),
+                component="process_launcher",
+                pid=self.launcher.pid if self.launcher else None,
+                run_id=self.output_monitor.current_run_id,
+                params=params
+            )
+            
+        except FileNotFoundError as e:
+            logger.error(f"File not found: {e}", exc_info=True)
+            self.status = 'error'
+            
+            self._set_error_context(
+                ScraperErrorType.FILE_ACCESS_ERROR,
+                "File not found",
+                details=str(e),
+                component="process_launcher"
+            )
+            
+            if self.output_monitor.current_run_id:
+                try:
+                    from .models import ScraperRun
+                    run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
+                    run.status = 'failed'
+                    run.logs = f"File not found: {str(e)}"
+                    run.finished_at = timezone.now()
+                    run.save()
+                except Exception:
+                    pass
+            
+            return create_error_response(
+                ScraperErrorType.FILE_ACCESS_ERROR,
+                details=str(e),
+                component="process_launcher",
+                pid=self.launcher.pid if self.launcher else None,
+                run_id=self.output_monitor.current_run_id,
+                params=params
+            )
+            
         except Exception as e:
             logger.error(f"Failed to start scraper: {e}", exc_info=True)
             self.status = 'error'
+            
+            # Try to detect error type from exception message
+            error_type = ScraperErrorType.UNKNOWN_ERROR
+            component = "process_manager"
+            
+            error_str = str(e).lower()
+            if 'config' in error_str or 'settings' in error_str:
+                error_type = ScraperErrorType.CONFIG_ERROR
+                component = "config_loader"
+            elif 'module' in error_str or 'import' in error_str:
+                error_type = ScraperErrorType.MISSING_DEPENDENCY
+                component = "dependency_loader"
+            elif 'permission' in error_str or 'access' in error_str:
+                error_type = ScraperErrorType.PERMISSION_DENIED
+                component = "process_launcher"
+            
+            self._set_error_context(
+                error_type,
+                str(e),
+                details=str(e),
+                component=component
+            )
+            
             if self.output_monitor.current_run_id:
                 try:
                     from .models import ScraperRun
@@ -320,14 +475,15 @@ class ProcessManager:
                     run.save()
                 except Exception:
                     pass
-            return {
-                'success': False,
-                'error': str(e),
-                'status': self.status,
-                'pid': self.launcher.pid if self.launcher else None,
-                'run_id': self.output_monitor.current_run_id,
-                'params': params
-            }
+            
+            return create_error_response(
+                error_type,
+                details=str(e),
+                component=component,
+                pid=self.launcher.pid if self.launcher else None,
+                run_id=self.output_monitor.current_run_id,
+                params=params
+            )
     
     def stop(self) -> Dict[str, Any]:
         """
@@ -337,11 +493,15 @@ class ProcessManager:
             Dictionary with status
         """
         if not self.is_running():
-            return {
-                'success': False,
-                'error': 'Kein Scraper-Prozess läuft',
-                'status': self.status
-            }
+            self._set_error_context(
+                ScraperErrorType.NOT_RUNNING,
+                "Kein Scraper-Prozess läuft",
+                component="process_manager"
+            )
+            return create_error_response(
+                ScraperErrorType.NOT_RUNNING,
+                status=self.status
+            )
         
         try:
             # Stop the process using launcher
@@ -421,6 +581,16 @@ class ProcessManager:
             'circuit_breaker_state': self.circuit_breaker.state.value,
             'circuit_breaker_failures': self.circuit_breaker.failures,
         }
+        
+        # Add error context information if available
+        if self.last_error_type is not None:
+            from .error_types import ErrorContext
+            error_info = ErrorContext.get_error_info(
+                self.last_error_type,
+                self.last_error_details,
+                self.last_error_component
+            )
+            status_info.update(error_info)
         
         # Add circuit breaker penalty info if open
         if self.circuit_breaker.state != CircuitBreakerState.CLOSED and self.circuit_breaker.opened_at:
