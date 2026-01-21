@@ -72,34 +72,30 @@ def get_dynamic_queries(industry: str, count: int = 20) -> List[str]:
             'site:xing.com/profile "Handelsvertreter" telefon',
             'inurl:about "Vertrieb" kontakt',
         ],
+        "all": [
+            '"Vertrieb" "Job" "NRW" kontakt',
+            '"Sales" "Karriere" telefon',
+            '"Handelsvertreter" "suche" kontakt',
+            'site:ebay-kleinanzeigen.de "Vertrieb" "Job"',
+            'site:quoka.de "Sales" Stellengesuch',
+            '"Außendienst" "Bewerbung" NRW',
+            '"Vertriebsmitarbeiter" kontakt telefon',
+            '"Account Manager" Lebenslauf',
+            'site:kalaydo.de "Vertrieb" Stellengesuch',
+            '"Business Development" CV Deutschland',
+            '"Key Account" "suche" NRW',
+            'site:markt.de "Vertrieb" Job',
+            '"Vertriebsleiter" Bewerbung kontakt',
+            '"Sales Representative" Deutschland telefon',
+            '"Vertriebsprofi" "verfügbar" kontakt',
+        ],
     }
-    
-    # General/fallback queries
-    default_queries = [
-        '"Vertrieb" "Job" "NRW" kontakt',
-        '"Sales" "Karriere" telefon',
-        '"Handelsvertreter" "suche" kontakt',
-        'site:ebay-kleinanzeigen.de "Vertrieb" "Job"',
-        'site:quoka.de "Sales" Stellengesuch',
-        '"Außendienst" "Bewerbung" NRW',
-        '"Vertriebsmitarbeiter" kontakt telefon',
-        '"Account Manager" Lebenslauf',
-        'site:kalaydo.de "Vertrieb" Stellengesuch',
-        '"Business Development" CV Deutschland',
-        '"Key Account" "suche" NRW',
-        'site:markt.de "Vertrieb" Job',
-        '"Vertriebsleiter" Bewerbung kontakt',
-        '"Sales Representative" Deutschland telefon',
-        '"Vertriebsprofi" "verfügbar" kontakt',
-    ]
     
     # Select queries based on industry
     industry_lower = industry.lower() if industry else "all"
     
-    if industry_lower in industry_queries:
-        queries = industry_queries[industry_lower].copy()
-    else:
-        queries = default_queries.copy()
+    # Get queries for the specified industry, fallback to 'all' if not found
+    queries = industry_queries.get(industry_lower, industry_queries["all"])
     
     # Shuffle for variety
     random.shuffle(queries)

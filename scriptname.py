@@ -9691,7 +9691,7 @@ if __name__ == "__main__":
                 per_industry_limit=per_industry_limit, count=len(QUERIES))
             
             # Automatically generate queries if queue is empty
-            if not QUERIES or len(QUERIES) == 0:
+            if not QUERIES:
                 log("info", "Query-Queue leer, generiere dynamische Queries", 
                     industry=selected_industry, count=20)
                 QUERIES = get_dynamic_queries(selected_industry, count=20)
