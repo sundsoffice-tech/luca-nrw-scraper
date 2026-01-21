@@ -65,8 +65,18 @@ class ProcessManager:
         self.retry_controller = RetryController()
         self.circuit_breaker = CircuitBreaker()
         
+        # Config version tracking for automatic restart on config changes
+        self.current_config_version: int = 0
+        self.config_watcher_thread: Optional[threading.Thread] = None
+        self.config_check_interval: int = 10  # Check every 10 seconds
+        self.restart_lock = threading.Lock()  # Prevent concurrent restarts
+        self.last_restart_user = None  # Track user who last started the process
+        
         # Load configuration from database (will be set dynamically)
         self._load_config()
+        
+        # Start config version watcher thread
+        self._start_config_watcher()
         
         self._initialized = True
     
@@ -80,7 +90,10 @@ class ProcessManager:
             self.retry_controller.load_config(config)
             self.circuit_breaker.load_config(config)
             
-            logger.info("Configuration loaded into all components")
+            # Track current config version
+            self.current_config_version = config.config_version
+            
+            logger.info(f"Configuration loaded into all components (version {self.current_config_version})")
         except Exception as e:
             logger.warning(f"Failed to load config from database, using defaults: {e}")
     
@@ -281,6 +294,7 @@ class ProcessManager:
             self.status = 'running'
             self.start_time = timezone.now()
             self.params = params
+            self.last_restart_user = user  # Track user for automatic restarts
             
             # Reset consecutive failures on successful start
             self.reset_failure_counter()
@@ -380,6 +394,141 @@ class ProcessManager:
                 'error': str(e),
                 'status': self.status
             }
+    
+    def restart_process(self) -> Dict[str, Any]:
+        """
+        Restart the running scraper process with the same parameters.
+        
+        This method stops the current process and starts a new one with the same
+        configuration. It uses a lock to prevent concurrent restarts.
+        
+        Returns:
+            Dictionary with status and process info
+        """
+        # Use lock to prevent concurrent restarts
+        if not self.restart_lock.acquire(blocking=False):
+            logger.warning("Restart already in progress, ignoring concurrent restart request")
+            return {
+                'success': False,
+                'error': 'Restart already in progress',
+                'status': self.status
+            }
+        
+        try:
+            if not self.is_running():
+                logger.warning("Cannot restart: no scraper process is running")
+                return {
+                    'success': False,
+                    'error': 'Kein Scraper-Prozess läuft',
+                    'status': self.status
+                }
+            
+            logger.info("Restarting scraper process due to configuration change")
+            
+            # Save current parameters and user
+            restart_params = self.params.copy()
+            restart_user = self.last_restart_user
+            
+            # Log the restart event
+            self.output_monitor.log_error("🔄 Konfigurationsänderung erkannt – automatischer Neustart wird durchgeführt...")
+            
+            # Stop the current process
+            stop_result = self.stop()
+            if not stop_result.get('success'):
+                logger.error(f"Failed to stop process during restart: {stop_result.get('error')}")
+                return {
+                    'success': False,
+                    'error': f"Fehler beim Stoppen: {stop_result.get('error')}",
+                    'status': self.status
+                }
+            
+            # Brief pause to ensure clean shutdown
+            import time
+            time.sleep(2)
+            
+            # Reload configuration
+            self._load_config()
+            
+            # Start the process again with the same parameters
+            start_result = self.start(restart_params, user=restart_user)
+            
+            if start_result.get('success'):
+                logger.info("Scraper restarted successfully")
+                self.output_monitor.log_error("✅ Scraper erfolgreich mit neuer Konfiguration neu gestartet")
+            else:
+                logger.error(f"Failed to start process during restart: {start_result.get('error')}")
+            
+            return start_result
+            
+        finally:
+            self.restart_lock.release()
+    
+    def _start_config_watcher(self):
+        """
+        Start background thread that watches for configuration changes.
+        
+        Polls the ScraperConfig.config_version every few seconds and triggers
+        an automatic restart when the version changes.
+        """
+        if self.config_watcher_thread is not None:
+            logger.debug("Config watcher thread already running")
+            return
+        
+        def config_watcher_loop():
+            """Background loop that checks for config version changes."""
+            logger.info("Config watcher thread started")
+            
+            while True:
+                try:
+                    import time
+                    time.sleep(self.config_check_interval)
+                    
+                    # Only check if a scraper is running
+                    if not self.is_running():
+                        continue
+                    
+                    # Check current config version from database
+                    try:
+                        from .models import ScraperConfig
+                        config = ScraperConfig.get_config()
+                        new_version = config.config_version
+                        
+                        if new_version != self.current_config_version:
+                            logger.info(
+                                f"Configuration version changed: {self.current_config_version} -> {new_version}"
+                            )
+                            
+                            # Update tracked version
+                            old_version = self.current_config_version
+                            self.current_config_version = new_version
+                            
+                            # Trigger automatic restart
+                            logger.info("Triggering automatic restart due to config change")
+                            restart_result = self.restart_process()
+                            
+                            if restart_result.get('success'):
+                                logger.info(f"Config change restart successful (v{old_version} -> v{new_version})")
+                            else:
+                                logger.error(f"Config change restart failed: {restart_result.get('error')}")
+                    
+                    except Exception as e:
+                        logger.debug(f"Error checking config version: {e}")
+                        # Don't fail the watcher thread on transient errors
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Error in config watcher loop: {e}", exc_info=True)
+                    # Continue running even if there's an error
+                    continue
+        
+        # Start daemon thread
+        self.config_watcher_thread = threading.Thread(
+            target=config_watcher_loop,
+            name="ConfigWatcher",
+            daemon=True
+        )
+        self.config_watcher_thread.start()
+        logger.info("Config watcher thread initialized")
     
     def get_status(self) -> Dict[str, Any]:
         """

@@ -75,9 +75,30 @@ class ScraperConfigAdmin(ModelAdmin):
         return tuple(fieldsets)
     
     def save_model(self, request, obj, form, change):
-        """Set updated_by to current user"""
+        """Set updated_by to current user and notify about automatic restart"""
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+        
+        # Add message about automatic restart if scraper is running
+        from .process_manager import get_manager
+        from django.contrib import messages
+        
+        try:
+            manager = get_manager()
+            if manager.is_running():
+                messages.info(
+                    request,
+                    'Konfiguration gespeichert. Der laufende Scraper wird automatisch '
+                    'neu gestartet, um die Änderungen zu übernehmen (innerhalb von ~10 Sekunden).'
+                )
+            else:
+                messages.success(
+                    request,
+                    'Konfiguration gespeichert. Die Änderungen werden beim nächsten Start angewendet.'
+                )
+        except Exception as e:
+            # Don't fail if we can't check status
+            pass
     
     def has_add_permission(self, request):
         """Only allow one config instance"""
