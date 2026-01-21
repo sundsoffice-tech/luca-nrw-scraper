@@ -84,8 +84,44 @@ class ScraperControl {
             this.btnStop.disabled = false;
         } else if (status.status === 'error') {
             this.statusDot.className = 'w-3 h-3 rounded-full bg-red-500';
-            this.statusText.textContent = 'Fehler';
+            
+            // Show error type if available
+            if (status.error_type) {
+                const errorTypeMap = {
+                    'SCRIPT_NOT_FOUND': 'Fehler: Skript nicht gefunden',
+                    'SCRIPT_PERMISSION_DENIED': 'Fehler: Skript-Berechtigung verweigert',
+                    'PERMISSION_DENIED': 'Fehler: Zugriff verweigert',
+                    'CONFIG_ERROR': 'Fehler: Konfiguration',
+                    'CONFIG_FILE_MISSING': 'Fehler: Konfiguration fehlt',
+                    'CONFIG_INVALID': 'Fehler: Ungültige Konfiguration',
+                    'PROCESS_START_FAILED': 'Fehler: Prozessstart fehlgeschlagen',
+                    'PROCESS_CRASH': 'Fehler: Prozess abgestürzt',
+                    'PROCESS_EARLY_EXIT': 'Fehler: Frühzeitiger Exit',
+                    'MISSING_DEPENDENCY': 'Fehler: Fehlende Abhängigkeit',
+                    'PYTHON_VERSION_ERROR': 'Fehler: Python-Version',
+                    'RATE_LIMIT_ERROR': 'Fehler: Rate Limit',
+                    'CONNECTION_ERROR': 'Fehler: Verbindung',
+                    'TIMEOUT_ERROR': 'Fehler: Timeout',
+                    'FILE_ACCESS_ERROR': 'Fehler: Dateizugriff',
+                    'ALREADY_RUNNING': 'Läuft bereits',
+                    'NOT_RUNNING': 'Läuft nicht',
+                    'UNKNOWN_ERROR': 'Unbekannter Fehler'
+                };
+                this.statusText.textContent = errorTypeMap[status.error_type] || 'Fehler';
+                this.statusText.title = status.error_message || '';
+            } else {
+                this.statusText.textContent = 'Fehler';
+            }
+            
             this.btnStart.disabled = false;
+            this.btnStop.disabled = true;
+        } else if (status.status === 'circuit_breaker_open') {
+            this.statusDot.className = 'w-3 h-3 rounded-full bg-yellow-500';
+            this.statusText.textContent = 'Circuit Breaker aktiv';
+            if (status.remaining_penalty_seconds) {
+                this.statusText.title = `Versuchen Sie es in ${Math.ceil(status.remaining_penalty_seconds)}s erneut`;
+            }
+            this.btnStart.disabled = true;
             this.btnStop.disabled = true;
         } else {
             this.statusDot.className = 'w-3 h-3 rounded-full bg-gray-500';
@@ -155,6 +191,35 @@ class ScraperControl {
         return data;
     }
     
+    /**
+     * Format error message with context and recovery actions
+     */
+    formatErrorMessage(result) {
+        if (!result.error_type) {
+            // Fallback for old-style errors
+            return result.error || 'Unbekannter Fehler';
+        }
+        
+        let message = result.error_message || result.error || 'Fehler';
+        
+        // Add error details if available
+        if (result.error_details) {
+            message += `\n\nDetails: ${result.error_details}`;
+        }
+        
+        // Add failed component if available
+        if (result.failed_component) {
+            message += `\nBetroffene Komponente: ${result.failed_component}`;
+        }
+        
+        // Add recovery action if available
+        if (result.recovery_action) {
+            message += `\n\n💡 Lösungsvorschlag:\n${result.recovery_action}`;
+        }
+        
+        return message;
+    }
+    
     async start() {
         try {
             this.btnStart.disabled = true;
@@ -177,8 +242,13 @@ class ScraperControl {
                 this.appendLog('INFO', 'Scraper erfolgreich gestartet');
                 await this.updateStatus();
             } else {
-                this.appendLog('ERROR', `Fehler beim Starten: ${result.error}`);
-                alert(`Fehler: ${result.error}`);
+                const errorMsg = this.formatErrorMessage(result);
+                
+                this.appendLog('ERROR', `Fehler beim Starten: ${result.error_message || result.error}`);
+                
+                // Show detailed error in alert
+                alert(`❌ Fehler beim Starten des Scrapers\n\n${errorMsg}`);
+                
                 this.btnStart.disabled = false;
             }
             
@@ -212,8 +282,10 @@ class ScraperControl {
                 this.appendLog('INFO', 'Scraper gestoppt');
                 await this.updateStatus();
             } else {
-                this.appendLog('ERROR', `Fehler beim Stoppen: ${result.error}`);
-                alert(`Fehler: ${result.error}`);
+                const errorMsg = this.formatErrorMessage(result);
+                
+                this.appendLog('ERROR', `Fehler beim Stoppen: ${result.error_message || result.error}`);
+                alert(`❌ Fehler beim Stoppen\n\n${errorMsg}`);
             }
             
             this.btnStop.textContent = '⏹️ Scraper stoppen';
