@@ -483,8 +483,8 @@
 </div>
 
 <script>
-const leadId = {{ lead.id }};
-const csrfToken = '{{ csrf_token }}';
+const leadId = {{ lead.id|escapejs }};
+const csrfToken = '{{ csrf_token|escapejs }}';
 
 // Toast notification function
 function showToast(message, type = 'success') {
