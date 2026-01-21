@@ -295,7 +295,7 @@ function uploadZip(file) {
         progressDiv.classList.add('hidden');
     });
     
-    xhr.open('POST', `/pages/api/${pageSlug}/upload/zip/`);
+    xhr.open('POST', `/crm/pages/api/${pageSlug}/upload/zip/`);
     xhr.send(formData);
 }
 
@@ -353,7 +353,7 @@ function uploadSingleFile(file) {
         progressDiv.classList.add('hidden');
     });
     
-    xhr.open('POST', `/pages/api/${pageSlug}/upload/file/`);
+    xhr.open('POST', `/crm/pages/api/${pageSlug}/upload/file/`);
     xhr.send(formData);
 }
 
@@ -388,7 +388,7 @@ function formatFileSize(bytes) {
 }
 
 function refreshFileTree() {
-    fetch(`/pages/api/${pageSlug}/upload/list/`, {
+    fetch(`/crm/pages/api/${pageSlug}/upload/list/`, {
         headers: {
             'X-CSRFToken': csrfToken,
         }
@@ -410,7 +410,7 @@ function deleteFile(path) {
         return;
     }
     
-    fetch(`/pages/api/${pageSlug}/upload/delete/`, {
+    fetch(`/crm/pages/api/${pageSlug}/upload/delete/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -434,7 +434,7 @@ function deleteFile(path) {
 }
 
 function setEntryPoint(path) {
-    fetch(`/pages/api/${pageSlug}/upload/entry-point/`, {
+    fetch(`/crm/pages/api/${pageSlug}/upload/entry-point/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -457,7 +457,7 @@ function setEntryPoint(path) {
 }
 
 function refreshStats() {
-    fetch(`/pages/api/${pageSlug}/upload/stats/`, {
+    fetch(`/crm/pages/api/${pageSlug}/upload/stats/`, {
         headers: {
             'X-CSRFToken': csrfToken,
         }
