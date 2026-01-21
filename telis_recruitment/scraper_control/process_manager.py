@@ -52,6 +52,13 @@ class ProcessManager:
         self.params: Dict[str, Any] = {}
         self.early_exit_threshold: int = 5  # Seconds threshold for detecting early process exits
         
+        # Auto-recovery state
+        self.consecutive_failures: int = 0
+        self.max_consecutive_failures: int = 5
+        self.auto_restart_timer: Optional[threading.Timer] = None
+        self.auto_restart_delays = [30, 60, 120, 240, 480]  # Exponential backoff in seconds
+        self.max_auto_restart_delay: int = 600  # 10 minutes max
+        
         # Composition: specialized components
         self.launcher = ProcessLauncher()
         self.output_monitor = OutputMonitor(max_logs=1000)
@@ -96,6 +103,10 @@ class ProcessManager:
             self._handle_error('crash')
             self.retry_controller.record_failure()
             
+            # Increment consecutive failures for auto-recovery
+            self.consecutive_failures += 1
+            logger.warning(f"Consecutive failures: {self.consecutive_failures}/{self.max_consecutive_failures}")
+            
             # Mark run as failed
             if self.output_monitor.current_run_id:
                 try:
@@ -126,10 +137,20 @@ class ProcessManager:
                     self.circuit_breaker.check_and_update(),
                     user=user
                 )
+            
+            # Trigger auto-restart if threshold reached
+            if self._should_auto_restart():
+                logger.info("Triggering auto-restart due to consecutive failures")
+                self._auto_restart()
+                
         else:
             # Normal completion - reset error counters
             self.retry_controller.record_success()
             self.circuit_breaker.record_success()
+            
+            # Reset consecutive failures counter on successful run
+            if exit_code == 0:
+                self.reset_failure_counter()
     
     def _handle_error(self, error_type: str):
         """
@@ -260,6 +281,9 @@ class ProcessManager:
             self.status = 'running'
             self.start_time = timezone.now()
             self.params = params
+            
+            # Reset consecutive failures on successful start
+            self.reset_failure_counter()
             
             # Update run record with PID
             run.pid = self.launcher.pid
@@ -582,6 +606,120 @@ class ProcessManager:
     def _check_circuit_breaker(self) -> bool:
         """Backward compatibility: delegate to circuit_breaker"""
         return self.circuit_breaker.check_and_update(self.output_monitor.log_error)
+    
+    # Auto-recovery methods
+    def _should_auto_restart(self) -> bool:
+        """
+        Check if automatic restart should be triggered.
+        
+        Returns:
+            True if auto-restart should happen
+        """
+        if self.consecutive_failures >= self.max_consecutive_failures:
+            logger.warning(
+                f"Consecutive failures ({self.consecutive_failures}) reached max threshold "
+                f"({self.max_consecutive_failures}), auto-restart enabled"
+            )
+            return True
+        return False
+    
+    def _calculate_restart_delay(self) -> int:
+        """
+        Calculate exponential backoff delay for auto-restart.
+        
+        Uses exponential backoff: 30s, 60s, 120s, 240s, 480s, max 600s
+        
+        Returns:
+            Delay in seconds
+        """
+        failure_index = min(self.consecutive_failures - 1, len(self.auto_restart_delays) - 1)
+        if failure_index >= 0 and failure_index < len(self.auto_restart_delays):
+            delay = self.auto_restart_delays[failure_index]
+        else:
+            delay = self.max_auto_restart_delay
+        
+        return min(delay, self.max_auto_restart_delay)
+    
+    def _auto_restart(self):
+        """
+        Automatically restart the scraper after a delay.
+        
+        Uses exponential backoff to avoid rapid restart loops.
+        Triggered when consecutive failures exceed threshold.
+        """
+        if self.is_running():
+            logger.info("Scraper already running, skipping auto-restart")
+            return
+        
+        if not self._should_auto_restart():
+            logger.debug("Auto-restart conditions not met")
+            return
+        
+        delay = self._calculate_restart_delay()
+        
+        logger.info(
+            f"Scheduling auto-restart in {delay}s "
+            f"(failure #{self.consecutive_failures})"
+        )
+        
+        # Cancel any existing restart timer
+        if self.auto_restart_timer:
+            self.auto_restart_timer.cancel()
+        
+        # Schedule restart with timer
+        def restart_callback():
+            logger.info("Executing auto-restart")
+            try:
+                # Attempt to restart with the same parameters
+                user = None
+                if self.output_monitor.current_run_id:
+                    try:
+                        from .models import ScraperRun
+                        run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
+                        user = run.started_by
+                    except Exception:
+                        pass
+                
+                result = self.start(self.params, user=user)
+                
+                if result.get('success'):
+                    logger.info("Auto-restart successful")
+                    # Reset counter on successful start
+                    self.consecutive_failures = 0
+                else:
+                    logger.error(f"Auto-restart failed: {result.get('error')}")
+                    self.consecutive_failures += 1
+                    
+                    # Trigger another restart if still below threshold
+                    if self._should_auto_restart():
+                        self._auto_restart()
+                        
+            except Exception as e:
+                logger.error(f"Auto-restart exception: {e}", exc_info=True)
+                self.consecutive_failures += 1
+        
+        self.auto_restart_timer = threading.Timer(delay, restart_callback)
+        self.auto_restart_timer.daemon = True
+        self.auto_restart_timer.start()
+    
+    def reset_failure_counter(self):
+        """
+        Reset the consecutive failures counter.
+        
+        Call this after a successful manual restart or when
+        the scraper runs successfully for a sufficient duration.
+        """
+        if self.consecutive_failures > 0:
+            logger.info(
+                f"Resetting consecutive failures counter from {self.consecutive_failures} to 0"
+            )
+            self.consecutive_failures = 0
+        
+        # Cancel any pending auto-restart
+        if self.auto_restart_timer:
+            logger.debug("Cancelling pending auto-restart timer")
+            self.auto_restart_timer.cancel()
+            self.auto_restart_timer = None
 
 
 # Global manager instance
