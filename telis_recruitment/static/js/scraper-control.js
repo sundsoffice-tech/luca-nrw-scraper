@@ -455,5 +455,176 @@ class ScraperControl {
     }
 }
 
+/**
+ * Show run details in a modal
+ * @param {number} runId - The ID of the scraper run
+ * @param {Object} config - Configuration object with URLs and CSRF token
+ */
+async function showRunDetails(runId, config) {
+    const runDetailsModal = document.getElementById('run-details-modal');
+    const modalContent = document.getElementById('modal-content');
+    const modalLoading = document.getElementById('modal-loading');
+    
+    try {
+        // Show modal
+        runDetailsModal.classList.remove('hidden');
+        modalContent.classList.add('hidden');
+        modalLoading.classList.remove('hidden');
+        
+        document.getElementById('modal-run-id').textContent = runId;
+        
+        // Fetch run details
+        const response = await fetch(config.runsEndpoint, {
+            headers: {
+                'X-CSRFToken': config.csrfToken
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load runs');
+        
+        const runs = await response.json();
+        const run = runs.find(r => r.id === runId);
+        
+        if (!run) {
+            throw new Error('Run not found');
+        }
+        
+        // Populate modal with data
+        // Status
+        const statusEl = document.getElementById('detail-status');
+        statusEl.textContent = run.status;
+        statusEl.className = 'text-lg font-semibold mt-1';
+        if (run.status === 'completed') {
+            statusEl.classList.add('text-green-400');
+        } else if (run.status === 'failed' || run.status === 'error') {
+            statusEl.classList.add('text-red-400');
+        } else if (run.status === 'running') {
+            statusEl.classList.add('text-primary');
+        } else {
+            statusEl.classList.add('text-gray-400');
+        }
+        
+        // Duration
+        if (run.duration_seconds) {
+            const hours = Math.floor(run.duration_seconds / 3600);
+            const minutes = Math.floor((run.duration_seconds % 3600) / 60);
+            const seconds = run.duration_seconds % 60;
+            let durationStr = '';
+            if (hours > 0) durationStr += `${hours}h `;
+            if (minutes > 0) durationStr += `${minutes}m `;
+            durationStr += `${seconds}s`;
+            document.getElementById('detail-duration').textContent = durationStr.trim();
+        } else {
+            document.getElementById('detail-duration').textContent = '-';
+        }
+        
+        // Leads
+        document.getElementById('detail-leads').textContent = `${run.leads_accepted || 0} / ${run.leads_found || 0}`;
+        
+        // API Cost
+        document.getElementById('detail-cost').textContent = run.api_cost ? run.api_cost.toFixed(2) : '0.00';
+        
+        // Parameters - fetch full details from API
+        const detailResponse = await fetch(`${config.runsEndpoint}?run_id=${runId}`, {
+            headers: {
+                'X-CSRFToken': config.csrfToken
+            }
+        });
+        
+        if (detailResponse.ok) {
+            const runDetail = await detailResponse.json();
+            if (runDetail.params_snapshot) {
+                document.getElementById('detail-params').textContent = JSON.stringify(runDetail.params_snapshot, null, 2);
+            } else {
+                document.getElementById('detail-params').textContent = 'Parameter nicht verfügbar';
+            }
+        } else {
+            document.getElementById('detail-params').textContent = 'Fehler beim Laden der Parameter';
+        }
+        
+        // Performance metrics
+        document.getElementById('detail-links-checked').textContent = run.links_checked || 0;
+        document.getElementById('detail-acceptance-rate').textContent = `${(run.lead_acceptance_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-block-rate').textContent = `${(run.block_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-success-rate').textContent = `${(run.success_rate || 0).toFixed(1)}%`;
+        document.getElementById('detail-avg-time').textContent = `${Math.round(run.avg_request_time_ms || 0)}ms`;
+        document.getElementById('detail-timeout-rate').textContent = `${(run.timeout_rate || 0).toFixed(1)}%`;
+        
+        // Errors
+        const errorsContainer = document.getElementById('detail-errors');
+        errorsContainer.innerHTML = '';
+        
+        // Fetch errors for this run
+        try {
+            const errorsResponse = await fetch(`${config.errorsEndpoint}?run_id=${runId}&limit=10`, {
+                headers: {
+                    'X-CSRFToken': config.csrfToken
+                }
+            });
+            
+            if (errorsResponse.ok) {
+                const errors = await errorsResponse.json();
+                if (errors.length > 0) {
+                    errors.forEach(error => {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'text-sm border-l-2 border-red-500 pl-3 py-1';
+                        
+                        const typeSpan = document.createElement('span');
+                        typeSpan.className = 'text-red-400 font-semibold';
+                        typeSpan.textContent = error.error_type_display;
+                        
+                        const msgSpan = document.createElement('span');
+                        msgSpan.className = 'text-gray-300 ml-2';
+                        msgSpan.textContent = `(${error.count}x) ${error.message.substring(0, 100)}`;
+                        
+                        errorDiv.appendChild(typeSpan);
+                        errorDiv.appendChild(msgSpan);
+                        errorsContainer.appendChild(errorDiv);
+                    });
+                } else {
+                    errorsContainer.innerHTML = '<div class="text-gray-500 text-sm">Keine Fehler</div>';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading errors:', e);
+        }
+        
+        // Logs
+        try {
+            const logsResponse = await fetch(`${config.logsFilteredEndpoint}?run_id=${runId}&limit=200`, {
+                headers: {
+                    'X-CSRFToken': config.csrfToken
+                }
+            });
+            
+            if (logsResponse.ok) {
+                const logs = await logsResponse.json();
+                if (logs.length > 0) {
+                    const logsText = logs.map(log => {
+                        const timestamp = new Date(log.created_at).toLocaleTimeString();
+                        return `[${timestamp}] [${log.level}] ${log.message}`;
+                    }).join('\n');
+                    document.getElementById('detail-logs').textContent = logsText;
+                } else {
+                    document.getElementById('detail-logs').textContent = 'Keine Logs verfügbar';
+                }
+            }
+        } catch (e) {
+            console.error('Error loading logs:', e);
+            document.getElementById('detail-logs').textContent = 'Fehler beim Laden der Logs';
+        }
+        
+        // Show content
+        modalLoading.classList.add('hidden');
+        modalContent.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error loading run details:', error);
+        alert('Fehler beim Laden der Run-Details: ' + error.message);
+        runDetailsModal.classList.add('hidden');
+    }
+}
+
 // Export for global use
 window.ScraperControl = ScraperControl;
+window.showRunDetails = showRunDetails;
