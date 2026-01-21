@@ -414,7 +414,7 @@ Focus on queries that will discover additional relevant leads beyond the base qu
         industry_lower = industry.lower()
         is_candidates = industry_lower in ("candidates", "recruiter")
         
-        # Build prompt with Query Fan-Out for dorks
+        # Build prompt with Query Fan-Out for dorks - requesting JSON format
         if is_candidates:
             base_prompt = (
                 "Generate Google Dorks with QUERY FAN-OUT to find JOB SEEKERS:\n\n"
@@ -429,7 +429,7 @@ Focus on queries that will discover additional relevant leads beyond the base qu
                 'site:kleinanzeigen.de/s-stellengesuche "vertrieb"\n'
                 'site:xing.com/profile "offen für angebote" "sales"\n'
                 '"ich suche job" "vertrieb" "NRW"\n\n'
-                "Return ONLY the dorks, one per line."
+                f'Return JSON format: {{"dorks": ["dork1", "dork2", ...]}} with {count} dorks.'
             )
         else:
             base_prompt = (
@@ -445,48 +445,38 @@ Focus on queries that will discover additional relevant leads beyond the base qu
                 f'intitle:"Team" "Sales" {industry}\n'
                 f'filetype:pdf "Lebenslauf" {industry}\n'
                 f'site:linkedin.com/in/ "{industry}" "open to work"\n\n'
-                "Return ONLY the dorks, one per line."
+                f'Return JSON format: {{"dorks": ["dork1", "dork2", ...]}} with {count} dorks.'
             )
         
-        # Call API
-        system_prompt = "You create Google search dorks with Query Fan-Out strategy."
+        # Call API with JSON response format
+        system_prompt = "You create Google search dorks with Query Fan-Out strategy. Always return valid JSON."
         try:
             response = await self._call_openai_api(system_prompt, base_prompt)
             
             if not response:
                 return []
             
-            # Parse dorks from response
-            # The response might be plain text (line-separated) or JSON
+            # Parse dorks from JSON response
             if isinstance(response, dict):
-                # Try to extract from various possible keys
-                content = (
-                    response.get("dorks") or 
-                    response.get("queries") or 
-                    response.get("content", "")
-                )
-                if isinstance(content, list):
-                    return [str(d).strip() for d in content if d]
-                content = str(content)
-            else:
-                content = str(response)
+                dorks = response.get("dorks", [])
+                if isinstance(dorks, list):
+                    # Clean and deduplicate
+                    unique = []
+                    seen = set()
+                    for d in dorks:
+                        d_str = str(d).strip()
+                        if not d_str or d_str.lower() in seen:
+                            continue
+                        seen.add(d_str.lower())
+                        unique.append(d_str)
+                        if len(unique) >= count:
+                            break
+                    
+                    log("info", "Generated dorks with fan-out", count=len(unique), industry=industry)
+                    return unique
             
-            # Parse line-separated dorks
-            lines = [ln.strip(" -*\t") for ln in content.splitlines() if ln.strip()]
-            
-            # Deduplicate
-            unique = []
-            seen = set()
-            for ln in lines:
-                if ln.lower() in seen or not ln:
-                    continue
-                seen.add(ln.lower())
-                unique.append(ln)
-                if len(unique) >= count:
-                    break
-            
-            log("info", "Generated dorks with fan-out", count=len(unique), industry=industry)
-            return unique
+            log("warn", "Unexpected response format for dorks", response_type=type(response).__name__)
+            return []
             
         except Exception as e:
             log("error", "Dork generation with fan-out failed", error=str(e))
