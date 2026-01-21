@@ -317,9 +317,13 @@ async function deleteNavItem(id) {
         const navItem = document.querySelector(`.nav-item[data-id="${id}"]`);
         if (navItem) {
             navItem.remove();
+            alert('Navigation Item gelöscht!');
+        } else {
+            console.warn(`Navigation item with id ${id} not found in DOM`);
+            // Still show success since API deletion worked
+            alert('Navigation Item gelöscht!');
+            window.location.reload();
         }
-        
-        alert('Navigation Item gelöscht!');
     } catch (error) {
         console.error('Error deleting navigation item:', error);
         alert('Fehler beim Löschen des Navigation Items');

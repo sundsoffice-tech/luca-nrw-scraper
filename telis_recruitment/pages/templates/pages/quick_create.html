@@ -322,7 +322,8 @@ document.getElementById('code-form').addEventListener('submit', async (e) => {
         
         if (result.success) {
             // Redirect to the newly created page
-            window.location.href = result.redirect_url || result.data.page_url;
+            const redirectUrl = result.redirect_url || (result.data && result.data.page_url) || '/pages/';
+            window.location.href = redirectUrl;
         } else {
             alert('Fehler: ' + (result.error || 'Unbekannter Fehler'));
             submitBtn.disabled = false;
@@ -365,7 +366,8 @@ async function selectTemplate(templateId, templateName) {
             // Show success message
             alert('Projekt erfolgreich erstellt!');
             // Redirect to the new project
-            window.location.href = result.redirect_url || result.data.project_url;
+            const redirectUrl = result.redirect_url || (result.data && result.data.project_url) || '/pages/projects/';
+            window.location.href = redirectUrl;
         } else {
             alert('Fehler: ' + (result.error || 'Template konnte nicht angewendet werden'));
         }
