@@ -1365,12 +1365,12 @@ def robots_txt(request):
 
 def fallback_static(request, file_path):
     """
-    Fallback handler für fehlende statische Dateien aus Page-Builder-Projekten.
+    Fallback handler for missing static files from Page Builder projects.
     
-    Viele Page-Builder-Projekte referenzieren Dateien wie /src/main.css
-    die nicht existieren. Diese View:
-    1. Loggt die fehlende Datei (für spätere Analyse)
-    2. Gibt eine leere, aber gültige Response zurück (verhindert 404 Fehler)
+    Many Page Builder projects reference files like /src/main.css that don't exist.
+    This view:
+    1. Logs the missing file (for later analysis)
+    2. Returns an empty but valid response (prevents 404 errors)
     """
     # Log missing file for debugging
     logger.warning(

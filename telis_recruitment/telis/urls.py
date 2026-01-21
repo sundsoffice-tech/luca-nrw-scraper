@@ -21,8 +21,8 @@ from leads.views import landing_page, phone_dashboard
 from pages import views as pages_views
 
 urlpatterns = [
-    # Fallback für fehlende statische Dateien aus Page-Builder-Projekten
-    # Fängt typische Pfade ab wie /src/main.css, /dist/bundle.js, etc.
+    # Fallback for missing static files from Page Builder projects
+    # Catches typical paths like /src/main.css, /dist/bundle.js, etc.
     path('src/<path:file_path>', pages_views.fallback_static, name='fallback-static-src'),
     path('dist/<path:file_path>', pages_views.fallback_static, name='fallback-static-dist'),
     path('assets/<path:file_path>', pages_views.fallback_static, name='fallback-static-assets'),

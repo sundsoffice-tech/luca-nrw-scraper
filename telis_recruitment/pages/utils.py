@@ -7,14 +7,14 @@ logger = logging.getLogger(__name__)
 
 def validate_asset_references(html_content: str) -> list:
     """
-    Prüft HTML-Content auf potentiell fehlende Asset-Referenzen.
+    Check HTML content for potentially missing asset references.
     
     Returns:
-        Liste von Warnungen für fehlende Assets
+        List of warnings for missing assets
     """
     warnings = []
     
-    # Finde alle src und href Attribute
+    # Find all src and href attributes
     patterns = [
         r'src=["\']([^"\']+)["\']',
         r'href=["\']([^"\']+\.(?:css|js))["\']',
@@ -25,8 +25,8 @@ def validate_asset_references(html_content: str) -> list:
     for pattern in patterns:
         matches = re.findall(pattern, html_content)
         for match in matches:
-            # Prüfe auf verdächtige lokale Pfade
+            # Check for suspicious local paths
             if any(match.startswith(path) for path in suspicious_paths):
-                warnings.append(f"Möglicherweise fehlende Datei referenziert: {match}")
+                warnings.append(f"Possibly missing file referenced: {match}")
     
     return warnings
