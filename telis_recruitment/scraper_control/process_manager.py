@@ -60,7 +60,7 @@ class ProcessManager:
         self.last_error_component: Optional[str] = None
         
         # Auto-recovery state
-        self.consecutive_failures: int = 0
+       # self.consecutive_failures: int = 0
         self.max_consecutive_failures: int = 5
         self.auto_restart_timer: Optional[threading.Timer] = None
         self.auto_restart_delays = [30, 60, 120, 240, 480]  # Exponential backoff in seconds
