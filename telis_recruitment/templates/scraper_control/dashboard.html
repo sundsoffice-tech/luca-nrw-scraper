@@ -748,10 +748,12 @@ runDetailsModal.addEventListener('click', (e) => {
     }
 });
 
-// Use the showRunDetails function from scraper-control.js
-// Create a wrapper that passes the configuration
+// The showRunDetails function is available from scraper-control.js
+// When called from onclick="showRunDetails(runId)", it needs the config
+// We'll override it to automatically pass the configuration
+const originalShowRunDetails = window.showRunDetails;
 window.showRunDetails = async function(runId) {
-    await showRunDetails(runId, runDetailsConfig);
+    await originalShowRunDetails(runId, runDetailsConfig);
 };
 </script>
 {% endblock %}
