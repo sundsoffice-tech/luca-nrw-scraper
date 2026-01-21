@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
-Leads-Scraper (NRW Vertrieb/Callcenter/D2D) — robust + inkrementell + UI
+Leads-Scraper (NRW Vertrieb/Callcenter/D2D) â€” robust + inkrementell + UI
 
 Features:
 - Suche: Google CSE (Key/CX-Rotation, Backoff, Pagination) + Fallback Bing + Seed-URLs
 - Fetch: Retries, SSL-Verify mit Fallback (Flag), robots tolerant (Cache)
-- Filter: Harter Domain-Block (News/Behörden/Verbände), Pfad-Whitelist, Content-Validation tolerant
+- Filter: Harter Domain-Block (News/BehÃ¶rden/VerbÃ¤nde), Pfad-Whitelist, Content-Validation tolerant
 - Extraktion: OpenAI (JSON) oder Regex (E-Mail/Tel/WhatsApp/wa.me + Namensheuristik); Kleinanzeigen-Extractor
 - Scoring: Kontakt-/Branchen-Signale, starker WhatsApp/Telefon/E-Mail-Boost, URL-Hints, dynamischer Schwellenwert
-- Enrichment: Firma/Größe/Branche/Region/Frische + Confidence/DataQuality realistisch
+- Enrichment: Firma/GrÃ¶ÃŸe/Branche/Region/Frische + Confidence/DataQuality realistisch
 - Persistenz: SQLite (runs, queries_done, urls_seen, leads) => keine Doppelten, Wiederaufnahme
 - Export: CSV/XLSX (append nur neue Leads)
 - Depth: Interne Tiefe + Sitemap-Hints
@@ -110,7 +110,7 @@ except ImportError:
     PhonebookLookup = None
     # Fallback BAD_NAMES if phonebook module not available
     BAD_NAMES = ["_probe_", "", None, "Unknown Candidate", "Keine Fixkosten", 
-                 "Gastronomie", "Verkäufer", "Mitarbeiter", "Thekenverkäufer"]
+                 "Gastronomie", "VerkÃ¤ufer", "Mitarbeiter", "ThekenverkÃ¤ufer"]
 # New modules for extended functionality
 from dorks_extended import (
     get_all_dorks,
@@ -347,46 +347,46 @@ except ImportError as e:
     # Will use existing definitions below
 
 # =========================
-# NRW Städte für städtebasierte Suche
+# NRW StÃ¤dte fÃ¼r stÃ¤dtebasierte Suche
 # =========================
 NRW_CITIES = [
-    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg",
-    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
-    "Gelsenkirchen", "Aachen", "Mönchengladbach"
+    "KÃ¶ln", "DÃ¼sseldorf", "Dortmund", "Essen", "Duisburg",
+    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "MÃ¼nster",
+    "Gelsenkirchen", "Aachen", "MÃ¶nchengladbach"
 ]
 NRW_CITIES_EXTENDED = [
-    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg",
-    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
-    "Gelsenkirchen", "Mönchengladbach", "Aachen", "Krefeld", "Oberhausen",
-    "Hagen", "Hamm", "Mülheim an der Ruhr", "Leverkusen", "Solingen",
+    "KÃ¶ln", "DÃ¼sseldorf", "Dortmund", "Essen", "Duisburg",
+    "Bochum", "Wuppertal", "Bielefeld", "Bonn", "MÃ¼nster",
+    "Gelsenkirchen", "MÃ¶nchengladbach", "Aachen", "Krefeld", "Oberhausen",
+    "Hagen", "Hamm", "MÃ¼lheim an der Ruhr", "Leverkusen", "Solingen",
     "Neuss", "Paderborn", "Recklinghausen", "Remscheid", "Moers",
     "Siegen", "Witten", "Iserlohn", "Bergisch Gladbach", "Herne"
 ]
-# Top 40 Städte in NRW für massive Abdeckung
+# Top 40 StÃ¤dte in NRW fÃ¼r massive Abdeckung
 NRW_BIG_CITIES = [
-    "Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster",
-    "Gelsenkirchen", "Mönchengladbach", "Aachen", "Chemnitz", "Krefeld", "Oberhausen", "Hagen", "Hamm", "Mülheim",
+    "KÃ¶ln", "DÃ¼sseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "MÃ¼nster",
+    "Gelsenkirchen", "MÃ¶nchengladbach", "Aachen", "Chemnitz", "Krefeld", "Oberhausen", "Hagen", "Hamm", "MÃ¼lheim",
     "Leverkusen", "Solingen", "Herne", "Neuss", "Paderborn", "Bottrop", "Recklinghausen", "Bergisch Gladbach",
-    "Remscheid", "Moers", "Siegen", "Gütersloh", "Witten", "Iserlohn", "Düren", "Ratingen", "Lünen", "Marl",
+    "Remscheid", "Moers", "Siegen", "GÃ¼tersloh", "Witten", "Iserlohn", "DÃ¼ren", "Ratingen", "LÃ¼nen", "Marl",
     "Velbert", "Minden", "Viersen"
 ]
-# Großstädte mit stärkerer Titel-Streuung
-METROPOLIS = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Bonn", "Münster"]
+# GroÃŸstÃ¤dte mit stÃ¤rkerer Titel-Streuung
+METROPOLIS = ["KÃ¶ln", "DÃ¼sseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Bonn", "MÃ¼nster"]
 
-# Professionelle Job-Titel für LinkedIn/Xing
+# Professionelle Job-Titel fÃ¼r LinkedIn/Xing
 SALES_TITLES = [
-    "Vertrieb", "Sales Manager", "Account Manager", "Außendienst", "Telesales",
-    "Verkäufer", "Handelsvertreter", "Key Account Manager", "Area Sales Manager"
+    "Vertrieb", "Sales Manager", "Account Manager", "AuÃŸendienst", "Telesales",
+    "VerkÃ¤ufer", "Handelsvertreter", "Key Account Manager", "Area Sales Manager"
 ]
-# Regionen statt nur Städte (für breite Suche)
+# Regionen statt nur StÃ¤dte (fÃ¼r breite Suche)
 NRW_REGIONS = [
     "nrw", "nordrhein-westfalen", "nordrhein westfalen",
-    "düsseldorf", "köln", "dortmund", "essen", "duisburg",
-    "bochum", "wuppertal", "bielefeld", "bonn", "münster",
-    "gelsenkirchen", "mönchengladbach", "aachen", "krefeld",
-    "oberhausen", "hagen", "hamm", "mülheim", "leverkusen",
+    "dÃ¼sseldorf", "kÃ¶ln", "dortmund", "essen", "duisburg",
+    "bochum", "wuppertal", "bielefeld", "bonn", "mÃ¼nster",
+    "gelsenkirchen", "mÃ¶nchengladbach", "aachen", "krefeld",
+    "oberhausen", "hagen", "hamm", "mÃ¼lheim", "leverkusen",
     "solingen", "herne", "neuss", "paderborn", "bottrop",
-    "ruhrgebiet", "rheinland", "sauerland", "münsterland", "owl",
+    "ruhrgebiet", "rheinland", "sauerland", "mÃ¼nsterland", "owl",
 ]
 
 # Private Mail-Provider (keine Firmen!)
@@ -403,12 +403,12 @@ DEFAULT_QUERIES: List[str] = [
     'site:de "Unsere Vertretungen" "Industrievertretung" "Kontakt"',
     'site:de "Vertriebsnetz" "Handelsvertretung" "Ansprechpartner"',
     'site:de "Gebietsvertretung" "PLZ" "Telefon" -stepstone -indeed',
-    'site:de "Vertragshändler" "Maschinenbau" "Ansprechpartner"',
+    'site:de "VertragshÃ¤ndler" "Maschinenbau" "Ansprechpartner"',
     'filetype:pdf "Vertreterliste" "Mobil" "PLZ" -bewerbung',
     'filetype:pdf "Preisliste" "Industrievertretung" "Kontakt"',
-    'filetype:xlsx "Händlerverzeichnis" "Ansprechpartner" "Mobil"',
+    'filetype:xlsx "HÃ¤ndlerverzeichnis" "Ansprechpartner" "Mobil"',
     '"Inhaltlich Verantwortlicher" "Handelsvertretung" "Mobil" -GmbH -UG',
-    '"Angaben gemäß § 5 TMG" "Handelsvertretung" "Inhaber" "Mobil"',
+    '"Angaben gemÃ¤ÃŸ Â§ 5 TMG" "Handelsvertretung" "Inhaber" "Mobil"',
     'inurl:impressum "Handelsvertretung" "powered by WordPress" "Mobil"',
     'site:cdh.de "Mitglied" "Kontakt"',
 
@@ -420,32 +420,32 @@ DEFAULT_QUERIES: List[str] = [
     'site:quoka.de "Stellengesuch" "Vertrieb" "Kontakt"',
     'site:markt.de "Jobgesuch" "Verkauf" "Mobil"',
     'site:linkedin.com/in/ "Suche neue Herausforderung" "Vertrieb" "Kontakt"',
-    'site:xing.com/profile "ab sofort verfügbar" "Sales" "Mobil"',
+    'site:xing.com/profile "ab sofort verfÃ¼gbar" "Sales" "Mobil"',
 ]
 NICHE_QUERIES = {
     "construction": [
-        '("Werksvertretung" OR "Handelsvertretung") ("SHK" OR "Sanitär" OR "Heizung") "Gebietsleiter" "Mobil"',
+        '("Werksvertretung" OR "Handelsvertretung") ("SHK" OR "SanitÃ¤r" OR "Heizung") "Gebietsleiter" "Mobil"',
         '("Bauelemente" OR "Fenster") ("Werksvertretung" OR "Fachhandelspartner") "PLZ" "Ansprechpartner"',
-        'site:de ("Außendienst" OR "Vertriebsaußendienst") ("SHK" OR "Elektro") "Gebietsverkaufsleiter" "Kontakt"',
+        'site:de ("AuÃŸendienst" OR "VertriebsauÃŸendienst") ("SHK" OR "Elektro") "Gebietsverkaufsleiter" "Kontakt"',
         'filetype:pdf "Fachpartnerliste" "Heizung" "Vertriebspartner" "Telefon"'
     ],
     "medical": [
         '("Medizinprodukteberater" OR "Klinikreferent") "Gebietsleiter" "Kontakt" "Mobil"',
-        '("Außendienst" OR "Key Account Manager") ("Medizintechnik" OR "Medical Devices") "Region" "Deutschland"',
+        '("AuÃŸendienst" OR "Key Account Manager") ("Medizintechnik" OR "Medical Devices") "Region" "Deutschland"',
         'filetype:pdf "Lebenslauf" "Medizinprodukteberater" "Geburtsdatum" "Mobil"',
-        'site:de "Unsere Außendienstmitarbeiter" "Medizintechnik" "Ansprechpartner"'
+        'site:de "Unsere AuÃŸendienstmitarbeiter" "Medizintechnik" "Ansprechpartner"'
     ],
     "food": [
         '("Distributorenliste" OR "Distributor list") ("Food" OR "Lebensmittel") "Deutschland"',
-        '("Großhandel" OR "Großhändler") "Gastronomie" "Vertriebspartner" "Kontakt"',
-        '("Food Startup" OR "Getränke") "sucht Vertrieb" "Handelspartner"',
-        'filetype:pdf "Vertriebspartner" "Getränke" "Kontakt" "Deutschland"'
+        '("GroÃŸhandel" OR "GroÃŸhÃ¤ndler") "Gastronomie" "Vertriebspartner" "Kontakt"',
+        '("Food Startup" OR "GetrÃ¤nke") "sucht Vertrieb" "Handelspartner"',
+        'filetype:pdf "Vertriebspartner" "GetrÃ¤nke" "Kontakt" "Deutschland"'
     ]
 }
 # Freelancer & Modern Sales
 FREELANCE_QUERIES = [
     # 1. Freelancer Portals (Scraping Profiles)
-    'site:freelancermap.de "Vertrieb" "Deutschland" "verfügbar" -projekt',
+    'site:freelancermap.de "Vertrieb" "Deutschland" "verfÃ¼gbar" -projekt',
     'site:freelance.de "Vertriebsfreelancer" "Kaltakquise" "Kontakt"',
     'site:freelancermap.de "Telesales" "Muttersprache Deutsch" "Mobil"',
 
@@ -462,13 +462,13 @@ FREELANCE_QUERIES = [
 GUERILLA_QUERIES = [
     # 1. Insolvency & Layoffs (Trigger Events)
     '("Entlassungswelle" OR "Stellenabbau") "Vertrieb" "Deutschland" "2024" -news',
-    '("Insolvenz" OR "Geschäftsaufgabe") "Vertriebsteam" "suche Job" site:linkedin.com',
-    'site:kununu.com "Kündigung" "Vertrieb" "Bewertung" "2025"',
+    '("Insolvenz" OR "GeschÃ¤ftsaufgabe") "Vertriebsteam" "suche Job" site:linkedin.com',
+    'site:kununu.com "KÃ¼ndigung" "Vertrieb" "Bewertung" "2025"',
 
     # 2. Frustration & Advice (Community Hacking)
-    'site:reddit.com ("Vertrieb" OR "Sales") "gekündigt" "was tun"',
-    'site:wiwi-treff.de "Vertrieb" "Kündigung" "Wechsel" -stellenmarkt',
-    'site:gutefrage.net "Vertrieb" "gekündigt" "neuer Job"',
+    'site:reddit.com ("Vertrieb" OR "Sales") "gekÃ¼ndigt" "was tun"',
+    'site:wiwi-treff.de "Vertrieb" "KÃ¼ndigung" "Wechsel" -stellenmarkt',
+    'site:gutefrage.net "Vertrieb" "gekÃ¼ndigt" "neuer Job"',
 
     # 3. Career Changers (Quereinsteiger)
     '("Suche Job ohne Ausbildung" OR "Quereinstieg") "Vertrieb" "schnell Geld" site:.de',
@@ -516,7 +516,7 @@ def export_xlsx(filename: str, rows=None):
 if os.getenv("ALLOW_INSECURE_SSL", "0") == "1":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     import logging
-    logging.warning("⚠️  UNSICHERER MODUS: SSL-Zertifikat-Validierung ist deaktiviert! Nur für Entwicklung verwenden.")
+    logging.warning("âš ï¸  UNSICHERER MODUS: SSL-Zertifikat-Validierung ist deaktiviert! Nur fÃ¼r Entwicklung verwenden.")
 
 # =========================
 # Konfiguration & Globals
@@ -530,7 +530,7 @@ USER_AGENT = "Mozilla/5.0 (compatible; VertriebFinder/2.3; +https://example.com)
 # =========================
 # These are fallback definitions when luca_scraper is not available.
 # When luca_scraper is available, values from luca_scraper.config are used instead (see line ~1200).
-# luca_scraper.config uses centralized configuration with priority: DB → Env → Defaults
+# luca_scraper.config uses centralized configuration with priority: DB â†’ Env â†’ Defaults
 
 DEFAULT_CSV = "vertrieb_kontakte.csv"
 DEFAULT_XLSX = "vertrieb_kontakte.xlsx"
@@ -568,7 +568,7 @@ PROXY_ENV_VARS = [
     "FTP_PROXY", "ftp_proxy", "SOCKS_PROXY", "socks_proxy"
 ]
 
-NRW_CITIES = ["Köln", "Düsseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "Münster"]
+NRW_CITIES = ["KÃ¶ln", "DÃ¼sseldorf", "Dortmund", "Essen", "Duisburg", "Bochum", "Wuppertal", "Bielefeld", "Bonn", "MÃ¼nster"]
 
 ENABLE_KLEINANZEIGEN = (os.getenv("ENABLE_KLEINANZEIGEN", "1") == "1")
 KLEINANZEIGEN_MAX_RESULTS = int(os.getenv("KLEINANZEIGEN_MAX_RESULTS", "20"))
@@ -598,8 +598,8 @@ DIRECT_CRAWL_URLS = [
     "https://www.kleinanzeigen.de/s-stellengesuche/telesales/k0c107",
     "https://www.kleinanzeigen.de/s-stellengesuche/call-center/k0c107",
     
-    # Alle großen NRW-Städte
-    # Köln
+    # Alle groÃŸen NRW-StÃ¤dte
+    # KÃ¶ln
     "https://www.kleinanzeigen.de/s-stellengesuche/koeln/vertrieb/k0c107l945",
     "https://www.kleinanzeigen.de/s-stellengesuche/koeln/sales/k0c107l945",
     "https://www.kleinanzeigen.de/s-stellengesuche/koeln/verkauf/k0c107l945",
@@ -627,13 +627,13 @@ DIRECT_CRAWL_URLS = [
     # Bonn
     "https://www.kleinanzeigen.de/s-stellengesuche/bonn/vertrieb/k0c107l944",
     
-    # Münster
+    # MÃ¼nster
     "https://www.kleinanzeigen.de/s-stellengesuche/muenster/vertrieb/k0c107l946",
     
     # Gelsenkirchen
     "https://www.kleinanzeigen.de/s-stellengesuche/gelsenkirchen/vertrieb/k0c107l948",
     
-    # Mönchengladbach
+    # MÃ¶nchengladbach
     "https://www.kleinanzeigen.de/s-stellengesuche/moenchengladbach/vertrieb/k0c107l949",
     
     # Aachen
@@ -651,7 +651,7 @@ DIRECT_CRAWL_URLS = [
     # Hamm
     "https://www.kleinanzeigen.de/s-stellengesuche/hamm/vertrieb/k0c107l954",
     
-    # Zusätzliche Berufsfelder NRW
+    # ZusÃ¤tzliche Berufsfelder NRW
     "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/kundenservice/k0c107l929",
     "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/call-center/k0c107l929",
     "https://www.kleinanzeigen.de/s-stellengesuche/nordrhein-westfalen/promotion/k0c107l929",
@@ -673,7 +673,7 @@ MARKT_DE_URLS = [
 
 # Quoka.de Stellengesuche URLs
 QUOKA_DE_URLS = [
-    # NRW Städte (erweitert)
+    # NRW StÃ¤dte (erweitert)
     "https://www.quoka.de/stellengesuche/duesseldorf/",
     "https://www.quoka.de/stellengesuche/koeln/",
     "https://www.quoka.de/stellengesuche/dortmund/",
@@ -704,7 +704,7 @@ KALAYDO_DE_URLS = [
 
 # Meinestadt.de Stellengesuche URLs
 MEINESTADT_DE_URLS = [
-    # Alle Top-15 NRW Städte
+    # Alle Top-15 NRW StÃ¤dte
     "https://www.meinestadt.de/duesseldorf/stellengesuche",
     "https://www.meinestadt.de/koeln/stellengesuche",
     "https://www.meinestadt.de/dortmund/stellengesuche",
@@ -736,14 +736,14 @@ FREELANCER_PORTAL_URLS = [
     "https://www.gulp.de/gulp2/g/projekte?region=nordrhein-westfalen&skill=vertrieb",
 ]
 
-# DHD24.com Stellengesuche URLs (neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten)
+# DHD24.com Stellengesuche URLs (neues Kleinanzeigen-Portal mit Ã¶ffentlichen Kontaktdaten)
 DHD24_URLS = [
     "https://www.dhd24.com/kleinanzeigen/stellengesuche.html",
     "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-vertrieb.html",
     "https://www.dhd24.com/kleinanzeigen/jobs/stellengesuche-verkauf.html",
 ]
 
-# Freelancermap.de URLs - Vertrieb/Sales Freelancer mit öffentlichen Telefonnummern
+# Freelancermap.de URLs - Vertrieb/Sales Freelancer mit Ã¶ffentlichen Telefonnummern
 FREELANCERMAP_URLS = [
     "https://www.freelancermap.de/freelancer-verzeichnis/sales.html",
     "https://www.freelancermap.de/freelancer-verzeichnis/vertrieb.html",
@@ -770,10 +770,10 @@ DIRECT_CRAWL_SOURCES = {
     "markt_de": True,
     "quoka": True,
     "kalaydo": False,  # Deaktiviert - Blockiert Requests
-    "meinestadt": False,  # DEAKTIVIERT - 0 Stellengesuche bei 12 Städten (komplett nutzlos)
+    "meinestadt": False,  # DEAKTIVIERT - 0 Stellengesuche bei 12 StÃ¤dten (komplett nutzlos)
     "freelancer_portals": False,  # Deaktiviert - Kontaktdaten hinter Login
     "dhd24": True,  # AKTIVIERT - Alternative zu meinestadt
-    "freelancermap": True,  # NEU - Freelancer-Portal mit öffentlichen Handynummern
+    "freelancermap": True,  # NEU - Freelancer-Portal mit Ã¶ffentlichen Handynummern
     "freelance_de": False,  # DEAKTIVIERT - Server blockiert Requests (HTTP 403/Timeout)
 }
 
@@ -781,7 +781,7 @@ DIRECT_CRAWL_SOURCES = {
 PORTAL_DELAYS = {
     "kleinanzeigen": 3.0,
     "markt_de": 4.0,
-    "quoka": 6.0,  # ERHÖHT von 3.0 - 429 Rate-Limit Detection
+    "quoka": 6.0,  # ERHÃ–HT von 3.0 - 429 Rate-Limit Detection
     "kalaydo": 4.0,
     "meinestadt": 3.0,
     "dhd24": 4.0,
@@ -942,14 +942,14 @@ PORTAL_CONCURRENCY_PER_SITE = int(os.getenv("PORTAL_CONCURRENCY_PER_SITE", "2"))
 
 
 def get_active_portals() -> Dict[str, bool]:
-    """Gibt aktive Portale zurück, basierend auf Learning"""
+    """Gibt aktive Portale zurÃ¼ck, basierend auf Learning"""
     try:
         from ai_learning_engine import ActiveLearningEngine
         learning = ActiveLearningEngine()
         
         base_config = DIRECT_CRAWL_SOURCES.copy()
         
-        # Learning überschreibt Base-Config
+        # Learning Ã¼berschreibt Base-Config
         for portal in base_config.keys():
             should_skip, reason = learning.should_skip_portal(portal)
             if should_skip:
@@ -959,7 +959,7 @@ def get_active_portals() -> Dict[str, bool]:
         return base_config
     except Exception as e:
         # Fallback: Original config if learning fails
-        log("warn", "Learning engine nicht verfügbar, nutze Standard-Config", error=str(e))
+        log("warn", "Learning engine nicht verfÃ¼gbar, nutze Standard-Config", error=str(e))
         return DIRECT_CRAWL_SOURCES.copy()
 
 # =========================
@@ -968,7 +968,7 @@ def get_active_portals() -> Dict[str, bool]:
 
 # Source Types - Extensive list for candidate-focused scraping
 SOURCE_TYPES = {
-    # PRIMÄR - Direkte Jobsuche
+    # PRIMÃ„R - Direkte Jobsuche
     "stellengesuch_kleinanzeigen": "Kleinanzeigen.de Stellengesuch",
     "stellengesuch_markt": "Markt.de Stellengesuch",
     "stellengesuch_quoka": "Quoka Stellengesuch",
@@ -977,7 +977,7 @@ SOURCE_TYPES = {
     # SOCIAL MEDIA - Aktiv suchend
     "linkedin_opentowork": "LinkedIn #OpenToWork",
     "linkedin_seeking": "LinkedIn 'seeking opportunities'",
-    "xing_offen": "Xing 'offen für Angebote'",
+    "xing_offen": "Xing 'offen fÃ¼r Angebote'",
     "xing_jobsuche": "Xing 'auf Jobsuche'",
     "facebook_jobpost": "Facebook Jobsuche-Post",
     "facebook_gruppe": "Facebook Vertriebs-Gruppe",
@@ -1004,7 +1004,7 @@ SOURCE_TYPES = {
     "upwork_german": "Upwork deutschsprachig",
     
     # LEBENSLAUF/CV
-    "cv_pdf_public": "Öffentliches PDF (Lebenslauf)",
+    "cv_pdf_public": "Ã–ffentliches PDF (Lebenslauf)",
     "cv_stepstone": "StepStone Kandidatenprofil",
     "cv_indeed": "Indeed Lebenslauf",
     
@@ -1021,7 +1021,7 @@ SOURCE_TYPES = {
     "immobilien_makler": "Immobilien-Makler",
     
     # QUEREINSTEIGER-POTENZIAL
-    "gastro_wechsler": "Gastro → Vertrieb Wechsler",
+    "gastro_wechsler": "Gastro â†’ Vertrieb Wechsler",
     "einzelhandel_pro": "Einzelhandel mit Sales-Talent",
     "mlm_aussteiger": "MLM/Network Marketing Aussteiger",
     "callcenter_erfahren": "Call-Center mit Erfahrung",
@@ -1031,7 +1031,7 @@ SOURCE_TYPES = {
 
 # Required vs Optional Fields
 REQUIRED_FIELDS = {
-    "name": "Echter menschlicher Name (KI-geprüft!)",
+    "name": "Echter menschlicher Name (KI-geprÃ¼ft!)",
     "telefon": "Handynummer (015x, 016x, 017x)",
 }
 
@@ -1039,12 +1039,12 @@ OPTIONAL_FIELDS = {
     "email": "E-Mail (bevorzugt privat)",
     "whatsapp_link": "WhatsApp-Link",
     "profile_url": "Social-Media Profil",
-    "skills": "Fähigkeiten",
+    "skills": "FÃ¤higkeiten",
     "experience_years": "Berufserfahrung",
-    "availability": "Verfügbarkeit",
+    "availability": "VerfÃ¼gbarkeit",
     "industries_experience": "Branchenerfahrung",
     "location": "Standort/Region",
-    "mobility": "Mobilität",
+    "mobility": "MobilitÃ¤t",
     "cv_url": "Lebenslauf-URL",
 }
 
@@ -1056,7 +1056,7 @@ HIDDEN_GEMS_PATTERNS = {
         "reason": "Gastro-Erfahrung = Kundenkontakt + Belastbarkeit"
     },
     "einzelhandel_pro": {
-        "keywords": ["einzelhandel", "verkäufer", "filiale", "retail"],
+        "keywords": ["einzelhandel", "verkÃ¤ufer", "filiale", "retail"],
         "positive": ["umsatz", "beratung", "kasse", "kundenservice"],
         "reason": "Einzelhandel = Verkaufserfahrung + Kundenumgang"
     },
@@ -1067,23 +1067,23 @@ HIDDEN_GEMS_PATTERNS = {
     },
     "mlm_refugee": {
         "keywords": ["network marketing", "mlm", "direktvertrieb", "tupperware"],
-        "positive": ["selbstständig", "provision", "akquise"],
+        "positive": ["selbststÃ¤ndig", "provision", "akquise"],
         "reason": "MLM-Aussteiger = Kaltakquise + Hunger auf echten Job"
     },
     "promotion_hustler": {
         "keywords": ["promotion", "promoter", "messe", "events"],
-        "positive": ["kommunikativ", "überzeugend", "präsentation"],
+        "positive": ["kommunikativ", "Ã¼berzeugend", "prÃ¤sentation"],
         "reason": "Promoter = Ansprache-Erfahrung + keine Scheu"
     },
     "door2door_warrior": {
-        "keywords": ["d2d", "door to door", "haustür", "außendienst"],
-        "positive": ["provision", "abschlussstark", "hartnäckig"],
-        "reason": "D2D-Erfahrung = Härtester Vertrieb überhaupt"
+        "keywords": ["d2d", "door to door", "haustÃ¼r", "auÃŸendienst"],
+        "positive": ["provision", "abschlussstark", "hartnÃ¤ckig"],
+        "reason": "D2D-Erfahrung = HÃ¤rtester Vertrieb Ã¼berhaupt"
     },
     "fitness_coach": {
         "keywords": ["fitness", "personal trainer", "coach", "studio"],
         "positive": ["motivierend", "zielorientiert", "membership"],
-        "reason": "Fitness = Verkauf + Überzeugungskraft"
+        "reason": "Fitness = Verkauf + Ãœberzeugungskraft"
     },
 }
 
@@ -1105,11 +1105,11 @@ UNIVERSAL_HARD_BLOCKS = [
 CANDIDATE_ALWAYS_ALLOW = [
     "suche job", "suche arbeit", "suche stelle",
     "suche neue herausforderung", "stellengesuch",
-    "#opentowork", "offen für angebote", "offen für neues",
-    "arbeitslos", "arbeitssuchend", "freigestellt", "gekündigt",
-    "verfügbar ab", "ab sofort verfügbar", "wechselwillig",
+    "#opentowork", "offen fÃ¼r angebote", "offen fÃ¼r neues",
+    "arbeitslos", "arbeitssuchend", "freigestellt", "gekÃ¼ndigt",
+    "verfÃ¼gbar ab", "ab sofort verfÃ¼gbar", "wechselwillig",
     "auf jobsuche", "biete meine dienste", "biete mich an",
-    "freiberuflich verfügbar",
+    "freiberuflich verfÃ¼gbar",
 ]
 
 # Candidate export fields
@@ -1211,7 +1211,7 @@ MIN_SCORE_ENV = int(os.getenv("MIN_SCORE", "40"))
 MAX_PER_DOMAIN = int(os.getenv("MAX_PER_DOMAIN", "5"))
 INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 
-SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))  # konservativ für Rate-Limit Schutz
+SLEEP_BETWEEN_QUERIES = float(os.getenv("SLEEP_BETWEEN_QUERIES", "2.7"))  # konservativ fÃ¼r Rate-Limit Schutz
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
 
@@ -1644,8 +1644,8 @@ def init_mode(mode: str) -> Dict[str, Any]:
 
 def migrate_db_unique_indexes():
     """
-    Fallback für sehr alte Schemas mit harten UNIQUE-Constraints.
-    Nur ausführen, wenn Einfügen weiterhin scheitert.
+    Fallback fÃ¼r sehr alte Schemas mit harten UNIQUE-Constraints.
+    Nur ausfÃ¼hren, wenn EinfÃ¼gen weiterhin scheitert.
     """
     con = db(); cur = con.cursor()
     try:
@@ -1744,7 +1744,7 @@ def _url_seen_fast(url: str) -> bool:
 # =========================
 
 async def get_cached_telefonbuch_result(name: str, city: str) -> Optional[List[Dict]]:
-    """Prüft ob Ergebnis im Cache ist (max 7 Tage alt)"""
+    """PrÃ¼ft ob Ergebnis im Cache ist (max 7 Tage alt)"""
     if not name or not city:
         return None
     
@@ -1825,7 +1825,7 @@ _telefonbuch_rate = _TelefonbuchRateLimiter(interval=TELEFONBUCH_RATE_LIMIT)
 
 async def query_dasoertliche(name: str, city: str) -> List[Dict]:
     """
-    Führt eine Suche auf dasoertliche.de durch.
+    FÃ¼hrt eine Suche auf dasoertliche.de durch.
     
     URL-Format: https://www.dasoertliche.de/?kw={name}&ci={city}
     
@@ -1891,7 +1891,7 @@ async def query_dasoertliche(name: str, city: str) -> List[Dict]:
         if parsing_strategy:
             log("debug", "Telefonbuch-Parse-Strategie", strategy=parsing_strategy, entries_found=len(entries))
         else:
-            log("debug", "Telefonbuch-Parse: Keine Einträge gefunden")
+            log("debug", "Telefonbuch-Parse: Keine EintrÃ¤ge gefunden")
         
         for entry in entries[:5]:  # Limit to first 5 results
             result = {}
@@ -1941,12 +1941,12 @@ def should_accept_enrichment(
     results: List[Dict]
 ) -> Tuple[bool, Optional[Dict], str]:
     """
-    Prüft ob Enrichment akzeptiert werden soll.
+    PrÃ¼ft ob Enrichment akzeptiert werden soll.
     
     Checks:
         1. Genau 1 Treffer
         2. Name-Match >= 90% (fuzzy matching)
-        3. Stadt-Match (enthält oder gleich)
+        3. Stadt-Match (enthÃ¤lt oder gleich)
         4. Telefonnummer ist Mobilnummer (015/016/017)
     
     Returns:
@@ -2046,7 +2046,7 @@ async def enrich_phone_from_telefonbuch(
     
     Args:
         name: Vor- und Nachname (z.B. "Max Mustermann")
-        city: Stadt (z.B. "Düsseldorf")
+        city: Stadt (z.B. "DÃ¼sseldorf")
         strict: Nur bei exakt 1 Treffer (100% Genauigkeit)
     
     Returns:
@@ -2113,7 +2113,7 @@ async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dic
             
             # Skip if name looks like a company
             if _looks_like_company_name(name):
-                log("debug", "Telefonbuch-Enrichment übersprungen (Firmenname)", name=name)
+                log("debug", "Telefonbuch-Enrichment Ã¼bersprungen (Firmenname)", name=name)
                 enriched_leads.append(lead)
                 continue
             
@@ -2143,7 +2143,7 @@ async def enrich_leads_with_telefonbuch(leads: List[Dict[str, Any]]) -> List[Dic
                         log("info", "Telefonbuch-Enrichment erfolgreich", 
                             name=name, city=city, phone=normalized_phone[:8]+"..." if len(normalized_phone) > 8 else normalized_phone)
                     else:
-                        log("debug", "Telefonbuch-Enrichment: Ungültige Nummer", 
+                        log("debug", "Telefonbuch-Enrichment: UngÃ¼ltige Nummer", 
                             name=name, phone=normalized_phone, phone_type=phone_type)
                 else:
                     log("debug", "Telefonbuch-Enrichment: Normalisierung fehlgeschlagen", 
@@ -2213,7 +2213,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 # Validate extracted name again
                 if not validate_lead_name(extracted_name):
                     log("debug", "Lead abgelehnt nach Name-Extraktion", name=extracted_name)
-                    increment_rejection_stat("Ungültiger Name nach Extraktion")
+                    increment_rejection_stat("UngÃ¼ltiger Name nach Extraktion")
                     continue
         
         # STEP 4: Additional validation using existing logic for backwards compatibility
@@ -2329,7 +2329,7 @@ def reset_history():
 
 
 # =========================
-# HTTP/SSL/robots — ASYNC
+# HTTP/SSL/robots â€” ASYNC
 # =========================
 
 # Content-Guards (konfigurierbar)
@@ -2345,7 +2345,7 @@ PDF_CT = "application/pdf"
 _HOST_STATE: Dict[str, Dict[str, Any]] = {}  # {host: {"penalty_until": float, "failures": int}}
 # URLs, die wegen 429/403 in die zweite Welle sollen
 CB_BASE_PENALTY = int(os.getenv("CB_BASE_PENALTY", "30"))  # Reduziert von 90 auf 30 Sekunden
-CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))   # Neu: Kürzere Penalty für APIs
+CB_API_PENALTY = int(os.getenv("CB_API_PENALTY", "15"))   # Neu: KÃ¼rzere Penalty fÃ¼r APIs
 CB_MAX_PENALTY  = int(os.getenv("CB_MAX_PENALTY", "900"))
 
 RETRY_INCLUDE_403 = (os.getenv("RETRY_INCLUDE_403", "0") == "1")
@@ -2397,7 +2397,7 @@ def _penalize_host(host: str, reason: str = "error"):
     if not host:
         return
     
-    # API-Hosts bekommen kürzere Penalty
+    # API-Hosts bekommen kÃ¼rzere Penalty
     # Use proper domain matching to avoid substring attacks
     is_google_api = host in {"googleapis.com", "www.googleapis.com"} or host.endswith(".googleapis.com")
     is_api_host = host.startswith("api.")
@@ -2533,12 +2533,12 @@ _LAST_STATUS: Dict[str, int] = {}
 
 async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
     """
-    GET mit optionalem HEAD-Preflight, Proxys/UA-Rotation, HTTP/2→1.1 Fallback
+    GET mit optionalem HEAD-Preflight, Proxys/UA-Rotation, HTTP/2â†’1.1 Fallback
     Verbesserungen:
-      - HEAD-Preflight: 405/501 nicht „bestrafen“ (kein erneutes HEAD), aber bei 405 Host sanft penalizen.
-      - Host-Penalty zusätzlich bei 503/504 (Rate drosseln, spätere Retries wahrscheinlicher).
+      - HEAD-Preflight: 405/501 nicht â€žbestrafenâ€œ (kein erneutes HEAD), aber bei 405 Host sanft penalizen.
+      - Host-Penalty zusÃ¤tzlich bei 503/504 (Rate drosseln, spÃ¤tere Retries wahrscheinlicher).
     """
-    # --- Rotation wählen ---
+    # --- Rotation wÃ¤hlen ---
     ua = random.choice(UA_POOL) if UA_POOL else USER_AGENT
     proxy = random.choice(PROXY_POOL) if PROXY_POOL else None
 
@@ -2554,14 +2554,14 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
     base_to = max(5, min(timeout, 45))
     eff_timeout = base_to + random.uniform(0.0, 1.25)
 
-    # 1) HEAD-Preflight (secure, HTTP/2/1 je nach Param) – optional
+    # 1) HEAD-Preflight (secure, HTTP/2/1 je nach Param) â€“ optional
     r_head = None
     try:
         async with _make_client(True, ua, proxy, force_http1=False, timeout_s=eff_timeout) as client_head:
             r_head = await client_head.head(url, headers=headers, params=params, allow_redirects=True, timeout=eff_timeout)
             if r_head is not None:
-                # Wenn HEAD 405/501 → kein erneutes HEAD versuchen (spart Roundtrips).
-                # Zusätzlich: bei 405 sanfte Host-Penalty (viele Sites blocken HEAD hart).
+                # Wenn HEAD 405/501 â†’ kein erneutes HEAD versuchen (spart Roundtrips).
+                # ZusÃ¤tzlich: bei 405 sanfte Host-Penalty (viele Sites blocken HEAD hart).
                 if r_head.status_code == 405:
                     _penalize_host(host, "405")
                     log("info", "HEAD 405: host penalized, continue with GET", url=url)
@@ -2574,14 +2574,14 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                         log("info", "Head-preflight: skipped by headers", url=url, reason=reason)
                         return None
     except Exception:
-        # Preflight ist optional – still & silent
+        # Preflight ist optional â€“ still & silent
         r_head = None
 
     async def _do_get(secure: bool, force_http1: bool) -> Optional[Any]:
         async with _make_client(secure, ua, proxy, force_http1, eff_timeout) as cl:
             return await cl.get(url, headers=headers, params=params, timeout=eff_timeout, allow_redirects=True)
 
-    # 2) Primär GET (secure, HTTP/2 erlaubt)
+    # 2) PrimÃ¤r GET (secure, HTTP/2 erlaubt)
     try:
         r = await _do_get(secure=True, force_http1=False)
         if r.status_code == 200:
@@ -2653,9 +2653,9 @@ async def http_get_async(url, headers=None, params=None, timeout=HTTP_TIMEOUT):
                 pass
 
     if "sitemap" in (url or "").lower():
-        log("debug", "Sitemap nicht verfügbar", url=url)
+        log("debug", "Sitemap nicht verfÃ¼gbar", url=url)
     else:
-        log("error", "HTTP GET endgültig gescheitert", url=url)
+        log("error", "HTTP GET endgÃ¼ltig gescheitert", url=url)
     return None
 
 
@@ -2667,7 +2667,7 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
     status = getattr(r, "status_code", 0)
     if status != 200:
         _LAST_STATUS[url] = status
-        log("warn", "Nicht-200 beim Abruf – skip", url=url, status=status)
+        log("warn", "Nicht-200 beim Abruf â€“ skip", url=url, status=status)
         return None
     _LAST_STATUS[url] = 200
     return r
@@ -2676,7 +2676,7 @@ async def fetch_response_async(url: str, headers=None, params=None, timeout=HTTP
 async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HTTP_TIMEOUT):
     """
     Fetch mit automatischer Login-Erkennung und Session-Management
-    Verwendet die Login-Handler-Funktionalität, um bei Bedarf einen Login anzufordern
+    Verwendet die Login-Handler-FunktionalitÃ¤t, um bei Bedarf einen Login anzufordern
     """
     handler = get_login_handler()
     portal = handler.get_portal_from_url(url)
@@ -2685,19 +2685,19 @@ async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HT
     if portal and handler.has_valid_session(portal):
         saved_cookies = handler.get_session_cookies(portal)
         if saved_cookies:
-            log("debug", f"Verwende gespeicherte Cookies für {portal}")
+            log("debug", f"Verwende gespeicherte Cookies fÃ¼r {portal}")
             # Cookies werden nicht direkt in curl_cffi verwendet, aber wir markieren die Session als aktiv
     
-    # Führe normalen Request aus
+    # FÃ¼hre normalen Request aus
     r = await fetch_response_async(url, headers=headers, params=params, timeout=timeout)
     
-    # Prüfe Response auf Login-Anforderungen
+    # PrÃ¼fe Response auf Login-Anforderungen
     if r is not None:
         response_text = getattr(r, "text", "") or ""
         status = getattr(r, "status_code", 200)
         
         if handler.detect_login_required(response_text, status, url):
-            log("warn", f"Login erforderlich für {portal or url}")
+            log("warn", f"Login erforderlich fÃ¼r {portal or url}")
             
             # Alte Session invalidieren
             if portal:
@@ -2705,8 +2705,8 @@ async def fetch_with_login_check(url: str, headers=None, params=None, timeout=HT
             
             # Manuellen Login anfordern (blockierend)
             # Hinweis: In Produktionsumgebung sollte dies async oder in separatem Thread erfolgen
-            # Für jetzt: Wir loggen nur eine Warnung und geben None zurück
-            log("warn", f"Bitte führe manuell aus: python scriptname.py --login {portal}")
+            # FÃ¼r jetzt: Wir loggen nur eine Warnung und geben None zurÃ¼ck
+            log("warn", f"Bitte fÃ¼hre manuell aus: python scriptname.py --login {portal}")
             return None
     
     return r
@@ -2744,27 +2744,27 @@ GCS_KEYS = [k for k in _stripped_keys if k] or ([GCS_API_KEY] if GCS_API_KEY els
 _normalized_cxs = (_normalize_cx(x) for x in os.getenv("GCS_CXS","").split(","))
 GCS_CXS = [cx for cx in _normalized_cxs if cx] or ([GCS_CX] if GCS_CX else [])
 
-MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 für Cost & Rate-Limit Control
+MAX_GOOGLE_PAGES = int(os.getenv("MAX_GOOGLE_PAGES","2"))  # Reduziert auf 2 fÃ¼r Cost & Rate-Limit Control
 
 # ======= SUCHE: Branchen & Query-Baukasten (modular) =======
-REGION = '(NRW OR "Nordrhein-Westfalen" OR Düsseldorf OR Köln OR Essen OR Dortmund OR Bochum OR Duisburg OR Mönchengladbach)'
+REGION = '(NRW OR "Nordrhein-Westfalen" OR DÃ¼sseldorf OR KÃ¶ln OR Essen OR Dortmund OR Bochum OR Duisburg OR MÃ¶nchengladbach)'
 CONTACT = '(kontakt OR impressum OR ansprechpartner OR "e-mail" OR email OR telefon OR whatsapp)'
 SALES   = '(vertrieb OR d2d OR "call center" OR telesales OR outbound OR verkauf OR sales)'
 
 # Kurze, treffsichere Query-Sets je Branche
 INDUSTRY_QUERIES: dict[str, list[str]] = {
     "candidates": [
-        # ══════════════════════════════════════════════════════════════
-        # KATEGORIE 1: KLEINANZEIGEN STELLENGESUCHE (Primäre Quelle!)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # KATEGORIE 1: KLEINANZEIGEN STELLENGESUCHE (PrimÃ¤re Quelle!)
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Kleinanzeigen.de - Stellengesuche Vertrieb
         'site:kleinanzeigen.de/s-stellengesuche "vertrieb" "NRW"',
         'site:kleinanzeigen.de/s-stellengesuche "sales" "nordrhein-westfalen"',
-        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung"',
+        'site:kleinanzeigen.de/s-stellengesuche "auÃŸendienst" "erfahrung"',
         'site:kleinanzeigen.de/s-stellengesuche "key account" "suche"',
         'site:kleinanzeigen.de/s-stellengesuche "handelsvertreter" "freiberuflich"',
-        'site:kleinanzeigen.de/s-stellengesuche "verkäufer" "mobil"',
+        'site:kleinanzeigen.de/s-stellengesuche "verkÃ¤ufer" "mobil"',
         'site:kleinanzeigen.de/s-stellengesuche "kundenberater" "NRW"',
         'site:kleinanzeigen.de/s-stellengesuche "akquise" "erfahrung"',
         'site:kleinanzeigen.de/s-stellengesuche "telesales" "homeoffice"',
@@ -2776,7 +2776,7 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         # Markt.de - Stellengesuche
         'site:markt.de/stellengesuche "vertrieb"',
         'site:markt.de/stellengesuche "sales manager"',
-        'site:markt.de/stellengesuche "außendienst" "PKW"',
+        'site:markt.de/stellengesuche "auÃŸendienst" "PKW"',
         'site:markt.de/stellengesuche "handelsvertreter"',
         'site:markt.de "suche arbeit" "vertrieb" "NRW"',
         
@@ -2787,48 +2787,48 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         
         # Kalaydo (Regional NRW)
         'site:kalaydo.de/stellengesuche "vertrieb"',
-        'site:kalaydo.de "suche stelle" "außendienst"',
+        'site:kalaydo.de "suche stelle" "auÃŸendienst"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 2: BUSINESS NETZWERKE (Xing, LinkedIn)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Xing - Offene Kandidaten
-        'site:xing.com/profile "offen für angebote" "vertrieb" "NRW"',
+        'site:xing.com/profile "offen fÃ¼r angebote" "vertrieb" "NRW"',
         'site:xing.com/profile "auf jobsuche" "sales"',
         'site:xing.com/profile "suche neue herausforderung" "key account"',
-        'site:xing.com/profile "verfügbar ab" "vertriebsleiter"',
-        'site:xing.com/profile "in ungekündigter stellung" "außendienst"',
+        'site:xing.com/profile "verfÃ¼gbar ab" "vertriebsleiter"',
+        'site:xing.com/profile "in ungekÃ¼ndigter stellung" "auÃŸendienst"',
         'site:xing.com/profile "wechselwillig" "sales manager"',
         'site:xing.com "freiberuflicher handelsvertreter" "sucht"',
-        'site:xing.com "sales" "open to work" "düsseldorf"',
-        'site:xing.com "vertrieb" "neue chancen" "köln"',
+        'site:xing.com "sales" "open to work" "dÃ¼sseldorf"',
+        'site:xing.com "vertrieb" "neue chancen" "kÃ¶ln"',
         'site:xing.com "b2b vertrieb" "suche" "NRW"',
         
         # LinkedIn - Open to Work
         'site:linkedin.com/in "open to work" "sales" "germany"',
-        'site:linkedin.com/in "offen für" "vertrieb" "NRW"',
-        'site:linkedin.com/in "looking for" "sales" "düsseldorf"',
-        'site:linkedin.com/in "seeking" "business development" "köln"',
+        'site:linkedin.com/in "offen fÃ¼r" "vertrieb" "NRW"',
+        'site:linkedin.com/in "looking for" "sales" "dÃ¼sseldorf"',
+        'site:linkedin.com/in "seeking" "business development" "kÃ¶ln"',
         'site:linkedin.com/in "available" "account manager" "essen"',
         'site:linkedin.com/in "#opentowork" "vertrieb"',
         'site:linkedin.com "actively looking" "sales representative" "germany"',
         'site:linkedin.com "job seeker" "key account" "NRW"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 3: SOCIAL MEDIA (Facebook, Instagram, TikTok)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Facebook - Job Suche Posts
         'site:facebook.com "suche neue herausforderung" "vertrieb"',
         'site:facebook.com "suche arbeit" "sales" "NRW"',
         'site:facebook.com "wer kennt wen" "vertriebsjob"',
         'site:facebook.com "bin auf jobsuche" "verkauf"',
-        'site:facebook.com "suche stelle" "außendienst" "erfahrung"',
+        'site:facebook.com "suche stelle" "auÃŸendienst" "erfahrung"',
         'site:facebook.com/groups "vertriebler" "jobsuche"',
         'site:facebook.com/groups "sales jobs" "deutschland"',
-        'site:facebook.com "freelancer" "vertrieb" "verfügbar"',
-        'site:facebook.com "gekündigt" "vertrieb" "suche"',
+        'site:facebook.com "freelancer" "vertrieb" "verfÃ¼gbar"',
+        'site:facebook.com "gekÃ¼ndigt" "vertrieb" "suche"',
         
         # Instagram - Job Seeker Bios
         'site:instagram.com "open for work" "sales"',
@@ -2843,11 +2843,11 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:tiktok.com "suche arbeit" "sales"',
         'site:tiktok.com "arbeitslos" "vertriebler"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 4: MESSENGER GRUPPEN (Telegram, WhatsApp, Discord)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
-        # Telegram - Öffentliche Gruppen
+        # Telegram - Ã–ffentliche Gruppen
         'site:t.me "vertrieb" "jobs" "gruppe"',
         'site:t.me "sales jobs" "germany"',
         'site:t.me "jobsuche" "NRW"',
@@ -2856,20 +2856,20 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:t.me/joinchat "vertrieb"',
         'site:t.me/joinchat "sales" "jobs"',
         # NEU: Erweiterte Telegram Gruppen NRW
-        'site:t.me "vertrieb" "NRW" OR "düsseldorf" OR "köln"',
+        'site:t.me "vertrieb" "NRW" OR "dÃ¼sseldorf" OR "kÃ¶ln"',
         'site:t.me "sales jobs" "deutschland" "nrw"',
         'site:t.me "handelsvertreter" "gruppe"',
         '"telegram gruppe" "vertrieb" "NRW"',
         
-        # WhatsApp - Öffentliche Einladungslinks
+        # WhatsApp - Ã–ffentliche Einladungslinks
         'site:chat.whatsapp.com "vertrieb" "jobs"',
         'site:chat.whatsapp.com "sales" "netzwerk"',
         'site:chat.whatsapp.com "vertriebler" "gruppe"',
         'site:chat.whatsapp.com "jobsuche" "NRW"',
         # NEU: Erweiterte WhatsApp Gruppen
         'site:chat.whatsapp.com "vertrieb" "nrw"',
-        'site:chat.whatsapp.com "sales" "düsseldorf"',
-        '"whatsapp gruppe" "vertriebler" "köln"',
+        'site:chat.whatsapp.com "sales" "dÃ¼sseldorf"',
+        '"whatsapp gruppe" "vertriebler" "kÃ¶ln"',
         
         # Discord - Karriere Server
         'site:discord.gg "vertrieb" "jobs"',
@@ -2879,53 +2879,53 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:discord.gg "vertrieb" "deutschland"',
         'site:discord.com/invite "sales" "karriere"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 5: FOREN & COMMUNITIES
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Reddit - Deutsche Karriere-Subreddits
         'site:reddit.com/r/arbeitsleben "vertrieb" "neuer job"',
-        'site:reddit.com/r/arbeitsleben "sales" "kündigung"',
-        'site:reddit.com/r/arbeitsleben "außendienst" "wechsel"',
+        'site:reddit.com/r/arbeitsleben "sales" "kÃ¼ndigung"',
+        'site:reddit.com/r/arbeitsleben "auÃŸendienst" "wechsel"',
         'site:reddit.com/r/de_EDV "vertrieb" "jobsuche"',
         'site:reddit.com/r/FragReddit "vertriebsjob" "erfahrung"',
         'site:reddit.com/r/Finanzen "vertrieb" "gehalt" "wechsel"',
-        'site:reddit.com "gekündigt" "sales" "was tun"',
+        'site:reddit.com "gekÃ¼ndigt" "sales" "was tun"',
         'site:reddit.com "arbeitslos" "vertrieb" "bewerbung"',
         
         # Gutefrage.net
         'site:gutefrage.net "vertrieb" "stelle suchen"',
         'site:gutefrage.net "sales job" "erfahrung"',
-        'site:gutefrage.net "außendienst" "bewerbung"',
+        'site:gutefrage.net "auÃŸendienst" "bewerbung"',
         'site:gutefrage.net "handelsvertreter werden"',
         
         # Wer-weiss-was.de
         'site:wer-weiss-was.de "vertriebsjob" "suche"',
         'site:wer-weiss-was.de "sales karriere"',
         
-        # Motor-Talk (Autoverkäufer)
-        'site:motor-talk.de "autoverkäufer" "suche stelle"',
+        # Motor-Talk (AutoverkÃ¤ufer)
+        'site:motor-talk.de "autoverkÃ¤ufer" "suche stelle"',
         'site:motor-talk.de "verkaufsberater" "wechsel"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 6: FREELANCER PORTALE
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Freelancer Profile
-        'site:freelancermap.de "vertrieb" "verfügbar"',
+        'site:freelancermap.de "vertrieb" "verfÃ¼gbar"',
         'site:freelancermap.de "sales" "freiberufler"',
         'site:freelance.de "vertriebsexperte" "profil"',
-        'site:freelance.de "handelsvertreter" "selbstständig"',
-        'site:gulp.de "sales" "verfügbar"',
+        'site:freelance.de "handelsvertreter" "selbststÃ¤ndig"',
+        'site:gulp.de "sales" "verfÃ¼gbar"',
         'site:gulp.de "vertrieb" "freiberuflich"',
         
         # Fiverr/Upwork (Vertriebs-Freelancer)
         'site:fiverr.com "sales" "germany" "b2b"',
         'site:upwork.com "sales representative" "german"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 7: LEBENSLAUF-DATENBANKEN & JOBPORTALE
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Lebenslauf-Portale (wo Kandidaten sich eintragen)
         'site:lebenslaufmuster.de "vertrieb" "berufserfahrung"',
@@ -2941,23 +2941,23 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:indeed.com/r "vertrieb" "NRW"',
         'site:indeed.com "lebenslauf" "sales"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 8: BRANCHEN-SPEZIFISCHE KANDIDATEN
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # D2D / Door-to-Door Vertriebler
         'site:kleinanzeigen.de "d2d" "suche" "erfahrung"',
         '"door to door" "vertriebler" "sucht" "mobil"',
-        '"haustürgeschäft" "erfahrung" "suche arbeit"',
-        # NEU: Erweiterte D2D/Haustür NRW
-        'site:kleinanzeigen.de/s-stellengesuche "haustür" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "außendienst" "erfahrung" "NRW"',
+        '"haustÃ¼rgeschÃ¤ft" "erfahrung" "suche arbeit"',
+        # NEU: Erweiterte D2D/HaustÃ¼r NRW
+        'site:kleinanzeigen.de/s-stellengesuche "haustÃ¼r" "NRW"',
+        'site:kleinanzeigen.de/s-stellengesuche "auÃŸendienst" "erfahrung" "NRW"',
         
         # Call Center / Telesales
         '"call center agent" "suche" "homeoffice" "NRW"',
         '"telesales" "erfahrung" "suche stelle"',
-        '"telefonvertrieb" "freiberuflich" "verfügbar"',
-        'site:kleinanzeigen.de "telefonverkäufer" "suche"',
+        '"telefonvertrieb" "freiberuflich" "verfÃ¼gbar"',
+        'site:kleinanzeigen.de "telefonverkÃ¤ufer" "suche"',
         
         # Energie / Solar Vertriebler
         '"solarvertrieb" "suche" "erfahrung" "NRW"',
@@ -2965,8 +2965,8 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"photovoltaik" "vertrieb" "suche stelle"',
         # NEU: Erweiterte Solar/Energie NRW
         'site:kleinanzeigen.de/s-stellengesuche "solar" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "photovoltaik" "köln"',
-        'site:kleinanzeigen.de/s-stellengesuche "energie" "düsseldorf"',
+        'site:kleinanzeigen.de/s-stellengesuche "photovoltaik" "kÃ¶ln"',
+        'site:kleinanzeigen.de/s-stellengesuche "energie" "dÃ¼sseldorf"',
         
         # Versicherung / Finanz
         '"versicherungsvertreter" "suche" "neue"',
@@ -2974,7 +2974,7 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"makler" "sucht" "neue herausforderung"',
         # NEU: Erweiterte Versicherung NRW
         'site:kleinanzeigen.de/s-stellengesuche "versicherung" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "finanzberater" "köln"',
+        'site:kleinanzeigen.de/s-stellengesuche "finanzberater" "kÃ¶ln"',
         
         # Telekommunikation
         '"telekom vertrieb" "suche" "erfahrung"',
@@ -2982,11 +2982,11 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"provider" "vertrieb" "wechsel"',
         # NEU: Erweiterte Telekom NRW
         'site:kleinanzeigen.de/s-stellengesuche "telekom" "NRW"',
-        'site:kleinanzeigen.de/s-stellengesuche "mobilfunk" "düsseldorf"',
+        'site:kleinanzeigen.de/s-stellengesuche "mobilfunk" "dÃ¼sseldorf"',
         
         # Medizin / Pharma
         '"pharmareferent" "sucht" "neue"',
-        '"medizinprodukteberater" "verfügbar"',
+        '"medizinprodukteberater" "verfÃ¼gbar"',
         '"healthcare sales" "germany" "open"',
         
         # IT / Software
@@ -2994,39 +2994,39 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"it vertrieb" "suche stelle" "NRW"',
         '"saas" "account executive" "open to"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 9: REGIONALE NRW-SUCHE
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
-        # Düsseldorf
-        '"vertrieb" "suche" "düsseldorf" "mobil"',
-        '"sales" "jobsuche" "düsseldorf" "kontakt"',
-        'site:xing.com "vertrieb" "düsseldorf" "offen für"',
+        # DÃ¼sseldorf
+        '"vertrieb" "suche" "dÃ¼sseldorf" "mobil"',
+        '"sales" "jobsuche" "dÃ¼sseldorf" "kontakt"',
+        'site:xing.com "vertrieb" "dÃ¼sseldorf" "offen fÃ¼r"',
         
-        # Köln
-        '"vertrieb" "suche" "köln" "erfahrung"',
-        '"außendienst" "köln" "suche stelle"',
-        'site:linkedin.com "sales" "köln" "open"',
+        # KÃ¶ln
+        '"vertrieb" "suche" "kÃ¶ln" "erfahrung"',
+        '"auÃŸendienst" "kÃ¶ln" "suche stelle"',
+        'site:linkedin.com "sales" "kÃ¶ln" "open"',
         
         # Essen/Ruhrgebiet
         '"vertrieb" "essen" "suche" "mobil"',
         '"sales" "ruhrgebiet" "jobsuche"',
         '"dortmund" "vertrieb" "suche stelle"',
         
-        # Weitere NRW Städte
+        # Weitere NRW StÃ¤dte
         '"vertrieb" "wuppertal" "suche"',
         '"sales" "bonn" "suche stelle"',
-        '"außendienst" "münster" "suche"',
+        '"auÃŸendienst" "mÃ¼nster" "suche"',
         '"vertrieb" "bielefeld" "jobsuche"',
         '"verkauf" "aachen" "suche stelle"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 10: KARRIERE-EVENTS & NETZWERKE
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Karrieremessen Teilnehmer
         '"jobmesse" "NRW" "vertrieb" "besucher"',
-        '"karrieretag" "düsseldorf" "sales"',
+        '"karrieretag" "dÃ¼sseldorf" "sales"',
         '"connecticum" "vertrieb" "teilnehmer"',
         
         # Vertriebler-Netzwerke
@@ -3040,38 +3040,38 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
     ],
     
     "talent_hunt": [
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 1: LINKEDIN PROFILES (OHNE #opentowork - aktive Vertriebler!)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # LinkedIn Profile - Aktive Account Manager
         'site:linkedin.com/in "Account Manager" "NRW" -"#opentowork"',
-        'site:linkedin.com/in "Sales Manager" ("Düsseldorf" OR "Köln" OR "Dortmund") -"#opentowork"',
+        'site:linkedin.com/in "Sales Manager" ("DÃ¼sseldorf" OR "KÃ¶ln" OR "Dortmund") -"#opentowork"',
         'site:linkedin.com/in "Vertriebsleiter" "Nordrhein-Westfalen" -"open to work"',
         'site:linkedin.com/in "Key Account" "NRW" "Jahre Erfahrung" -"#opentowork"',
-        'site:linkedin.com/in "Außendienst" ("NRW" OR "Ruhrgebiet") -"open to work"',
+        'site:linkedin.com/in "AuÃŸendienst" ("NRW" OR "Ruhrgebiet") -"open to work"',
         'site:linkedin.com/in "Business Development" "NRW" -"#opentowork"',
         'site:linkedin.com/in "Senior Sales" "Deutschland" -"#opentowork"',
-        'site:linkedin.com/in "Vertriebsmitarbeiter" "Köln" -"open to work"',
+        'site:linkedin.com/in "Vertriebsmitarbeiter" "KÃ¶ln" -"open to work"',
         'site:linkedin.com/in "Regional Sales" "NRW" -"#opentowork"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 2: XING PROFILE (Aktive Vertriebler)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Xing Profile - Etablierte Vertriebler
         'site:xing.com/profile "Vertriebsmitarbeiter" "NRW"',
         'site:xing.com/profile "Handelsvertreter" "Nordrhein-Westfalen"',
         'site:xing.com/profile "Sales Representative" "Deutschland"',
-        'site:xing.com/profile "Außendienstmitarbeiter" kontakt',
-        'site:xing.com/profile "Account Manager" "Düsseldorf"',
-        'site:xing.com/profile "Key Account" "Köln" "Berufserfahrung"',
+        'site:xing.com/profile "AuÃŸendienstmitarbeiter" kontakt',
+        'site:xing.com/profile "Account Manager" "DÃ¼sseldorf"',
+        'site:xing.com/profile "Key Account" "KÃ¶ln" "Berufserfahrung"',
         'site:xing.com/profile "Vertriebsleiter" "Dortmund"',
         'site:xing.com/profile "Sales Director" "NRW"',
         
-        # ══════════════════════════════════════════════════════════════
-        # KATEGORIE 3: HANDELSVERTRETER-REGISTER & VERBÄNDE
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # KATEGORIE 3: HANDELSVERTRETER-REGISTER & VERBÃ„NDE
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Offizielle Register
         'site:cdh.de "Handelsvertreter" "NRW" kontakt',
@@ -3081,47 +3081,47 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:bdvi.de "Mitglied" "NRW" kontakt',
         '"Verband deutscher Handelsvertreter" NRW',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 4: FIRMEN-TEAM-SEITEN (Dort sind Vertriebler gelistet!)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Team-Seiten mit Vertriebs-Kontakten
         'intitle:"Unser Team" "Vertrieb" "NRW" kontakt',
-        'intitle:"Team" "Sales" ("Düsseldorf" OR "Köln") telefon',
+        'intitle:"Team" "Sales" ("DÃ¼sseldorf" OR "KÃ¶ln") telefon',
         '"Ansprechpartner Vertrieb" telefon NRW',
-        '"Ihr Ansprechpartner" "Außendienst" kontakt',
+        '"Ihr Ansprechpartner" "AuÃŸendienst" kontakt',
         'inurl:team "Vertriebsleiter" telefon',
         'inurl:mitarbeiter "Account Manager" email',
         'intitle:"Unser Team" "Key Account" kontakt',
         '"Team Vertrieb" telefon NRW',
         'inurl:about "Sales Team" kontakt',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 5: FREELANCER-PORTALE (Aktive Vertriebler)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Freiberufler-Profile
-        'site:freelancermap.de "Vertrieb" "verfügbar" kontakt',
+        'site:freelancermap.de "Vertrieb" "verfÃ¼gbar" kontakt',
         'site:gulp.de "Sales" "freiberuflich" telefon',
         'site:twago.de "Vertriebsprofi" kontakt',
-        'site:freelance.de "Handelsvertreter" "selbstständig"',
-        'site:freelancermap.de "Business Development" "verfügbar"',
+        'site:freelance.de "Handelsvertreter" "selbststÃ¤ndig"',
+        'site:freelancermap.de "Business Development" "verfÃ¼gbar"',
         'site:gulp.de "Account Manager" "freiberuflich"',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 6: LEBENSLAUF-DATENBANKEN (Sichtbare Profile)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
-        # PDF Lebensläufe mit Kontaktdaten
+        # PDF LebenslÃ¤ufe mit Kontaktdaten
         'filetype:pdf "Lebenslauf" "Vertriebserfahrung" "NRW"',
-        'filetype:pdf "CV" "Sales Manager" "Düsseldorf"',
-        'filetype:pdf "Außendienst" "Berufserfahrung" kontakt',
+        'filetype:pdf "CV" "Sales Manager" "DÃ¼sseldorf"',
+        'filetype:pdf "AuÃŸendienst" "Berufserfahrung" kontakt',
         'filetype:pdf "Vertrieb" "Key Account" telefon NRW',
         'filetype:pdf "Sales Representative" "Germany" email',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 7: BRANCHENSPEZIFISCHE VERTRIEBLER
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Solar/Energie Vertriebler
         'site:linkedin.com/in "Solar" "Vertrieb" "NRW" -"#opentowork"',
@@ -3130,9 +3130,9 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:linkedin.com/in "Erneuerbare Energien" "Sales" "Deutschland" -"#opentowork"',
         
         # Versicherung Vertriebler
-        'site:linkedin.com/in "Versicherung" "Außendienst" "NRW" -"#opentowork"',
+        'site:linkedin.com/in "Versicherung" "AuÃŸendienst" "NRW" -"#opentowork"',
         'site:xing.com/profile "Versicherungsvertrieb" kontakt',
-        '"Versicherungsmakler" "selbstständig" kontakt NRW',
+        '"Versicherungsmakler" "selbststÃ¤ndig" kontakt NRW',
         
         # Telekommunikation Vertriebler
         'site:linkedin.com/in "Telekommunikation" "Sales" "NRW" -"#opentowork"',
@@ -3141,21 +3141,21 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         
         # Automotive Vertriebler
         'site:linkedin.com/in "Automotive" "Sales" "NRW" -"#opentowork"',
-        'site:xing.com/profile "Autoverkäufer" kontakt',
+        'site:xing.com/profile "AutoverkÃ¤ufer" kontakt',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 8: MESSE-/EVENT-TEILNEHMER (Vertriebler gehen zu Messen!)
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Messe-Ansprechpartner
         '"Messestand" "Vertrieb" "Ansprechpartner" NRW',
         'site:xing.com/events "Vertrieb" "NRW" teilnehmer',
-        '"Messe Düsseldorf" "Sales" "Kontakt"',
+        '"Messe DÃ¼sseldorf" "Sales" "Kontakt"',
         '"IHK Veranstaltung" "Vertrieb" telefon',
         
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         # KATEGORIE 9: UNTERNEHMENSWEBSEITEN - KONTAKTSEITEN
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
         # Kontakt-Seiten mit Vertriebs-Ansprechpartnern
         'inurl:kontakt "Vertrieb" telefon NRW',
@@ -3163,19 +3163,19 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"Vertriebsleitung" kontakt telefon',
         '"Sales Manager" "direkt erreichen" telefon',
         
-        # ══════════════════════════════════════════════════════════════
-        # KATEGORIE 10: GESCHÄFTSFÜHRER MIT VERTRIEBSHINTERGRUND
-        # ══════════════════════════════════════════════════════════════
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        # KATEGORIE 10: GESCHÃ„FTSFÃœHRER MIT VERTRIEBSHINTERGRUND
+        # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         
-        # Geschäftsführer/Inhaber mit Sales-Background
-        'site:linkedin.com/in "Geschäftsführer" "ehemals Vertrieb" "NRW" -"#opentowork"',
+        # GeschÃ¤ftsfÃ¼hrer/Inhaber mit Sales-Background
+        'site:linkedin.com/in "GeschÃ¤ftsfÃ¼hrer" "ehemals Vertrieb" "NRW" -"#opentowork"',
         'site:xing.com/profile "Inhaber" "Handelsvertreter" kontakt',
-        '"Selbstständiger Vertriebsprofi" kontakt NRW',
+        '"SelbststÃ¤ndiger Vertriebsprofi" kontakt NRW',
     ],
 }
 
 
-# Fallback für "alle" Branchen – Reihenfolge
+# Fallback fÃ¼r "alle" Branchen â€“ Reihenfolge
 INDUSTRY_ORDER = ["handelsvertreter","nrw","social","solar","telekom","versicherung","bau","ecom","household","d2d","callcenter"]
 
 def build_queries(
@@ -3223,11 +3223,11 @@ def is_denied(url: str) -> bool:
             "twago.de",
         ]
         
-        # Prüfe URL-Patterns (using compiled regex for efficiency)
+        # PrÃ¼fe URL-Patterns (using compiled regex for efficiency)
         if _TALENT_HUNT_PATTERN_REGEX.search(url_lower):
             return False  # Nicht blockieren!
         
-        # Prüfe spezielle Hosts für talent_hunt
+        # PrÃ¼fe spezielle Hosts fÃ¼r talent_hunt
         for allowed_host in talent_hunt_allowed_hosts:
             if host == allowed_host or host.endswith("." + allowed_host):
                 return False  # Nicht blockieren!
@@ -3247,7 +3247,7 @@ def is_denied(url: str) -> bool:
     if host in {"ruhr-uni-bochum.de"}:
         return True
 
-    # NEU: NRW-Rauschen — IHK/HWK/Bildung (aber nur wenn NICHT talent_hunt)
+    # NEU: NRW-Rauschen â€” IHK/HWK/Bildung (aber nur wenn NICHT talent_hunt)
     if not _is_talent_hunt_mode():
         if host.endswith(".ihk.de") or host.startswith(("ihk-", "hwk-")):
             return True
@@ -3293,7 +3293,7 @@ def _normalize_for_dedupe(u: str) -> str:
     try:
         pu = urllib.parse.urlparse(u)
 
-        # Query normalisieren – Tracking & Paginierung raus
+        # Query normalisieren â€“ Tracking & Paginierung raus
         q = urllib.parse.parse_qsl(pu.query, keep_blank_values=False)
         q = [
             (k, v) for (k, v) in q
@@ -3331,20 +3331,20 @@ import re, urllib.parse
 
 def prioritize_urls(urls: List[str]) -> List[str]:
     """
-    Priorisiert typische Kontaktseiten deutlich höher als Karriere/Jobs/Datenschutz.
+    Priorisiert typische Kontaktseiten deutlich hÃ¶her als Karriere/Jobs/Datenschutz.
     - Additives Scoring (nicht nur erstes Pattern)
     - Starke Upvotes: /kontakt, /impressum
     - Downvotes: /karriere, /jobs, /stellen, /datenschutz, /privacy, /agb
-    - Leichte Bevorzugung kurzer/oberflächlicher Pfade; Abwertung bei Paginierung/Fragmenten
+    - Leichte Bevorzugung kurzer/oberflÃ¤chlicher Pfade; Abwertung bei Paginierung/Fragmenten
     """
-    # --- POSITIVE & NEGATIVE Schlüsselwörter ---
+    # --- POSITIVE & NEGATIVE SchlÃ¼sselwÃ¶rter ---
     # Hinweis: additive Bewertung; ein Pfad kann mehrere Treffer bekommen.
     PRIORITY_PATTERNS = [
         (r'/kontakt(?:/|$)',                    +40),
         (r'/kontaktformular(?:/|$)',            +32),
         (r'/impressum(?:/|$)',                  +35),
         (r'/team(?:/|$)',                       +12),
-        (r'/ueber-uns|/über-uns|/unternehmen',  +10),
+        (r'/ueber-uns|/Ã¼ber-uns|/unternehmen',  +10),
         # NEU: Jobseeker-Signale boosten
         (r'/karriere(?:/|$)',                   +18),
         (r'/jobs?(?:/|$)',                      +18),
@@ -3376,17 +3376,17 @@ def prioritize_urls(urls: List[str]) -> List[str]:
             if re.search(pat, low, re.I):
                 s += pts
 
-        # Query-Hints (selten, aber wenn vorhanden → leicht positiv)
+        # Query-Hints (selten, aber wenn vorhanden â†’ leicht positiv)
         if re.search(r'(\?|#).*(kontakt|impressum)', low, re.I):
             s += 12
 
-        # Pfad-Länge / -Tiefe: kurze, flache Pfade bevorzugen
+        # Pfad-LÃ¤nge / -Tiefe: kurze, flache Pfade bevorzugen
         depth = max(0, path.count('/') - 1)
-        s += max(0, 20 - len(path))           # kürzerer Pfad = besser
+        s += max(0, 20 - len(path))           # kÃ¼rzerer Pfad = besser
         s += max(0, 10 - 5*depth)             # weniger Unterverzeichnisse = besser
 
         # Rauschfilter / Paginierung / Fragmente
-        if len(u) > 220:                      # sehr lange URLs wirken oft „Rauschen“
+        if len(u) > 220:                      # sehr lange URLs wirken oft â€žRauschenâ€œ
             s -= 40
         if re.search(r'(\?|&)page=\d{1,3}\b', low):
             s -= 25
@@ -3452,7 +3452,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
 
     def _preview(txt: Optional[str]) -> str:
         if not txt: return ""
-        # HTML-Tags & übermäßige Whitespaces entfernen, dann hart bei 200 cutten
+        # HTML-Tags & Ã¼bermÃ¤ÃŸige Whitespaces entfernen, dann hart bei 200 cutten
         txt = re.sub(r"<[^>]+>", " ", txt)
         txt = re.sub(r"\s+", " ", txt).strip()
         return txt[:200]
@@ -3490,7 +3490,7 @@ async def google_cse_search_async(q: str, max_results: int = 60, date_restrict: 
 
         if r.status_code == 429:
             had_429 = True
-            log("warn","Google 429 – skip this query without retry")
+            log("warn","Google 429 â€“ skip this query without retry")
             return [], had_429
 
         if r.status_code != 200:
@@ -3584,7 +3584,7 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
                 os.environ["NO_PROXY"] = "*"
                 log("debug", "DuckDuckGo: Direct connection configured (no_proxy='*', all proxies cleared)")
             
-            # Initialize DDGS (Kurzes Timeout für "Fail Fast")
+            # Initialize DDGS (Kurzes Timeout fÃ¼r "Fail Fast")
             with DDGS(timeout=10) as ddgs:
                 gen = ddgs.text(
                     query,
@@ -3621,13 +3621,13 @@ async def duckduckgo_search_async(query: str, max_results: int = 10, date_restri
         except Exception as e:
             err_msg = str(e)
             if "ConnectTimeout" in err_msg or "WinError 10060" in err_msg:
-                log("warn", "DuckDuckGo: Netzwerkproblem, überspringe", q=query)
+                log("warn", "DuckDuckGo: Netzwerkproblem, Ã¼berspringe", q=query)
                 return []
             if attempt < 2:  # Only 1 retry allowed
                 log("warn", f"DuckDuckGo Retry {attempt}/2 wegen Fehler", error=err_msg, q=query)
                 await asyncio.sleep(3)
             else:
-                log("warn", "DuckDuckGo endgültig gescheitert nach 1 Retry", error=err_msg, q=query)
+                log("warn", "DuckDuckGo endgÃ¼ltig gescheitert nach 1 Retry", error=err_msg, q=query)
                 # Log query as weak after failure - metrics system tracks this
                 log("debug", "DuckDuckGo: Query weak (failed)", q=query)
 
@@ -3932,7 +3932,7 @@ async def crawl_kalaydo_listings_async() -> List[Dict]:
 async def crawl_meinestadt_listings_async() -> List[Dict]:
     """
     Crawlt meinestadt.de Stellengesuche-Seiten.
-    Städte-basiert, gut für lokale Kandidaten.
+    StÃ¤dte-basiert, gut fÃ¼r lokale Kandidaten.
     
     Wrapper function that calls the modular crawler implementation.
     
@@ -3955,8 +3955,8 @@ async def crawl_meinestadt_listings_async() -> List[Dict]:
 async def crawl_dhd24_listings_async() -> List[Dict]:
     """
     Crawlt DHD24.com Stellengesuche-Seiten.
-    Neues Kleinanzeigen-Portal mit öffentlichen Kontaktdaten.
-    Ähnliche Struktur wie andere Kleinanzeigen-Portale.
+    Neues Kleinanzeigen-Portal mit Ã¶ffentlichen Kontaktdaten.
+    Ã„hnliche Struktur wie andere Kleinanzeigen-Portale.
     
     Returns:
         Liste von Lead-Dicts
@@ -4072,8 +4072,8 @@ async def extract_generic_detail_async(url: str, source_tag: str = "direct_crawl
 
 async def crawl_freelancer_portals_async() -> List[Dict]:
     """
-    Crawlt Freelancer-Portale für NRW Vertriebs-Profile.
-    Extrahiert: Name, Telefon, Skills, Verfügbarkeit.
+    Crawlt Freelancer-Portale fÃ¼r NRW Vertriebs-Profile.
+    Extrahiert: Name, Telefon, Skills, VerfÃ¼gbarkeit.
     
     Returns:
         Liste von Lead-Dicts
@@ -4176,7 +4176,7 @@ async def extract_freelancer_profile_async(profile_url: str, source_tag: str = "
     
     Args:
         profile_url: URL zum Freelancer-Profil
-        source_tag: Tag für die Quelle (z.B. "freelancermap", "freelance_de")
+        source_tag: Tag fÃ¼r die Quelle (z.B. "freelancermap", "freelance_de")
     
     Returns:
         Lead-Dict oder None
@@ -4280,7 +4280,7 @@ async def extract_freelancer_profile_async(profile_url: str, source_tag: str = "
             "frische": "neu",
             "confidence": 0.85,
             "data_quality": 0.80,
-            "opening_line": f"Verfügbarkeit: {availability}" if availability else "",
+            "opening_line": f"VerfÃ¼gbarkeit: {availability}" if availability else "",
         }
         
         return lead
@@ -4294,8 +4294,8 @@ async def crawl_freelancermap_async() -> List[Dict]:
     """
     Crawlt Freelancermap.de Profile.
     Profile haben oft:
-    - Öffentliche Telefonnummer
-    - Verfügbarkeit
+    - Ã–ffentliche Telefonnummer
+    - VerfÃ¼gbarkeit
     - Stundensatz
     - Skills
     """
@@ -4352,7 +4352,7 @@ async def crawl_freelancermap_async() -> List[Dict]:
 async def crawl_freelance_de_async() -> List[Dict]:
     """
     Crawlt Freelance.de Profile.
-    Profile haben oft öffentliche Kontaktdaten.
+    Profile haben oft Ã¶ffentliche Kontaktdaten.
     """
     if not DIRECT_CRAWL_SOURCES.get("freelance_de", False):
         return []
@@ -4413,24 +4413,24 @@ PHONE_RE   = re.compile(r'(?:\+49|0049|0)\s?(?:\(?\d{2,5}\)?[\s\/\-]?)?\d(?:[\s\
 MOBILE_RE  = re.compile(r'(?:\+49|0049|0)\s*1[5-7]\d(?:[\s\/\-]?\d){6,10}')
 SALES_RE   = re.compile(r'\b(vertrieb|vertriebs|sales|account\s*manager|key\s*account|business\s*development|aussendienst|aussendienst|handelsvertreter|telesales|call\s*center|outbound|haust?r|d2d)\b', re.I)
 PROVISION_HINT = re.compile(r'\b(Provisionsbasis|nur\s*Provision|hohe\s*Provision(en)?|Leistungsprovision)\b', re.I)
-D2D_HINT       = re.compile(r'\b(Door[-\s]?to[-\s]?door|Haustür|Kaltakquise|D2D)\b', re.I)
+D2D_HINT       = re.compile(r'\b(Door[-\s]?to[-\s]?door|HaustÃ¼r|Kaltakquise|D2D)\b', re.I)
 CALLCENTER_HINT= re.compile(r'\b(Call\s*Center|Telesales|Outbound|Inhouse-?Sales)\b', re.I)
 B2C_HINT       = re.compile(
     r'\b(?:B2C|Privatkunden|Haushalte|Endkunden|Privatperson(?:en)?|'
     r'verschuld\w*|schuldenhilfe|schuldnerberatung|schuldner|'
-    r'inkasso(?:[-\s]?f(?:ä|ae)lle?)?)\b',
+    r'inkasso(?:[-\s]?f(?:Ã¤|ae)lle?)?)\b',
     re.I,
 )
-JOBSEEKER_RE  = re.compile(r'\b(jobsuche|stellensuche|arbeitslos|lebenslauf|bewerb(ung)?|cv|portfolio|offen\s*f(?:ür|uer)\s*neues)\b', re.I)
+JOBSEEKER_RE  = re.compile(r'\b(jobsuche|stellensuche|arbeitslos|lebenslauf|bewerb(ung)?|cv|portfolio|offen\s*f(?:Ã¼r|uer)\s*neues)\b', re.I)
 CANDIDATE_TEXT_RE = re.compile(r'(?is)\b(ich\s+suche|suche\s+job|biete\s+mich|arbeitslos|stellengesuch|open\s+to\s+work)\b')
 EMPLOYER_TEXT_RE  = re.compile(r'(?is)\b(wir\s+suchen|wir\s+stellen\s+ein|deine\s+aufgaben|unser\s+angebot|jetzt\s+bewerben)\b')
 RECRUITER_RE  = re.compile(r'\b(recruit(er|ing)?|hr|human\s*resources|personalvermittlung|headhunter|wir\s*suchen|join\s*our\s*team)\b', re.I)
 
 # Spezifische Handelsvertreter-Fingerprint-Phrasen
 AGENT_FINGERPRINTS = (
-    "selbstständiger handelsvertreter", "handelsvertretung cdh", "cdh-mitglied",
-    "gemäß § 84 hgb", "gemäß §84 hgb", "industrievertretung",
-    "vertriebsbüro inhaber", "auf provisionsbasis", "vertretung für plz",
+    "selbststÃ¤ndiger handelsvertreter", "handelsvertretung cdh", "cdh-mitglied",
+    "gemÃ¤ÃŸ Â§ 84 hgb", "gemÃ¤ÃŸ Â§84 hgb", "industrievertretung",
+    "vertriebsbÃ¼ro inhaber", "auf provisionsbasis", "vertretung fÃ¼r plz",
     "freie handelsvertretung", "vertriebsagentur", "gebiete: plz",
     "mitglied im handelsvertreterverband", "iucab", "handelsregister a",
     "einzelkaufmann", "e.k."
@@ -4445,19 +4445,19 @@ WHATSAPP_PHRASE_RE = re.compile(
 )
 TELEGRAM_LINK_RE = re.compile(r'(?:https?://)?(?:t\.me|telegram\.me)/[A-Za-z0-9_/-]+', re.I)
 
-CITY_RE        = re.compile(r'\b(NRW|Nordrhein[-\s]?Westfalen|Düsseldorf|Köln|Essen|Dortmund|Mönchengladbach|Bochum|Wuppertal|Bonn)\b', re.I)
-NAME_RE        = re.compile(r'\b([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß\-]+){0,2})\b')
-# --- Kontext-Fenster für Heuristiken (Sales/Jobseeker) ---
+CITY_RE        = re.compile(r'\b(NRW|Nordrhein[-\s]?Westfalen|DÃ¼sseldorf|KÃ¶ln|Essen|Dortmund|MÃ¶nchengladbach|Bochum|Wuppertal|Bonn)\b', re.I)
+NAME_RE        = re.compile(r'\b([A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ\-]+){0,2})\b')
+# --- Kontext-Fenster fÃ¼r Heuristiken (Sales/Jobseeker) ---
 # Sales-Fenster: erkennt Vertriebs-/Akquise-Kontext im Umfeld von Text
 SALES_WINDOW = re.compile(
-    r'(?is).{0,400}(vertrieb|verkauf|sales|akquise|außendienst|aussendienst|'
+    r'(?is).{0,400}(vertrieb|verkauf|sales|akquise|auÃŸendienst|aussendienst|'
     r'call\s*center|telefonverkauf|door\s*to\s*door|d2d|provision).{0,400}'
 )
 
 # Jobseeker-Fenster: erkennt Lebenslauf/Bewerbung/Jobsuche-Kontext
 JOBSEEKER_WINDOW = re.compile(
     r'(?is).{0,400}(jobsuche|stellensuche|arbeitslos|bewerb(?:ung)?|lebenslauf|'
-    r'cv|portfolio|offen\s*f(?:ür|uer)\s*neues|profil).{0,400}'
+    r'cv|portfolio|offen\s*f(?:Ã¼r|uer)\s*neues|profil).{0,400}'
 )
 
 CANDIDATE_KEYWORDS = [
@@ -4496,7 +4496,7 @@ STRICT_JOB_AD_MARKERS = [
     "teamleiter gesucht", "sales manager gesucht", "benefits", "corporate benefits",
 ]
 
-# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
+# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dÃ¼rfen NICHT als job_ad geblockt werden!)
 CANDIDATE_POSITIVE_SIGNALS = [
     "suche job",
     "suche arbeit",
@@ -4506,11 +4506,11 @@ CANDIDATE_POSITIVE_SIGNALS = [
     "ich suche",
     "stellengesuch",
     "auf jobsuche",
-    "offen für angebote",
-    "offen für neue",
+    "offen fÃ¼r angebote",
+    "offen fÃ¼r neue",
     "suche neue herausforderung",
     "suche neuen wirkungskreis",
-    "verfügbar ab",
+    "verfÃ¼gbar ab",
     "freigestellt",
     "open to work",
     "#opentowork",
@@ -4518,7 +4518,7 @@ CANDIDATE_POSITIVE_SIGNALS = [
     "seeking new",
     "jobsuchend",
     "arbeitslos",
-    "gekündigt",
+    "gekÃ¼ndigt",
     "wechselwillig",
     "bin auf der suche",
     "suche eine neue",
@@ -4534,9 +4534,9 @@ JOB_OFFER_SIGNALS = [
     "stellenangebot",
     "job zu vergeben",
     "mitarbeiter gesucht",
-    "verstärkung gesucht",
+    "verstÃ¤rkung gesucht",
     "team sucht",
-    "für unser team",
+    "fÃ¼r unser team",
 ]
 
 # Minimum number of job offer signals required to override a candidate signal
@@ -4552,13 +4552,13 @@ HIRING_INDICATORS = (
 
 SOLO_BIZ_INDICATORS = (
     # Original
-    "handelsvertretung", "handelsvertreter", "selbstständiger vertriebspartner",
-    "industrievertretung", "agentur für", "vertriebsbüro",
+    "handelsvertretung", "handelsvertreter", "selbststÃ¤ndiger vertriebspartner",
+    "industrievertretung", "agentur fÃ¼r", "vertriebsbÃ¼ro",
     # NEW from Research
-    "§ 84 hgb", "§84 hgb", "cdh-mitglied", "cdh mitglied",
-    "freie handelsvertretung", "vertriebsunternehmer", "eigenständige vertriebsunternehmung",
-    "handelsagentur", "vertriebsrepräsentanz", "gebietsvertretung",
-    "provisionsbasis", "courtage-vereinbarung", "übernehme vertretungen",
+    "Â§ 84 hgb", "Â§84 hgb", "cdh-mitglied", "cdh mitglied",
+    "freie handelsvertretung", "vertriebsunternehmer", "eigenstÃ¤ndige vertriebsunternehmung",
+    "handelsagentur", "vertriebsreprÃ¤sentanz", "gebietsvertretung",
+    "provisionsbasis", "courtage-vereinbarung", "Ã¼bernehme vertretungen",
     "inhaltlich verantwortlicher", "einzelunternehmen", "einzelkaufmann",
     "registriert bei handelsvertreter.de", "iucab"
 )
@@ -4576,7 +4576,7 @@ RETAIL_ROLES = [
 
 def deduplicate_parallel_leads(leads: List[Dict]) -> List[Dict]:
     """
-    Entfernt Duplikate die durch paralleles Crawling entstehen können.
+    Entfernt Duplikate die durch paralleles Crawling entstehen kÃ¶nnen.
     Priorisiert nach: Telefon > URL > Name+Region
     
     Args:
@@ -4618,13 +4618,13 @@ async def crawl_all_portals_parallel() -> List[Dict]:
     """
     Crawlt ALLE aktivierten Portale gleichzeitig statt sequentiell.
     
-    Vorher: Kleinanzeigen → Markt.de → Quoka → Kalaydo → Meinestadt (sequentiell)
-    Nachher: Alle 5 parallel, dann Ergebnisse zusammenführen
+    Vorher: Kleinanzeigen â†’ Markt.de â†’ Quoka â†’ Kalaydo â†’ Meinestadt (sequentiell)
+    Nachher: Alle 5 parallel, dann Ergebnisse zusammenfÃ¼hren
     
     Zeitersparnis: ~70% (von 20 Min auf 5-6 Min pro Run)
     
     Returns:
-        Zusammengeführte Liste aller Leads von allen Portalen
+        ZusammengefÃ¼hrte Liste aller Leads von allen Portalen
     """
     tasks = []
     portal_names = []
@@ -4658,16 +4658,16 @@ async def crawl_all_portals_parallel() -> List[Dict]:
         portal_names.append("DHD24")
     
     if not tasks:
-        log("info", "Keine Portale für paralleles Crawling aktiviert")
+        log("info", "Keine Portale fÃ¼r paralleles Crawling aktiviert")
         return []
     
     log("info", "Starte paralleles Portal-Crawling", portals=len(tasks))
     start_time = time.time()
     
-    # Alle Tasks gleichzeitig ausführen
+    # Alle Tasks gleichzeitig ausfÃ¼hren
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    # Ergebnisse zusammenführen und Fehler loggen
+    # Ergebnisse zusammenfÃ¼hren und Fehler loggen
     all_leads = []
     for i, result in enumerate(results):
         portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
@@ -4752,9 +4752,9 @@ async def crawl_portals_sequential() -> List[Dict]:
 
 async def crawl_portals_smart() -> List[Dict]:
     """
-    Wählt automatisch zwischen parallel und sequentiell.
+    WÃ¤hlt automatisch zwischen parallel und sequentiell.
     Bei Fehler im parallelen Modus: Fallback auf sequentiell.
-    Integriert Active Learning für Portal-Performance-Tracking.
+    Integriert Active Learning fÃ¼r Portal-Performance-Tracking.
     
     Returns:
         Liste aller Leads von allen Portalen
@@ -4792,7 +4792,7 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[Act
     Crawlt ALLE aktivierten Portale gleichzeitig mit Active Learning Integration.
     
     Returns:
-        Zusammengeführte Liste aller Leads von allen Portalen
+        ZusammengefÃ¼hrte Liste aller Leads von allen Portalen
     """
     tasks = []
     portal_names = []
@@ -4823,16 +4823,16 @@ async def crawl_all_portals_parallel_with_learning(learning_engine: Optional[Act
             portal_configs.append(portal_key)
     
     if not tasks:
-        log("info", "Keine Portale für paralleles Crawling aktiviert")
+        log("info", "Keine Portale fÃ¼r paralleles Crawling aktiviert")
         return []
     
     log("info", "Starte paralleles Portal-Crawling mit Learning", portals=len(tasks))
     start_time = time.time()
     
-    # Alle Tasks gleichzeitig ausführen
+    # Alle Tasks gleichzeitig ausfÃ¼hren
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    # Ergebnisse zusammenführen und Learning-Metriken erfassen
+    # Ergebnisse zusammenfÃ¼hren und Learning-Metriken erfassen
     all_leads = []
     for i, result in enumerate(results):
         portal_name = portal_names[i] if i < len(portal_names) else f"Portal {i}"
@@ -5071,8 +5071,8 @@ IGNORE_EXTENSIONS = (
 
 BAD_TITLE_KEYWORDS = (
     "jobs", "stellenangebote", "karriere", "career", "vacancies",
-    "wir suchen", "gesucht", "hiring", "jobbörse", "company",
-    "unternehmen", "über uns", "about us", "impressum", "kontakt",
+    "wir suchen", "gesucht", "hiring", "jobbÃ¶rse", "company",
+    "unternehmen", "Ã¼ber uns", "about us", "impressum", "kontakt",
     "datenschutz", "login", "register", "anmelden", "sign up",
     "ag", "gmbh", "k.g.", "limited", "inc.",
 )
@@ -5097,17 +5097,17 @@ DENY_DOMAINS.update({
 })
 
 
-NEGATIVE_HINT  = re.compile(r'\b(Behörde|Amt|Universität|Karriereportal|Blog|Ratgeber|Software|SaaS|Bank|Versicherung)\b', re.I)
+NEGATIVE_HINT  = re.compile(r'\b(BehÃ¶rde|Amt|UniversitÃ¤t|Karriereportal|Blog|Ratgeber|Software|SaaS|Bank|Versicherung)\b', re.I)
 WHATSAPP_INLINE= re.compile(r'\+?\d[\d ()\-]{6,}\s*(?:WhatsApp|WA)', re.I)
-PERSON_PREFIX  = re.compile(r'\b(Herr|Frau|Hr\.|Fr\.)\s+[A-ZÄÖÜ][a-zäöüß\-]+(?:\s+[A-ZÄÖÜ][a-zäöüß\-]+)?')
+PERSON_PREFIX  = re.compile(r'\b(Herr|Frau|Hr\.|Fr\.)\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ\-]+(?:\s+[A-ZÃ„Ã–Ãœ][a-zÃ¤Ã¶Ã¼ÃŸ\-]+)?')
 JOBSEEKER_WINDOW = re.compile(
-    r'(?is).{0,400}(jobsuche|stellensuche|arbeitslos|bewerb(ung)?|lebenslauf|cv|portfolio|offen\s*f(?:ür|uer)\s*neues).{0,400}'
+    r'(?is).{0,400}(jobsuche|stellensuche|arbeitslos|bewerb(ung)?|lebenslauf|cv|portfolio|offen\s*f(?:Ã¼r|uer)\s*neues).{0,400}'
 )
 INDUSTRY_PATTERNS = {
-    "energie":      r'\b(Energie|Strom|Gas|Ökostrom|Versorger|Photovoltaik|PV|Solar|Wärmepumpe)\b',
+    "energie":      r'\b(Energie|Strom|Gas|Ã–kostrom|Versorger|Photovoltaik|PV|Solar|WÃ¤rmepumpe)\b',
     "telekom":      r'\b(Telekommunikation|Telefonie|Internet|DSL|Mobilfunk|Glasfaser|Telekom)\b',
     "versicherung": r'\b(Versicherung(en)?|Versicherungsmakler|Bausparen|Finanzberatung|Finanzen)\b',
-    "bau":          r'\b(Bau|Handwerk|Sanierung|Fenster|Türen|Dämm|Energieberatung)\b',
+    "bau":          r'\b(Bau|Handwerk|Sanierung|Fenster|TÃ¼ren|DÃ¤mm|Energieberatung)\b',
     "ecommerce":    r'\b(E-?Commerce|Onlineshop|Bestellhotline|Kundengewinnung)\b',
     "household":    r'\b(Vorwerk|Kobold|Staubsauger|Haushaltswaren)\b'
 }
@@ -5130,7 +5130,7 @@ INDUSTRY_HINTS = [
     "solar", "photovoltaik", "pv", "energie", "energieberatung", "strom", "gas",
     "glasfaser", "telekom", "telekommunikation", "dsl", "mobilfunk", "internet",
     "vorwerk", "kobold", "staubsauger", "haushaltswaren",
-    "fenster", "türen", "tueren", "dämm", "daemm", "wärmepumpe", "waermepumpe",
+    "fenster", "tÃ¼ren", "tueren", "dÃ¤mm", "daemm", "wÃ¤rmepumpe", "waermepumpe",
     "versicherung", "versicherungen", "bausparen", "immobilien", "makler",
     "onlineshop", "e-commerce", "shop", "kundengewinnung"
 ]
@@ -5268,7 +5268,7 @@ def _is_talent_hunt_mode() -> bool:
 
 def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
     """
-    Erkennt Lead-Type für talent_hunt Modus.
+    Erkennt Lead-Type fÃ¼r talent_hunt Modus.
     Unterscheidet zwischen aktiven Vertriebsprofis und Jobsuchenden.
     """
     url_lower = url.lower()
@@ -5276,8 +5276,8 @@ def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
     
     # LinkedIn/Xing Profile ohne #opentowork = aktive Vertriebler
     if "linkedin.com/in/" in url_lower or "xing.com/profile" in url_lower:
-        # Prüfe ob die Person aktiv Arbeit sucht
-        job_seeking_signals = ["#opentowork", "open to work", "offen für", "suche stelle", "auf jobsuche"]
+        # PrÃ¼fe ob die Person aktiv Arbeit sucht
+        job_seeking_signals = ["#opentowork", "open to work", "offen fÃ¼r", "suche stelle", "auf jobsuche"]
         if any(signal in text_lower for signal in job_seeking_signals):
             return "candidate"  # Jobsuchender
         else:
@@ -5291,7 +5291,7 @@ def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
     if _FREELANCER_REGEX.search(url_lower):
         return "freelancer"
     
-    # HR-Kontakte (wertvoll für Empfehlungen)
+    # HR-Kontakte (wertvoll fÃ¼r Empfehlungen)
     hr_keywords = ["hr", "recruiting", "personal", "human resources", "personalreferent"]
     if any(keyword in text_lower for keyword in hr_keywords):
         return "hr_contact"
@@ -5306,7 +5306,7 @@ def _detect_lead_type_talent_hunt(url: str, text: str, lead: dict) -> str:
 
 def is_candidate_url(url: Optional[str]) -> Optional[bool]:
     """
-    Prüft ob URL ein Kandidaten-Profil sein könnte.
+    PrÃ¼ft ob URL ein Kandidaten-Profil sein kÃ¶nnte.
     Returns: True (candidate), False (definitely not), None (uncertain, needs further analysis)
     """
     if not url:
@@ -5348,7 +5348,7 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         '/company/',                # Firmen-Profile
         '/impressum',               # Firmen-Impressum
         '/kontakt',                 # Firmen-Kontakt
-        '/about',                   # Über uns Seiten
+        '/about',                   # Ãœber uns Seiten
         '/karriere/stellenangebote', # Firmen-Karriereseiten mit Stellenangeboten
         '/karriere/jobs',           # Firmen-Karriereseiten mit Jobs
         '/stellenangebote/',        # Firmen-Stellenangebote (without "stellengesuch")
@@ -5358,14 +5358,14 @@ def is_candidate_url(url: Optional[str]) -> Optional[bool]:
         'monster.de',               # Job boards
         'linkedin.com/jobs/',       # Job listings
         'xing.com/jobs/',           # Job listings
-        'jobboerse',                # Jobbörsen
+        'jobboerse',                # JobbÃ¶rsen
     ]
     
     for neg in negative_patterns:
         if neg in url_lower:
             return False
     
-    # Default: Nicht sicher, weitere Prüfung nötig
+    # Default: Nicht sicher, weitere PrÃ¼fung nÃ¶tig
     return None
 
 
@@ -5538,9 +5538,9 @@ def same_org_domain(page_url: str, email_domain: str) -> bool:
         return False
 
 _OBFUSCATION_PATTERNS = [
-    (r'\s*(\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|\s+at\s+|\s+ät\s+)\s*', '@'),
+    (r'\s*(\[\s*at\s*\]|\(\s*at\s*\)|\{\s*at\s*\}|\s+at\s+|\s+Ã¤t\s+)\s*', '@'),
     (r'\s*(\[\s*dot\s*\]|\(\s*dot\s*\)|\{\s*dot\s*\}|\s+dot\s+|\s+punkt\s*|\s*\.\s*)\s*', '.'),
-    (r'\s*(ät|@t)\s*', '@'),   # zusätzliche Varianten
+    (r'\s*(Ã¤t|@t)\s*', '@'),   # zusÃ¤tzliche Varianten
 ]
 
 def deobfuscate_text_for_emails(text: str) -> str:
@@ -5579,10 +5579,10 @@ def is_employer_email(email: str) -> bool:
     return any(normalized_local.startswith(pref) for pref in EMPLOYER_EMAIL_PREFIXES)
 
 def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> bool:
-    """Prüft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!)."""
+    """PrÃ¼ft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!)."""
     text_lower = (text + " " + title).lower()
     
-    # ERST prüfen: Ist es ein KANDIDAT der einen Job SUCHT?
+    # ERST prÃ¼fen: Ist es ein KANDIDAT der einen Job SUCHT?
     for signal in CANDIDATE_POSITIVE_SIGNALS:
         if signal in text_lower:
             return True  # Das ist ein Kandidat! Nicht blocken!
@@ -5595,7 +5595,7 @@ def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> 
 # =========================
 
 def _validate_name_heuristic(name: str) -> Tuple[bool, int, str]:
-    """Fallback-Heuristik für Namensvalidierung ohne KI."""
+    """Fallback-Heuristik fÃ¼r Namensvalidierung ohne KI."""
     if not name or len(name.strip()) < 3:
         return False, 0, "Name zu kurz"
     
@@ -5611,27 +5611,27 @@ def _validate_name_heuristic(name: str) -> Tuple[bool, int, str]:
     if any(b in name_lower for b in blacklist):
         return False, 90, f"Blacklist-Wort gefunden"
     
-    # Muss mindestens 2 Wörter haben
+    # Muss mindestens 2 WÃ¶rter haben
     words = name.split()
     if len(words) < 2:
         return False, 70, "Nur ein Wort"
     
     # Keine Zahlen
     if re.search(r'\d', name):
-        return False, 85, "Enthält Zahlen"
+        return False, 85, "EnthÃ¤lt Zahlen"
     
     return True, 75, "Heuristik: wahrscheinlich echter Name"
 
 
 def _looks_like_company_name(name: str) -> bool:
     """
-    Prüft ob Name wie eine Firma aussieht.
+    PrÃ¼ft ob Name wie eine Firma aussieht.
     
-    Returns True für:
+    Returns True fÃ¼r:
         - "GmbH", "AG", "KG", "UG" im Namen
         - "Team", "Vertrieb", "Sales" im Namen
         - Nur ein Wort
-        - Enthält Zahlen
+        - EnthÃ¤lt Zahlen
     """
     if not name:
         return True
@@ -5660,7 +5660,7 @@ def _looks_like_company_name(name: str) -> bool:
 
 async def validate_real_name_with_ai(name: str, context: str = "") -> Tuple[bool, int, str]:
     """
-    KI-Prüfung ob der Name ein echter menschlicher Name ist.
+    KI-PrÃ¼fung ob der Name ein echter menschlicher Name ist.
     
     Returns: (is_real_name, confidence, reason)
     """
@@ -5669,26 +5669,26 @@ async def validate_real_name_with_ai(name: str, context: str = "") -> Tuple[bool
         return _validate_name_heuristic(name)
     
     prompt = f"""
-    Prüfe ob dieser Name ein ECHTER menschlicher Name ist:
+    PrÃ¼fe ob dieser Name ein ECHTER menschlicher Name ist:
     
     Name: "{name}"
     Kontext: "{context}"
     
     ECHTE Namen:
-    ✅ "Max Mustermann" - Vor- und Nachname
-    ✅ "Anna-Maria Schmidt" - Doppelname
-    ✅ "Dr. Hans Meier" - Mit Titel
-    ✅ "Mehmet Yılmaz" - Internationale Namen
+    âœ… "Max Mustermann" - Vor- und Nachname
+    âœ… "Anna-Maria Schmidt" - Doppelname
+    âœ… "Dr. Hans Meier" - Mit Titel
+    âœ… "Mehmet YÄ±lmaz" - Internationale Namen
     
     KEINE echten Namen:
-    ❌ "Vertrieb NRW" - Firmenname
-    ❌ "Team Sales" - Abteilung
-    ❌ "info" - Generisch
-    ❌ "123456" - Zahlen
-    ❌ "Ansprechpartner" - Rolle
-    ❌ "GmbH" - Firma
-    ❌ "Unknown Candidate" - Platzhalter
-    ❌ "N/A", "k.A.", "-" - Leer
+    âŒ "Vertrieb NRW" - Firmenname
+    âŒ "Team Sales" - Abteilung
+    âŒ "info" - Generisch
+    âŒ "123456" - Zahlen
+    âŒ "Ansprechpartner" - Rolle
+    âŒ "GmbH" - Firma
+    âŒ "Unknown Candidate" - Platzhalter
+    âŒ "N/A", "k.A.", "-" - Leer
     
     Return JSON: {{"is_real_name": true/false, "confidence": 0-100, "reason": "..."}}
     """
@@ -5722,8 +5722,8 @@ def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
     Returns: (classification, reason)
     - "job_ad" = Stellenanzeige (BLOCK)
     - "candidate" = Kandidat sucht (ALLOW)
-    - "business_inquiry" = Geschäftsanfrage (ALLOW mit Prüfung)
-    - "unclear" = Unklar (weitere Prüfung)
+    - "business_inquiry" = GeschÃ¤ftsanfrage (ALLOW mit PrÃ¼fung)
+    - "unclear" = Unklar (weitere PrÃ¼fung)
     """
     text_lower = text.lower()
     
@@ -5740,10 +5740,10 @@ def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
         # === STELLENANZEIGE (BLOCK) ===
         job_ad_signals = [
             "(m/w/d)", "(w/m/d)", "(d/m/w)",
-            "zum nächstmöglichen", "zur verstärkung",
-            "für unser team", "ihre aufgaben", "ihr profil",
+            "zum nÃ¤chstmÃ¶glichen", "zur verstÃ¤rkung",
+            "fÃ¼r unser team", "ihre aufgaben", "ihr profil",
             "wir bieten", "benefits", "festanstellung",
-            "vollzeit", "teilzeit", "homeoffice möglich",
+            "vollzeit", "teilzeit", "homeoffice mÃ¶glich",
             "bewerbung an", "bewerben sie sich",
         ]
         job_ad_count = sum(1 for signal in job_ad_signals if signal in context)
@@ -5754,7 +5754,7 @@ def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
         # === KANDIDAT SUCHT (ALLOW) ===
         candidate_signals = [
             "wir suchen ein unternehmen", "wir suchen eine firma",
-            "wir suchen aufträge", "wir suchen neue kunden",
+            "wir suchen auftrÃ¤ge", "wir suchen neue kunden",
             "wir suchen vertretungen", "wir suchen partner",
             "wir suchen projekte", "ich und mein team suchen",
             "wir als handelsvertretung suchen",
@@ -5767,7 +5767,7 @@ def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
         # === EINZELPERSON (Pluralis Majestatis) ===
         solo_signals = [
             "biete meine dienste", "meine erfahrung",
-            "mein profil", "ich bin", "verfügbar ab",
+            "mein profil", "ich bin", "verfÃ¼gbar ab",
             "kontaktieren sie mich",
         ]
         for signal in solo_signals:
@@ -5781,7 +5781,7 @@ def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:
         ]
         for signal in business_signals:
             if signal in context:
-                return "business_inquiry", f"Geschäftsanfrage: '{signal}'"
+                return "business_inquiry", f"GeschÃ¤ftsanfrage: '{signal}'"
     
     return "unclear", "Kontext nicht eindeutig"
 
@@ -5805,7 +5805,7 @@ def detect_hidden_gem(text: str, url: str = "") -> Tuple[Optional[str], int, str
     return None, 0, ""
 
 def has_nrw_signal(text: str) -> bool:
-    """Prüft ob Text NRW-Bezug hat."""
+    """PrÃ¼ft ob Text NRW-Bezug hat."""
     text_lower = text.lower()
     return any(region in text_lower for region in NRW_REGIONS)
 
@@ -5913,7 +5913,7 @@ def normalize_email(e: str) -> str:
 
 def extract_company_name(title_text:str)->str:
     if not title_text: return ""
-    m = re.split(r'[-–|•·:]', title_text)
+    m = re.split(r'[-â€“|â€¢Â·:]', title_text)
     base = m[0].strip() if m else title_text.strip()
     if re.search(r'\b(Job|Karriere|Kontakt|Impressum)\b', base, re.I): return ""
     return base[:120]
@@ -5922,7 +5922,7 @@ def detect_company_size(text:str)->str:
     patterns = {
         "klein":  r'\b(1-10|klein|Inhaber|Familienunternehmen)\b',
         "mittel": r'\b(11-50|50-250|Mittelstand|[1-9]\d?\s*Mitarbeiter)\b',
-        "groß":   r'\b(250\+|Konzern|Tochtergesellschaft|international|[2-9]\d{2,}\s*Mitarbeiter)\b'
+        "groÃŸ":   r'\b(250\+|Konzern|Tochtergesellschaft|international|[2-9]\d{2,}\s*Mitarbeiter)\b'
     }
     for size, pat in patterns.items():
         if re.search(pat, text, re.I): return size
@@ -5936,20 +5936,20 @@ def detect_industry(text:str)->str:
 def detect_recency(html:str)->str:
     if re.search(r'\b(2025|2024)\-(0[1-9]|1[0-2])\-(0[1-9]|[12]\d|3[01])\b', html): return "aktuell"
     if re.search(r'\b(0?[1-9]|[12]\d|3[01])\.(0?[1-9]|1[0-2])\.(2024|2025)\b', html): return "aktuell"
-    if re.search(r'\b(ab\s*sofort|sofort|zum\s*nächsten?\s*möglichen\s*termin)\b', html, re.I): return "sofort"
+    if re.search(r'\b(ab\s*sofort|sofort|zum\s*nÃ¤chsten?\s*mÃ¶glichen\s*termin)\b', html, re.I): return "sofort"
     return "unbekannt"
 
 def estimate_hiring_volume(text:str)->str:
-    if re.search(r'\b(mehrere|Teams|Team-?Erweiterung|Verstärkung|wir wachsen)\b', text, re.I): return "hoch"
+    if re.search(r'\b(mehrere|Teams|Team-?Erweiterung|VerstÃ¤rkung|wir wachsen)\b', text, re.I): return "hoch"
     if len(re.findall(r'\b(Stelle|Stellen|Job)\b', text, re.I)) > 1: return "mittel"
     return "niedrig"
 
 ADDRESS_RE = re.compile(
-    r'\b([A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}?(?:straße|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?(?:\s*,\s*)?(?:\d{5}\s+[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40})?)',
+    r'\b([A-ZÃ„Ã–Ãœ][\wÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ\-\.\s]{2,40}?(?:straÃŸe|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?(?:\s*,\s*)?(?:\d{5}\s+[A-ZÃ„Ã–Ãœ][\wÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ\-\.\s]{2,40})?)',
     re.I
 )
 ADDRESS_RE_ALT = re.compile(
-    r'\b(\d{5}\s+[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}\s*,?\s*[A-ZÄÖÜ][\wÄÖÜäöüß\-\.\s]{2,40}?(?:straße|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?)',
+    r'\b(\d{5}\s+[A-ZÃ„Ã–Ãœ][\wÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ\-\.\s]{2,40}\s*,?\s*[A-ZÃ„Ã–Ãœ][\wÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ\-\.\s]{2,40}?(?:straÃŸe|str\.|weg|platz|allee|gasse|ring|ufer|chaussee|damm|steig|pfad|stieg|promenade)\s*\d+[a-zA-Z]?)',
     re.I
 )
 
@@ -5961,7 +5961,7 @@ SOCIAL_DOMAINS = ("linkedin.com", "xing.com", "x.com", "twitter.com", "facebook.
 
 def extract_private_address(text: str) -> str:
     """
-    Greift die erste wahrscheinliche Anschrift aus dem Text heraus (Straße + Hausnummer, optional PLZ/Ort).
+    Greift die erste wahrscheinliche Anschrift aus dem Text heraus (StraÃŸe + Hausnummer, optional PLZ/Ort).
     """
     if not text:
         return ""
@@ -6008,7 +6008,7 @@ def extract_social_profile_url(soup: Optional[BeautifulSoup], text: str) -> str:
     return candidates[0]
 
 def extract_locations(text:str)->str:
-    cities = re.findall(r'\b(Düsseldorf|Köln|Essen|Dortmund|Mönchengladbach|Bochum|Wuppertal|Bonn|NRW|Nordrhein[-\s]?Westfalen)\b', text, re.I)
+    cities = re.findall(r'\b(DÃ¼sseldorf|KÃ¶ln|Essen|Dortmund|MÃ¶nchengladbach|Bochum|Wuppertal|Bonn|NRW|Nordrhein[-\s]?Westfalen)\b', text, re.I)
     out, seen=[], set()
     for c in cities:
         k=c.lower()
@@ -6038,13 +6038,13 @@ def tags_from(text:str)->str:
 
 def opening_line(lead:dict)->str:
     t = (lead.get("tags","") or "")
-    if "d2d" in t: return "D2D in NRW: tägliche Touren + überdurchschnittliche Provision, Auszahlung wöchentlich."
-    if "callcenter" in t: return "Outbound-Leads mit hoher Abschlussquote – Provision top, Auszahlung wöchentlich."
+    if "d2d" in t: return "D2D in NRW: tÃ¤gliche Touren + Ã¼berdurchschnittliche Provision, Auszahlung wÃ¶chentlich."
+    if "callcenter" in t: return "Outbound-Leads mit hoher Abschlussquote â€“ Provision top, Auszahlung wÃ¶chentlich."
     return "Warme Leads, starker Provisionsplan, schnelle Auszahlung."
 
 def normalize_phone(p: str) -> str:
     """
-    DE-Telefon-Normalisierung (E.164-ähnlich) mit Edge-Cases wie '(0)'.
+    DE-Telefon-Normalisierung (E.164-Ã¤hnlich) mit Edge-Cases wie '(0)'.
     Beispiele:
       '0211 123456'            -> '+49211123456'
       '+49 (0) 211 123456'     -> '+49211123456'
@@ -6060,13 +6060,13 @@ def normalize_phone(p: str) -> str:
     # Erfasst (), [], {} und beliebige Whitespaces: '(0)', '( 0 )', '[0]' etc.
     s = re.sub(r'[\(\[\{]\s*0\s*[\)\]\}]', '0', s)
 
-    # Häufige Extension-/Zusatzangaben am Ende entfernen (ext, Durchwahl, DW, Tel.)
+    # HÃ¤ufige Extension-/Zusatzangaben am Ende entfernen (ext, Durchwahl, DW, Tel.)
     s = re.sub(r'(?:durchwahl|dw|ext\.?|extension)\s*[:\-]?\s*\d+\s*$', '', s, flags=re.I)
 
-    # Alle Zeichen außer Ziffern und Plus entfernen
+    # Alle Zeichen auÃŸer Ziffern und Plus entfernen
     s = re.sub(r'[^\d+]', '', s)
 
-    # Internationale Präfixe vereinheitlichen
+    # Internationale PrÃ¤fixe vereinheitlichen
     s = re.sub(r'^00', '+', s)        # 0049 -> +49, 0033 -> +33, etc.
     s = re.sub(r'^\+049', '+49', s)   # Tippfehler-Variante absichern
     s = re.sub(r'^0049', '+49', s)    # (redundant, aber explizit)
@@ -6075,7 +6075,7 @@ def normalize_phone(p: str) -> str:
     # Beispiele: '+490211...' -> '+49211...'
     s = re.sub(r'^\+490', '+49', s)
 
-    # Nationale führende 0 → +49
+    # Nationale fÃ¼hrende 0 â†’ +49
     if s.startswith('0') and not s.startswith('+'):
         s = '+49' + s[1:]
 
@@ -6083,14 +6083,14 @@ def normalize_phone(p: str) -> str:
     if s.count('+') > 1:
         s = '+' + re.sub(r'\D', '', s)
 
-    # Falls noch kein '+' vorhanden ist, hinzufügen (E.164-ähnlich)
+    # Falls noch kein '+' vorhanden ist, hinzufÃ¼gen (E.164-Ã¤hnlich)
     if not s.startswith('+'):
         s = '+' + re.sub(r'\D', '', s)
 
-    # Plausibilitätscheck (Gesamtziffernzahl)
+    # PlausibilitÃ¤tscheck (Gesamtziffernzahl)
     digits = re.sub(r'\D', '', s)
     if len(digits) < 8 or len(digits) > 16:
-        return s  # unbearbeitet zurückgeben, wenn außerhalb Range
+        return s  # unbearbeitet zurÃ¼ckgeben, wenn auÃŸerhalb Range
 
     return s
 
@@ -6189,7 +6189,7 @@ def regex_extract_contacts(text: str, src_url: str):
     # Text absichern
     text = text or ""
 
-    # 2× De-Obfuscation (schluckt verschachtelte Varianten wie [at](punkt), ät, {dot}, etc.)
+    # 2Ã— De-Obfuscation (schluckt verschachtelte Varianten wie [at](punkt), Ã¤t, {dot}, etc.)
     for _ in range(2):
         text = deobfuscate_text_for_emails(text)
 
@@ -6204,7 +6204,7 @@ def regex_extract_contacts(text: str, src_url: str):
         return []
 
 
-    # Näheprüfung mit erweitertem Fenster (±400 Zeichen)
+    # NÃ¤heprÃ¼fung mit erweitertem Fenster (Â±400 Zeichen)
     def _sales_near(a: int, b: int) -> bool:
         span = text[max(0, a - 400): min(len(text), b + 400)]
         return bool(SALES_WINDOW.search(span))
@@ -6229,7 +6229,7 @@ def regex_extract_contacts(text: str, src_url: str):
         log("info", "Regex-Fallback: keine Treffer", url=src_url)
         return rows
 
-    # E-Mails mit nächster Telefonnummer verbinden (falls vorhanden) + Name raten
+    # E-Mails mit nÃ¤chster Telefonnummer verbinden (falls vorhanden) + Name raten
     for e, es, ee in email_hits:
         if not _sales_near(es, ee):
             continue
@@ -6252,7 +6252,7 @@ def regex_extract_contacts(text: str, src_url: str):
             "quelle": src_url
         })
 
-    # Telefonnummern ergänzen, die noch nicht genutzt wurden
+    # Telefonnummern ergÃ¤nzen, die noch nicht genutzt wurden
     used_tel = set(r["telefon"] for r in rows if r.get("telefon"))
     for p, ps, pe, _is_mobile in phone_hits:
         if not _sales_near(ps, pe):
@@ -6476,17 +6476,17 @@ def _ensure_candidate_name(record: Dict[str, Any], text: str, soup: Optional[Bea
 
     # 2) Impressum-Pattern
     if (not name) and ("/impressum" in lower_url or "legal" in lower_url):
-        m = re.search(r"angaben gemäß §\s*5\s*tmg[\s:]*\n?\r?\s*([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+        m = re.search(r"angaben gemÃ¤ÃŸ Â§\s*5\s*tmg[\s:]*\n?\r?\s*([A-ZÃ„Ã–Ãœ][^\n\r]{2,80})", text, flags=re.I)
         if m:
             name = _extract_name_from_text_block(m.group(1))
         if not name:
-            m2 = re.search(r"Inhaltlich Verantwortlicher:?\s*([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+            m2 = re.search(r"Inhaltlich Verantwortlicher:?\s*([A-ZÃ„Ã–Ãœ][^\n\r]{2,80})", text, flags=re.I)
             if m2:
                 name = _extract_name_from_text_block(m2.group(1))
 
     # 3) PDF/CV Header-Heuristik
     if not name:
-        m = re.search(r"Lebenslauf von\s+([A-ZÄÖÜ][^\n\r]{2,80})", text, flags=re.I)
+        m = re.search(r"Lebenslauf von\s+([A-ZÃ„Ã–Ãœ][^\n\r]{2,80})", text, flags=re.I)
         if m:
             name = _extract_name_from_text_block(m.group(1))
     if not name:
@@ -6675,7 +6675,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         except Exception:
             title_text = ""
     title_lower = title_text.lower()
-    # Zusatzflags für Off-Target-Quellen
+    # Zusatzflags fÃ¼r Off-Target-Quellen
     job_host_hints = (
         "ebay-kleinanzeigen.de",
         "kleinanzeigen.de",
@@ -6751,7 +6751,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     if agent_fingerprint:
         score += 40
         reasons.append("agent_fingerprint")
-    has_d2d = bool(D2D_HINT.search(t)) or any(k in t for k in ["door to door", "haustür", "haustuer", "kaltakquise"])
+    has_d2d = bool(D2D_HINT.search(t)) or any(k in t for k in ["door to door", "haustÃ¼r", "haustuer", "kaltakquise"])
     has_callcenter = bool(CALLCENTER_HINT.search(t))
     has_b2c = bool(B2C_HINT.search(t))
     # Commission / high-value signals
@@ -6777,7 +6777,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
             score = max(score, 50)
 
     if ("facebook.com" in u) and ("/groups" in u):
-        score += 10  # leichte Bevorzugung für Facebook-Gruppen
+        score += 10  # leichte Bevorzugung fÃ¼r Facebook-Gruppen
 
     if has_whatsapp:
         score += 28
@@ -6829,7 +6829,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
         reasons.append("social_profile")
     
     # Freelancer/Available signals
-    if any(sig in t_lower for sig in ["freelancer", "verfügbar ab", "ab sofort verfügbar", "freiberuflich"]):
+    if any(sig in t_lower for sig in ["freelancer", "verfÃ¼gbar ab", "ab sofort verfÃ¼gbar", "freiberuflich"]):
         score += 10
         reasons.append("availability_signal")
     
@@ -6858,7 +6858,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
     if rec in ("aktuell", "sofort"):
         score += 8
 
-    # Harte Abwertungen für Off-Target-Kontexte
+    # Harte Abwertungen fÃ¼r Off-Target-Kontexte
     if is_job_board:
         score -= 40
     if is_public_context:
@@ -6896,7 +6896,7 @@ def compute_score(text: str, url: str, html: str = "") -> int:
             reasons.append("job_seeking_penalty")
         
         # Boost for freelancer/independent profiles
-        if any(kw in t_lower for kw in ["freiberuflich", "selbstständig", "handelsvertreter"]):
+        if any(kw in t_lower for kw in ["freiberuflich", "selbststÃ¤ndig", "handelsvertreter"]):
             score += 15
             reasons.append("independent_professional")
 
@@ -6941,10 +6941,10 @@ def validate_content(html: str, url: str) -> bool:
     lower = text.lower()
     login_gate = (
         re.search(r'\b(anmelden|login|passwort)\b', lower, re.I) and
-        re.search(r'\b(geschützt|nur\s*für\s*mitglieder|zugang\s*verweigert|restricted)\b', lower, re.I)
+        re.search(r'\b(geschÃ¼tzt|nur\s*fÃ¼r\s*mitglieder|zugang\s*verweigert|restricted)\b', lower, re.I)
     )
     is_404 = any(phrase in lower for phrase in ["404", "seite nicht gefunden", "page not found", "not found"])
-    german_core = re.search(r'\b(der|die|das|und|in|zu|für|mit|auf)\b', lower, re.I) is not None
+    german_core = re.search(r'\b(der|die|das|und|in|zu|fÃ¼r|mit|auf)\b', lower, re.I) is not None
     contact_tolerant = any(k in lower for k in ["kontakt", "impressum", "telefon", "e-mail", "email", "bewerben"])
     no_german = not (german_core or contact_tolerant)
     checks = {
@@ -6972,12 +6972,12 @@ def is_high_quality_lead(row: Dict[str, Any], *, linkedin_profile: bool = False,
         "rechtsanwalt", "kanzlei", "legal", "law", "anwalt",
         "umzug", "transporte", "pflegedienst", "autohaus", "kfz",
         "stiftung", "verein", "news", "presse",
-        "messe frankfurt", "messe münchen"
+        "messe frankfurt", "messe mÃ¼nchen"
     ]
     if any(w in name or w in role_guess for w in legal_service_trash):
         return False, "Blocked: Irrelevant Industry (Legal/B2C)"
 
-    trash_words = ["stellenangebot", "jobs", "job", "ausbildung", "gmbh", "co. kg", "minijob", "büro", "fahrer", "lager", "suche arbeit", "team", "karriere"]
+    trash_words = ["stellenangebot", "jobs", "job", "ausbildung", "gmbh", "co. kg", "minijob", "bÃ¼ro", "fahrer", "lager", "suche arbeit", "team", "karriere"]
     if "stellengesuch" not in name and "jobgesuch" not in name:
         if any(w in name for w in trash_words):
             return False, "Trash keyword in name"
@@ -6986,17 +6986,17 @@ def is_high_quality_lead(row: Dict[str, Any], *, linkedin_profile: bool = False,
         "lebenslauf", "stellengesuch", "jobgesuch", "bewerbung", "suche neue", "ab sofort", "curriculum vitae"
     ])
     is_agency = agent_hit or any(k in name or k in role_guess for k in [
-        "handelsvertretung", "industrievertretung", "vertriebsbüro", "vertriebsbuero", "agentur", "cdh", "hgb", "partner", "vertretung"
+        "handelsvertretung", "industrievertretung", "vertriebsbÃ¼ro", "vertriebsbuero", "agentur", "cdh", "hgb", "partner", "vertretung"
     ])
 
     text_for_niche = f"{row.get('name','')} {row.get('role_guess','')}".lower()
-    if any(k in text_for_niche for k in ["shk", "sanitär", "heizung", "bauelemente", "werksvertretung"]):
+    if any(k in text_for_niche for k in ["shk", "sanitÃ¤r", "heizung", "bauelemente", "werksvertretung"]):
         row["industry"] = "Construction/SHK"
     elif any(k in text_for_niche for k in ["medizinprodukte", "medizintechnik", "klinikreferent", "pharmareferent"]):
         row["industry"] = "Medical"
-    elif any(k in text_for_niche for k in ["food", "lebensmittel", "getränke", "fmcg", "gastronomie"]):
+    elif any(k in text_for_niche for k in ["food", "lebensmittel", "getrÃ¤nke", "fmcg", "gastronomie"]):
         row["industry"] = "Food/FMCG"
-    elif any(k in text_for_niche for k in ["freelancer", "freiberuflich", "selbstständig", "selbststaendig", "interim"]):
+    elif any(k in text_for_niche for k in ["freelancer", "freiberuflich", "selbststÃ¤ndig", "selbststaendig", "interim"]):
         row["industry"] = "Freelance Sales"
     elif any(k in text_for_niche for k in ["closer", "setter", "high ticket", "remote sales"]):
         row["industry"] = "Modern Sales/Closer"
@@ -7005,7 +7005,7 @@ def is_high_quality_lead(row: Dict[str, Any], *, linkedin_profile: bool = False,
 
     source_url = (row.get("url") or row.get("quelle") or "").lower()
     is_guerilla_source = any(d in source_url for d in ["reddit.com", "gutefrage.net", "facebook.com", "instagram.com", "kununu.com", "wiwi-treff.de"])
-    has_sentiment_keywords = any(k in text_for_niche for k in ["gekündigt", "entlassen", "insolvenz", "suche arbeit", "job gesucht", "quereinstieg", "ohne ausbildung"])
+    has_sentiment_keywords = any(k in text_for_niche for k in ["gekÃ¼ndigt", "entlassen", "insolvenz", "suche arbeit", "job gesucht", "quereinstieg", "ohne ausbildung"])
     if is_guerilla_source and has_sentiment_keywords:
         row["industry"] = "Guerilla/Sentiment"
         return True, "Sentiment Signal found (Manual Review)"
@@ -7238,7 +7238,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         log("debug", "URL bereits gesehen (skip)", url=url)
         return (0, [])
     if (is_denied(url) or not path_ok(url)) and not linkedin_profile:
-        log("debug", "Vorprüfung blockt URL", url=url)
+        log("debug", "VorprÃ¼fung blockt URL", url=url)
         mark_url_seen(url, run_id)
         return (1, [])
     if not await robots_allowed_async(url):
@@ -7266,7 +7266,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
             final_path = urllib.parse.urlparse(str(getattr(resp, "url", url))).path.lower() if resp else ""
             login_wall = (li_status == 999) or ("/login" in final_path)
             if login_wall and linkedin_snippet_text:
-                log("info", "LinkedIn Login-Wall – nutze Snippet", url=url, status=li_status)
+                log("info", "LinkedIn Login-Wall â€“ nutze Snippet", url=url, status=li_status)
                 using_linkedin_snippet = True
                 html = linkedin_snippet_text
                 resp = None
@@ -7285,7 +7285,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     if (resp is None) and (not using_linkedin_snippet):
         st = _LAST_STATUS.get(url, li_status if li_status is not None else -1)
         if st in (429, 403, -1):
-            log("warn", "Kein Content – Retry später (nicht markiert)", url=url, status=st)
+            log("warn", "Kein Content â€“ Retry spÃ¤ter (nicht markiert)", url=url, status=st)
             return (1, [])
         mark_url_seen(url, run_id)
         return (1, [])
@@ -7295,7 +7295,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         if "application/pdf" in ct or url.lower().endswith(".pdf"):
             is_pdf = True  # PDF erkannt
         if is_pdf and not CFG.allow_pdf:
-            log("info", "PDF übersprungen (ALLOW_PDF=0)", url=url)
+            log("info", "PDF Ã¼bersprungen (ALLOW_PDF=0)", url=url)
             mark_url_seen(url, run_id)
             return (1, [])
         if is_pdf:
@@ -7349,7 +7349,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         mark_url_seen(url, run_id)
         return (1 + extra_checked, collected if extra_followups else [])
 
-    # Titel-basierter Guard (früher Exit, bevor teure Extraktion)
+    # Titel-basierter Guard (frÃ¼her Exit, bevor teure Extraktion)
     title_text = ""
     try:
         soup_title = BeautifulSoup(html, "html.parser")
@@ -7383,17 +7383,17 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         "forum", "community", "treffpunkt", "liste", "firmen",
         "datenbank", "mitglieder", "aussteller", "katalog"
     )
-    pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","außendienst","kundenberater",
-                "handelsvertreter","handelsvertretung","makler","akquise","agent","berater","beraterin","geschäftsführer",
-                "repräsentant","b2b","b2c","verkäufer","verkaeufer","vertriebler",
+    pos_keys = ("vertrieb","sales","verkauf","account","aussendienst","auÃŸendienst","kundenberater",
+                "handelsvertreter","handelsvertretung","makler","akquise","agent","berater","beraterin","geschÃ¤ftsfÃ¼hrer",
+                "reprÃ¤sentant","b2b","b2c","verkÃ¤ufer","verkaeufer","vertriebler",
                 "vertriebspartner","aushilfe verkauf",
                 "stellengesuch")
     neg_keys = ("reinigung","putz","hilfe","helfer","lager","fahrer","zusteller","kommissionierer",
                 "melker","tischler","handwerker","bauhelfer","produktionshelfer","stapler",
-                "pflege","medizin","arzt","kassierer","kasse","verräumer","regal",
+                "pflege","medizin","arzt","kassierer","kasse","verrÃ¤umer","regal",
                 "aushilfe","minijob","winterdienst","promoter","promotion","fundraiser","spendensammler",
                 "museum","theater","verein","crypto","bitcoin","nft","casino","dating","sex","flohmarkt",
-                "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklärung","agb")
+                "impressum","gmbh","ag","kg","hrb","ust-id","datenschutzerklÃ¤rung","agb")
     has_pos_key = any(k in title_src for k in pos_keys) or pdf_cv_hint
     intent_hit = any(k in title_src for k in INTENT_TITLE_KEYWORDS)
     suche_biete_hit = (("suche" in title_src) or ("biete" in title_src)) and (has_pos_key or intent_hit)
@@ -7404,13 +7404,13 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     # Check if this is a CANDIDATE seeking a job - NEVER skip candidates!
     is_candidate = is_candidate_seeking_job(title_text or "", "", url)
     
-    # NEU: Im Candidates-Modus - Titel-Guard für Social-Profile überspringen
+    # NEU: Im Candidates-Modus - Titel-Guard fÃ¼r Social-Profile Ã¼berspringen
     url_lower = url.lower()
     # Use compiled regex for faster matching
     is_social_profile = bool(_SOCIAL_PROFILE_REGEX.search(url_lower))
     
     if _is_candidates_mode():
-        # Social-Profile überspringen den Titel-Guard
+        # Social-Profile Ã¼berspringen den Titel-Guard
         if not is_social_profile:
             if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
                 if not is_candidate:
@@ -7418,7 +7418,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
                     mark_url_seen(url, run_id)
                     return (1, [])
     else:
-        # Standard-Logik für nicht-Candidates-Modus
+        # Standard-Logik fÃ¼r nicht-Candidates-Modus
         if any(k in title_src for k in neg_keys) and ("handelsvertretung" not in title_src and "handelsvertreter" not in title_src):
             if not is_candidate:
                 log("debug", "Titel-Guard: Negative erkannt, skip", url=url, title=title_text)
@@ -7440,13 +7440,13 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     ssl_insecure = getattr(resp, "insecure_ssl", False)
     invite_link = ("chat.whatsapp.com" in url.lower()) or ("t.me" in url.lower())
 
-    # XML/Sitemap ausfiltern (Invite-Links dürfen durch)
+    # XML/Sitemap ausfiltern (Invite-Links dÃ¼rfen durch)
     if (("xml" in ct) or html.lstrip().startswith("<?xml") or "<urlset" in html[:200].lower() or "<sitemapindex" in html[:200].lower()) and not invite_link:
         log("debug", "XML/Sitemap erkannt (kein Lead-Content)", url=url)
         mark_url_seen(url, run_id)
         return (1, [])
 
-    # Content validieren (Invite-Links überspringen strenge Prüfung)
+    # Content validieren (Invite-Links Ã¼berspringen strenge PrÃ¼fung)
     if (not invite_link) and (not using_linkedin_snippet) and (not is_pdf) and (not validate_content(html, url)):
         mark_url_seen(url, run_id)
         return (1, [])
@@ -7607,11 +7607,11 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     lu = url.lower()
     if any(p in lu for p in ("/jobs", "/karriere", "/stellen")):
         if not _has_contact_anchor(soup):
-            log("debug", "Jobpfad ohne Kontaktanker – skip", url=url)
+            log("debug", "Jobpfad ohne Kontaktanker â€“ skip", url=url)
             mark_url_seen(url, run_id)
             return (1, [])
 
-    # >>> FAST-PATH: Kontakt/Impressum/Team/Ansprechpartner – Anker-Scan & Early-Return
+    # >>> FAST-PATH: Kontakt/Impressum/Team/Ansprechpartner â€“ Anker-Scan & Early-Return
     if any(key in lu for key in ("/kontakt", "/impressum", "/team", "/ansprechpartner")):
         fast_items = _anchor_contacts_fast(soup, url)
         if fast_items:
@@ -7977,7 +7977,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
     out: List[Dict[str, Any]] = []
     snippet_lower = (snippet_hint or "").lower()
     for r in items:
-        # Reject früh, damit kein Müll reinkommt
+        # Reject frÃ¼h, damit kein MÃ¼ll reinkommt
         if not (r.get("email") or r.get("telefon")):
             continue
         lead_email = (r.get("email") or "").lower()
@@ -8029,7 +8029,7 @@ async def process_link_async(url: UrlLike, run_id: int, *, force: bool = False) 
         tel_boost, extras = _tel_wa_boost(r, text, html)
         boost += tel_boost
 
-        # Tags lokal ergänzen
+        # Tags lokal ergÃ¤nzen
         tag_local = (base_tags or "").strip()
         if extras.get("tags_add_whatsapp"):
             parts = [p for p in tag_local.split(",") if p]
@@ -8240,8 +8240,8 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
     max_bytes = int(os.getenv("OPENAI_MAX_BYTES", "12000"))
     snippet = (raw_text or "")[:max_bytes]
     system = (
-        "Extrahiere ausschließlich reale Vertrieb/Sales-Kontaktpersonen aus deutschem Webtext.\n"
-        "Gib STRICT ein JSON-Objekt mit Schlüssel 'data' zurück:\n"
+        "Extrahiere ausschlieÃŸlich reale Vertrieb/Sales-Kontaktpersonen aus deutschem Webtext.\n"
+        "Gib STRICT ein JSON-Objekt mit SchlÃ¼ssel 'data' zurÃ¼ck:\n"
         "{\"data\":[{\"name\":str,\"rolle\":str,\"email\":str,\"telefon\":str,\"quelle\":str}]}\n"
         "Nur valide E-Mails/DE-Telefone; fehlende Felder als leere Strings. Keine Halluzinationen."
     )
@@ -8279,7 +8279,7 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
                 try:
                     obj = json.loads(content)
                 except Exception:
-                    log("error", "OpenAI JSON in content ungültig", url=src_url, content_preview=content[:200])
+                    log("error", "OpenAI JSON in content ungÃ¼ltig", url=src_url, content_preview=content[:200])
                     return []
                 data = obj.get("data")
                 if not isinstance(data, list):
@@ -8311,7 +8311,7 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
                     if t: seen_t.add(t)
                 log("info", "OpenAI-Extraktion", url=src_url, count=len(dedup))
                 return dedup
-            # Nicht-200 → nur kurze, bereinigte Preview loggen
+            # Nicht-200 â†’ nur kurze, bereinigte Preview loggen
             log("warn", "OpenAI Antwort != 200", status=status, body=_preview(r.text), url=src_url)
             last_err = f"HTTP {status}"
             if status in (429, 500, 502, 503, 504):
@@ -8326,7 +8326,7 @@ def openai_extract_contacts(raw_text: str, src_url: str) -> List[Dict[str, Any]]
 
 async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
     """
-    LLM-generierte Dorks für die angegebene Branche.
+    LLM-generierte Dorks fÃ¼r die angegebene Branche.
     CRITICAL FIX: Special prompt for candidates/recruiter mode.
     """
     api_key = os.getenv("OPENAI_API_KEY")
@@ -8340,7 +8340,7 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
             "Target: People actively looking for sales/vertrieb jobs. "
             "Required patterns: "
             'site:kleinanzeigen.de/s-stellengesuche "vertrieb"; '
-            'site:xing.com/profile "offen für angebote" "sales"; '
+            'site:xing.com/profile "offen fÃ¼r angebote" "sales"; '
             'site:linkedin.com/in "#opentowork" "vertrieb"; '
             '"ich suche job" "vertrieb" "NRW" "mobil"; '
             'site:facebook.com "suche arbeit" "verkauf". '
@@ -8351,12 +8351,12 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
         # Standard B2B prompt
         prompt = (
             "You are a Headhunter. Generate Google Dorks that find lists of employees, PDF CVs, 'Unser Team' pages, or Freelancer profiles. "
-            "forbidden: Do NOT generate generic B2B searches like 'Händler' or 'Hersteller'. "
+            "forbidden: Do NOT generate generic B2B searches like 'HÃ¤ndler' or 'Hersteller'. "
             "Required Patterns (mix these): "
             f'intitle:\"Team\" \"Sales Manager\" {industry}; '
             f'filetype:pdf \"Lebenslauf\" {industry} -job -anzeige; '
             f'site:linkedin.com/in/ \"{industry}\" \"open to work\"; '
-            f'\"stellengesuch\" {industry} \"verfügbar ab\"; '
+            f'\"stellengesuch\" {industry} \"verfÃ¼gbar ab\"; '
             f'\"Ansprechpartner\" \"Vertrieb\" {industry} -intitle:Jobs. '
             "Return ONLY the dorks, one per line."
         )
@@ -8405,20 +8405,20 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
 
 def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
     """
-    Wählt die besten Dorks basierend auf Learning + Extended Dorks
+    WÃ¤hlt die besten Dorks basierend auf Learning + Extended Dorks
     
     Kombiniert:
     - Top-Performer aus Learning (50%)
     - Power-Dorks aus dorks_extended (25%)
-    - Zufällige neue Dorks zum Testen (25%)
+    - ZufÃ¤llige neue Dorks zum Testen (25%)
     - Social Media Dorks (Bonus)
     
     Args:
         industry: Branche (z.B. "candidates", "vertrieb")
-        count: Anzahl der gewünschten Dorks
+        count: Anzahl der gewÃ¼nschten Dorks
     
     Returns:
-        Liste der ausgewählten Dorks
+        Liste der ausgewÃ¤hlten Dorks
     """
     dorks = []
     
@@ -8433,16 +8433,16 @@ def get_smart_dorks_extended(industry: str, count: int = 20) -> List[str]:
         power_count = count // 4
         dorks.extend(POWER_DORKS[:power_count])
         
-        # 3. Zufällige neue Dorks zum Testen (25%)
+        # 3. ZufÃ¤llige neue Dorks zum Testen (25%)
         random_count = count // 4
         random_dorks = get_random_dorks(random_count)
         dorks.extend(random_dorks)
         
-        # 4. Social Media Dorks (Bonus - 5 Stück)
+        # 4. Social Media Dorks (Bonus - 5 StÃ¼ck)
         social_dorks = SOCIAL_MEDIA_DORKS[:5]
         dorks.extend(social_dorks)
         
-        # 5. Job Seeker Dorks für Candidates Mode
+        # 5. Job Seeker Dorks fÃ¼r Candidates Mode
         if industry and industry.lower() in ("candidates", "recruiter"):
             job_seeker = JOB_SEEKER_DORKS[:10]
             dorks.extend(job_seeker)
@@ -8510,7 +8510,7 @@ def append_csv(path: str, rows: List[Dict[str, Any]], fieldnames: List[str]):
                 w.writeheader()
             for r in rows:
                 w.writerow(_coerce(r))
-        log("warn", "CSV war gelockt – in Home geschrieben", file=alt)
+        log("warn", "CSV war gelockt â€“ in Home geschrieben", file=alt)
 
 def append_xlsx(path: str, rows: List[Dict[str, Any]], fieldnames: List[str]):
     if not rows:
@@ -8519,7 +8519,7 @@ def append_xlsx(path: str, rows: List[Dict[str, Any]], fieldnames: List[str]):
         from openpyxl import Workbook, load_workbook
         from openpyxl.utils import get_column_letter
     except ImportError:
-        log("warn", "openpyxl nicht installiert – XLSX übersprungen")
+        log("warn", "openpyxl nicht installiert â€“ XLSX Ã¼bersprungen")
         return
     def _coerce_row(row: Dict[str, Any]) -> List[Any]:
         safe = [("" if row.get(k) is None else row.get(k)) for k in fieldnames]
@@ -8530,7 +8530,7 @@ def append_xlsx(path: str, rows: List[Dict[str, Any]], fieldnames: List[str]):
             pass
         return safe
 
-    # Robuste Header-Behandlung (fehlende Spalten am Ende ergänzen)
+    # Robuste Header-Behandlung (fehlende Spalten am Ende ergÃ¤nzen)
     if os.path.exists(path):
         wb = load_workbook(path)
         ws = wb.active
@@ -8596,7 +8596,7 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
         part = part.split(" - ", 1)[0]
         part = part.strip(" -|")
         part = re.sub(r"\s+", " ", part).strip()
-        # Mindestlänge: Vor- + Nachname
+        # MindestlÃ¤nge: Vor- + Nachname
         if len(part.split()) >= 2:
             return part
         return ""
@@ -8662,7 +8662,7 @@ async def _bounded_process(urls: List[UrlLike], run_id:int, *, rate:_Rate, force
             phones = list(dict.fromkeys(phones_validated))
             if emails or phones:
                 try:
-                    log("info", f"💰 SNIPPET-JACKPOT: {u} -> Mail: {len(emails)}, Tel: {len(phones)}")
+                    log("info", f"ðŸ’° SNIPPET-JACKPOT: {u} -> Mail: {len(emails)}, Tel: {len(phones)}")
                 except Exception:
                     pass
                 
@@ -8778,16 +8778,16 @@ def emergency_save(run_id, links_checked=None, leads_new_total=None):
     """
     Not-Speicherung:
     - kompatibel zu alten Aufrufen mit 1 oder 3 Parametern
-    - versucht Export + finish_run, fällt bei Fehlern auf Minimaldump zurück
+    - versucht Export + finish_run, fÃ¤llt bei Fehlern auf Minimaldump zurÃ¼ck
     - darf niemals eine Exception durchreichen
     """
     try:
-        log("warn", "Not-Speicherung läuft ...", run_id=run_id,
+        log("warn", "Not-Speicherung lÃ¤uft ...", run_id=run_id,
             links_checked=links_checked, leads_new_total=leads_new_total)
     except Exception:
         pass
 
-    # 1) Bestmöglicher Export/Run-Abschluss (nicht abbrechen, nur versuchen)
+    # 1) BestmÃ¶glicher Export/Run-Abschluss (nicht abbrechen, nur versuchen)
     try:
         try:
             export_xlsx(DEFAULT_XLSX)
@@ -8801,7 +8801,7 @@ def emergency_save(run_id, links_checked=None, leads_new_total=None):
             # finish_run kann Links/Leads-Argumente optional verarbeiten
             finish_run(run_id, links_checked, leads_new_total, status="aborted", metrics=dict(RUN_METRICS))
         except TypeError:
-            # Fallback für alte Signaturen
+            # Fallback fÃ¼r alte Signaturen
             finish_run(run_id, status="aborted", metrics=dict(RUN_METRICS))
         except Exception as e:
             try:
@@ -8874,7 +8874,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
     if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and ActiveLearningEngine is not None:
         try:
             active_learning_engine = ActiveLearningEngine(DB_PATH)
-            log("info", "Active Learning Engine initialisiert für Dork-Tracking")
+            log("info", "Active Learning Engine initialisiert fÃ¼r Dork-Tracking")
         except Exception as e:
             log("warn", "Active Learning Engine konnte nicht initialisiert werden", error=str(e))
 
@@ -8940,12 +8940,12 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 log("info", "Multi-Portal-Crawling abgeschlossen", leads=len(direct_crawl_leads))
                 _uilog(f"Multi-Portal-Crawling abgeschlossen: {len(direct_crawl_leads)} Leads gefunden")
                 
-                # Telefonbuch-Enrichment für Leads ohne Telefon
+                # Telefonbuch-Enrichment fÃ¼r Leads ohne Telefon
                 if TELEFONBUCH_ENRICHMENT_ENABLED:
                     leads_without_phone = [l for l in direct_crawl_leads if not l.get("telefon") and l.get("name") and l.get("region")]
                     if leads_without_phone:
                         log("info", "Starte Telefonbuch-Enrichment", count=len(leads_without_phone))
-                        _uilog(f"Telefonbuch-Enrichment: Prüfe {len(leads_without_phone)} Leads ohne Telefon...")
+                        _uilog(f"Telefonbuch-Enrichment: PrÃ¼fe {len(leads_without_phone)} Leads ohne Telefon...")
                         
                         try:
                             enriched_leads = await enrich_leads_with_telefonbuch(leads_without_phone)
@@ -8987,8 +8987,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("error", "Multi-Portal-Crawling failed", error=str(e))
             _uilog(f"Multi-Portal-Crawling fehlgeschlagen: {str(e)}")
     elif _is_talent_hunt_mode():
-        log("info", "Talent-Hunt-Modus: Überspringe Stellengesuche-Portale, nutze Google/Bing für Profile")
-        _uilog("🎯 Talent-Hunt-Modus: Suche aktive Vertriebler über LinkedIn/Xing/Team-Seiten (keine Stellengesuche-Portale)")
+        log("info", "Talent-Hunt-Modus: Ãœberspringe Stellengesuche-Portale, nutze Google/Bing fÃ¼r Profile")
+        _uilog("ðŸŽ¯ Talent-Hunt-Modus: Suche aktive Vertriebler Ã¼ber LinkedIn/Xing/Team-Seiten (keine Stellengesuche-Portale)")
 
     try:
         for q in QUERIES:
@@ -9004,7 +9004,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 last_perf_check = time.time()
             
             if run_flag and not run_flag.get("running", True):
-                _uilog("STOP erkannt – breche ab")
+                _uilog("STOP erkannt â€“ breche ab")
                 break
             if (not force) and is_query_done(q):
                 log("info", "Query bereits erledigt (skip)", q=q)
@@ -9047,7 +9047,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     log("error", "DuckDuckGo-Suche explodiert", q=q, error=str(e))
 
             if not links:
-                log("warn", "Alle Suchmaschinen erschöpft (Google, Perplexity, DDG). Mache eine längere Pause.", q=q)
+                log("warn", "Alle Suchmaschinen erschÃ¶pft (Google, Perplexity, DDG). Mache eine lÃ¤ngere Pause.", q=q)
                 await asyncio.sleep(current_request_delay + _jitter(1.5,2.5))
 
             try:
@@ -9093,7 +9093,7 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                 if ACTIVE_MODE_CONFIG and ACTIVE_MODE_CONFIG.get("learning_enabled") and _LEARNING_ENGINE:
                     domain_clean = dom[4:] if dom.startswith("www.") else dom
                     if _LEARNING_ENGINE.should_skip_domain(domain_clean):
-                        log("debug", "Learning: Domain übersprungen (schlechte Historie)", domain=domain_clean)
+                        log("debug", "Learning: Domain Ã¼bersprungen (schlechte Historie)", domain=domain_clean)
                         skipped_by_learning += 1
                         continue
                 
@@ -9447,8 +9447,8 @@ def start_ui(host="127.0.0.1", port=5055):
   <button class="warn" onclick="fetch('/start_force',{method:'POST'})">Start (Force)</button>
   <button class="stop" onclick="fetch('/stop',{method:'POST'})">Stop</button>
   <button class="warn" onclick="fetch('/reset',{method:'POST'})">Reset (History)</button>
-  <button class="muted" onclick="fetch('/reset_seen',{method:'POST'})">Seen (24h) löschen</button>
-  <button class="muted" onclick="fetch('/reset_queries',{method:'POST'})">Queries zurücksetzen</button>
+  <button class="muted" onclick="fetch('/reset_seen',{method:'POST'})">Seen (24h) lÃ¶schen</button>
+  <button class="muted" onclick="fetch('/reset_queries',{method:'POST'})">Queries zurÃ¼cksetzen</button>
   <a style="margin-left:12px;color:#9fe29f" href="/logs" target="_blank">Logs Stream</a>
   <div class="card"><pre id="p"></pre></div>
 </main>
@@ -9485,29 +9485,6 @@ es.onmessage=(e)=>{ if(e.data!==undefined){ p.textContent+=e.data+"\\n"; p.scrol
         if UILOGQ: UILOGQ.put("STOP angefordert")
         return "ok", 200
 
-    @app.route("/reset", methods=["POST"])
-    def reset():
-        a,b = reset_history()
-        msg = f"Reset: queries_done={a}, urls_seen={b} gelöscht"
-        if UILOGQ: UILOGQ.put(msg)
-        return "ok", 200
-
-    @app.route("/reset_seen", methods=["POST"])
-    def reset_seen():
-        con=db(); cur=con.cursor()
-        cur.execute("DELETE FROM urls_seen WHERE ts < datetime('now','-1 day')")
-        con.commit(); con.close()
-        if UILOGQ: UILOGQ.put("urls_seen (älter 24h) bereinigt")
-        return "ok", 200
-
-    @app.route("/reset_queries", methods=["POST"])
-    def reset_queries():
-        con=db(); cur=con.cursor()
-        cur.execute("DELETE FROM queries_done")
-        con.commit(); con.close()
-        if UILOGQ: UILOGQ.put("queries_done geleert")
-        return "ok", 200
-
     @app.route("/stream")
     def stream():
         def gen():
@@ -9528,7 +9505,7 @@ es.onmessage=(e)=>{ if(e.data!==undefined){ p.textContent+=e.data+"\\n"; p.scrol
 def _ui_controller():
     try:
         force = bool(RUN_FLAG.get("force"))
-        # UI-Run: DATE_RESTRICT (falls gesetzt) aus ENV übernehmen
+        # UI-Run: DATE_RESTRICT (falls gesetzt) aus ENV Ã¼bernehmen
         dr = os.getenv("DATE_RESTRICT", "").strip() or None
         asyncio.run(
             run_scrape_once_async(
@@ -9560,9 +9537,9 @@ def validate_config():
     # Fallback: Inline implementation when luca_scraper not available
     errs=[]
     if not OPENAI_API_KEY or len(OPENAI_API_KEY) < 40:
-        errs.append("OPENAI_API_KEY zu kurz/leer (für KI-Extraktion). Regex-Fallback läuft dennoch.")
+        errs.append("OPENAI_API_KEY zu kurz/leer (fÃ¼r KI-Extraktion). Regex-Fallback lÃ¤uft dennoch.")
     if (GCS_KEYS and not GCS_CXS) or (GCS_CXS and not GCS_KEYS):
-        errs.append("GCS_KEYS/GCS_CXS unvollständig (beide listenbasiert setzen oder deaktivieren).")
+        errs.append("GCS_KEYS/GCS_CXS unvollstÃ¤ndig (beide listenbasiert setzen oder deaktivieren).")
     if not (GCS_KEYS and GCS_CXS) and (GCS_API_KEY and not GCS_CX):
         errs.append("GCS_CX fehlt trotz GCS_API_KEY (Legacy-Single-Config).")
     if errs: log("warn","Konfiguration Hinweise", errors=errs)
@@ -9579,17 +9556,17 @@ def parse_args():
     ap = argparse.ArgumentParser(description="NRW Vertrieb-Leads Scraper (inkrementell + UI)")
     ap.add_argument("--ui", action="store_true", help="Web-UI starten (Start/Stop/Logs)")
     ap.add_argument("--once", action="store_true", help="Einmaliger Lauf im CLI")
-    ap.add_argument("--interval", type=int, default=0, help="Pause in Sekunden zwischen den Durchläufen im Loop-Modus")
+    ap.add_argument("--interval", type=int, default=0, help="Pause in Sekunden zwischen den DurchlÃ¤ufen im Loop-Modus")
     ap.add_argument("--force", action="store_true", help="Ignoriere History (queries_done)")
-    ap.add_argument("--dry-run", dest="dry_run", action="store_true", help="Test-Modus ohne tatsächliche Ausführung (keine DB-Änderungen)")
-    ap.add_argument("--tor", action="store_true", help="Leite Traffic über Tor (SOCKS5 127.0.0.1:9050)")
-    ap.add_argument("--reset", action="store_true", help="Lösche queries_done und urls_seen vor dem Lauf")
+    ap.add_argument("--dry-run", dest="dry_run", action="store_true", help="Test-Modus ohne tatsÃ¤chliche AusfÃ¼hrung (keine DB-Ã„nderungen)")
+    ap.add_argument("--tor", action="store_true", help="Leite Traffic Ã¼ber Tor (SOCKS5 127.0.0.1:9050)")
+    ap.add_argument("--reset", action="store_true", help="LÃ¶sche queries_done und urls_seen vor dem Lauf")
     # Use base modes + INDUSTRY_ORDER to avoid duplicates
     base_industries = ["all","recruiter","candidates","talent_hunt"]
     all_industries = base_industries + [i for i in INDUSTRY_ORDER if i not in base_industries]
     ap.add_argument("--industry", choices=all_industries,
                 default=os.getenv("INDUSTRY","all"),
-                help="Branche für diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
+                help="Branche fÃ¼r diesen Run: all, recruiter, candidates, talent_hunt (NEU: findet aktive Vertriebler), oder Branchen (Standard: all)")
     ap.add_argument("--qpi", type=int, default=int(os.getenv("QPI","6")),
                     help="Queries pro Branche in diesem Run (Standard: 6)")
     ap.add_argument("--daterestrict", type=str, default=os.getenv("DATE_RESTRICT",""),
@@ -9603,7 +9580,7 @@ def parse_args():
         help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
     )
     ap.add_argument("--login", type=str, help="Manuell einloggen bei Portal (z.B. --login linkedin)")
-    ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions löschen")
+    ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions lÃ¶schen")
     ap.add_argument("--list-sessions", action="store_true", help="Alle Sessions anzeigen")
     return ap.parse_args()
 
@@ -9616,7 +9593,7 @@ if __name__ == "__main__":
         # Set global DRY_RUN flag from args
         DRY_RUN = bool(getattr(args, "dry_run", False))
         if DRY_RUN:
-            log("warn", "DRY RUN MODE AKTIVIERT - Keine Datenbank-Änderungen werden durchgeführt!")
+            log("warn", "DRY RUN MODE AKTIVIERT - Keine Datenbank-Ã„nderungen werden durchgefÃ¼hrt!")
         if getattr(args, "no_google", False):
             os.environ["DISABLE_GOOGLE"] = "1"
         
@@ -9657,7 +9634,7 @@ if __name__ == "__main__":
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute('DELETE FROM login_sessions')
                 conn.commit()
-            print("✅ Alle Sessions gelöscht")
+            print("âœ… Alle Sessions gelÃ¶scht")
             sys.exit(0)
         
         if args.list_sessions:
@@ -9665,7 +9642,7 @@ if __name__ == "__main__":
             sessions = handler.get_all_sessions()
             if sessions:
                 for s in sessions:
-                    status = "✅" if s['is_valid'] else "❌"
+                    status = "âœ…" if s['is_valid'] else "âŒ"
                     print(f"{status} {s['portal']}: {s['logged_in_at']}")
             else:
                 print("Keine Sessions vorhanden")
@@ -9677,7 +9654,7 @@ if __name__ == "__main__":
 
         if args.reset:
             a,b = reset_history()
-            log("info","Reset durchgeführt", queries_done=a, urls_seen=b)
+            log("info","Reset durchgefÃ¼hrt", queries_done=a, urls_seen=b)
 
         def _run_cycle():
             global QUERIES

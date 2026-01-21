@@ -226,24 +226,6 @@ class ScraperControl {
             this.btnStart.textContent = '⏳ Starte...';
             
             const data = this.getFormData();
-
-            // Save config to database BEFORE starting
-            try {
-                const configResponse = await fetch('/crm/scraper/api/scraper/config/update/', {
-                    method:  'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.config.csrfToken
-                    },
-                    body: JSON.stringify(data)
-                });
-                if (!configResponse.ok) {
-                    console.warn('Config save failed, continuing with start...');
-                }
-            } catch (configError) {
-                console.warn('Config save error:', configError);
-            }
-
             
             const response = await fetch(this.config.startEndpoint, {
                 method: 'POST',

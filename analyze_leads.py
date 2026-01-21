@@ -1,53 +1,32 @@
-﻿import sqlite3
+﻿# -*- coding: utf-8 -*-
+import os
+import sys
+import django
 
-conn = sqlite3.connect('scraper.db')
-c = conn.cursor()
+os.chdir(r'C:\Users\sunds\Desktop\Luca\telis_recruitment')
+sys.path.insert(0, r'C:\Users\sunds\Desktop\Luca\telis_recruitment')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis. settings')
+django.setup()
 
-print("=== LEADS MIT TELEFON ===")
-c.execute("SELECT COUNT(*) FROM leads WHERE telefon IS NOT NULL AND telefon != ''")
-print(f"Mit Telefon: {c. fetchone()[0]}")
+from scraper_control.models import ScraperRun
+from leads.models import Lead
 
-c.execute("SELECT COUNT(*) FROM leads WHERE telefon IS NULL OR telefon = ''")
-print(f"Ohne Telefon: {c.fetchone()[0]}")
+print('=== LETZTE 5 RUNS ===')
+for run in ScraperRun.objects. order_by('-started_at')[:5]:
+    industry = run.parameters_snapshot.get('industry', '? ') if run.parameters_snapshot else '?'
+    print(f"Run #{run.id}: {run.status} | Industry: {industry} | Leads: {run.leads_accepted}/{run.links_checked}")
 
-print("\n=== LETZTE 15 LEADS ===")
-c.execute("SELECT name, telefon, substr(quelle,1,60) FROM leads ORDER BY id DESC LIMIT 15")
-for r in c.fetchall():
-    name = str(r[0])[: 30] if r[0] else "UNBEKANNT"
-    phone = str(r[1]) if r[1] else "KEINE"
-    source = str(r[2]) if r[2] else ""
-    print(f"{name} | {phone} | {source}")
+print('\n=== LETZTE 10 LEADS ===')
+for lead in Lead.objects.filter(source__icontains='scraper').order_by('-created_at')[:10]:
+    name = (lead.company_name or '?')[:40]. ljust(40)
+    print(f"{name} | Score:  {lead.score or 0}")
 
-print("\n=== QUELLEN-STATISTIK ===")
-c.execute('''
-    SELECT 
-        CASE 
-            WHEN quelle LIKE '%kleinanzeigen%' THEN 'Kleinanzeigen'
-            WHEN quelle LIKE '%markt. de%' THEN 'Markt.de'
-            WHEN quelle LIKE '%quoka%' THEN 'Quoka'
-            WHEN quelle LIKE '%kalaydo%' THEN 'Kalaydo'
-            WHEN quelle LIKE '%meinestadt%' THEN 'Meinestadt'
-            WHEN quelle LIKE '%xing%' THEN 'XING'
-            WHEN quelle LIKE '%linkedin%' THEN 'LinkedIn'
-            ELSE 'Andere'
-        END as source,
-        COUNT(*) as count
-    FROM leads 
-    GROUP BY source 
-    ORDER BY count DESC
-''')
-for r in c.fetchall():
-    print(f"{r[0]}: {r[1]}")
-
-print("\n=== PHONE TYPE ===")
-c.execute("SELECT phone_type, COUNT(*) FROM leads GROUP BY phone_type")
-for r in c.fetchall():
-    ptype = r[0] if r[0] else "unbekannt"
-    print(f"{ptype}: {r[1]}")
-
-print("\n=== BEISPIEL TELEFONNUMMERN ===")
-c.execute("SELECT telefon FROM leads WHERE telefon IS NOT NULL AND telefon != '' LIMIT 10")
-for r in c.fetchall():
-    print(r[0])
-
-conn.close()
+print('\n=== LEAD STATS ===')
+total = Lead.objects.filter(source__icontains='scraper').count()
+with_email = Lead.objects.filter(source__icontains='scraper', email__isnull=False).exclude(email='').count()
+with_phone = Lead.objects.filter(source__icontains='scraper', phone__isnull=False).exclude(phone='').count()
+high_score = Lead.objects. filter(source__icontains='scraper', score__gte=70).count()
+print(f"Total: {total}")
+print(f"Mit Email: {with_email}")
+print(f"Mit Telefon: {with_phone}")
+print(f"Score >= 70: {high_score}")

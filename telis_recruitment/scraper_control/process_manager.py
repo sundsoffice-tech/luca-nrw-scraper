@@ -363,12 +363,15 @@ class ProcessManager:
                 try:
                     from dotenv import dotenv_values
                     env_vars = dotenv_values(env_file)
-                    env.update(env_vars)
+                    env.update({k: v for k, v in env_vars.items() if v is not None})
                 except ImportError:
                     pass
             
             overrides = config.env_overrides()
             self.launcher.apply_env_overrides(env, overrides)
+
+            # Ensure all env values are strings (safety filter)
+            env = {k: str(v) for k, v in env. items() if v is not None}
             
             # Start process using launcher
             process = self.launcher.start_process(cmd, env, project_root)
