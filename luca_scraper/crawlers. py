@@ -33,49 +33,39 @@ async def crawl_kleinanzeigen_listings_async(
     detail_urls = []
 
     for page in range(1, max_pages + 1):
-        # Pagination
         if page == 1:
             url = listing_url
-        else:
+        else: 
             if "seite:" in listing_url:
                 url = re.sub(r'seite:\d+', f'seite:{page}', listing_url)
             else:
                 url = f"{listing_url}/seite:{page}"
 
         try:
-            # Jitter delay
             if jitter_func and PORTAL_DELAYS:
-                delay = PORTAL_DELAYS.get("kleinanzeigen", 2.0)
-                await asyncio.sleep(jitter_func(delay))
+                delay = PORTAL_DELAYS.get("kleinanzeigen", 2. 0)
+                await asyncio. sleep(jitter_func(delay))
 
-            # HTTP Request
             if http_get_func:
                 html = await http_get_func(url, timeout=HTTP_TIMEOUT)
                 if not html:
                     break
 
-                # Parse HTML
-                soup = BeautifulSoup(html, 'html.parser')
-
-                # Finde Anzeigen-Links
+                soup = BeautifulSoup(html, 'html. parser')
                 found_on_page = 0
                 for link in soup.select('a[href*="/s-anzeige/"]'):
                     href = link.get('href', '')
                     if href and '/s-anzeige/' in href:
                         full_url = f"https://www.kleinanzeigen.de{href}" if href.startswith('/') else href
-
-                        # Normalize und dedupe
                         if normalize_func:
                             full_url = normalize_func(full_url)
-
-                        if full_url not in detail_urls: 
-                            detail_urls.append(full_url)
+                        if full_url not in detail_urls:
+                            detail_urls. append(full_url)
                             found_on_page += 1
 
                 if log_func:
                     log_func("debug", f"Kleinanzeigen Seite {page}:  {found_on_page} URLs gefunden")
 
-                # Keine Ergebnisse = Ende
                 if found_on_page == 0:
                     break
 
@@ -93,14 +83,14 @@ async def crawl_kleinanzeigen_listings_async(
 async def extract_kleinanzeigen_detail_async(
     url: str,
     http_get_func: Callable = None,
-    log_func:  Callable = None,
+    log_func: Callable = None,
     normalize_phone_func: Callable = None,
     validate_phone_func: Callable = None,
     is_mobile_number_func: Callable = None,
     extract_all_phone_patterns_func: Callable = None,
     get_best_phone_number_func: Callable = None,
     extract_whatsapp_number_func: Callable = None,
-    extract_phone_with_browser_func: Callable = None,
+    extract_phone_with_browser_func:  Callable = None,
     extract_name_enhanced_func: Callable = None,
     learning_engine = None,
     HTTP_TIMEOUT: int = 25,
@@ -114,7 +104,7 @@ async def extract_kleinanzeigen_detail_async(
     try:
         if not http_get_func:
             return None
-            
+
         html = await http_get_func(url, timeout=HTTP_TIMEOUT)
         if not html: 
             return None
@@ -122,7 +112,6 @@ async def extract_kleinanzeigen_detail_async(
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.get_text(" ", strip=True)
 
-        # Basis-Daten
         data = {
             'quelle': url,
             'source_url': url,
@@ -130,28 +119,24 @@ async def extract_kleinanzeigen_detail_async(
             'lead_type': 'candidate',
         }
 
-        # Titel
         title_el = soup.select_one('h1#viewad-title')
-        if title_el:
+        if title_el: 
             data['title'] = title_el.get_text(strip=True)
 
-        # Beschreibung
         desc_el = soup.select_one('#viewad-description-text')
         description = ""
         if desc_el: 
             description = desc_el.get_text(strip=True)
             data['description'] = description
 
-        # Name extrahieren
         name = ""
-        name_el = soup.select_one('. userprofile-vip a')
+        name_el = soup. select_one('. userprofile-vip a')
         if name_el: 
             name = name_el.get_text(strip=True)
         if not name:
-            name_el = soup.select_one('.iconlist--text')
-            if name_el: 
+            name_el = soup.select_one('. iconlist--text')
+            if name_el:
                 name = name_el.get_text(strip=True)
-        # Enhanced name extraction
         if extract_name_enhanced_func and (not name or len(name) < 3):
             try:
                 enhanced_name = extract_name_enhanced_func(text, url)
@@ -159,33 +144,29 @@ async def extract_kleinanzeigen_detail_async(
                     name = enhanced_name
             except Exception: 
                 pass
-        if name:
+        if name: 
             data['name'] = name
 
-        # Ort/Region
         loc_el = soup. select_one('#viewad-locality')
         if loc_el:
             location = loc_el.get_text(strip=True)
             data['region'] = location
             data['location'] = location
 
-        # ===== TELEFON-EXTRAKTION (KRITISCH!) =====
         telefon = ""
-        
-        # 1. WhatsApp Links prüfen
-        if extract_whatsapp_number_func:
+
+        if extract_whatsapp_number_func: 
             try:
                 wa_number = extract_whatsapp_number_func(html)
                 if wa_number: 
                     telefon = wa_number
-                    data['whatsapp_link'] = f"https://wa.me/{wa_number.replace('+', '')}"
+                    data['whatsapp_link'] = f"https://wa.me/{wa_number. replace('+', '')}"
                     if log_func:
                         log_func("debug", "Kleinanzeigen:  WhatsApp gefunden", url=url)
             except Exception: 
                 pass
-        
-        # 2. Direkte WhatsApp-Link Extraktion (Fallback)
-        if not telefon: 
+
+        if not telefon:
             wa = soup.select_one('a[href*="wa.me"], a[href*="api.whatsapp.com"]')
             if wa:
                 href = wa.get("href", "")
@@ -193,9 +174,8 @@ async def extract_kleinanzeigen_detail_async(
                 if tel_raw and len(tel_raw) >= 10:
                     telefon = "+" + tel_raw
                     data['whatsapp_link'] = href
-        
-        # 3. Telefon aus Text extrahieren (alle Patterns)
-        if not telefon and extract_all_phone_patterns_func:
+
+        if not telefon and extract_all_phone_patterns_func: 
             try:
                 phones = extract_all_phone_patterns_func(text)
                 if phones and get_best_phone_number_func:
@@ -204,10 +184,8 @@ async def extract_kleinanzeigen_detail_async(
                         telefon = best
             except Exception:
                 pass
-        
-        # 4. Regex-basierte Extraktion (Fallback)
+
         if not telefon:
-            # Deutsche Mobilnummern
             phone_patterns = [
                 r'(\+49\s*1[567]\d[\s\-/]*\d{7,})',
                 r'(01[567]\d[\s\-/]*\d{6,})',
@@ -221,58 +199,50 @@ async def extract_kleinanzeigen_detail_async(
                     if len(cleaned) >= 10:
                         telefon = cleaned
                         break
-        
-        # 5. Browser-Extraktion (für versteckte Nummern)
+
         if not telefon and extract_phone_with_browser_func:
-            try: 
+            try:
                 browser_phone = await extract_phone_with_browser_func(url)
-                if browser_phone: 
+                if browser_phone:
                     telefon = browser_phone
                     if log_func:
-                        log_func("debug", "Kleinanzeigen:  Telefon via Browser extrahiert", url=url)
+                        log_func("debug", "Kleinanzeigen: Telefon via Browser extrahiert", url=url)
             except Exception:
                 pass
-        
-        # Telefon normalisieren und validieren
+
         if telefon and normalize_phone_func:
             try:
                 telefon = normalize_phone_func(telefon)
             except Exception:
                 pass
-        
-        if telefon and validate_phone_func:
+
+        if telefon and validate_phone_func: 
             try:
                 is_valid, phone_type = validate_phone_func(telefon)
-                if is_valid:
+                if is_valid: 
                     data['telefon'] = telefon
                     data['phone_type'] = phone_type
-                    
-                    # Mobile bevorzugen
                     if is_mobile_number_func: 
                         data['is_mobile'] = is_mobile_number_func(telefon)
             except Exception:
-                # Bei Validierungsfehler trotzdem speichern
                 data['telefon'] = telefon
         elif telefon:
-            # Ohne Validierung trotzdem speichern
             data['telefon'] = telefon
 
-        # Email extrahieren
         if EMAIL_RE:
             email_match = EMAIL_RE.search(text)
             if email_match:
                 data['email'] = email_match.group(0)
 
-        # Nur zurückgeben wenn wir Telefon haben
-        if data.get('telefon'):
+        if data. get('telefon'):
             if log_func:
-                log_func("info", "Kleinanzeigen: Lead extrahiert", 
-                        url=url, 
+                log_func("info", "Kleinanzeigen: Lead extrahiert",
+                        url=url,
                         has_phone=True,
-                        name=data.get('name', '')[: 20])
+                        name=data.get('name', '')[:20])
             return data
         else:
-            if log_func: 
+            if log_func:
                 log_func("debug", "Kleinanzeigen:  Kein Telefon gefunden", url=url)
             return None
 
@@ -287,10 +257,7 @@ async def crawl_kleinanzeigen_portal_async(
     http_get_func: Callable = None,
     log_func:  Callable = None,
     **kwargs
-) -> List[Dict]: 
-    """
-    Crawlt mehrere Kleinanzeigen URLs. 
-    """
+) -> List[Dict]:
     results = []
     for url in urls:
         detail_urls = await crawl_kleinanzeigen_listings_async(
@@ -299,7 +266,7 @@ async def crawl_kleinanzeigen_portal_async(
             log_func=log_func,
             **kwargs
         )
-        for detail_url in detail_urls: 
+        for detail_url in detail_urls:
             data = await extract_kleinanzeigen_detail_async(
                 url=detail_url,
                 http_get_func=http_get_func,
@@ -311,68 +278,50 @@ async def crawl_kleinanzeigen_portal_async(
     return results
 
 
-# ============================================
-# MARK URL SEEN
-# ============================================
-
 def _mark_url_seen(
     url: str,
     source:  str = "",
     db_func: Callable = None,
     log_func: Callable = None,
-    seen_cache: set = None,
+    seen_cache:  set = None,
     normalize_func: Callable = None,
 ) -> bool:
-    """Mark URL as seen in database and cache."""
     try:
         normalized = normalize_func(url) if normalize_func else url
-        
         if seen_cache is not None:
-            seen_cache.add(normalized)
-        
+            seen_cache. add(normalized)
         if db_func:
             con = db_func()
             cur = con.cursor()
-            cur.execute("""
+            cur.execute('''
                 INSERT OR IGNORE INTO seen_urls (url, source, seen_at)
                 VALUES (?, ?, datetime('now'))
-            """, (normalized, source))
+            ''', (normalized, source))
             con.commit()
             con.close()
-        
         return True
-    except Exception as e: 
-        if log_func: 
+    except Exception as e:
+        if log_func:
             log_func("warn", f"Failed to mark URL seen: {e}")
         return False
 
 
-# ============================================
-# ANDERE PORTAL CRAWLER (Stubs)
-# ============================================
-
 async def crawl_markt_de_listings_async(*args, **kwargs) -> List[str]:
-    """Markt.de crawler - Stub"""
     return []
 
 async def crawl_quoka_listings_async(*args, **kwargs) -> List[str]:
-    """Quoka crawler - Stub"""
     return []
 
 async def crawl_kalaydo_listings_async(*args, **kwargs) -> List[str]:
-    """Kalaydo crawler - Stub"""
     return []
 
 async def crawl_meinestadt_listings_async(*args, **kwargs) -> List[str]:
-    """MeineStadt crawler - Stub"""
     return []
 
-async def extract_generic_detail_async(*args, **kwargs) -> Optional[Dict]: 
-    """Generic detail extractor - Stub"""
+async def extract_generic_detail_async(*args, **kwargs) -> Optional[Dict]:
     return None
 
 
-# Export all
 __all__ = [
     'crawl_kleinanzeigen_listings_async',
     'extract_kleinanzeigen_detail_async',
@@ -384,5 +333,3 @@ __all__ = [
     'extract_generic_detail_async',
     '_mark_url_seen',
 ]
-
-

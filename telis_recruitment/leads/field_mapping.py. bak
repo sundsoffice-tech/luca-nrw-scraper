@@ -1,4 +1,4 @@
-﻿"""
+"""
 Central field mapping for Lead data synchronization.
 
 This module provides canonical field name mappings between:
@@ -28,7 +28,7 @@ FIELD_SCHEMA = {
     'qualifications': ['qualifications', 'qualification', 'qualifikationen', 'education', 'certifications'],
 }
 
-# Scraper DB â†’ Django Model field mapping
+# Scraper DB → Django Model field mapping
 # Maps scraper.db column names to Django Lead model field names
 SCRAPER_TO_DJANGO_MAPPING = {
     # Core fields
@@ -40,8 +40,6 @@ SCRAPER_TO_DJANGO_MAPPING = {
     'rolle': 'role',
     'role_guess': 'role',
     'company_name': 'company',
-    'firma': 'company',
-    'firma_groesse': 'company_size',
     
     # Location
     'region': 'location',
@@ -114,10 +112,10 @@ SCRAPER_TO_DJANGO_MAPPING = {
     'ssl_insecure': 'ssl_insecure',
 }
 
-# Django Model â†’ Scraper DB reverse mapping
+# Django Model → Scraper DB reverse mapping
 # Note: When multiple scraper fields map to the same Django field,
 # only the first occurrence is preserved in the reverse mapping.
-# This is by design as the mapping is primarily used for scraper â†’ Django direction.
+# This is by design as the mapping is primarily used for scraper → Django direction.
 DJANGO_TO_SCRAPER_MAPPING = {}
 for scraper_field, django_field in SCRAPER_TO_DJANGO_MAPPING.items():
     # Only set if not already set (preserves first mapping)
@@ -212,4 +210,3 @@ def is_boolean_field(field_name):
 def is_url_field(field_name):
     """Check if a field should be treated as a URL."""
     return field_name in URL_FIELDS
-
