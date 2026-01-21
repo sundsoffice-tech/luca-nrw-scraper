@@ -282,9 +282,7 @@
                             <span class="text-gray-500 text-sm">Keine Tags vorhanden</span>
                         {% endif %}
                     </div>
-                    <!-- Commented out until API implementation is complete
                     <button class="mt-2 text-sm text-primary hover:underline" onclick="addTag()">+ Tag hinzufügen</button>
-                    -->
                 </div>
                 
                 <!-- Notes -->
@@ -295,9 +293,7 @@
                     {% else %}
                         <div class="p-4 bg-dark-900 rounded text-gray-500 text-sm italic">Keine Notizen vorhanden</div>
                     {% endif %}
-                    <!-- Commented out until API implementation is complete
                     <button class="mt-2 text-sm text-primary hover:underline" onclick="editNotes()">✏️ Notizen bearbeiten</button>
-                    -->
                 </div>
             </div>
 
@@ -428,5 +424,205 @@
     </div>
 </div>
 
-<!-- Note: addTag() and editNotes() functions are disabled until API implementation is complete -->
+<!-- Tag Modal -->
+<div id="tagModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6 max-w-md w-full mx-4">
+        <h2 class="text-xl font-semibold text-white mb-4">Tag hinzufügen</h2>
+        
+        <form id="tagForm" class="space-y-4">
+            <div>
+                <label for="tagInput" class="block text-sm font-medium text-gray-300 mb-2">
+                    Tag-Name
+                </label>
+                <input type="text" id="tagInput" 
+                       class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                       placeholder="z.B. Hot Lead, Follow-up, etc.">
+            </div>
+            
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeTagModal()" 
+                        class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+                    Abbrechen
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
+                    Hinzufügen
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Notes Modal -->
+<div id="notesModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-dark-800 rounded-lg border border-dark-700 p-6 max-w-2xl w-full mx-4">
+        <h2 class="text-xl font-semibold text-white mb-4">Notizen bearbeiten</h2>
+        
+        <form id="notesForm" class="space-y-4">
+            <div>
+                <label for="notesTextarea" class="block text-sm font-medium text-gray-300 mb-2">
+                    Notizen
+                </label>
+                <textarea id="notesTextarea" rows="8"
+                          class="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Notizen zu diesem Lead...">{{ lead.notes }}</textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeNotesModal()" 
+                        class="px-4 py-2 bg-dark-700 text-white rounded-lg hover:bg-dark-600 transition">
+                    Abbrechen
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">
+                    Speichern
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const leadId = {{ lead.id }};
+const csrfToken = '{{ csrf_token }}';
+
+// Toast notification function
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 ${
+        type === 'success' ? 'bg-green-500' : 'bg-red-500'
+    } text-white`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Add Tag Functions
+function addTag() {
+    document.getElementById('tagModal').classList.remove('hidden');
+    document.getElementById('tagInput').focus();
+}
+
+function closeTagModal() {
+    document.getElementById('tagModal').classList.add('hidden');
+    document.getElementById('tagInput').value = '';
+}
+
+document.getElementById('tagForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const tagName = document.getElementById('tagInput').value.trim();
+    if (!tagName) {
+        showToast('Bitte geben Sie einen Tag-Namen ein', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/crm/api/leads/${leadId}/add-tag/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ tag: tagName })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Tag erfolgreich hinzugefügt', 'success');
+            closeTagModal();
+            
+            // Update tags display
+            const tagsContainer = document.getElementById('tags-container');
+            const newTag = document.createElement('span');
+            newTag.className = 'px-3 py-1 bg-primary/20 text-primary rounded-full text-sm';
+            newTag.textContent = tagName;
+            
+            // Remove "no tags" message if it exists
+            const noTagsMsg = tagsContainer.querySelector('.text-gray-500');
+            if (noTagsMsg) {
+                noTagsMsg.remove();
+            }
+            
+            tagsContainer.appendChild(newTag);
+        } else {
+            showToast('❌ Fehler: ' + (data.error || 'Unbekannter Fehler'), 'error');
+        }
+    } catch (error) {
+        console.error('Error adding tag:', error);
+        showToast('❌ Fehler beim Hinzufügen des Tags', 'error');
+    }
+});
+
+// Edit Notes Functions
+function editNotes() {
+    document.getElementById('notesModal').classList.remove('hidden');
+    document.getElementById('notesTextarea').focus();
+}
+
+function closeNotesModal() {
+    document.getElementById('notesModal').classList.add('hidden');
+}
+
+document.getElementById('notesForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const notes = document.getElementById('notesTextarea').value.trim();
+    
+    try {
+        const response = await fetch(`/crm/api/leads/${leadId}/update-notes/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ notes: notes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Notizen erfolgreich gespeichert', 'success');
+            closeNotesModal();
+            
+            // Reload page to show updated notes
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showToast('❌ Fehler: ' + (data.error || 'Unbekannter Fehler'), 'error');
+        }
+    } catch (error) {
+        console.error('Error updating notes:', error);
+        showToast('❌ Fehler beim Speichern der Notizen', 'error');
+    }
+});
+
+// Close modals on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeTagModal();
+        closeNotesModal();
+    }
+});
+
+// Close modals when clicking outside
+document.getElementById('tagModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        closeTagModal();
+    }
+});
+
+document.getElementById('notesModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        closeNotesModal();
+    }
+});
+</script>
 {% endblock %}
