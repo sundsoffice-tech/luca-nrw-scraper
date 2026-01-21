@@ -1357,3 +1357,39 @@ def robots_txt(request):
     ]
     
     return HttpResponse('\n'.join(lines), content_type='text/plain')
+
+
+# ============================================================================
+# Fallback Static File Handler
+# ============================================================================
+
+def fallback_static(request, file_path):
+    """
+    Fallback handler for missing static files from Page Builder projects.
+    
+    Many Page Builder projects reference files like /src/main.css that don't exist.
+    This view:
+    1. Logs the missing file (for later analysis)
+    2. Returns an empty but valid response (prevents 404 errors)
+    """
+    # Log missing file for debugging
+    logger.warning(
+        f"Missing static file requested: {request.path} - "
+        f"Referer: {request.META.get('HTTP_REFERER', 'unknown')}"
+    )
+    
+    # Determine content type based on file extension
+    if file_path.endswith('.css'):
+        content_type = 'text/css'
+        content = '/* File not found - placeholder */\n'
+    elif file_path.endswith('.js'):
+        content_type = 'application/javascript'
+        content = '// File not found - placeholder\n'
+    elif file_path.endswith('.map'):
+        content_type = 'application/json'
+        content = '{}'
+    else:
+        content_type = 'text/plain'
+        content = ''
+    
+    return HttpResponse(content, content_type=content_type, status=200)
