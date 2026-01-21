@@ -123,6 +123,24 @@ class ProcessManager:
         self.last_error_details = None
         self.last_error_component = None
     
+    def _update_run_as_failed(self, error_message: str):
+        """
+        Helper method to mark a scraper run as failed.
+        
+        Args:
+            error_message: Error message to log in the run record
+        """
+        if self.output_monitor.current_run_id:
+            try:
+                from .models import ScraperRun
+                run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
+                run.status = 'failed'
+                run.logs = error_message
+                run.finished_at = timezone.now()
+                run.save()
+            except Exception as e:
+                logger.error(f"Failed to update ScraperRun as failed: {e}")
+    
     def _handle_process_completion(self, exit_code: int, runtime: float):
         """
         Handle process completion from OutputMonitor.
@@ -303,10 +321,7 @@ class ProcessManager:
             script_type, script_path = self.launcher.find_scraper_script()
             
             if script_type is None:
-                run.status = 'failed'
-                run.finished_at = timezone.now()
-                run.logs = "Scraper script not found (luca_scraper/cli.py or scriptname.py)"
-                run.save()
+                self._update_run_as_failed("Scraper script not found (luca_scraper/cli.py or scriptname.py)")
                 
                 self._set_error_context(
                     ScraperErrorType.SCRIPT_NOT_FOUND,
@@ -388,16 +403,7 @@ class ProcessManager:
                 component="process_launcher"
             )
             
-            if self.output_monitor.current_run_id:
-                try:
-                    from .models import ScraperRun
-                    run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
-                    run.status = 'failed'
-                    run.logs = f"Permission denied: {str(e)}"
-                    run.finished_at = timezone.now()
-                    run.save()
-                except Exception:
-                    pass
+            self._update_run_as_failed(f"Permission denied: {str(e)}")
             
             return create_error_response(
                 ScraperErrorType.PERMISSION_DENIED,
@@ -419,16 +425,7 @@ class ProcessManager:
                 component="process_launcher"
             )
             
-            if self.output_monitor.current_run_id:
-                try:
-                    from .models import ScraperRun
-                    run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
-                    run.status = 'failed'
-                    run.logs = f"File not found: {str(e)}"
-                    run.finished_at = timezone.now()
-                    run.save()
-                except Exception:
-                    pass
+            self._update_run_as_failed(f"File not found: {str(e)}")
             
             return create_error_response(
                 ScraperErrorType.FILE_ACCESS_ERROR,
@@ -465,16 +462,7 @@ class ProcessManager:
                 component=component
             )
             
-            if self.output_monitor.current_run_id:
-                try:
-                    from .models import ScraperRun
-                    run = ScraperRun.objects.get(id=self.output_monitor.current_run_id)
-                    run.status = 'failed'
-                    run.logs = f"Failed to start: {str(e)}"
-                    run.finished_at = timezone.now()
-                    run.save()
-                except Exception:
-                    pass
+            self._update_run_as_failed(f"Failed to start: {str(e)}")
             
             return create_error_response(
                 error_type,

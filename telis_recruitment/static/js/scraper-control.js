@@ -89,14 +89,23 @@ class ScraperControl {
             if (status.error_type) {
                 const errorTypeMap = {
                     'SCRIPT_NOT_FOUND': 'Fehler: Skript nicht gefunden',
+                    'SCRIPT_PERMISSION_DENIED': 'Fehler: Skript-Berechtigung verweigert',
                     'PERMISSION_DENIED': 'Fehler: Zugriff verweigert',
                     'CONFIG_ERROR': 'Fehler: Konfiguration',
+                    'CONFIG_FILE_MISSING': 'Fehler: Konfiguration fehlt',
+                    'CONFIG_INVALID': 'Fehler: Ungültige Konfiguration',
+                    'PROCESS_START_FAILED': 'Fehler: Prozessstart fehlgeschlagen',
                     'PROCESS_CRASH': 'Fehler: Prozess abgestürzt',
                     'PROCESS_EARLY_EXIT': 'Fehler: Frühzeitiger Exit',
                     'MISSING_DEPENDENCY': 'Fehler: Fehlende Abhängigkeit',
+                    'PYTHON_VERSION_ERROR': 'Fehler: Python-Version',
+                    'RATE_LIMIT_ERROR': 'Fehler: Rate Limit',
                     'CONNECTION_ERROR': 'Fehler: Verbindung',
                     'TIMEOUT_ERROR': 'Fehler: Timeout',
-                    'FILE_ACCESS_ERROR': 'Fehler: Dateizugriff'
+                    'FILE_ACCESS_ERROR': 'Fehler: Dateizugriff',
+                    'ALREADY_RUNNING': 'Läuft bereits',
+                    'NOT_RUNNING': 'Läuft nicht',
+                    'UNKNOWN_ERROR': 'Unbekannter Fehler'
                 };
                 this.statusText.textContent = errorTypeMap[status.error_type] || 'Fehler';
                 this.statusText.title = status.error_message || '';
@@ -109,8 +118,8 @@ class ScraperControl {
         } else if (status.status === 'circuit_breaker_open') {
             this.statusDot.className = 'w-3 h-3 rounded-full bg-yellow-500';
             this.statusText.textContent = 'Circuit Breaker aktiv';
-            if (status.circuit_breaker_remaining_seconds) {
-                this.statusText.title = `Versuchen Sie es in ${Math.ceil(status.circuit_breaker_remaining_seconds)}s erneut`;
+            if (status.remaining_penalty_seconds) {
+                this.statusText.title = `Versuchen Sie es in ${Math.ceil(status.remaining_penalty_seconds)}s erneut`;
             }
             this.btnStart.disabled = true;
             this.btnStop.disabled = true;
@@ -211,21 +220,6 @@ class ScraperControl {
         return message;
     }
     
-    /**
-     * Get CSS class for error type
-     */
-    getErrorClass(errorType) {
-        const errorClasses = {
-            'SCRIPT_NOT_FOUND': 'error-critical',
-            'PERMISSION_DENIED': 'error-critical',
-            'CONFIG_ERROR': 'error-warning',
-            'CIRCUIT_BREAKER_OPEN': 'error-info',
-            'ALREADY_RUNNING': 'error-info',
-            'NOT_RUNNING': 'error-info'
-        };
-        return errorClasses[errorType] || 'error-default';
-    }
-    
     async start() {
         try {
             this.btnStart.disabled = true;
@@ -249,7 +243,6 @@ class ScraperControl {
                 await this.updateStatus();
             } else {
                 const errorMsg = this.formatErrorMessage(result);
-                const errorClass = this.getErrorClass(result.error_type);
                 
                 this.appendLog('ERROR', `Fehler beim Starten: ${result.error_message || result.error}`);
                 
