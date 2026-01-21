@@ -46,11 +46,10 @@ def patch_db(monkeypatch):
     monkeypatch.setattr(sn, "path_ok", lambda *a, **k: True)
     monkeypatch.setattr(sn, "_url_seen_fast", lambda *a, **k: False)
     monkeypatch.setattr(sn, "is_query_done", lambda *a, **k: False)
-    # Don't actually sleep in tests
-    original_sleep = asyncio.sleep
-    async def fake_sleep(duration):
-        await original_sleep(0.001)  # Minimal sleep for async context switches
-    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    # Patch asyncio.sleep to be async but fast
+    async def fake_sleep(*args, **kwargs):
+        pass
+    monkeypatch.setattr(sn.asyncio, "sleep", fake_sleep)
 
 
 @pytest.mark.asyncio
