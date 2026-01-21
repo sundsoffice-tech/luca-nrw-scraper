@@ -44,6 +44,10 @@ urlpatterns = [
     path('api/saved-filters/', views.saved_filters, name='saved-filters'),
     path('api/saved-filters/<int:filter_id>/', views.saved_filter_detail, name='saved-filter-detail'),
     
+    # Lead management API
+    path('api/leads/<int:lead_id>/add-tag/', views.lead_add_tag, name='lead-add-tag'),
+    path('api/leads/<int:lead_id>/update-notes/', views.lead_update_notes, name='lead-update-notes'),
+    
     # Future: Add more CRM routes here
     # path('phone/', views.crm_phone, name='crm-phone'),
     # path('emails/', views.crm_emails, name='crm-emails'),
