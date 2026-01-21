@@ -1,4 +1,4 @@
-""
+"""
 Crawler-Funktionen für verschiedene Portale
 """
 import asyncio
@@ -45,7 +45,7 @@ async def crawl_kleinanzeigen_listings_async(
         try:
             # Jitter delay
             if jitter_func and PORTAL_DELAYS:
-                delay = PORTAL_DELAYS.get("kleinanzeigen", 2. 0)
+                delay = PORTAL_DELAYS.get("kleinanzeigen", 2.0)
                 await asyncio.sleep(jitter_func(delay))
             
             # HTTP Request
@@ -59,7 +59,7 @@ async def crawl_kleinanzeigen_listings_async(
                 
                 # Finde Anzeigen-Links
                 found_on_page = 0
-                for link in soup. select('a[href*="/s-anzeige/"]'):
+                for link in soup.select('a[href*="/s-anzeige/"]'):
                     href = link.get('href', '')
                     if href and '/s-anzeige/' in href:
                         full_url = f"https://www.kleinanzeigen.de{href}" if href.startswith('/') else href
@@ -105,7 +105,7 @@ async def extract_kleinanzeigen_detail_async(
             if not html:
                 return None
             
-            soup = BeautifulSoup(html, 'html. parser')
+            soup = BeautifulSoup(html, 'html.parser')
             
             # Extrahiere Daten
             data = {
@@ -124,7 +124,7 @@ async def extract_kleinanzeigen_detail_async(
                 data['description'] = desc_el.get_text(strip=True)
             
             # Name
-            name_el = soup. select_one('. userprofile-vip a, .iconlist--text')
+            name_el = soup.select_one('.userprofile-vip a, .iconlist--text')
             if name_el: 
                 data['name'] = name_el.get_text(strip=True)
             
