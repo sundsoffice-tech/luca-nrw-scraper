@@ -42,7 +42,7 @@ class GracefulShutdown:
     _instance: Optional['GracefulShutdown'] = None
     _lock = threading.Lock()
     
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         """Ensure only one instance exists (singleton pattern)."""
         if cls._instance is None:
             with cls._lock:
