@@ -1337,6 +1337,78 @@ def saved_filter_detail(request, filter_id):
         })
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def lead_add_tag(request, lead_id):
+    """
+    Add a tag to a lead.
+    """
+    try:
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        lead = leads_qs.get(pk=lead_id)
+    except Lead.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Lead not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    tag_name = request.data.get('tag', '').strip()
+    if not tag_name:
+        return Response({
+            'success': False,
+            'error': 'Tag name is required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Initialize tags array if it doesn't exist
+    if not lead.tags:
+        lead.tags = []
+    
+    # Add tag if it doesn't already exist
+    if tag_name not in lead.tags:
+        lead.tags.append(tag_name)
+        lead.save()
+        logger.info(f"Tag '{tag_name}' added to lead {lead_id} by {request.user}")
+        
+        return Response({
+            'success': True,
+            'message': f'Tag "{tag_name}" hinzugefügt',
+            'tags': lead.tags
+        })
+    else:
+        return Response({
+            'success': False,
+            'error': 'Tag bereits vorhanden'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def lead_update_notes(request, lead_id):
+    """
+    Update notes for a lead.
+    """
+    try:
+        leads_qs = _get_leads_queryset_for_user(request.user)
+        lead = leads_qs.get(pk=lead_id)
+    except Lead.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Lead not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    notes = request.data.get('notes', '')
+    lead.notes = notes.strip()
+    lead.save()
+    
+    logger.info(f"Notes updated for lead {lead_id} by {request.user}")
+    
+    return Response({
+        'success': True,
+        'message': 'Notizen erfolgreich gespeichert',
+        'notes': lead.notes
+    })
+
+
 # Template views for public pages
 
 
