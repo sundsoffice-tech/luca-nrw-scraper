@@ -894,3 +894,110 @@ def api_reset_circuit_breaker(request):
             'success': False,
             'error': str(e)
         }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def api_health_check(request):
+    """
+    Health check endpoint for external monitoring.
+    
+    Checks:
+    - Scraper process status
+    - Database connectivity
+    - Memory usage (<90%)
+    - Disk space (>1GB free)
+    
+    Returns:
+        JSON response with health status:
+        - HTTP 200 if healthy
+        - HTTP 503 if unhealthy
+        
+    Response format:
+        {
+            "healthy": true/false,
+            "timestamp": "2026-01-21T10:00:00Z",
+            "checks": {
+                "scraper_process": true/false,
+                "database": true/false,
+                "memory": true/false,
+                "disk": true/false
+            },
+            "scraper_status": "running/stopped",
+            "uptime_seconds": 3600
+        }
+    """
+    from datetime import datetime, timezone as dt_timezone
+    import shutil
+    
+    checks = {}
+    all_healthy = True
+    
+    # 1. Check scraper process status
+    try:
+        manager = get_manager()
+        scraper_running = manager.is_running()
+        checks['scraper_process'] = scraper_running
+        scraper_status = manager.status
+        
+        # Calculate uptime
+        uptime_seconds = 0
+        if manager.start_time and scraper_running:
+            uptime_seconds = (datetime.now(dt_timezone.utc) - manager.start_time).total_seconds()
+            
+    except Exception as e:
+        logger.error(f"Health check - scraper process error: {e}")
+        checks['scraper_process'] = False
+        scraper_status = 'unknown'
+        uptime_seconds = 0
+        all_healthy = False
+    
+    # 2. Check database connectivity
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks['database'] = True
+    except Exception as e:
+        logger.error(f"Health check - database error: {e}")
+        checks['database'] = False
+        all_healthy = False
+    
+    # 3. Check memory usage (<90%)
+    try:
+        memory = psutil.virtual_memory()
+        memory_ok = memory.percent < 90.0
+        checks['memory'] = memory_ok
+        if not memory_ok:
+            all_healthy = False
+            logger.warning(f"Health check - high memory usage: {memory.percent}%")
+    except Exception as e:
+        logger.error(f"Health check - memory error: {e}")
+        checks['memory'] = False
+        all_healthy = False
+    
+    # 4. Check disk space (>1GB free)
+    try:
+        disk = shutil.disk_usage('/')
+        free_gb = disk.free / (1024 ** 3)
+        disk_ok = free_gb > 1.0
+        checks['disk'] = disk_ok
+        if not disk_ok:
+            all_healthy = False
+            logger.warning(f"Health check - low disk space: {free_gb:.2f} GB")
+    except Exception as e:
+        logger.error(f"Health check - disk error: {e}")
+        checks['disk'] = False
+        all_healthy = False
+    
+    # Build response
+    response_data = {
+        'healthy': all_healthy,
+        'timestamp': datetime.now(dt_timezone.utc).isoformat(),
+        'checks': checks,
+        'scraper_status': scraper_status,
+        'uptime_seconds': int(uptime_seconds)
+    }
+    
+    status_code = http_status.HTTP_200_OK if all_healthy else http_status.HTTP_503_SERVICE_UNAVAILABLE
+    
+    return Response(response_data, status=status_code)

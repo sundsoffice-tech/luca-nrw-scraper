@@ -32,4 +32,7 @@ urlpatterns = [
     path('api/control/portal/toggle/', views.api_toggle_portal, name='api-toggle-portal'),
     path('api/control/portals/', views.api_portals_status, name='api-portals-status'),
     path('api/control/circuit-breaker/reset/', views.api_reset_circuit_breaker, name='api-reset-circuit-breaker'),
+    
+    # Health check endpoint
+    path('api/health/', views.api_health_check, name='api-health-check'),
 ]
