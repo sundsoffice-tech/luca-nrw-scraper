@@ -1062,6 +1062,8 @@ def api_postgres_listener_status(request):
     - PostgreSQL notification queue usage
     - Notification queue statistics
     """
+    from datetime import datetime, timezone as dt_timezone
+    
     listener = get_global_listener()
     notif_queue = get_notification_queue()
     
