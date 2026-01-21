@@ -232,7 +232,16 @@ async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Opti
                     if not ok:
                         log("info", "Head-preflight: skipped by headers", url=url, reason=reason)
                         return None
-    except Exception:
+    except asyncio.TimeoutError as e:
+        log("debug", "HEAD request timeout", url=url, error=str(e))
+        _penalize_host(host, "timeout")
+        r_head = None
+    except (ConnectionError, OSError) as e:
+        log("debug", "HEAD request connection error", url=url, error=str(e))
+        _penalize_host(host, "connection_error")
+        r_head = None
+    except Exception as e:
+        log("debug", "HEAD request failed", url=url, error=str(e), error_type=type(e).__name__)
         r_head = None
 
     async def _do_get(secure: bool, force_http1: bool) -> Optional[Any]:
@@ -255,7 +264,9 @@ async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Opti
             _schedule_retry(url, r.status_code)
             log("warn", f"{r.status_code} received", url=url)
             return r
-    except Exception:
+    except asyncio.TimeoutError as e:
+        log("debug", "Primary GET timeout, trying HTTP/1.1", url=url, error=str(e))
+        _penalize_host(host, "timeout")
         # 2a) Retry as HTTP/1.1
         try:
             r = await _do_get(secure=True, force_http1=True)
@@ -271,8 +282,65 @@ async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Opti
                 _schedule_retry(url, r.status_code)
                 log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
                 return r
-        except Exception:
-            pass
+        except asyncio.TimeoutError as e:
+            log("debug", "HTTP/1.1 retry timeout", url=url, error=str(e))
+            _penalize_host(host, "timeout")
+        except (ConnectionError, OSError) as e:
+            log("debug", "HTTP/1.1 retry connection error", url=url, error=str(e))
+            _penalize_host(host, "connection_error")
+        except Exception as e:
+            log("debug", "HTTP/1.1 retry failed", url=url, error=str(e), error_type=type(e).__name__)
+    except (ConnectionError, OSError) as e:
+        log("debug", "Primary GET connection error, trying HTTP/1.1", url=url, error=str(e))
+        _penalize_host(host, "connection_error")
+        # 2a) Retry as HTTP/1.1
+        try:
+            r = await _do_get(secure=True, force_http1=True)
+            if r.status_code == 200:
+                ok, reason = _acceptable_by_headers(r.headers or {})
+                if not ok:
+                    return None
+                setattr(r, "insecure_ssl", False)
+                return r
+            if _should_retry_status(r.status_code):
+                reason = "429" if r.status_code == 429 else "error"
+                _penalize_host(host, reason)
+                _schedule_retry(url, r.status_code)
+                log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
+                return r
+        except asyncio.TimeoutError as e:
+            log("debug", "HTTP/1.1 retry timeout", url=url, error=str(e))
+            _penalize_host(host, "timeout")
+        except (ConnectionError, OSError) as e:
+            log("debug", "HTTP/1.1 retry connection error", url=url, error=str(e))
+            _penalize_host(host, "connection_error")
+        except Exception as e:
+            log("debug", "HTTP/1.1 retry failed", url=url, error=str(e), error_type=type(e).__name__)
+    except Exception as e:
+        log("debug", "Primary GET failed with unexpected error, trying HTTP/1.1", url=url, error=str(e), error_type=type(e).__name__)
+        # 2a) Retry as HTTP/1.1
+        try:
+            r = await _do_get(secure=True, force_http1=True)
+            if r.status_code == 200:
+                ok, reason = _acceptable_by_headers(r.headers or {})
+                if not ok:
+                    return None
+                setattr(r, "insecure_ssl", False)
+                return r
+            if _should_retry_status(r.status_code):
+                reason = "429" if r.status_code == 429 else "error"
+                _penalize_host(host, reason)
+                _schedule_retry(url, r.status_code)
+                log("warn", f"{r.status_code} received (HTTP/1.1 retry)", url=url)
+                return r
+        except asyncio.TimeoutError as e:
+            log("debug", "HTTP/1.1 retry timeout", url=url, error=str(e))
+            _penalize_host(host, "timeout")
+        except (ConnectionError, OSError) as e:
+            log("debug", "HTTP/1.1 retry connection error", url=url, error=str(e))
+            _penalize_host(host, "connection_error")
+        except Exception as e:
+            log("debug", "HTTP/1.1 retry failed", url=url, error=str(e), error_type=type(e).__name__)
 
     # 3) SSL fallback (insecure), first HTTP/2, then HTTP/1.1
     allow_insecure_ssl = os.getenv("ALLOW_INSECURE_SSL", "0") == "1"
@@ -292,7 +360,9 @@ async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Opti
                 _schedule_retry(url, r2.status_code)
                 log("warn", f"{r2.status_code} received (insecure TLS)", url=url)
                 return r2
-        except Exception:
+        except asyncio.TimeoutError as e:
+            log("debug", "SSL fallback timeout, trying HTTP/1.1", url=url, error=str(e))
+            _penalize_host(host, "timeout")
             try:
                 r2 = await _do_get(secure=False, force_http1=True)
                 if r2.status_code == 200:
@@ -308,8 +378,65 @@ async def _http_get_inner(url: str, headers: Optional[Dict] = None, params: Opti
                     _schedule_retry(url, r2.status_code)
                     log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
                     return r2
-            except Exception:
-                pass
+            except asyncio.TimeoutError as e:
+                log("debug", "SSL fallback HTTP/1.1 timeout", url=url, error=str(e))
+                _penalize_host(host, "timeout")
+            except (ConnectionError, OSError) as e:
+                log("debug", "SSL fallback HTTP/1.1 connection error", url=url, error=str(e))
+                _penalize_host(host, "connection_error")
+            except Exception as e:
+                log("debug", "SSL fallback HTTP/1.1 failed", url=url, error=str(e), error_type=type(e).__name__)
+        except (ConnectionError, OSError) as e:
+            log("debug", "SSL fallback connection error, trying HTTP/1.1", url=url, error=str(e))
+            _penalize_host(host, "connection_error")
+            try:
+                r2 = await _do_get(secure=False, force_http1=True)
+                if r2.status_code == 200:
+                    ok, reason = _acceptable_by_headers(r2.headers or {})
+                    if not ok:
+                        return None
+                    setattr(r2, "insecure_ssl", True)
+                    log("warn", "SSL Fallback (HTTP/1.1) genutzt", url=url)
+                    return r2
+                if _should_retry_status(r2.status_code):
+                    reason = "429" if r2.status_code == 429 else "error"
+                    _penalize_host(host, reason)
+                    _schedule_retry(url, r2.status_code)
+                    log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
+                    return r2
+            except asyncio.TimeoutError as e:
+                log("debug", "SSL fallback HTTP/1.1 timeout", url=url, error=str(e))
+                _penalize_host(host, "timeout")
+            except (ConnectionError, OSError) as e:
+                log("debug", "SSL fallback HTTP/1.1 connection error", url=url, error=str(e))
+                _penalize_host(host, "connection_error")
+            except Exception as e:
+                log("debug", "SSL fallback HTTP/1.1 failed", url=url, error=str(e), error_type=type(e).__name__)
+        except Exception as e:
+            log("debug", "SSL fallback failed, trying HTTP/1.1", url=url, error=str(e), error_type=type(e).__name__)
+            try:
+                r2 = await _do_get(secure=False, force_http1=True)
+                if r2.status_code == 200:
+                    ok, reason = _acceptable_by_headers(r2.headers or {})
+                    if not ok:
+                        return None
+                    setattr(r2, "insecure_ssl", True)
+                    log("warn", "SSL Fallback (HTTP/1.1) genutzt", url=url)
+                    return r2
+                if _should_retry_status(r2.status_code):
+                    reason = "429" if r2.status_code == 429 else "error"
+                    _penalize_host(host, reason)
+                    _schedule_retry(url, r2.status_code)
+                    log("warn", f"{r2.status_code} received (insecure TLS, HTTP/1.1)", url=url)
+                    return r2
+            except asyncio.TimeoutError as e:
+                log("debug", "SSL fallback HTTP/1.1 timeout", url=url, error=str(e))
+                _penalize_host(host, "timeout")
+            except (ConnectionError, OSError) as e:
+                log("debug", "SSL fallback HTTP/1.1 connection error", url=url, error=str(e))
+                _penalize_host(host, "connection_error")
+            except Exception as e:
+                log("debug", "SSL fallback HTTP/1.1 failed", url=url, error=str(e), error_type=type(e).__name__)
 
     if "sitemap" in (url or "").lower():
         log("debug", "Sitemap nicht verfügbar", url=url)
