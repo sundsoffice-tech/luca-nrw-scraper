@@ -148,6 +148,14 @@ def api_scraper_status(request):
         manager = get_manager()
         status_info = manager.get_status()
         
+        # Add current config version info
+        try:
+            config = ScraperConfig.get_config()
+            status_info['config_version'] = config.config_version
+            status_info['config_updated_at'] = config.updated_at.isoformat() if config.updated_at else None
+        except Exception as e:
+            logger.debug(f"Could not add config version to status: {e}")
+        
         return Response(status_info, status=http_status.HTTP_200_OK)
             
     except Exception as e:
@@ -438,9 +446,20 @@ def api_scraper_config_update(request):
         config.updated_by = request.user
         config.save()
         
+        # Check if scraper is running to inform about automatic restart
+        manager = get_manager()
+        if manager.is_running():
+            message = (
+                'Konfiguration aktualisiert. Der laufende Scraper wird automatisch '
+                'neu gestartet, um die Änderungen zu übernehmen.'
+            )
+        else:
+            message = 'Konfiguration aktualisiert'
+        
         return Response({
             'success': True,
-            'message': 'Konfiguration aktualisiert'
+            'message': message,
+            'config_version': config.config_version
         }, status=http_status.HTTP_200_OK)
             
     except Exception as e:
