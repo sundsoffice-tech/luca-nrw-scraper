@@ -38,7 +38,10 @@ def patch_db(monkeypatch):
     monkeypatch.setattr(sn, "url_seen", lambda *a, **k: False)
     monkeypatch.setattr(sn, "is_denied", lambda *a, **k: False)
     monkeypatch.setattr(sn, "path_ok", lambda *a, **k: True)
-    monkeypatch.setattr(sn.asyncio, "sleep", lambda *a, **k: None)
+    # Patch asyncio.sleep to be async but fast
+    async def fake_sleep(*args, **kwargs):
+        pass
+    monkeypatch.setattr(sn.asyncio, "sleep", fake_sleep)
 
 
 @pytest.mark.asyncio
