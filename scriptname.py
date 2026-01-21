@@ -1300,7 +1300,7 @@ CFG = ScraperConfig()
 class DynamicQueryGenerator:
     """
     Tracks query results for machine learning optimization.
-    Records query performance including industry, lead counts, and phone number success rates.
+    Records query performance including industry data, lead counts, and phone number success rates.
     """
     
     def __init__(self, db_path: str = "scraper.db"):
@@ -1335,12 +1335,12 @@ class DynamicQueryGenerator:
         
         Args:
             query_string: The search query that was executed
-            industry: The industry/Branche context for the query
+            industry: The industry/Branche (business sector) context for the query
             leads_found: Total number of leads found by this query
             leads_with_phone: Number of leads that have phone numbers
             run_id: The run ID this query belongs to
         """
-        success_rate = leads_with_phone / max(1, leads_found) if leads_found > 0 else 0.0
+        success_rate = leads_with_phone / leads_found if leads_found > 0 else 0.0
         
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
@@ -9298,7 +9298,8 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             try:
                 query_gen = get_query_generator()
                 if query_gen:
-                    # Count leads with phone numbers
+                    # Calculate metrics in a single pass for efficiency
+                    leads_found = len(collected_rows)
                     leads_with_phone = sum(1 for r in collected_rows if r.get("telefon"))
                     # Get industry from environment
                     industry = os.getenv("INDUSTRY", "unknown").lower()
@@ -9306,11 +9307,11 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
                     query_gen.record_query_result(
                         query_string=q,
                         industry=industry,
-                        leads_found=len(collected_rows),
+                        leads_found=leads_found,
                         leads_with_phone=leads_with_phone,
                         run_id=run_id
                     )
-                    log("debug", "Query result recorded", q=q, leads=len(collected_rows), 
+                    log("debug", "Query result recorded", q=q, leads=leads_found, 
                         with_phone=leads_with_phone, industry=industry)
             except Exception as e:
                 log("error", "Failed to record query result", error=str(e), q=q)
