@@ -18,6 +18,8 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 from .process_manager import get_manager
 from .models import ScraperRun, ScraperConfig, ScraperLog
+from .postgres_listener import get_global_listener
+from .notification_queue import get_notification_queue, on_notification_received
 import logging
 
 logger = logging.getLogger(__name__)
@@ -264,14 +266,27 @@ def api_scraper_logs_stream(request):
     GET /crm/scraper/api/scraper/logs/stream/
     
     Stream live logs via Server-Sent Events (SSE).
+    
+    Uses PostgreSQL LISTEN/NOTIFY when available for push-based updates,
+    falls back to polling for SQLite compatibility.
     """
     def event_stream():
         """Generator for SSE events"""
         manager = get_manager()
         last_log_id = 0
         
+        # Initialize PostgreSQL listener if not already running
+        listener = get_global_listener()
+        use_notifications = listener.is_postgresql()
+        
+        if use_notifications and not listener._running:
+            # Start listener if not already running
+            listener.start(callback=on_notification_received)
+            logger.info("SSE: Started PostgreSQL listener for notifications")
+        
         # Send initial message
-        yield f"data: {json.dumps({'type': 'connected', 'message': 'Verbunden mit Log-Stream'})}\n\n"
+        mode_msg = "PostgreSQL LISTEN/NOTIFY" if use_notifications else "Polling-Modus (SQLite)"
+        yield f"data: {json.dumps({'type': 'connected', 'message': f'Verbunden mit Log-Stream ({mode_msg})'})}\n\n"
         
         # Get current run ID
         status_info = manager.get_status()
@@ -281,36 +296,65 @@ def api_scraper_logs_stream(request):
             yield f"data: {json.dumps({'type': 'info', 'message': 'Kein aktiver Scraper-Lauf'})}\n\n"
             return
         
+        # Get notification queue
+        notif_queue = get_notification_queue() if use_notifications else None
+        
         # Stream logs
         while True:
             try:
-                # Get new logs from database
-                new_logs = ScraperLog.objects.filter(
-                    run_id=run_id,
-                    id__gt=last_log_id
-                ).order_by('id')[:50]  # Batch of 50 logs at a time
-                
-                # Send new logs
-                for log_entry in new_logs:
-                    data = {
-                        'type': 'log',
-                        'level': log_entry.level,
-                        'timestamp': log_entry.created_at.isoformat(),
-                        'message': log_entry.message
-                    }
-                    yield f"data: {json.dumps(data)}\n\n"
-                    last_log_id = log_entry.id
+                if use_notifications:
+                    # PostgreSQL LISTEN/NOTIFY mode: wait for notifications
+                    # Check for new notifications in queue
+                    new_notifications = notif_queue.get_all_new(run_id, last_id=last_log_id)
+                    
+                    if new_notifications:
+                        # Send notifications directly from queue
+                        for notification in new_notifications:
+                            data = {
+                                'type': 'log',
+                                'level': notification.get('level', 'INFO'),
+                                'timestamp': notification.get('created_at', ''),
+                                'message': notification.get('message', '')
+                            }
+                            yield f"data: {json.dumps(data)}\n\n"
+                            
+                            # Update last_log_id
+                            notif_id = notification.get('id')
+                            if notif_id and notif_id > last_log_id:
+                                last_log_id = notif_id
+                    
+                    # Small sleep to prevent busy waiting
+                    time.sleep(0.1)
+                    
+                else:
+                    # Fallback: Polling mode for SQLite
+                    new_logs = ScraperLog.objects.filter(
+                        run_id=run_id,
+                        id__gt=last_log_id
+                    ).order_by('id')[:50]  # Batch of 50 logs at a time
+                    
+                    # Send new logs
+                    for log_entry in new_logs:
+                        data = {
+                            'type': 'log',
+                            'level': log_entry.level,
+                            'timestamp': log_entry.created_at.isoformat(),
+                            'message': log_entry.message
+                        }
+                        yield f"data: {json.dumps(data)}\n\n"
+                        last_log_id = log_entry.id
+                    
+                    # Wait before checking again
+                    time.sleep(1)
                 
                 # Check if scraper is still running
                 if not manager.is_running():
                     yield f"data: {json.dumps({'type': 'stopped', 'message': 'Scraper gestoppt'})}\n\n"
                     break
                 
-                # Wait before checking again
-                time.sleep(1)
-                
             except GeneratorExit:
                 # Client disconnected
+                logger.debug("SSE: Client disconnected from log stream")
                 break
             except Exception as e:
                 logger.error(f"Error in log stream: {e}")
@@ -1020,3 +1064,60 @@ def api_health_check(request):
     status_code = http_status.HTTP_200_OK if all_healthy else http_status.HTTP_503_SERVICE_UNAVAILABLE
     
     return Response(response_data, status=status_code)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def api_postgres_listener_status(request):
+    """
+    GET /crm/scraper/api/postgres-listener/status/
+    
+    Get status of PostgreSQL LISTEN/NOTIFY listener and notification queues.
+    
+    Returns information about:
+    - Listener running status
+    - Connection health
+    - Reconnection attempts
+    - PostgreSQL notification queue usage
+    - Notification queue statistics
+    """
+    from datetime import datetime, timezone as dt_timezone
+    
+    listener = get_global_listener()
+    notif_queue = get_notification_queue()
+    
+    # Check if PostgreSQL is available
+    is_postgresql = listener.is_postgresql()
+    
+    if not is_postgresql:
+        return Response({
+            'available': False,
+            'message': 'PostgreSQL LISTEN/NOTIFY not available (database is not PostgreSQL)',
+            'database_engine': settings.DATABASES.get('default', {}).get('ENGINE', 'unknown')
+        })
+    
+    # Get listener status
+    listener_status = {
+        'running': listener._running,
+        'connection_healthy': listener.check_connection_health() if listener._running else False,
+        'reconnect_attempts': listener._reconnect_attempts,
+        'max_reconnect_attempts': listener._max_reconnect_attempts,
+    }
+    
+    # Get PostgreSQL queue usage
+    queue_usage = listener.get_queue_usage()
+    if queue_usage is not None:
+        listener_status['pg_queue_usage_percent'] = round(queue_usage, 2)
+    
+    # Get notification queue stats
+    queue_stats = notif_queue.get_stats()
+    
+    # Build response
+    response_data = {
+        'available': True,
+        'listener': listener_status,
+        'notification_queues': queue_stats,
+        'timestamp': datetime.now(dt_timezone.utc).isoformat(),
+    }
+    
+    return Response(response_data)

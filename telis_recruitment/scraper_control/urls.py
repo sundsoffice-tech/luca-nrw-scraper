@@ -35,4 +35,7 @@ urlpatterns = [
     
     # Health check endpoint
     path('api/health/', views.api_health_check, name='api-health-check'),
+    
+    # PostgreSQL LISTEN/NOTIFY monitoring
+    path('api/postgres-listener/status/', views.api_postgres_listener_status, name='api-postgres-listener-status'),
 ]
