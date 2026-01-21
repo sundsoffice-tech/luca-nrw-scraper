@@ -24,6 +24,11 @@ from .robots import (
     check_robots_txt,
     robots_allowed_async,
 )
+from .backoff import (
+    retry_with_backoff,
+    calculate_backoff_delay,
+    RetryExhausted,
+)
 
 __all__ = [
     # Client functions
@@ -41,4 +46,8 @@ __all__ = [
     # Robots handling
     "check_robots_txt",
     "robots_allowed_async",
+    # Backoff logic
+    "retry_with_backoff",
+    "calculate_backoff_delay",
+    "RetryExhausted",
 ]
