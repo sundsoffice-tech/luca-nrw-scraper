@@ -1,4 +1,4 @@
-""
+"""
 Crawler-Funktionen für verschiedene Portale
 """
 import asyncio
@@ -45,7 +45,7 @@ async def crawl_kleinanzeigen_listings_async(
         try:
             # Jitter delay
             if jitter_func and PORTAL_DELAYS:
-                delay = PORTAL_DELAYS.get("kleinanzeigen", 2. 0)
+                delay = PORTAL_DELAYS.get("kleinanzeigen", 2.0)
                 await asyncio.sleep(jitter_func(delay))
             
             # HTTP Request
