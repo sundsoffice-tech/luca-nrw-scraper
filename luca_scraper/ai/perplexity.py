@@ -79,8 +79,14 @@ async def search_perplexity_async(query: str) -> List[Dict[str, str]]:
 
 async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
     """
-    LLM-generated dorks for the specified industry.
+    LLM-generated dorks for the specified industry with Query Fan-Out support.
     Uses different prompts for candidates/recruiter mode vs standard B2B.
+    
+    Query Fan-Out Strategy:
+    ----------------------
+    Applies Query Fan-Out to generate queries that cover broader lead intentions:
+    1. Generalization: Broader search patterns (e.g., multiple sites, generic terms)
+    2. Follow-ups: Related queries (e.g., adjacent roles, alternative platforms)
     
     Args:
         industry: Industry name or "candidates"/"recruiter" for job seeker mode
@@ -93,34 +99,52 @@ async def generate_smart_dorks(industry: str, count: int = 5) -> List[str]:
     if not api_key:
         return []
     
-    # Different prompt for candidates mode
+    # Different prompt for candidates mode with Query Fan-Out
     if industry.lower() in ("candidates", "recruiter"):
         prompt = (
-            "Generate Google Dorks to find JOB SEEKERS (not companies hiring). "
-            "Target: People actively looking for sales/vertrieb jobs. "
-            "Required patterns: "
+            "Generate Google Dorks with QUERY FAN-OUT to find JOB SEEKERS (not companies hiring).\n\n"
+            "QUERY FAN-OUT Strategy:\n"
+            "1. GENERALIZATION: Broader job seeker patterns across multiple platforms\n"
+            "   - Generic job search terms on classifieds sites\n"
+            "   - Multiple variations of 'looking for work' phrases\n"
+            "2. FOLLOW-UPS: Related discovery approaches\n"
+            "   - Social media job seeker profiles\n"
+            "   - Professional networks with 'open to work' status\n"
+            "   - Freelancer platforms\n\n"
+            "Target: People actively looking for sales/vertrieb jobs.\n\n"
+            "Required patterns (apply Fan-Out): "
             'site:kleinanzeigen.de/s-stellengesuche "vertrieb"; '
             'site:xing.com/profile "offen für angebote" "sales"; '
             'site:linkedin.com/in "#opentowork" "vertrieb"; '
             '"ich suche job" "vertrieb" "NRW" "mobil"; '
             'site:facebook.com "suche arbeit" "verkauf". '
-            "Return ONLY the dorks, one per line."
+            "\n\nReturn ONLY the dorks, one per line."
         )
-        system_content = "You create Google search dorks to find job seekers and candidates."
+        system_content = "You create Google search dorks with Query Fan-Out strategy to find job seekers and candidates."
     else:
-        # Standard B2B prompt
+        # Standard B2B prompt with Query Fan-Out
         prompt = (
-            "You are a Headhunter. Generate Google Dorks that find lists of employees, PDF CVs, 'Unser Team' pages, or Freelancer profiles. "
-            "forbidden: Do NOT generate generic B2B searches like 'Händler' or 'Hersteller'. "
-            "Required Patterns (mix these): "
+            f"You are a Headhunter. Generate Google Dorks with QUERY FAN-OUT for {industry}.\n\n"
+            "QUERY FAN-OUT Strategy:\n"
+            "1. GENERALIZATION: Broader employee discovery patterns\n"
+            "   - Team pages across various company types\n"
+            "   - CV/resume documents with format variations\n"
+            "   - Multiple professional platforms\n"
+            "2. FOLLOW-UPS: Related discovery methods\n"
+            "   - Adjacent job roles and titles\n"
+            "   - Freelancer/consultant profiles\n"
+            "   - Job seeker profiles (reverse recruiting)\n\n"
+            "Goal: Find lists of employees, PDF CVs, 'Unser Team' pages, or Freelancer profiles.\n\n"
+            "Forbidden: Do NOT generate generic B2B searches like 'Händler' or 'Hersteller'.\n\n"
+            "Required Patterns (apply Fan-Out): "
             f'intitle:"Team" "Sales Manager" {industry}; '
             f'filetype:pdf "Lebenslauf" {industry} -job -anzeige; '
             f'site:linkedin.com/in/ "{industry}" "open to work"; '
             f'"stellengesuch" {industry} "verfügbar ab"; '
             f'"Ansprechpartner" "Vertrieb" {industry} -intitle:Jobs. '
-            "Return ONLY the dorks, one per line."
+            "\n\nReturn ONLY the dorks, one per line."
         )
-        system_content = "You create targeted Google search dorks for B2B lead generation."
+        system_content = "You create targeted Google search dorks with Query Fan-Out for B2B lead generation."
     
     payload = {
         "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
