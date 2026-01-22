@@ -59,32 +59,121 @@ JOBSEEKER_WINDOW = re.compile(
 # SIGNAL LISTS
 # =========================
 
+# Import enhanced signals from parser.context for consistency
+try:
+    from luca_scraper.parser.context import (
+        CANDIDATE_STRONG_SIGNALS,
+        CANDIDATE_MEDIUM_SIGNALS,
+        SALES_CONTEXT_SIGNALS,
+        CANDIDATE_URL_PATTERNS,
+        EMPLOYER_URL_PATTERNS,
+    )
+    _IMPORT_SUCCESS = True
+except ImportError:
+    # Fallback definitions if import fails - use complete lists to ensure functionality
+    _IMPORT_SUCCESS = False
+    CANDIDATE_STRONG_SIGNALS = [
+        "stellengesuch", "job gesucht", "arbeit gesucht", "ich suche job",
+        "ich suche arbeit", "suche job", "suche arbeit", "suche stelle",
+        "auf jobsuche", "open to work", "#opentowork", "verfügbar ab",
+        "arbeitslos", "freigestellt", "gekündigt", "wechselwillig",
+        "quereinstieg", "quereinsteiger",
+    ]
+    CANDIDATE_MEDIUM_SIGNALS = [
+        "profil", "erfahrung", "qualifikation", "lebenslauf", "cv",
+        "handelsvertreter", "auf provisionsbasis",
+    ]
+    SALES_CONTEXT_SIGNALS = [
+        "vertrieb", "verkauf", "sales", "außendienst", "aussendienst",
+        "call center", "callcenter", "d2d", "door to door", "akquise",
+    ]
+    CANDIDATE_URL_PATTERNS = [
+        "/s-stellengesuche/", "/stellengesuche/", "/stellengesuch/",
+        "/jobgesuche/", "/arbeitgesuche/",
+    ]
+    EMPLOYER_URL_PATTERNS = [
+        "/s-jobs/", "/stellenangebote/", "/stellenangebot/",
+        "/karriere/", "/jobs/", "/vacancy/", "/vacancies/",
+    ]
+
 # CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
 CANDIDATE_POSITIVE_SIGNALS = [
+    # Direct job search phrases
+    "stellengesuch",
+    "job gesucht",
+    "arbeit gesucht",
+    "stelle gesucht",
+    "ich suche job",
+    "ich suche arbeit",
+    "ich suche stelle",
+    "ich suche einen job",
+    "ich suche eine arbeit",
+    "ich suche eine stelle",
     "suche job",
     "suche arbeit",
     "suche stelle",
     "suche neuen job",
     "suche neue stelle",
-    "ich suche",
-    "stellengesuch",
-    "auf jobsuche",
-    "offen für angebote",
-    "offen für neue",
+    "suche neue arbeit",
     "suche neue herausforderung",
     "suche neuen wirkungskreis",
+    
+    # Availability signals
+    "ab sofort verfügbar",
+    "sofort verfügbar",
     "verfügbar ab",
     "freigestellt",
+    "gekündigt",
+    "arbeitslos",
+    "arbeitssuchend",
+    "jobsuchend",
+    "auf jobsuche",
+    
+    # LinkedIn/Social signals
     "open to work",
     "#opentowork",
+    "offen für angebote",
+    "offen für neue chancen",
+    "offen für neues",
+    "offen für neue",
     "looking for opportunities",
+    "seeking new opportunities",
     "seeking new",
-    "jobsuchend",
-    "arbeitslos",
-    "gekündigt",
+    
+    # Willingness to change
     "wechselwillig",
+    "wechselbereit",
+    "bereit für veränderung",
+    "neue wege gehen",
+    "neuen wirkungskreis",
+    
+    # Career change / Quereinstieg
+    "quereinstieg",
+    "quereinsteiger",
+    "mehr geld verdienen",
+    "bessere verdienstmöglichkeiten",
+    "karrierewechsel",
+    
+    # General search phrases
     "bin auf der suche",
     "suche eine neue",
+    "ich suche",
+    
+    # Self-description (medium signals included for completeness)
+    "biete meine dienste",
+    "biete mich an",
+    "stelle mich vor",
+    "mein profil",
+    "meine erfahrung",
+    "meine qualifikation",
+    "mein lebenslauf",
+    "lebenslauf",
+    "curriculum vitae",
+    "bewerberprofil",
+    "qualifikationen",
+    "handelsvertreter",
+    "handelsvertretung",
+    "auf provisionsbasis",
 ]
 
 # JOB OFFER SIGNALS - Firmen die Mitarbeiter SUCHEN (SOLLEN geblockt werden)
@@ -187,20 +276,60 @@ def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> 
     """
     Prüft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!).
     
+    Priority rules:
+    1. URL pattern /s-stellengesuche/ → ALWAYS candidate
+    2. Strong candidate signals → candidate
+    3. Medium signals + contact data → candidate  
+    4. Medium signals + sales context → candidate
+    
     Args:
         text: Page text content
         title: Page title
-        url: Page URL (unused but kept for API compatibility)
+        url: Page URL for pattern matching
         
     Returns:
         True if this is a candidate seeking a job, False otherwise
     """
     text_lower = (text + " " + title).lower()
+    url_lower = (url or "").lower()
     
-    # ERST prüfen: Ist es ein KANDIDAT der einen Job SUCHT?
+    # Rule 1: URL patterns that ALWAYS indicate job seekers (Stellengesuche)
+    # Use the imported/fallback CANDIDATE_URL_PATTERNS constant
+    for pattern in CANDIDATE_URL_PATTERNS:
+        if pattern in url_lower:
+            return True  # Stellengesuche URL = always candidate!
+    
+    # Rule 2: Check for strong candidate signals (single phrase is enough)
     for signal in CANDIDATE_POSITIVE_SIGNALS:
         if signal in text_lower:
             return True  # Das ist ein Kandidat! Nicht blocken!
+    
+    # Rule 3: Check for phone/email/whatsapp with medium signals
+    combined_text = text + " " + title
+    has_phone = bool(PHONE_RE.search(combined_text) or MOBILE_RE.search(combined_text))
+    has_email = bool(EMAIL_RE.search(combined_text))
+    has_whatsapp = "wa.me/" in combined_text.lower() or "whatsapp" in combined_text.lower()
+    has_contact = has_phone or has_email or has_whatsapp
+    
+    # Medium signals that need contact data to confirm
+    medium_signals = [
+        "profil", "erfahrung", "qualifikation", "kenntnisse",
+        "flexibel", "deutschlandweit", "bundesweit",
+    ]
+    has_medium = any(sig in text_lower for sig in medium_signals)
+    
+    if has_medium and has_contact:
+        return True  # Medium signal + contact = candidate
+    
+    # Rule 4: Sales context signals that strengthen other signals
+    sales_context = [
+        "vertrieb", "verkauf", "sales", "außendienst", "aussendienst",
+        "call center", "callcenter", "d2d", "door to door", "akquise",
+    ]
+    has_sales = any(sig in text_lower for sig in sales_context)
+    
+    if has_medium and has_sales:
+        return True  # Medium signal + sales context = candidate
     
     return False
 
@@ -365,9 +494,15 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "", 
         return True, "shop_product"
 
     company_tokens = (" gmbh", "gmbh", " ag", " kg")
-    profile_tokens = ("profil", "lebenslauf", "gesuch")
+    profile_tokens = ("profil", "lebenslauf", "gesuch", "stellengesuch")
     if any(tok in ttl for tok in company_tokens) and not any(pk in ttl for pk in profile_tokens):
         return True, "company_imprint"
+
+    # NEW: Check for employer URL patterns - these are job ads
+    # Use the imported/fallback EMPLOYER_URL_PATTERNS constant
+    for pattern in EMPLOYER_URL_PATTERNS:
+        if pattern in url_lower:
+            return True, "job_ad"
 
     job_ad_tokens = ("wir suchen", "wir bieten", "deine aufgaben", "bewirb dich jetzt", "stellenanzeige", "jobangebot") + tuple(STRICT_JOB_AD_MARKERS)
     if any(tok in t for tok in job_ad_tokens):

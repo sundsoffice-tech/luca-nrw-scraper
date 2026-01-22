@@ -4705,32 +4705,106 @@ STRICT_JOB_AD_MARKERS = [
     "teamleiter gesucht", "sales manager gesucht", "benefits", "corporate benefits",
 ]
 
-# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dÃ¼rfen NICHT als job_ad geblockt werden!)
+# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
 CANDIDATE_POSITIVE_SIGNALS = [
+    # Direct job search phrases
+    "stellengesuch",
+    "job gesucht",
+    "arbeit gesucht",
+    "stelle gesucht",
+    "ich suche job",
+    "ich suche arbeit",
+    "ich suche stelle",
+    "ich suche einen job",
+    "ich suche eine arbeit",
+    "ich suche eine stelle",
     "suche job",
     "suche arbeit",
     "suche stelle",
     "suche neuen job",
     "suche neue stelle",
-    "ich suche",
-    "stellengesuch",
-    "auf jobsuche",
-    "offen fÃ¼r angebote",
-    "offen fÃ¼r neue",
+    "suche neue arbeit",
     "suche neue herausforderung",
     "suche neuen wirkungskreis",
-    "verfÃ¼gbar ab",
+    
+    # Availability signals
+    "ab sofort verfügbar",
+    "sofort verfügbar",
+    "verfügbar ab",
     "freigestellt",
+    "gekündigt",
+    "arbeitslos",
+    "arbeitssuchend",
+    "jobsuchend",
+    "auf jobsuche",
+    
+    # LinkedIn/Social signals
     "open to work",
     "#opentowork",
+    "offen für angebote",
+    "offen für neue chancen",
+    "offen für neues",
+    "offen für neue",
     "looking for opportunities",
+    "seeking new opportunities",
     "seeking new",
-    "jobsuchend",
-    "arbeitslos",
-    "gekÃ¼ndigt",
+    
+    # Willingness to change
     "wechselwillig",
+    "wechselbereit",
+    "bereit für veränderung",
+    "neue wege gehen",
+    "neuen wirkungskreis",
+    
+    # Career change / Quereinstieg
+    "quereinstieg",
+    "quereinsteiger",
+    "mehr geld verdienen",
+    "bessere verdienstmöglichkeiten",
+    "karrierewechsel",
+    
+    # General search phrases
     "bin auf der suche",
     "suche eine neue",
+    "ich suche",
+    
+    # Self-description (medium signals)
+    "biete meine dienste",
+    "biete mich an",
+    "stelle mich vor",
+    "mein profil",
+    "meine erfahrung",
+    "meine qualifikation",
+    "mein lebenslauf",
+    "lebenslauf",
+    "curriculum vitae",
+    "bewerberprofil",
+    "handelsvertreter",
+    "handelsvertretung",
+    "auf provisionsbasis",
+]
+
+# URL patterns that indicate job seekers (Stellengesuche) - NEVER block these
+CANDIDATE_URL_PATTERNS = [
+    "/s-stellengesuche/",
+    "/stellengesuche/",
+    "/stellengesuch/",
+    "/jobgesuche/",
+    "/arbeitgesuche/",
+]
+
+# URL patterns that indicate job offers (Stellenangebote) - BLOCK these
+EMPLOYER_URL_PATTERNS = [
+    "/s-jobs/",
+    "/stellenangebote/",
+    "/stellenangebot/",
+    "/karriere/",
+    "/karriere-",
+    "/jobs/",
+    "/vacancy/",
+    "/vacancies/",
+    "/open-positions/",
+    "/offene-stellen/",
 ]
 
 # JOB OFFER SIGNALS - Firmen die Mitarbeiter SUCHEN (SOLLEN geblockt werden)
@@ -5788,13 +5862,54 @@ def is_employer_email(email: str) -> bool:
     return any(normalized_local.startswith(pref) for pref in EMPLOYER_EMAIL_PREFIXES)
 
 def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> bool:
-    """PrÃ¼ft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!)."""
-    text_lower = (text + " " + title).lower()
+    """
+    Prüft ob es sich um einen jobsuchenden Kandidaten handelt (darf NICHT geblockt werden!).
     
-    # ERST prÃ¼fen: Ist es ein KANDIDAT der einen Job SUCHT?
+    Priority rules:
+    1. URL pattern /s-stellengesuche/ → ALWAYS candidate
+    2. Strong candidate signals → candidate
+    3. Medium signals + contact data → candidate  
+    4. Medium signals + sales context → candidate
+    """
+    text_lower = (text + " " + title).lower()
+    url_lower = (url or "").lower()
+    
+    # Rule 1: URL patterns that ALWAYS indicate job seekers (Stellengesuche)
+    for pattern in CANDIDATE_URL_PATTERNS:
+        if pattern in url_lower:
+            return True  # Stellengesuche URL = always candidate!
+    
+    # Rule 2: Check for strong candidate signals (single phrase is enough)
     for signal in CANDIDATE_POSITIVE_SIGNALS:
         if signal in text_lower:
             return True  # Das ist ein Kandidat! Nicht blocken!
+    
+    # Rule 3: Check for phone/email/whatsapp with medium signals
+    combined_text = text + " " + title
+    has_phone = bool(PHONE_RE.search(combined_text) or MOBILE_RE.search(combined_text))
+    has_email = bool(EMAIL_RE.search(combined_text))
+    has_whatsapp = "wa.me/" in combined_text.lower() or "whatsapp" in combined_text.lower()
+    has_contact = has_phone or has_email or has_whatsapp
+    
+    # Medium signals that need contact data to confirm
+    medium_signals = [
+        "profil", "erfahrung", "qualifikation", "kenntnisse",
+        "flexibel", "deutschlandweit", "bundesweit",
+    ]
+    has_medium = any(sig in text_lower for sig in medium_signals)
+    
+    if has_medium and has_contact:
+        return True  # Medium signal + contact = candidate
+    
+    # Rule 4: Sales context signals that strengthen other signals
+    sales_context = [
+        "vertrieb", "verkauf", "sales", "außendienst", "aussendienst",
+        "call center", "callcenter", "d2d", "door to door", "akquise",
+    ]
+    has_sales = any(sig in text_lower for sig in sales_context)
+    
+    if has_medium and has_sales:
+        return True  # Medium signal + sales context = candidate
     
     return False
 
@@ -6523,15 +6638,37 @@ CANDIDATE_NEG_MARKERS = (
     "wir suchen", "team sucht", "bewirb dich", "bewirb-dich", "gmbh", " ag ", "aktuell suchen",
 )
 CANDIDATE_POS_MARKERS = (
+    # Direct job search
     "suche job", "suche arbeit", "suche stelle", "suche neue herausforderung",
+    "job gesucht", "arbeit gesucht", "stelle gesucht",
+    "ich suche job", "ich suche arbeit", "ich suche stelle",
+    "suche neuen job", "suche neue stelle",
+    
+    # Availability
     "biete mich an", "zu sofort", "arbeitslos", "arbeitssuchend",
+    "ab sofort verfügbar", "sofort verfügbar", "verfügbar ab",
+    "freigestellt", "gekündigt", "auf jobsuche",
+    
+    # CV/Profile
     "lebenslauf", "cv", "curriculum vitae", "profil", "qualifikation",
-    "kenntnisse", "fuehrerschein", "fuehrerschein", "erfahrung im vertrieb",
+    "kenntnisse", "führerschein", "erfahrung im vertrieb",
     "stellengesuch", "bewerberprofil",
+    
+    # Career change
+    "quereinstieg", "quereinsteiger", "neue herausforderung",
+    "mehr geld verdienen", "karrierewechsel",
+    
+    # Willingness to change
+    "wechselwillig", "wechselbereit", "offen für angebote", "offen für neue",
+    "open to work", "#opentowork",
+    
+    # Handelsvertreter
+    "handelsvertreter", "handelsvertretung", "auf provisionsbasis",
 )
 CANDIDATE_PHONE_CONTEXT = (
     "lebenslauf", "cv", "profil", "erfahrung", "qualifikation", "vita",
     "bewerbung", "stellengesuch", "ich suche", "ich bin", "open to work", "freelancer", "freiberuf",
+    "quereinstieg", "quereinsteiger", "vertrieb", "verkauf", "sales",
 )
 
 # Social media profile URL patterns for candidates mode
@@ -6583,13 +6720,18 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     t_lower = t
     ttl = (title or "").lower()
     h1l = (h1 or "").lower()
+    url_lower = url.lower() if url else ""
+
+    # NEW: Check URL patterns first - Stellengesuche URLs are ALWAYS candidates
+    for pattern in CANDIDATE_URL_PATTERNS:
+        if pattern in url_lower:
+            return False, ""  # Stellengesuche URL = always allow!
 
     # FIRST: Check if this is a CANDIDATE seeking a job - NEVER mark candidates as garbage!
     if is_candidate_seeking_job(text, title, url):
         return False, ""  # Not garbage - this is a candidate!
     
     # NEW: Allow social media profiles in candidate mode
-    url_lower = url.lower() if url else ""
     social_profile_urls = [
         "linkedin.com/in/", "xing.com/profile/", "facebook.com/profile/",
         "instagram.com/", "twitter.com/", "x.com/",
@@ -6609,9 +6751,14 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
         return True, "shop_product"
 
     company_tokens = (" gmbh", "gmbh", " ag", " kg")
-    profile_tokens = ("profil", "lebenslauf", "gesuch")
+    profile_tokens = ("profil", "lebenslauf", "gesuch", "stellengesuch")
     if any(tok in ttl for tok in company_tokens) and not any(pk in ttl for pk in profile_tokens):
         return True, "company_imprint"
+
+    # NEW: Check for employer URL patterns - these are job ads
+    for pattern in EMPLOYER_URL_PATTERNS:
+        if pattern in url_lower:
+            return True, "job_ad"
 
     job_ad_tokens = ("wir suchen", "wir bieten", "deine aufgaben", "bewirb dich jetzt", "stellenanzeige", "jobangebot") + tuple(STRICT_JOB_AD_MARKERS)
     if any(tok in t for tok in job_ad_tokens):
@@ -6733,9 +6880,15 @@ def is_candidate_profile_text(text: str, url: str = "") -> bool:
     Check if text represents a candidate profile.
     In candidate mode, social media profiles are always accepted.
     """
+    url_lower = (url or "").lower()
+    
+    # NEW: Stellengesuche URL patterns are ALWAYS candidates
+    for pattern in CANDIDATE_URL_PATTERNS:
+        if pattern in url_lower:
+            return True  # Stellengesuche URL = always candidate!
+    
     # NEW: Social media profiles are always accepted in candidate mode
     if url:
-        url_lower = url.lower()
         social_profile_urls = [
             "linkedin.com/in/", "xing.com/profile/", "facebook.com/profile/",
             "instagram.com/", "twitter.com/", "x.com/",
@@ -6748,9 +6901,23 @@ def is_candidate_profile_text(text: str, url: str = "") -> bool:
         return True
     
     t = (text or "").lower()
+    
+    # Check for positive candidate markers
     has_pos = any(tok in t for tok in CANDIDATE_POS_MARKERS)
-    if not has_pos:
+    
+    # Also check the enhanced CANDIDATE_POSITIVE_SIGNALS list
+    has_strong = any(sig in t for sig in CANDIDATE_POSITIVE_SIGNALS)
+    
+    if not has_pos and not has_strong:
         return False
+    
+    # If we have a strong candidate signal, don't let negative markers override it
+    if has_strong:
+        # Count negative markers - need multiple to override
+        neg_count = sum(1 for tok in CANDIDATE_NEG_MARKERS if tok in t)
+        if neg_count < 2:
+            return True  # Strong signal wins unless multiple negatives
+    
     if EMPLOYER_TEXT_RE.search(t) or any(tok in t for tok in CANDIDATE_NEG_MARKERS):
         return False
     return True

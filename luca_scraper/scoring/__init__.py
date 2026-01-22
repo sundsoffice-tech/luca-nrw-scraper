@@ -73,6 +73,72 @@ from .quality import (
     is_commercial_agent,
 )
 
+# New modules for enhanced phone extraction and lead scoring
+from .german_patterns import (
+    # Phone patterns
+    PHONE_PATTERNS_COMPILED,
+    PHONE_LABELS,
+    LABEL_PATTERN,
+    GERMAN_MOBILE_PREFIXES,
+    PHONE_BLACKLIST,
+    # Normalization functions
+    normalize_german_phone,
+    validate_german_mobile,
+    validate_german_landline,
+    # Extraction functions
+    extract_german_phones,
+    extract_phone_with_label,
+    is_blacklisted_phone,
+)
+
+from .sales_context import (
+    # Keyword lists
+    SALES_KEYWORDS_PRIMARY,
+    SALES_KEYWORDS_SECONDARY,
+    HIGH_VALUE_INDUSTRIES,
+    JOB_SEEKING_SIGNALS_STRONG,
+    JOB_SEEKING_SIGNALS_MODERATE,
+    NRW_INDICATORS,
+    # Configuration
+    ScoringConfig,
+    DEFAULT_SCORING_CONFIG,
+    # Data classes
+    LeadScore,
+    # Functions
+    score_lead,
+    is_sales_context,
+    is_job_seeker,
+    is_nrw_region,
+)
+
+from .lead_rules import (
+    # Enums
+    LeadDecision,
+    ExclusionReason,
+    InclusionReason,
+    # Pattern lists
+    JOB_OFFER_PATTERNS,
+    CANDIDATE_PATTERNS,
+    HR_PATTERNS,
+    GENERIC_CONTACT_PATTERNS,
+    NEWS_PATTERNS,
+    AGGREGATOR_DOMAINS,
+    PRIVACY_PATTERNS,
+    QUALITY_PORTAL_PATTERNS,
+    # Configuration
+    LeadRulesConfig,
+    DEFAULT_RULES_CONFIG,
+    # CSV definitions
+    LeadCSVFields,
+    CSV_HEADERS,
+    # Result classes
+    LeadDecisionResult,
+    # Functions
+    evaluate_lead_for_csv,
+    build_csv_row,
+    filter_leads_for_csv,
+)
+
 __all__ = [
     # Patterns
     "EMAIL_RE",
@@ -135,4 +201,53 @@ __all__ = [
     "deduplicate_parallel_leads",
     "detect_recency",
     "is_commercial_agent",
+    
+    # German Phone Patterns (new)
+    "PHONE_PATTERNS_COMPILED",
+    "PHONE_LABELS",
+    "LABEL_PATTERN",
+    "GERMAN_MOBILE_PREFIXES",
+    "PHONE_BLACKLIST",
+    "normalize_german_phone",
+    "validate_german_mobile",
+    "validate_german_landline",
+    "extract_german_phones",
+    "extract_phone_with_label",
+    "is_blacklisted_phone",
+    
+    # Sales Context Detection (new)
+    "SALES_KEYWORDS_PRIMARY",
+    "SALES_KEYWORDS_SECONDARY",
+    "HIGH_VALUE_INDUSTRIES",
+    "JOB_SEEKING_SIGNALS_STRONG",
+    "JOB_SEEKING_SIGNALS_MODERATE",
+    "NRW_INDICATORS",
+    "ScoringConfig",
+    "DEFAULT_SCORING_CONFIG",
+    "LeadScore",
+    "score_lead",
+    "is_sales_context",
+    "is_job_seeker",
+    "is_nrw_region",
+    
+    # Lead CSV Rules (new)
+    "LeadDecision",
+    "ExclusionReason",
+    "InclusionReason",
+    "JOB_OFFER_PATTERNS",
+    "CANDIDATE_PATTERNS",
+    "HR_PATTERNS",
+    "GENERIC_CONTACT_PATTERNS",
+    "NEWS_PATTERNS",
+    "AGGREGATOR_DOMAINS",
+    "PRIVACY_PATTERNS",
+    "QUALITY_PORTAL_PATTERNS",
+    "LeadRulesConfig",
+    "DEFAULT_RULES_CONFIG",
+    "LeadCSVFields",
+    "CSV_HEADERS",
+    "LeadDecisionResult",
+    "evaluate_lead_for_csv",
+    "build_csv_row",
+    "filter_leads_for_csv",
 ]
