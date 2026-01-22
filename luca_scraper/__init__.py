@@ -170,18 +170,29 @@ try:
     )
 except Exception as e:
     import logging
+    from contextlib import contextmanager
+    
     logging.warning(f"Database module not available: {e}")
+    
     # Define placeholder functions to prevent import errors
+    # These will raise errors if actually called, but allow the module to import
     def db():
-        raise RuntimeError("Database module is not available")
+        raise RuntimeError("Database module is not available - cannot get database connection")
+    
     def init_db():
-        raise RuntimeError("Database module is not available")
+        raise RuntimeError("Database module is not available - cannot initialize database")
+    
+    @contextmanager
     def transaction():
-        raise RuntimeError("Database module is not available")
+        """Placeholder transaction context manager that raises error if used."""
+        raise RuntimeError("Database module is not available - cannot create transaction")
+        yield  # Never reached, but makes this a valid generator
+    
     def migrate_db_unique_indexes():
-        raise RuntimeError("Database module is not available")
+        raise RuntimeError("Database module is not available - cannot migrate database")
+    
     def sync_status_to_scraper():
-        raise RuntimeError("Database module is not available")
+        raise RuntimeError("Database module is not available - cannot sync status")
 
 # =========================
 # Re-export Search Module (Phase 3)

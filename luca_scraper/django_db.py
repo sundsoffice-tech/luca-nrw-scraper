@@ -36,9 +36,34 @@ except Exception as exc:
 
 logger = logging.getLogger(__name__)
 
+# Cache for lazy-loaded Django imports to avoid repeated imports
+_django_imports_cache = None
+
 # Lazy import helpers - import Django models only when needed
 def _get_django_imports():
-    """Lazily import Django models and utilities to avoid import errors."""
+    """
+    Lazily import Django models and utilities to avoid import errors.
+    
+    This function caches the imports on first call to avoid repeated import overhead.
+    
+    Returns:
+        Dictionary containing Django models and utility functions
+        
+    Raises:
+        ImportError: If Django models or utilities cannot be imported
+        django.core.exceptions.AppRegistryNotReady: If Django is not properly initialized
+        
+    Note:
+        Callers should ensure Django is initialized before calling this function.
+        This is typically done by calling django.setup() at the module or application entry point.
+    """
+    global _django_imports_cache
+    
+    # Return cached imports if available
+    if _django_imports_cache is not None:
+        return _django_imports_cache
+    
+    # Import Django models and utilities
     from django.db import IntegrityError, transaction as django_transaction
     from leads.models import Lead
     from leads.utils.normalization import normalize_email, normalize_phone
@@ -48,7 +73,9 @@ def _get_django_imports():
         INTEGER_FIELDS,
         BOOLEAN_FIELDS,
     )
-    return {
+    
+    # Cache the imports for future calls
+    _django_imports_cache = {
         'IntegrityError': IntegrityError,
         'django_transaction': django_transaction,
         'Lead': Lead,
@@ -59,6 +86,8 @@ def _get_django_imports():
         'INTEGER_FIELDS': INTEGER_FIELDS,
         'BOOLEAN_FIELDS': BOOLEAN_FIELDS,
     }
+    
+    return _django_imports_cache
 
 # Transient error keywords that indicate retryable database errors
 TRANSIENT_ERROR_KEYWORDS = [
