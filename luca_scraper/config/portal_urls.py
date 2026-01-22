@@ -309,7 +309,8 @@ HOTFROG_URLS: List[str] = [
 ]
 
 # =========================
-# HANDELSVERTRETER-SPECIFIC PORTALE (40+ Quellen)
+# HANDELSVERTRETER-SPECIFIC PORTALE (7 Portal Configurations)
+# Used in conjunction with 90+ search queries in manager.py
 # =========================
 
 # CDH (Centralvereinigung Deutscher Handelsvertreter) - Priority 5

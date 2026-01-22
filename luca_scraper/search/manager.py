@@ -553,7 +553,7 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
     ],
     
     # ══════════════════════════════════════════════════════════════
-    # NEU: HANDELSVERTRETER (40+ Quellen - Erweiterte Konfiguration)
+    # NEU: HANDELSVERTRETER (90+ Quellen - Erweiterte Konfiguration)
     # Zielgruppe: Handelsvertreter + selbständige Vertriebs-/Außendienstkräfte in NRW/DE
     # ══════════════════════════════════════════════════════════════
     "handelsvertreter": [
@@ -613,8 +613,10 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         # ──────────────────────────────────────────────────────────
         # PRIORITÄT 4: IHK & REGIONALE KAMMERN
         # ──────────────────────────────────────────────────────────
-        'site:ihk-koeln.de OR site:ihk-duesseldorf.de OR site:ihk-dortmund.de "Vertrieb" kontakt',
-        'site:northdata.de "Vertriebsleitung" OR "Handelsvertretung" NRW',
+        'site:ihk-koeln.de "Vertrieb" kontakt',
+        'site:ihk-duesseldorf.de "Vertrieb" kontakt',
+        'site:ihk-dortmund.de "Vertrieb" kontakt',
+        'site:northdata.de ("Vertriebsleitung" OR "Handelsvertretung") NRW',
         'site:bvmw.de "Mitglied" ("NRW" OR "Nordrhein-Westfalen") "Vertrieb" kontakt',
         
         # ──────────────────────────────────────────────────────────
@@ -714,16 +716,16 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         # KATEGORIE: MESSEN & EVENTS
         # ──────────────────────────────────────────────────────────
         'site:messe-duesseldorf.de "Aussteller" "Ansprechpartner" kontakt',
-        'site:koelnmesse.de "Ausstellerprofil" "Vertrieb" OR "Sales" telefon',
+        'site:koelnmesse.de "Ausstellerprofil" ("Vertrieb" OR "Sales") telefon',
         'site:messe-essen.de "Aussteller" "Ansprechpartner" kontakt telefon',
-        '"Messekatalog" OR "Ausstellerverzeichnis" "Vertrieb" OR "Sales" NRW kontakt telefon',
+        '("Messekatalog" OR "Ausstellerverzeichnis") ("Vertrieb" OR "Sales") NRW kontakt telefon',
         
         # ──────────────────────────────────────────────────────────
         # KATEGORIE: FREELANCER & PROJEKTBÖRSEN
         # ──────────────────────────────────────────────────────────
-        'site:freelancermap.de "Vertrieb" OR "Sales" "verfügbar" NRW kontakt',
-        'site:freelance.de "Handelsvertreter" OR "Vertriebsprofi" "freiberuflich" kontakt',
-        'site:gulp.de "Sales" OR "Business Development" NRW verfügbar telefon',
+        'site:freelancermap.de ("Vertrieb" OR "Sales") "verfügbar" NRW kontakt',
+        'site:freelance.de ("Handelsvertreter" OR "Vertriebsprofi") "freiberuflich" kontakt',
+        'site:gulp.de ("Sales" OR "Business Development") NRW verfügbar telefon',
     ],
     
     # ══════════════════════════════════════════════════════════════
