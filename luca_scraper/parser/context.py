@@ -5,32 +5,128 @@ from typing import Optional, Tuple
 
 
 # Constants
-CANDIDATE_POSITIVE_SIGNALS = [
+
+# CANDIDATE_STRONG_SIGNALS - Single phrase is enough to identify as candidate
+CANDIDATE_STRONG_SIGNALS = [
+    # Direct job search phrases
+    "stellengesuch",
+    "job gesucht",
+    "arbeit gesucht",
+    "stelle gesucht",
+    "ich suche job",
+    "ich suche arbeit",
+    "ich suche stelle",
+    "ich suche einen job",
+    "ich suche eine arbeit",
+    "ich suche eine stelle",
     "suche job",
     "suche arbeit",
     "suche stelle",
     "suche neuen job",
     "suche neue stelle",
-    "ich suche",
-    "stellengesuch",
-    "auf jobsuche",
-    "offen für angebote",
-    "offen für neue",
+    "suche neue arbeit",
     "suche neue herausforderung",
     "suche neuen wirkungskreis",
+    
+    # Availability signals
+    "ab sofort verfügbar",
+    "sofort verfügbar",
     "verfügbar ab",
     "freigestellt",
+    "gekündigt",
+    "arbeitslos",
+    "arbeitssuchend",
+    "jobsuchend",
+    "auf jobsuche",
+    
+    # LinkedIn/Social signals
     "open to work",
     "#opentowork",
+    "offen für angebote",
+    "offen für neue chancen",
+    "offen für neues",
+    "offen für neue",
     "looking for opportunities",
+    "seeking new opportunities",
     "seeking new",
-    "jobsuchend",
-    "arbeitslos",
-    "gekündigt",
+    
+    # Willingness to change
     "wechselwillig",
+    "wechselbereit",
+    "bereit für veränderung",
+    "neue wege gehen",
+    "neuen wirkungskreis",
+    
+    # Career change / Quereinstieg
+    "quereinstieg",
+    "quereinsteiger",
+    "mehr geld verdienen",
+    "bessere verdienstmöglichkeiten",
+    "karrierewechsel",
+    
+    # General search phrases
     "bin auf der suche",
     "suche eine neue",
+    "ich suche",
 ]
+
+# CANDIDATE_MEDIUM_SIGNALS - Need context or contact data to confirm
+CANDIDATE_MEDIUM_SIGNALS = [
+    # Self-description
+    "biete meine dienste",
+    "biete mich an",
+    "stelle mich vor",
+    "mein profil",
+    "meine erfahrung",
+    "meine qualifikation",
+    "mein lebenslauf",
+    
+    # CV/Application
+    "lebenslauf",
+    "curriculum vitae",
+    "bewerberprofil",
+    "qualifikationen",
+    
+    # Flexibility
+    "flexibel einsetzbar",
+    "deutschlandweit",
+    "bundesweit",
+    "regional flexibel",
+    
+    # Sales representatives
+    "handelsvertreter",
+    "handelsvertretung",
+    "selbstständiger vertreter",
+    "freiberuflicher vertrieb",
+    "auf provisionsbasis",
+]
+
+# SALES_CONTEXT_SIGNALS - Strengthen other candidate signals
+SALES_CONTEXT_SIGNALS = [
+    "vertrieb",
+    "verkauf",
+    "sales",
+    "außendienst",
+    "aussendienst",
+    "innendienst",
+    "key account",
+    "account manager",
+    "business development",
+    "akquise",
+    "neukundengewinnung",
+    "kundenbetreuung",
+    "call center",
+    "callcenter",
+    "telesales",
+    "telefonverkauf",
+    "d2d",
+    "door to door",
+    "haustür",
+    "kaltakquise",
+]
+
+# Combined list for backward compatibility
+CANDIDATE_POSITIVE_SIGNALS = CANDIDATE_STRONG_SIGNALS + CANDIDATE_MEDIUM_SIGNALS
 
 JOB_OFFER_SIGNALS = [
     "(m/w/d)",
@@ -87,23 +183,99 @@ HIDDEN_GEMS_PATTERNS = {
 }
 
 
+# URL patterns that indicate job seekers (Stellengesuche)
+CANDIDATE_URL_PATTERNS = [
+    "/s-stellengesuche/",
+    "/stellengesuche/",
+    "/stellengesuch/",
+    "/jobgesuche/",
+    "/arbeitgesuche/",
+]
+
+# URL patterns that indicate job offers (Stellenangebote) - BLOCK these
+EMPLOYER_URL_PATTERNS = [
+    "/s-jobs/",
+    "/stellenangebote/",
+    "/stellenangebot/",
+    "/karriere/",
+    "/karriere-",
+    "/jobs/",
+    "/vacancy/",
+    "/vacancies/",
+    "/open-positions/",
+    "/offene-stellen/",
+]
+
+# Regex for phone number detection (German mobile)
+PHONE_PATTERN = re.compile(r'(?:\+49|0049|0)\s?1[5-7]\d(?:[\s\/\-]?\d){6,10}')
+# Regex for email detection
+EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
+# Regex for WhatsApp links
+WHATSAPP_PATTERN = re.compile(r'wa\.me/\d+|api\.whatsapp\.com/send\?phone=\d+')
+
+
+def has_contact_data(text: str) -> bool:
+    """Check if text contains contact data (phone or email)."""
+    text_lower = text.lower()
+    return bool(
+        PHONE_PATTERN.search(text) or 
+        EMAIL_PATTERN.search(text) or 
+        WHATSAPP_PATTERN.search(text_lower) or
+        "tel:" in text_lower or
+        "mailto:" in text_lower
+    )
+
+
+def has_sales_context(text: str) -> bool:
+    """Check if text has sales/vertrieb context."""
+    text_lower = text.lower()
+    return any(signal in text_lower for signal in SALES_CONTEXT_SIGNALS)
+
+
 def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> bool:
     """
     Check if content indicates a candidate seeking a job.
     
     This should NEVER be blocked as a job ad - these are people looking for work!
     
+    Priority rules:
+    1. URL pattern /s-stellengesuche/ → ALWAYS candidate
+    2. Strong candidate signals → candidate
+    3. Medium signals + contact data → candidate  
+    4. Medium signals + sales context → candidate
+    
     Returns:
         True if candidate signals are found
     """
     text_lower = (text + " " + title).lower()
+    url_lower = (url or "").lower()
     
-    # Check if candidate is seeking job
-    for signal in CANDIDATE_POSITIVE_SIGNALS:
+    # Rule 1: URL patterns that ALWAYS indicate job seekers
+    for pattern in CANDIDATE_URL_PATTERNS:
+        if pattern in url_lower:
+            return True  # Stellengesuche URL = always candidate!
+    
+    # Rule 2: Strong candidate signals (single phrase is enough)
+    for signal in CANDIDATE_STRONG_SIGNALS:
         if signal in text_lower:
             return True  # This is a candidate! Don't block!
     
+    # Rule 3: Medium signals with contact data
+    has_medium_signal = any(signal in text_lower for signal in CANDIDATE_MEDIUM_SIGNALS)
+    if has_medium_signal and has_contact_data(text + " " + title):
+        return True  # Medium signal + contact = candidate
+    
+    # Rule 4: Medium signals with sales context
+    if has_medium_signal and has_sales_context(text + " " + title):
+        return True  # Medium signal + sales context = candidate
+    
     return False
+
+
+def is_employer_url(url: str) -> bool:
+    """Check if URL indicates an employer job posting."""
+    url_lower = (url or "").lower()
+    return any(pattern in url_lower for pattern in EMPLOYER_URL_PATTERNS)
 
 
 def analyze_wir_suchen_context(text: str, url: str = "") -> Tuple[str, str]:

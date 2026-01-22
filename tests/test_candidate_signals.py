@@ -199,3 +199,57 @@ class TestCandidateScenarios:
         is_garbage, reason = is_garbage_context(text, "", title, "")
         assert is_garbage is True
         assert reason == "job_ad"
+
+
+class TestEnhancedCandidateSignals:
+    """Test the enhanced candidate signal detection."""
+    
+    def test_quereinstieg_signals(self):
+        """Test that Quereinstieg signals are detected."""
+        assert is_candidate_seeking_job("Suche Quereinstieg im Vertrieb", "", "") is True
+        assert is_candidate_seeking_job("Quereinsteiger mit Motivation", "", "") is True
+        assert is_candidate_seeking_job("Möchte mehr Geld verdienen im Sales", "", "") is True
+    
+    def test_url_pattern_stellengesuche(self):
+        """Test that Stellengesuche URL patterns are always detected as candidates."""
+        url = "https://kleinanzeigen.de/s-stellengesuche/vertrieb-nrw/123"
+        # Even with negative text, URL pattern should win
+        assert is_candidate_seeking_job("", "", url) is True
+        
+        is_garbage, _ = is_garbage_context("wir suchen", url, "", "")
+        assert is_garbage is False  # URL pattern overrides
+    
+    def test_url_pattern_stellenangebote_blocked(self):
+        """Test that Stellenangebote URL patterns are blocked as job ads."""
+        url = "https://kleinanzeigen.de/s-jobs/vertrieb-nrw/123"
+        # This should be blocked as job ad
+        is_garbage, reason = is_garbage_context("Vertriebsmitarbeiter", url, "", "")
+        assert is_garbage is True
+        assert reason == "job_ad"
+    
+    def test_contact_data_with_medium_signal(self):
+        """Test that medium signals with contact data are accepted."""
+        text = "Mein Profil: Erfahrung im Vertrieb. Tel: 0176-12345678"
+        assert is_candidate_seeking_job(text, "", "") is True
+    
+    def test_sales_context_with_medium_signal(self):
+        """Test that medium signals with sales context are accepted."""
+        text = "Meine Erfahrung im Vertrieb: 5 Jahre Außendienst"
+        assert is_candidate_seeking_job(text, "", "") is True
+    
+    def test_homeoffice_search_not_blocked(self):
+        """Test that homeoffice job searches are not blocked."""
+        text = "Ich suche Homeoffice Job im Vertrieb"
+        assert is_candidate_seeking_job(text, "", "") is True
+        assert is_job_advertisement(text, "", "") is False
+    
+    def test_handelsvertreter_signals(self):
+        """Test that Handelsvertreter signals are detected."""
+        assert is_candidate_seeking_job("Handelsvertreter sucht neue Vertretung", "", "") is True
+        assert is_candidate_seeking_job("Auf Provisionsbasis arbeiten", "", "") is True
+    
+    def test_karrierewechsel_signals(self):
+        """Test that career change signals are detected."""
+        assert is_candidate_seeking_job("Karrierewechsel geplant", "", "") is True
+        assert is_candidate_seeking_job("Bereit für Veränderung", "", "") is True
+        assert is_candidate_seeking_job("Wechselbereit und motiviert", "", "") is True
