@@ -160,13 +160,28 @@ from .config import (
 # Re-export Database
 # =========================
 
-from .database import (
-    db,
-    init_db,
-    transaction,
-    migrate_db_unique_indexes,
-    sync_status_to_scraper,
-)
+try:
+    from .database import (
+        db,
+        init_db,
+        transaction,
+        migrate_db_unique_indexes,
+        sync_status_to_scraper,
+    )
+except Exception as e:
+    import logging
+    logging.warning(f"Database module not available: {e}")
+    # Define placeholder functions to prevent import errors
+    def db():
+        raise RuntimeError("Database module is not available")
+    def init_db():
+        raise RuntimeError("Database module is not available")
+    def transaction():
+        raise RuntimeError("Database module is not available")
+    def migrate_db_unique_indexes():
+        raise RuntimeError("Database module is not available")
+    def sync_status_to_scraper():
+        raise RuntimeError("Database module is not available")
 
 # =========================
 # Re-export Search Module (Phase 3)

@@ -41,6 +41,17 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 from flask import Response, render_template_string
 
+# CRITICAL: Initialize Django BEFORE any other imports that use Django models
+# This must happen before importing any module that uses Django models (e.g., learning_engine)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis.settings')
+
+try:
+    import django
+    django.setup()
+except Exception as e:
+    print(f"Warning: Django setup failed: {e}", file=sys.stderr)
+    # Continue anyway - some functionality may work without Django
+
 
 # Third-party
 from curl_cffi.requests import AsyncSession
