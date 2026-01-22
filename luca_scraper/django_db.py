@@ -11,11 +11,22 @@ import logging
 import os
 import json
 import time
+import sys
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 # Django setup - must happen before any Django imports
+# Use the same settings module as manage.py (telis.settings), ensuring repo root is on sys.path.
 if not os.environ.get('DJANGO_SETTINGS_MODULE'):
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis_recruitment.telis.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis.settings')
+
+# Ensure repo root is on sys.path so 'telis' and 'leads' packages resolve
+repo_root = Path(__file__).resolve().parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+project_root = repo_root / "telis_recruitment"
+if project_root.exists() and str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import django
 try:
@@ -25,9 +36,9 @@ except Exception as exc:
 
 # Now we can import Django models and utilities
 from django.db import IntegrityError, transaction as django_transaction
-from telis_recruitment.leads.models import Lead
-from telis_recruitment.leads.utils.normalization import normalize_email, normalize_phone
-from telis_recruitment.leads.field_mapping import (
+from leads.models import Lead
+from leads.utils.normalization import normalize_email, normalize_phone
+from leads.field_mapping import (
     SCRAPER_TO_DJANGO_MAPPING,
     JSON_ARRAY_FIELDS,
     INTEGER_FIELDS,
