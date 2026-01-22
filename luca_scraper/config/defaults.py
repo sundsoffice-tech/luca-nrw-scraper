@@ -137,7 +137,9 @@ ENH_FIELDS = [
     "ai_category", "ai_summary",
     "experience_years", "skills", "availability", "current_status", "industries", "location", "profile_text",
     "candidate_status", "mobility", "industries_experience", "source_type",
-    "profile_url", "cv_url", "contact_preference", "last_activity", "name_validated", "crm_status"
+    "profile_url", "cv_url", "contact_preference", "last_activity", "name_validated", "crm_status",
+    # NEU: Erweiterte Quellen-Spalten für dork_set="new_sources"
+    "source_category", "source_priority", "dork_used",
 ]
 
 LEAD_FIELDS = [
@@ -149,6 +151,8 @@ LEAD_FIELDS = [
     "private_address", "social_profile_url", "ai_category", "ai_summary",
     "crm_status",
     "lead_type",
+    # NEU: Erweiterte Quellen-Spalten für dork_set="new_sources"
+    "source_category", "source_priority", "dork_used",
 ]
 
 

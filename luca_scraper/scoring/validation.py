@@ -289,15 +289,40 @@ def classify_lead(lead: Dict[str, Any], title: str = "", text: str = "") -> str:
     return "candidate"
 
 
-def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") -> Tuple[bool, str]:
+# =========================
+# NEU: ALWAYS_CRAWL SUPPORT
+# =========================
+
+def _is_always_crawl_url(url: str) -> bool:
+    """
+    NEU: Prüft ob eine URL zu einer always_crawl Domain gehört.
+    
+    Args:
+        url: Die zu prüfende URL
+        
+    Returns:
+        True wenn always_crawl, sonst False
+    """
+    try:
+        from ..config.new_sources_config import is_always_crawl_url
+        return is_always_crawl_url(url)
+    except ImportError:
+        return False
+
+
+def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "", bypass_for_always_crawl: bool = True) -> Tuple[bool, str]:
     """
     Detect obvious non-candidate contexts (blogs, shops, company imprint, job ads).
+    
+    NEU: Mit bypass_for_always_crawl Parameter. Wenn True (Standard), werden
+    URLs von always_crawl Domains NICHT als Garbage markiert.
     
     Args:
         text: Page text content
         url: Page URL
         title: Page title
         h1: H1 heading
+        bypass_for_always_crawl: NEU - Wenn True, werden always_crawl URLs durchgelassen
         
     Returns:
         Tuple of (is_garbage, reason)
@@ -311,6 +336,10 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     ttl = (title or "").lower()
     h1l = (h1 or "").lower()
     url_lower = url.lower() if url else ""
+
+    # NEU: Bypass für always_crawl Domains
+    if bypass_for_always_crawl and url and _is_always_crawl_url(url):
+        return False, ""  # always_crawl Domains werden nicht als Garbage markiert
 
     # FIRST: Check if this is a CANDIDATE seeking a job - NEVER mark candidates as garbage!
     if is_candidate_seeking_job(text, title, url):
@@ -396,10 +425,13 @@ def should_drop_lead(lead: Dict[str, Any], page_url: str, text: str = "", title:
     return False, ""
 
 
-def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_snippet_jackpot: bool = False) -> Tuple[bool, str]:
+def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_snippet_jackpot: bool = False, bypass_for_always_crawl: bool = True) -> Tuple[bool, str]:
     """
     Pre-fetch URL filtering: check blacklist hosts and path patterns.
     Snippet jackpots with contact data are always allowed through (unless job postings).
+    
+    NEU: Mit bypass_for_always_crawl Parameter. Wenn True (Standard), werden
+    URLs von always_crawl Domains NICHT übersprungen.
     
     **IMPORTANT**: This is a simplified version for the refactored module.
     The full implementation requires integration with scriptname.py dependencies:
@@ -417,12 +449,17 @@ def should_skip_url_prefetch(url: str, title: str = "", snippet: str = "", is_sn
         title: Page title
         snippet: Search snippet
         is_snippet_jackpot: Whether snippet contains contact data
+        bypass_for_always_crawl: NEU - Wenn True, werden always_crawl URLs nicht übersprungen
         
     Returns:
         Tuple of (should_skip, reason)
     """
     if not url:
         return False, ""
+    
+    # NEU: Bypass für always_crawl Domains
+    if bypass_for_always_crawl and _is_always_crawl_url(url):
+        return False, ""  # always_crawl Domains werden nicht übersprungen
     
     # Basic URL validation without dependencies
     try:

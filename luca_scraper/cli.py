@@ -114,6 +114,12 @@ def parse_args() -> Any:
                     default="standard",
                     help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)")
     
+    # NEU: Dork-Set Parameter
+    ap.add_argument("--dork-set",
+                    choices=["default", "new_sources"],
+                    default="default",
+                    help="NEU: Dork-Set auswählen: default (Standard-Dorks), new_sources (Handelsvertreter/B2B-Portale mit Priorität)")
+    
     # Login management
     ap.add_argument("--login", type=str, 
                     help="Manuell einloggen bei Portal (z.B. --login linkedin)")
@@ -151,6 +157,9 @@ def print_help() -> None:
         --industry MODE    Industry/Mode: all, candidates, talent_hunt, recruiter
         --qpi N            Queries pro Branche (Standard: 6)
         
+    Dork-Sets:
+        --dork-set SET     NEU: Dork-Set: default, new_sources (Handelsvertreter/B2B)
+        
     Steuerung:
         --force            Historie ignorieren
         --reset            Historie löschen vor Lauf
@@ -165,5 +174,6 @@ def print_help() -> None:
         python scriptname.py --ui
         python scriptname.py --once --industry candidates --qpi 10
         python scriptname.py --once --industry talent_hunt --mode learning
+        python scriptname.py --once --dork-set new_sources --qpi 20
     """
     print(help_text)
