@@ -410,7 +410,7 @@ class ProcessManager:
             self.launcher.apply_env_overrides(env, overrides)
 
             # Ensure all env values are strings (safety filter)
-            env = {k: str(v) for k, v in env. items() if v is not None}
+            env = {k: str(v) for k, v in env.items() if v is not None}
             
             # Start process using launcher
             process = self.launcher.start_process(cmd, env, project_root)

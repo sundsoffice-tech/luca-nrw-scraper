@@ -164,10 +164,17 @@ class ProcessLauncher:
         """
         try:
             if script_type == 'module':
-                # For modules, try importing them
+                # For modules, validate the module name is safe (alphanumeric + underscore + dots)
+                import re
+                if not re.match(r'^[a-zA-Z0-9_\.]+$', script_path):
+                    return False, f"Invalid module name: {script_path}"
+                
+                # Try importing the module
+                # Using list arguments prevents shell injection even with user input
                 cmd = ['python', '-c', f'import {script_path}']
             else:
                 # For scripts, check syntax and basic imports using py_compile
+                # script_path is passed as a separate argument, preventing injection
                 cmd = ['python', '-m', 'py_compile', script_path]
             
             result = subprocess.run(
