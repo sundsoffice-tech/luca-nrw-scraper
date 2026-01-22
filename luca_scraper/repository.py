@@ -16,6 +16,7 @@ import time
 from typing import Dict, Optional, Tuple
 
 from .config import DATABASE_BACKEND
+from .database import ALLOWED_LEAD_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,37 @@ def _normalize_phone(value: Optional[str]) -> Optional[str]:
         return None
     digits = "".join(ch for ch in value if ch.isdigit())
     return digits or None
+
+
+# Field normalizations to keep DB schema compatibility
+_FIELD_RENAMES = {
+    "confidence": "confidence_score",
+    "frische": "recency_indicator",
+    "phone_source": "source_type",
+}
+
+
+def _sanitize_lead_data(data: Dict) -> Dict:
+    """
+    Drop or rename unsupported columns before writing to SQLite.
+
+    - Renames keys defined in _FIELD_RENAMES.
+    - Filters to ALLOWED_LEAD_COLUMNS to avoid 'no column named' errors.
+    """
+    sanitized: Dict = {}
+    dropped = []
+
+    for key, value in data.items():
+        target = _FIELD_RENAMES.get(key, key)
+        if target in ALLOWED_LEAD_COLUMNS:
+            sanitized[target] = value
+        else:
+            dropped.append(key)
+
+    if dropped and logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Dropping unsupported lead columns", dropped=dropped)
+
+    return sanitized
 
 
 def _build_crm_status_index() -> Optional[Tuple[Dict[str, str], Dict[str, str]]]:
@@ -189,6 +221,9 @@ def upsert_lead_sqlite(data: Dict, max_retries: int = 3, retry_delay: float = 0.
     for attempt in range(max_retries):
         con = None
         try:
+            # Ensure only supported columns are written
+            data = _sanitize_lead_data(data)
+
             con = db()
             cur = con.cursor()
             
