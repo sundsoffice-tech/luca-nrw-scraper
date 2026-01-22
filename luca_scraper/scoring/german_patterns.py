@@ -139,7 +139,6 @@ PHONE_PATTERNS_COMPILED: Dict[str, re.Pattern] = {
 PHONE_LABELS = [
     "Tel:",
     "Tel.:",
-    "Tel.:",
     "Telefon:",
     "Telefonnummer:",
     "Fon:",
@@ -168,16 +167,14 @@ LABEL_PATTERN = re.compile(
 # MOBILE PREFIX VALIDATION
 # ========================================
 
-# Valid German mobile prefixes (without country code)
+# Valid German mobile prefixes (without country code) - deduplicated
 GERMAN_MOBILE_PREFIXES = [
     # Deutsche Telekom (D1)
-    "151", "152", "157", "159", "160", "161", "162", "163", "164", "165", "166", "167", "168", "169", "170", "171", "175",
+    "151", "159", "160", "161", "164", "165", "166", "167", "168", "169", "170", "171", "175",
     # Vodafone (D2)
     "152", "162", "172", "173", "174",
-    # O2/E-Plus
-    "155", "156", "157", "159", "163", "164", "165", "176", "177", "178", "179",
-    # E-Plus (merged with O2)
-    "157", "163", "177", "178",
+    # O2/E-Plus (merged)
+    "155", "156", "157", "163", "176", "177", "178", "179",
 ]
 
 # Valid German area code ranges (first digits)

@@ -240,7 +240,8 @@ class TestBuildCSVRow:
         
         row = build_csv_row(lead_data, decision)
         
-        assert "ich suche" in row["sales_keywords"]
+        # candidate_signals go into job_signals field
+        assert "ich suche" in row["job_signals"]
     
     def test_build_row_alternative_keys(self):
         """Test that alternative key names are handled."""

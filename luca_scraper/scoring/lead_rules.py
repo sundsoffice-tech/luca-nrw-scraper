@@ -569,8 +569,8 @@ def build_csv_row(
     
     # Decision metadata
     row["inclusion_reason"] = decision_result.reason_code or decision_result.reason
-    row["sales_keywords"] = ", ".join(decision_result.candidate_signals_found[:5])
-    row["job_signals"] = ", ".join(decision_result.job_offer_signals_found[:5])
+    row["sales_keywords"] = ""  # Would be populated by sales_context module
+    row["job_signals"] = ", ".join(decision_result.candidate_signals_found[:5])
     row["extraction_date"] = lead_data.get("extraction_date", lead_data.get("last_updated", ""))
     
     return row
