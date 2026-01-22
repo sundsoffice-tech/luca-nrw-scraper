@@ -498,7 +498,9 @@ ENH_FIELDS = [
     "experience_years","skills","availability","current_status","industries","location","profile_text",
     # New candidate-focused fields
     "candidate_status","mobility","industries_experience","source_type",
-    "profile_url","cv_url","contact_preference","last_activity","name_validated","crm_status"
+    "profile_url","cv_url","contact_preference","last_activity","name_validated","crm_status",
+    # NEU: Erweiterte Quellen-Spalten für dork_set="new_sources"
+    "source_category","source_priority","dork_used"
 ]
 
 def export_xlsx(filename: str, rows=None):
@@ -1411,7 +1413,9 @@ LEAD_FIELDS = [
     # New candidate-focused fields
     "candidate_status","experience_years","availability","mobility","skills",
     "industries_experience","source_type","profile_url","cv_url",
-    "contact_preference","last_activity","name_validated"
+    "contact_preference","last_activity","name_validated",
+    # NEU: Erweiterte Quellen-Spalten für dork_set="new_sources"
+    "source_category","source_priority","dork_used"
 ]
 
 def _ensure_schema(con: sqlite3.Connection) -> None:
@@ -9951,6 +9955,13 @@ def parse_args():
         default="standard",
         help="Betriebsmodus: standard, learning (lernt aus Erfolgen), aggressive (mehr Requests), snippet_only (nur Snippets)"
     )
+    # NEU: Dork-Set Parameter für erweiterte Quellen
+    ap.add_argument(
+        "--dork-set",
+        choices=["default", "new_sources"],
+        default="default",
+        help="NEU: Dork-Set auswählen: default (Standard-Dorks), new_sources (Handelsvertreter/B2B-Portale mit Priorität)"
+    )
     ap.add_argument("--login", type=str, help="Manuell einloggen bei Portal (z.B. --login linkedin)")
     ap.add_argument("--clear-sessions", action="store_true", help="Alle gespeicherten Sessions lÃ¶schen")
     ap.add_argument("--list-sessions", action="store_true", help="Alle Sessions anzeigen")
@@ -10034,9 +10045,35 @@ if __name__ == "__main__":
             # CRITICAL FIX: Set INDUSTRY env variable for _is_candidates_mode()
             os.environ["INDUSTRY"] = selected_industry
             per_industry_limit = max(1, getattr(args, "qpi", 2))
-            QUERIES = build_queries(selected_industry, per_industry_limit)
-            log("info", "Query-Set gebaut", industry=selected_industry,
-                per_industry_limit=per_industry_limit, count=len(QUERIES))
+            
+            # NEU: Check for dork-set parameter
+            dork_set = getattr(args, "dork_set", "default")
+            
+            if dork_set == "new_sources":
+                # NEU: Use new_sources dork set with priority-based loading
+                try:
+                    from luca_scraper.search.manager import build_queries_with_dork_set
+                    dorks_with_meta = build_queries_with_dork_set(
+                        dork_set_name="new_sources",
+                        per_industry_limit=per_industry_limit
+                    )
+                    # Extract just the dork strings for QUERIES
+                    QUERIES = [d["dork"] for d in dorks_with_meta]
+                    # Store metadata for later use in enrichment
+                    os.environ["DORK_SET_ACTIVE"] = "new_sources"
+                    log("info", "NEU: new_sources Dork-Set geladen", 
+                        dork_set=dork_set, count=len(QUERIES),
+                        top_priority=dorks_with_meta[0]["priority"] if dorks_with_meta else 0)
+                except ImportError as e:
+                    log("warn", f"Could not load new_sources dork set: {e}, falling back to default")
+                    QUERIES = build_queries(selected_industry, per_industry_limit)
+                    os.environ["DORK_SET_ACTIVE"] = "default"
+            else:
+                # Standard behavior
+                QUERIES = build_queries(selected_industry, per_industry_limit)
+                os.environ["DORK_SET_ACTIVE"] = "default"
+                log("info", "Query-Set gebaut", industry=selected_industry,
+                    per_industry_limit=per_industry_limit, count=len(QUERIES))
             
             # Optimize query order if learning mode is active
             if mode_config.get("query_optimization") and _LEARNING_ENGINE:

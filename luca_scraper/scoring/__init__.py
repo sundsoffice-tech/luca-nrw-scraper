@@ -49,6 +49,8 @@ from .validation import (
     is_garbage_context,
     should_drop_lead,
     should_skip_url_prefetch,
+    # NEU: always_crawl Support
+    _is_always_crawl_url,
 )
 
 from .enrichment import (
@@ -181,6 +183,8 @@ __all__ = [
     "is_garbage_context",
     "should_drop_lead",
     "should_skip_url_prefetch",
+    # NEU: always_crawl Support
+    "_is_always_crawl_url",
     
     # Enrichment Functions
     "get_cached_telefonbuch_result",

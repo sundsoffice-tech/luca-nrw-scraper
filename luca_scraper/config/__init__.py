@@ -353,6 +353,18 @@ from .env_loader import *  # noqa: F401, F403
 # Re-export from portal_urls
 from .portal_urls import *  # noqa: F401, F403
 
+# NEU: Re-export from new_sources_config
+from .new_sources_config import (
+    NEW_SOURCES_CONFIG,
+    get_new_sources_dorks,
+    get_new_sources_dorks_by_priority,
+    get_always_crawl_domains,
+    get_source_category_for_url,
+    get_source_priority_for_url,
+    is_always_crawl_url,
+    get_dork_metadata,
+)
+
 # Additional exports for backward compatibility
 __all__ = [
     # Core functions
@@ -361,6 +373,15 @@ __all__ = [
     # Django integration
     'AI_CONFIG_AVAILABLE',
     'SCRAPER_CONFIG_AVAILABLE',
+    # NEU: New sources config exports
+    'NEW_SOURCES_CONFIG',
+    'get_new_sources_dorks',
+    'get_new_sources_dorks_by_priority',
+    'get_always_crawl_domains',
+    'get_source_category_for_url',
+    'get_source_priority_for_url',
+    'is_always_crawl_url',
+    'get_dork_metadata',
 ]
 
 # Re-export helper functions that are used by other modules

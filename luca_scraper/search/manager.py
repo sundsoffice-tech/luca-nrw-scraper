@@ -868,3 +868,84 @@ def build_queries(
 
     cap = min(max(1, per_industry_limit), len(queries))
     return queries[:cap]
+
+
+# =========================
+# NEU: DORK SET FUNCTIONS
+# =========================
+
+# NEU: Unterstützte Dork-Sets
+DORK_SETS = {
+    "default": _COMPLETE_DEFAULT_QUERIES,
+    # "new_sources" wird dynamisch aus new_sources_config geladen
+}
+
+
+def get_dork_set(dork_set_name: str = "default") -> List[str]:
+    """
+    NEU: Lädt Dorks aus einem spezifischen Dork-Set.
+    
+    Unterstützte Sets:
+    - "default": Standard-Dorks aus DEFAULT_QUERIES
+    - "new_sources": Dorks aus NEW_SOURCES_CONFIG (Handelsvertreter, B2B, etc.)
+    
+    Args:
+        dork_set_name: Name des Dork-Sets
+        
+    Returns:
+        Liste von Dork-Strings
+    """
+    if dork_set_name == "new_sources":
+        # NEU: Lade aus new_sources_config
+        try:
+            from ..config.new_sources_config import get_new_sources_dorks
+            return get_new_sources_dorks()
+        except ImportError:
+            logger.warning("Could not import new_sources_config, using default dorks")
+            return list(DORK_SETS.get("default", []))
+    
+    return list(DORK_SETS.get(dork_set_name, DORK_SETS.get("default", [])))
+
+
+def build_queries_with_dork_set(
+    dork_set_name: str = "default",
+    selected_industry: Optional[str] = None,
+    per_industry_limit: int = 20000,
+) -> List[dict]:
+    """
+    NEU: Build queries mit Dork-Set Support und Metadaten.
+    
+    Wenn dork_set="new_sources" verwendet wird, werden Dorks mit Priorität
+    und always_crawl-Flag zurückgegeben.
+    
+    Args:
+        dork_set_name: Name des Dork-Sets ("default" oder "new_sources")
+        selected_industry: Industry/mode für Standard-Queries
+        per_industry_limit: Maximum Queries
+        
+    Returns:
+        Liste von Dicts mit keys: dork, category, priority, always_crawl, domains
+        Oder Liste von Dicts mit nur "dork" key für Standard-Sets
+    """
+    if dork_set_name == "new_sources":
+        # NEU: Lade aus new_sources_config mit Metadaten
+        try:
+            from ..config.new_sources_config import get_new_sources_dorks_by_priority
+            dorks_with_meta = get_new_sources_dorks_by_priority()
+            # Begrenze Anzahl
+            cap = min(max(1, per_industry_limit), len(dorks_with_meta))
+            return dorks_with_meta[:cap]
+        except ImportError:
+            logger.warning("Could not import new_sources_config, using default dorks")
+    
+    # Standard-Verarbeitung für andere Sets oder Fallback
+    if selected_industry:
+        base_queries = build_queries(selected_industry, per_industry_limit)
+    else:
+        base_queries = get_dork_set(dork_set_name)
+        random.shuffle(base_queries)
+        cap = min(max(1, per_industry_limit), len(base_queries))
+        base_queries = base_queries[:cap]
+    
+    # Konvertiere zu Dict-Format ohne Metadaten
+    return [{"dork": dork, "category": "default", "priority": 1, "always_crawl": False, "domains": []} for dork in base_queries]
