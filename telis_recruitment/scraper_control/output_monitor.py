@@ -25,6 +25,7 @@ class OutputMonitor:
         self.output_thread: Optional[threading.Thread] = None
         self.current_run_id: Optional[int] = None
         self._stop_monitoring = False
+        self._lock = threading.Lock()  # Thread-safe access to logs
 
     def start_monitoring(self, process, current_run_id: int, error_callback=None, completion_callback=None):
         """
@@ -96,11 +97,12 @@ class OutputMonitor:
             'timestamp': timestamp.isoformat(),
             'message': line
         }
-        self.logs.append(log_entry)
+        with self._lock:
+            self.logs.append(log_entry)
 
-        # Keep only last max_logs entries
-        if len(self.logs) > self.max_logs:
-            self.logs = self.logs[-self.max_logs:]
+            # Keep only last max_logs entries
+            if len(self.logs) > self.max_logs:
+                self.logs = self.logs[-self.max_logs:]
 
         # Update ScraperRun logs and create ScraperLog entry
         if self.current_run_id:
@@ -226,7 +228,32 @@ class OutputMonitor:
         Returns:
             List of log entries (most recent first)
         """
-        return self.logs[-lines:] if self.logs else []
+        with self._lock:
+            return self.logs[-lines:] if self.logs else []
+
+    def get_final_output(self, max_chars: int = 5000) -> str:
+        """
+        Get the last N characters of output for error diagnosis.
+        
+        This is useful when the process exits early and we need to capture
+        the actual error message that caused the exit.
+        
+        Args:
+            max_chars: Maximum number of characters to return (default: 5000)
+            
+        Returns:
+            String containing the last N characters of all log output
+        """
+        with self._lock:
+            if not self.logs:
+                return ""
+            
+            # Get last 50 log entries (or all if fewer)
+            recent_logs = self.logs[-50:]
+            all_logs = "\n".join(entry.get('message', '') for entry in recent_logs)
+            
+            # Return last max_chars characters
+            return all_logs[-max_chars:] if len(all_logs) > max_chars else all_logs
 
     def clear_logs(self):
         """Clear the in-memory log buffer."""

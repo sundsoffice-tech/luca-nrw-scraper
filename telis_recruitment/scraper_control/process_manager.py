@@ -164,16 +164,29 @@ class ProcessManager:
         """
         # Check if it ended too quickly (configurable threshold)
         if runtime < self.early_exit_threshold:
+            # Capture the actual error output from the process
+            final_output = self.output_monitor.get_final_output(max_chars=2000)
+            
             error_msg = f"⚠️ Scraper exited after only {runtime:.1f}s - likely a startup error!"
             logger.error(error_msg)
             self.output_monitor.log_error(error_msg)
-            self.output_monitor.log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
             
-            # Set error context for early exit
+            # Log the actual captured output if available
+            if final_output and final_output.strip():
+                self.output_monitor.log_error("Captured error output:")
+                self.output_monitor.log_error(final_output)
+            else:
+                self.output_monitor.log_error("This usually means the scraper script has no executable entry point or crashed immediately.")
+            
+            # Set error context for early exit with actual error details
+            error_details = f"Runtime: {runtime:.1f}s"
+            if final_output and final_output.strip():
+                error_details += f"\n\nError Output:\n{final_output}"
+            
             self._set_error_context(
                 ScraperErrorType.PROCESS_EARLY_EXIT,
                 error_msg,
-                details=f"Runtime: {runtime:.1f}s",
+                details=error_details,
                 component="process_monitor"
             )
             
@@ -352,6 +365,32 @@ class ProcessManager:
                     params=params
                 )
             
+            # Pre-flight validation: check if script can be imported/compiled
+            is_valid, validation_error = self.launcher.validate_script(script_type, script_path)
+            if not is_valid:
+                error_msg = "Pre-flight validation failed - script has syntax or import errors"
+                logger.error(f"{error_msg}: {validation_error}")
+                self.output_monitor.log_error(error_msg)
+                self.output_monitor.log_error(f"Validation error: {validation_error}")
+                
+                self._update_run_as_failed(f"Validation failed: {validation_error}")
+                
+                self._set_error_context(
+                    ScraperErrorType.PROCESS_START_FAILED,
+                    error_msg,
+                    details=f"Validation error:\n{validation_error}",
+                    component="script_validator"
+                )
+                
+                return create_error_response(
+                    ScraperErrorType.PROCESS_START_FAILED,
+                    details=f"Validation error:\n{validation_error}",
+                    component="script_validator",
+                    pid=None,
+                    run_id=run.id,
+                    params=params
+                )
+            
             # Build command using launcher
             cmd = self.launcher.build_command(params, script_type, script_path)
             
@@ -371,7 +410,7 @@ class ProcessManager:
             self.launcher.apply_env_overrides(env, overrides)
 
             # Ensure all env values are strings (safety filter)
-            env = {k: str(v) for k, v in env. items() if v is not None}
+            env = {k: str(v) for k, v in env.items() if v is not None}
             
             # Start process using launcher
             process = self.launcher.start_process(cmd, env, project_root)

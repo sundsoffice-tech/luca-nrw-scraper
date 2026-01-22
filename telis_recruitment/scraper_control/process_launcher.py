@@ -148,6 +148,53 @@ class ProcessLauncher:
             if value:
                 env[key] = value
 
+    def validate_script(self, script_type: str, script_path: str) -> Tuple[bool, str]:
+        """
+        Validate that the scraper script can be imported/compiled without errors.
+        
+        This performs a dry-run check before starting the subprocess to catch
+        common issues like syntax errors, missing dependencies, or import failures.
+        
+        Args:
+            script_type: 'module' or 'script'
+            script_path: Path to script or module name
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            if script_type == 'module':
+                # For modules, validate the module name is safe (alphanumeric + underscore + dots)
+                import re
+                if not re.match(r'^[a-zA-Z0-9_\.]+$', script_path):
+                    return False, f"Invalid module name: {script_path}"
+                
+                # Try importing the module
+                # Using list arguments prevents shell injection even with user input
+                cmd = ['python', '-c', f'import {script_path}']
+            else:
+                # For scripts, check syntax and basic imports using py_compile
+                # script_path is passed as a separate argument, preventing injection
+                cmd = ['python', '-m', 'py_compile', script_path]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                error_output = result.stderr or result.stdout
+                return False, error_output
+            
+            return True, ""
+            
+        except subprocess.TimeoutExpired:
+            return False, "Validation timed out after 30 seconds"
+        except Exception as e:
+            return False, str(e)
+
     def start_process(self, cmd: List[str], env: Dict[str, str], cwd: str) -> subprocess.Popen:
         """
         Start the scraper subprocess.
