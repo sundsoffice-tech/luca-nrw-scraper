@@ -68,13 +68,33 @@ try:
         CANDIDATE_URL_PATTERNS,
         EMPLOYER_URL_PATTERNS,
     )
+    _IMPORT_SUCCESS = True
 except ImportError:
-    # Fallback definitions if import fails
-    CANDIDATE_STRONG_SIGNALS = []
-    CANDIDATE_MEDIUM_SIGNALS = []
-    SALES_CONTEXT_SIGNALS = []
-    CANDIDATE_URL_PATTERNS = []
-    EMPLOYER_URL_PATTERNS = []
+    # Fallback definitions if import fails - use complete lists to ensure functionality
+    _IMPORT_SUCCESS = False
+    CANDIDATE_STRONG_SIGNALS = [
+        "stellengesuch", "job gesucht", "arbeit gesucht", "ich suche job",
+        "ich suche arbeit", "suche job", "suche arbeit", "suche stelle",
+        "auf jobsuche", "open to work", "#opentowork", "verfügbar ab",
+        "arbeitslos", "freigestellt", "gekündigt", "wechselwillig",
+        "quereinstieg", "quereinsteiger",
+    ]
+    CANDIDATE_MEDIUM_SIGNALS = [
+        "profil", "erfahrung", "qualifikation", "lebenslauf", "cv",
+        "handelsvertreter", "auf provisionsbasis",
+    ]
+    SALES_CONTEXT_SIGNALS = [
+        "vertrieb", "verkauf", "sales", "außendienst", "aussendienst",
+        "call center", "callcenter", "d2d", "door to door", "akquise",
+    ]
+    CANDIDATE_URL_PATTERNS = [
+        "/s-stellengesuche/", "/stellengesuche/", "/stellengesuch/",
+        "/jobgesuche/", "/arbeitgesuche/",
+    ]
+    EMPLOYER_URL_PATTERNS = [
+        "/s-jobs/", "/stellenangebote/", "/stellenangebot/",
+        "/karriere/", "/jobs/", "/vacancy/", "/vacancies/",
+    ]
 
 # CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
 CANDIDATE_POSITIVE_SIGNALS = [
@@ -274,14 +294,8 @@ def is_candidate_seeking_job(text: str = "", title: str = "", url: str = "") -> 
     url_lower = (url or "").lower()
     
     # Rule 1: URL patterns that ALWAYS indicate job seekers (Stellengesuche)
-    candidate_url_patterns = [
-        "/s-stellengesuche/",
-        "/stellengesuche/",
-        "/stellengesuch/",
-        "/jobgesuche/",
-        "/arbeitgesuche/",
-    ]
-    for pattern in candidate_url_patterns:
+    # Use the imported/fallback CANDIDATE_URL_PATTERNS constant
+    for pattern in CANDIDATE_URL_PATTERNS:
         if pattern in url_lower:
             return True  # Stellengesuche URL = always candidate!
     
@@ -428,14 +442,8 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
     url_lower = url.lower() if url else ""
 
     # NEW: Check URL patterns first - Stellengesuche URLs are ALWAYS candidates
-    candidate_url_patterns = [
-        "/s-stellengesuche/",
-        "/stellengesuche/",
-        "/stellengesuch/",
-        "/jobgesuche/",
-        "/arbeitgesuche/",
-    ]
-    for pattern in candidate_url_patterns:
+    # Use the imported/fallback CANDIDATE_URL_PATTERNS constant
+    for pattern in CANDIDATE_URL_PATTERNS:
         if pattern in url_lower:
             return False, ""  # Stellengesuche URL = always allow!
 
@@ -468,16 +476,8 @@ def is_garbage_context(text: str, url: str = "", title: str = "", h1: str = "") 
         return True, "company_imprint"
 
     # NEW: Check for employer URL patterns - these are job ads
-    employer_url_patterns = [
-        "/s-jobs/",
-        "/stellenangebote/",
-        "/stellenangebot/",
-        "/karriere/",
-        "/jobs/",
-        "/vacancy/",
-        "/vacancies/",
-    ]
-    for pattern in employer_url_patterns:
+    # Use the imported/fallback EMPLOYER_URL_PATTERNS constant
+    for pattern in EMPLOYER_URL_PATTERNS:
         if pattern in url_lower:
             return True, "job_ad"
 

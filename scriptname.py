@@ -4701,7 +4701,7 @@ STRICT_JOB_AD_MARKERS = [
     "teamleiter gesucht", "sales manager gesucht", "benefits", "corporate benefits",
 ]
 
-# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dÃ¼rfen NICHT als job_ad geblockt werden!)
+# CANDIDATE POSITIVE SIGNALS - Menschen die Jobs SUCHEN (dürfen NICHT als job_ad geblockt werden!)
 CANDIDATE_POSITIVE_SIGNALS = [
     # Direct job search phrases
     "stellengesuch",
@@ -6647,7 +6647,7 @@ CANDIDATE_POS_MARKERS = (
     
     # CV/Profile
     "lebenslauf", "cv", "curriculum vitae", "profil", "qualifikation",
-    "kenntnisse", "fuehrerschein", "führerschein", "erfahrung im vertrieb",
+    "kenntnisse", "führerschein", "erfahrung im vertrieb",
     "stellengesuch", "bewerberprofil",
     
     # Career change
