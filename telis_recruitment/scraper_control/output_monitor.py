@@ -98,11 +98,9 @@ class OutputMonitor:
             'message': line
         }
         with self._lock:
-            with self._lock:
             self.logs.append(log_entry)
 
-        # Keep only last max_logs entries
-        with self._lock:
+            # Keep only last max_logs entries
             if len(self.logs) > self.max_logs:
                 self.logs = self.logs[-self.max_logs:]
 
