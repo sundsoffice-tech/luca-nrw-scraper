@@ -308,6 +308,59 @@ HOTFROG_URLS: List[str] = [
     "https://www.hotfrog.de/suche/nordrhein-westfalen/sales",
 ]
 
+# =========================
+# HANDELSVERTRETER-SPECIFIC PORTALE (40+ Quellen)
+# =========================
+
+# CDH (Centralvereinigung Deutscher Handelsvertreter) - Priority 5
+CDH_URLS: List[str] = [
+    "https://www.cdh.de/boerse/",
+    "https://www.cdh.de/mitglieder/",
+    "https://www.cdh.de/regionen/nordrhein-westfalen/",
+]
+
+# Handelsvertreter.de Portal - Priority 5
+HANDELSVERTRETER_DE_URLS: List[str] = [
+    "https://www.handelsvertreter.de/nrw/",
+    "https://www.handelsvertreter.de/koeln/",
+    "https://www.handelsvertreter.de/duesseldorf/",
+    "https://www.handelsvertreter.de/dortmund/",
+    "https://www.handelsvertreter.de/essen/",
+]
+
+# IHK (Industrie- und Handelskammer) URLs - Priority 3
+IHK_URLS: List[str] = [
+    "https://www.ihk-nordwestfalen.de/firmenverzeichnis/",
+    "https://www.ihk-koeln.de/firmenverzeichnis/",
+    "https://www.ihk-duesseldorf.de/firmenverzeichnis/",
+    "https://www.ihk-dortmund.de/firmenverzeichnis/",
+]
+
+# Koeln.business - Regional NRW Portal - Priority 3
+KOELN_BUSINESS_URLS: List[str] = [
+    "https://www.koeln.business/unternehmen/vertrieb/",
+    "https://www.koeln.business/branchen/handelsvertreter/",
+]
+
+# Direktvertrieb.de Portal - Priority 3
+DIREKTVERTRIEB_URLS: List[str] = [
+    "https://www.direktvertrieb.de/mitglieder/",
+    "https://www.direktvertrieb.de/kooperationspartner/",
+]
+
+# Listflix & Firmendatenbanken - Priority 4
+LISTFLIX_URLS: List[str] = [
+    "https://www.listflix.de/handelsvertreter/nrw/",
+    "https://www.listflix.de/vertrieb/nordrhein-westfalen/",
+]
+
+# Messe URLs for Handelsvertreter - Events/Trade Fairs
+MESSE_HANDELSVERTRETER_URLS: List[str] = [
+    "https://www.messe-duesseldorf.de/aussteller/",
+    "https://www.koelnmesse.de/aussteller/",
+    "https://www.messe-essen.de/aussteller/",
+]
+
 # Direct crawl URLs (alias for backward compatibility)
 DIRECT_CRAWL_URLS = KLEINANZEIGEN_URLS
 
@@ -383,6 +436,14 @@ PORTAL_DELAYS: Dict[str, float] = {
     "firmen_abc": 4.0,
     "cylex": 3.0,
     "hotfrog": 3.0,
+    # Handelsvertreter-specific portals (40+ Quellen)
+    "cdh": 4.0,
+    "handelsvertreter_de": 3.0,
+    "ihk": 5.0,  # Higher delay for official sources
+    "koeln_business": 4.0,
+    "direktvertrieb": 4.0,
+    "listflix": 4.0,
+    "messe_handelsvertreter": 5.0,
 }
 
 # Direct crawl source configuration
@@ -404,6 +465,14 @@ DIRECT_CRAWL_SOURCES: Dict[str, bool] = {
     "firmen_abc": True,
     "cylex": True,
     "hotfrog": True,
+    # Handelsvertreter-specific portals (40+ Quellen) - All enabled
+    "cdh": True,
+    "handelsvertreter_de": True,
+    "ihk": True,
+    "koeln_business": True,
+    "direktvertrieb": True,
+    "listflix": True,
+    "messe_handelsvertreter": True,
 }
 
 # Max profiles per URL
@@ -471,6 +540,14 @@ def get_portal_urls(portal_name: str) -> List[str]:
         'firmen_abc': FIRMEN_ABC_URLS,
         'cylex': CYLEX_URLS,
         'hotfrog': HOTFROG_URLS,
+        # Handelsvertreter-specific portals (40+ Quellen)
+        'cdh': CDH_URLS,
+        'handelsvertreter_de': HANDELSVERTRETER_DE_URLS,
+        'ihk': IHK_URLS,
+        'koeln_business': KOELN_BUSINESS_URLS,
+        'direktvertrieb': DIREKTVERTRIEB_URLS,
+        'listflix': LISTFLIX_URLS,
+        'messe_handelsvertreter': MESSE_HANDELSVERTRETER_URLS,
     }
     
     # Try to load from database first
@@ -550,7 +627,10 @@ def get_all_portal_configs() -> Dict[str, Dict[str, Any]]:
         'dhd24', 'freelancermap', 'freelance_de',
         # New high-quality business directories
         'wlw', 'gelbe_seiten', 'das_oertliche', 'northdata',
-        'firmen_abc', 'cylex', 'hotfrog'
+        'firmen_abc', 'cylex', 'hotfrog',
+        # Handelsvertreter-specific portals (40+ Quellen)
+        'cdh', 'handelsvertreter_de', 'ihk', 'koeln_business',
+        'direktvertrieb', 'listflix', 'messe_handelsvertreter'
     }
     
     # Try to get additional portals from database

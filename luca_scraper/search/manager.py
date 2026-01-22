@@ -553,11 +553,72 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
     ],
     
     # ══════════════════════════════════════════════════════════════
-    # NEU: HANDELSVERTRETER
+    # NEU: HANDELSVERTRETER (40+ Quellen - Erweiterte Konfiguration)
+    # Zielgruppe: Handelsvertreter + selbständige Vertriebs-/Außendienstkräfte in NRW/DE
     # ══════════════════════════════════════════════════════════════
     "handelsvertreter": [
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 1: KLEINANZEIGEN STELLENGESUCHE (Primäre Quelle!)
+        # PRIORITÄT 6 (HÖCHST!): HANDELSREGISTER & OFFIZIELLE REGISTER
+        # Domains: handelsregister.de, it.nrw, bundesanzeiger.de, ag-koeln.nrw.de, ag-duesseldorf.nrw.de
+        # ──────────────────────────────────────────────────────────
+        'site:handelsregister.de "Nordrhein-Westfalen" (Vertrieb OR Außendienst OR Handelsvertreter OR selbständige)',
+        'site:it.nrw/thema/unternehmensregister (Vertrieb OR Handelsvertreter OR selbständige) (Köln OR Düsseldorf OR Essen)',
+        'site:bundesanzeiger.de (Vertrieb OR Außendienst OR Handelsvertreter) "Nordrhein-Westfalen" (Geschäftsführer OR GF)',
+        'site:ag-koeln.nrw.de Handelsregister (Vertrieb OR Handelsvertreter OR selbständig)',
+        'site:ag-duesseldorf.nrw.de Handelsregister (Außendienst OR Vertrieb OR selbständige)',
+        
+        # ──────────────────────────────────────────────────────────
+        # PRIORITÄT 5: TOP HANDELSVERTRETER-PORTALE
+        # Domains: handelsvertreter.de, cdh.de, handelsvertreter-netzwerk.de
+        # ──────────────────────────────────────────────────────────
+        'site:handelsvertreter.de (NRW OR Köln OR Düsseldorf OR Essen OR Dortmund) (Telefon OR Mobil OR @ OR Kontakt)',
+        'site:cdh.de (Institutionen OR Mitglieder OR Partner) (NRW OR Ruhrgebiet) (Telefon OR Kontakt OR E-Mail)',
+        'site:cdh.de "Handelsvertreter" "sucht Vertretung" kontakt',
+        'site:cdh.de "freie Kapazitäten" "Handelsvertreter"',
+        'site:cdh.de/boerse "Handelsvertretersuche"',
+        'site:handelsvertreter-netzwerk.de (NRW OR Köln OR Düsseldorf OR selbständig) (Profil OR Kontakt OR Handy)',
+        
+        # ──────────────────────────────────────────────────────────
+        # PRIORITÄT 4: B2B-VERZEICHNISSE
+        # Domains: gelbeseiten.de, dasoertliche.de, 11880.com
+        # ──────────────────────────────────────────────────────────
+        'site:gelbeseiten.de (Handelsvertreter OR Außendienst OR Gebietsvertreter OR selbständig) ("40000" OR "50000" OR "51000") (Telefon OR Mobil OR Kontakt)',
+        'site:gelbeseiten.de "Handelsvertretung" ("NRW" OR "Nordrhein-Westfalen") telefon',
+        'site:dasoertliche.de (Vertrieb OR Handelsvertreter OR selbständige) (Köln OR Düsseldorf OR Essen OR Dortmund) (Telefon OR Handy)',
+        'site:dasoertliche.de "Vertriebsservice" (Düsseldorf OR Köln OR Dortmund OR Essen OR Duisburg OR Bochum)',
+        'site:11880.com (Außendienst OR Vertrieb OR Handelsvertreter OR selbständig) NRW (Telefon OR Kontakt OR E-Mail)',
+        'site:11880.com "Außendienst" OR "Handelsvertreter" NRW telefon',
+        
+        # ──────────────────────────────────────────────────────────
+        # PRIORITÄT 4: FIRMENLISTEN & DATENBANKEN
+        # Domains: listflix.de, adressbar.de, firmendatenbanken.de, datenparty.com
+        # ──────────────────────────────────────────────────────────
+        'site:listflix.de (handelsvertreter OR selbständige OR außendienst) (NRW OR Köln OR Düsseldorf OR Ruhrgebiet)',
+        'site:adressbar.de (Handelsvertreter OR selbständige Vertrieb) (Nordrhein-Westfalen OR NRW)',
+        'site:firmendatenbanken.de/firmen/liste/handelsvertreter (NRW OR Köln)',
+        'site:datenparty.com (handelsvertreter OR selbständige) (Telefon OR E-Mail OR Kontakt)',
+        
+        # ──────────────────────────────────────────────────────────
+        # PRIORITÄT 3: LOKALE NRW + VERBÄNDE
+        # Domains: koeln.business, direktvertrieb.de, vertriebsoffice.de, ihk.de
+        # ──────────────────────────────────────────────────────────
+        'site:koeln.business (Vertrieb OR Außendienst OR Handelsvertreter OR selbständig) (Telefon OR Kontakt)',
+        'site:direktvertrieb.de (Kooperationspartner OR Mitglieder OR selbständige) (Telefon OR Kontakt)',
+        'site:vertriebsoffice.de/branchenbuch (Direktvertrieb OR Handelsvertreter) (NRW OR Köln)',
+        'site:ihk.de/nordwestfalen (Firmenverzeichnis OR Mitglieder) (Vertrieb OR Handelsvertreter)',
+        'site:ihk.de "Handelsvertreter" ("NRW" OR "Düsseldorf" OR "Köln") kontakt',
+        'site:ihk.de "Handelsvertreterbörse" kontakt',
+        'site:handelskammer.de "Handelsvertreter" "Vertretung gesucht"',
+        
+        # ──────────────────────────────────────────────────────────
+        # PRIORITÄT 4: IHK & REGIONALE KAMMERN
+        # ──────────────────────────────────────────────────────────
+        'site:ihk-koeln.de OR site:ihk-duesseldorf.de OR site:ihk-dortmund.de "Vertrieb" kontakt',
+        'site:northdata.de "Vertriebsleitung" OR "Handelsvertretung" NRW',
+        'site:bvmw.de "Mitglied" ("NRW" OR "Nordrhein-Westfalen") "Vertrieb" kontakt',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE: KLEINANZEIGEN STELLENGESUCHE (Primäre Quelle!)
         # ──────────────────────────────────────────────────────────
         'site:kleinanzeigen.de/s-stellengesuche "handelsvertreter"',
         'site:kleinanzeigen.de/s-stellengesuche "freier handelsvertreter"',
@@ -574,7 +635,7 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:quoka.de "suche vertretung" "provision"',
         
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 2: BUSINESS NETZWERKE (Xing, LinkedIn)
+        # KATEGORIE: BUSINESS NETZWERKE (Xing, LinkedIn)
         # ──────────────────────────────────────────────────────────
         'site:xing.com/profile "Handelsvertreter" "offen für angebote"',
         'site:xing.com/profile "Handelsvertretung" "suche"',
@@ -588,24 +649,23 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         'site:linkedin.com/in "Handelsvertretung" "neue Mandate"',
         
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 3: VERBÄNDE & REGISTER (Offizielle Quellen)
-        # ──────────────────────────────────────────────────────────
-        'site:cdh.de "Handelsvertreter" "sucht Vertretung" kontakt',
-        'site:cdh.de "freie Kapazitäten" "Handelsvertreter"',
-        'site:cdh.de/boerse "Handelsvertretersuche"',
-        'site:handelskammer.de "Handelsvertreter" "Vertretung gesucht"',
-        'site:ihk.de "Handelsvertreterbörse" kontakt',
-        '"CDH Handelsvertreterbörse" "sucht Vertretung"',
-        
-        # ──────────────────────────────────────────────────────────
-        # KATEGORIE 4: SOCIAL MEDIA
+        # KATEGORIE: SOCIAL MEDIA
         # ──────────────────────────────────────────────────────────
         'site:facebook.com "Handelsvertreter" "suche Vertretung"',
         'site:facebook.com/groups "Handelsvertreter" "freie Kapazitäten"',
         'site:facebook.com "freier Handelsvertreter" "suche Mandate"',
         
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 5: BRANCHEN-SPEZIFISCH
+        # KATEGORIE: WEITERE B2B-VERZEICHNISSE
+        # Domains: wlw.de, cylex.de, hotfrog.de, firmenabc.de
+        # ──────────────────────────────────────────────────────────
+        'site:wlw.de "Vertrieb" "Nordrhein-Westfalen" ("Ansprechpartner" OR "kontakt")',
+        'site:cylex.de "Vertriebspartner" ("Düsseldorf" OR "Köln" OR "Dortmund") kontakt',
+        'site:hotfrog.de "Handelsvertreter" "NRW" kontakt',
+        'site:firmenabc.de "Handelsvertretung" kontakt',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE: BRANCHEN-SPEZIFISCH
         # ──────────────────────────────────────────────────────────
         # SHK/Sanitär/Heizung
         '"Handelsvertreter" "SHK" "suche Vertretung" kontakt',
@@ -629,15 +689,18 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"Industrievertretung" "Baustoffe" "freie Kapazität"',
         
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 6: REGIONALE NRW-SUCHE
+        # KATEGORIE: REGIONALE NRW-SUCHE (Erweitert)
         # ──────────────────────────────────────────────────────────
         '"Handelsvertreter" "suche Vertretung" "Düsseldorf" kontakt',
         '"Handelsvertreter" "suche" "Köln" "NRW"',
         '"Industrievertretung" "Ruhrgebiet" "freie Kapazitäten"',
         '"freier Handelsvertreter" "Münsterland" "suche"',
+        '"Handelsvertreter" (Essen OR Dortmund OR Bochum) (Telefon OR Kontakt)',
+        '"selbständiger Außendienst" "NRW" (Mobil OR Telefon OR Kontakt)',
+        '"Vertriebskraft" "Nordrhein-Westfalen" (selbständig OR freiberuflich) Kontakt',
         
         # ──────────────────────────────────────────────────────────
-        # KATEGORIE 7: SPEZIFISCHE SUCHFORMULIERUNGEN
+        # KATEGORIE: SPEZIFISCHE SUCHFORMULIERUNGEN
         # ──────────────────────────────────────────────────────────
         '"suche Vertretung" "Handelsvertreter" "Provision" kontakt',
         '"freie Kapazitäten" "Handelsvertreter" "Außendienst" telefon',
@@ -646,6 +709,21 @@ INDUSTRY_QUERIES: dict[str, list[str]] = {
         '"Industrievertretung" "suche Hersteller" kontakt',
         '"biete Handelsvertretung" "Erfahrung" telefon',
         '"Handelsvertreter" "Sortimentserweiterung" "suche"',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE: MESSEN & EVENTS
+        # ──────────────────────────────────────────────────────────
+        'site:messe-duesseldorf.de "Aussteller" "Ansprechpartner" kontakt',
+        'site:koelnmesse.de "Ausstellerprofil" "Vertrieb" OR "Sales" telefon',
+        'site:messe-essen.de "Aussteller" "Ansprechpartner" kontakt telefon',
+        '"Messekatalog" OR "Ausstellerverzeichnis" "Vertrieb" OR "Sales" NRW kontakt telefon',
+        
+        # ──────────────────────────────────────────────────────────
+        # KATEGORIE: FREELANCER & PROJEKTBÖRSEN
+        # ──────────────────────────────────────────────────────────
+        'site:freelancermap.de "Vertrieb" OR "Sales" "verfügbar" NRW kontakt',
+        'site:freelance.de "Handelsvertreter" OR "Vertriebsprofi" "freiberuflich" kontakt',
+        'site:gulp.de "Sales" OR "Business Development" NRW verfügbar telefon',
     ],
     
     # ══════════════════════════════════════════════════════════════
