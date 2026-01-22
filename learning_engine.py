@@ -20,13 +20,24 @@ import urllib.parse
 import re
 import logging
 import hashlib
+import os
+import sys
+
+# CRITICAL: Ensure Django is initialized before importing luca_scraper modules
+# This prevents AppRegistryNotReady errors when Django models are accessed
+if 'DJANGO_SETTINGS_MODULE' not in os.environ:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis.settings')
+    try:
+        import django
+        django.setup()
+    except Exception as e:
+        logging.warning(f"Django setup failed in learning_engine: {e}")
+        # Continue anyway - some functionality may work without Django
 
 # Import unified learning database adapter
 try:
     from cache import get_domain_rating_cache
 except ImportError:
-    import sys
-    import os
     _root = os.path.dirname(os.path.abspath(__file__))
     if _root not in sys.path:
         sys.path.insert(0, _root)

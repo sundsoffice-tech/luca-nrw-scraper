@@ -34,18 +34,60 @@ try:
 except Exception as exc:
     logging.warning("Django setup failed: %s", exc)
 
-# Now we can import Django models and utilities
-from django.db import IntegrityError, transaction as django_transaction
-from leads.models import Lead
-from leads.utils.normalization import normalize_email, normalize_phone
-from leads.field_mapping import (
-    SCRAPER_TO_DJANGO_MAPPING,
-    JSON_ARRAY_FIELDS,
-    INTEGER_FIELDS,
-    BOOLEAN_FIELDS,
-)
-
 logger = logging.getLogger(__name__)
+
+# Cache for lazy-loaded Django imports to avoid repeated imports
+_django_imports_cache = None
+
+# Lazy import helpers - import Django models only when needed
+def _get_django_imports():
+    """
+    Lazily import Django models and utilities to avoid import errors.
+    
+    This function caches the imports on first call to avoid repeated import overhead.
+    
+    Returns:
+        Dictionary containing Django models and utility functions
+        
+    Raises:
+        ImportError: If Django models or utilities cannot be imported
+        django.core.exceptions.AppRegistryNotReady: If Django is not properly initialized
+        
+    Note:
+        Callers should ensure Django is initialized before calling this function.
+        This is typically done by calling django.setup() at the module or application entry point.
+    """
+    global _django_imports_cache
+    
+    # Return cached imports if available
+    if _django_imports_cache is not None:
+        return _django_imports_cache
+    
+    # Import Django models and utilities
+    from django.db import IntegrityError, transaction as django_transaction
+    from leads.models import Lead
+    from leads.utils.normalization import normalize_email, normalize_phone
+    from leads.field_mapping import (
+        SCRAPER_TO_DJANGO_MAPPING,
+        JSON_ARRAY_FIELDS,
+        INTEGER_FIELDS,
+        BOOLEAN_FIELDS,
+    )
+    
+    # Cache the imports for future calls
+    _django_imports_cache = {
+        'IntegrityError': IntegrityError,
+        'django_transaction': django_transaction,
+        'Lead': Lead,
+        'normalize_email': normalize_email,
+        'normalize_phone': normalize_phone,
+        'SCRAPER_TO_DJANGO_MAPPING': SCRAPER_TO_DJANGO_MAPPING,
+        'JSON_ARRAY_FIELDS': JSON_ARRAY_FIELDS,
+        'INTEGER_FIELDS': INTEGER_FIELDS,
+        'BOOLEAN_FIELDS': BOOLEAN_FIELDS,
+    }
+    
+    return _django_imports_cache
 
 # Transient error keywords that indicate retryable database errors
 TRANSIENT_ERROR_KEYWORDS = [
@@ -68,6 +110,13 @@ def _map_scraper_data_to_django(data: Dict) -> Dict:
     Returns:
         Dictionary with Django model field names
     """
+    # Lazy import Django constants
+    imports = _get_django_imports()
+    SCRAPER_TO_DJANGO_MAPPING = imports['SCRAPER_TO_DJANGO_MAPPING']
+    JSON_ARRAY_FIELDS = imports['JSON_ARRAY_FIELDS']
+    INTEGER_FIELDS = imports['INTEGER_FIELDS']
+    BOOLEAN_FIELDS = imports['BOOLEAN_FIELDS']
+    
     mapped_data = {}
     
     for scraper_field, value in data.items():
@@ -189,6 +238,13 @@ def upsert_lead(data: Dict, max_retries: int = 3, retry_delay: float = 0.1) -> T
     Raises:
         Exception: If all retry attempts fail
     """
+    # Lazy import Django modules
+    imports = _get_django_imports()
+    Lead = imports['Lead']
+    normalize_email = imports['normalize_email']
+    normalize_phone = imports['normalize_phone']
+    django_transaction = imports['django_transaction']
+    
     last_exception = None
     
     for attempt in range(max_retries):
@@ -289,6 +345,8 @@ def get_lead_count() -> int:
     Returns:
         Total number of leads
     """
+    imports = _get_django_imports()
+    Lead = imports['Lead']
     return Lead.objects.count()
 
 
@@ -305,6 +363,11 @@ def lead_exists(email: Optional[str] = None, telefon: Optional[str] = None) -> b
     """
     if not email and not telefon:
         return False
+    
+    imports = _get_django_imports()
+    Lead = imports['Lead']
+    normalize_email = imports['normalize_email']
+    normalize_phone = imports['normalize_phone']
     
     normalized_email = normalize_email(email)
     normalized_phone = normalize_phone(telefon)
@@ -330,6 +393,9 @@ def get_lead_by_id(lead_id: int) -> Optional[Dict]:
     Returns:
         Dictionary with lead data (scraper field names) or None if not found
     """
+    imports = _get_django_imports()
+    Lead = imports['Lead']
+    
     try:
         lead = Lead.objects.get(id=lead_id)
         return _map_django_to_scraper(lead)
@@ -348,6 +414,10 @@ def update_lead(lead_id: int, data: Dict) -> bool:
     Returns:
         True if lead was updated, False if lead not found
     """
+    imports = _get_django_imports()
+    Lead = imports['Lead']
+    django_transaction = imports['django_transaction']
+    
     try:
         with django_transaction.atomic():
             lead = Lead.objects.get(id=lead_id)
