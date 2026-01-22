@@ -2,12 +2,21 @@
 LUCA NRW Scraper - Environment Variable Loader
 ===============================================
 Reading and converting environment variables.
+
+This module loads environment variables from .env files using python-dotenv.
+load_dotenv() is called at import time to ensure all environment variables
+are available when this module is imported.
 """
 
 import os
 import urllib.parse
 from typing import List
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# This must happen before any os.getenv() calls to ensure .env values are available
+load_dotenv(override=True)
 
 # =========================
 # ENVIRONMENT VARIABLES
