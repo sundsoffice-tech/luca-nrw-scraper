@@ -349,22 +349,36 @@ def lead_exists_sqlite(email: Optional[str] = None, telefon: Optional[str] = Non
         con.close()
 
 
-def is_url_seen_sqlite(url: str) -> bool:
+def is_url_seen_sqlite(url: str, ttl_hours: int = 168) -> bool:
     """
-    Check if a URL has been seen in SQLite.
+    Check if a URL has been seen within the TTL period.
     
     Args:
         url: URL to check
+        ttl_hours: Time-to-live in hours (default 168h = 7 days).
+                   Set to 0 for no expiration (legacy behavior).
         
     Returns:
-        True if URL has been seen, False otherwise
+        True if URL was seen within TTL period, False otherwise
     """
     from .connection import db
     
     con = db()
     cur = con.cursor()
     try:
-        cur.execute("SELECT 1 FROM urls_seen WHERE url = ?", (url,))
+        if ttl_hours <= 0:
+            # Legacy behavior - no expiration
+            cur.execute("SELECT 1 FROM urls_seen WHERE url = ?", (url,))
+        else:
+            # Check with TTL - URL is "seen" only if within TTL window
+            cur.execute(
+                """
+                SELECT 1 FROM urls_seen 
+                WHERE url = ? 
+                AND ts > datetime('now', ? || ' hours')
+                """,
+                (url, -ttl_hours)
+            )
         return bool(cur.fetchone())
     finally:
         con.close()
@@ -392,22 +406,36 @@ def mark_url_seen_sqlite(url: str, run_id: Optional[int] = None) -> None:
         con.close()
 
 
-def is_query_done_sqlite(query: str) -> bool:
+def is_query_done_sqlite(query: str, ttl_hours: int = 24) -> bool:
     """
-    Check if a query has been done in SQLite.
+    Check if a query has been done within the TTL period.
     
     Args:
         query: Search query to check
+        ttl_hours: Time-to-live in hours (default 24h). 
+                   Set to 0 for no expiration (legacy behavior).
         
     Returns:
-        True if query has been done, False otherwise
+        True if query was done within TTL period, False otherwise
     """
     from .connection import db
     
     con = db()
     cur = con.cursor()
     try:
-        cur.execute("SELECT 1 FROM queries_done WHERE q = ?", (query,))
+        if ttl_hours <= 0:
+            # Legacy behavior - no expiration
+            cur.execute("SELECT 1 FROM queries_done WHERE q = ?", (query,))
+        else:
+            # Check with TTL - query is "done" only if within TTL window
+            cur.execute(
+                """
+                SELECT 1 FROM queries_done 
+                WHERE q = ? 
+                AND ts > datetime('now', ? || ' hours')
+                """,
+                (query, -ttl_hours)
+            )
         return bool(cur.fetchone())
     finally:
         con.close()
@@ -431,6 +459,66 @@ def mark_query_done_sqlite(query: str, run_id: Optional[int] = None) -> None:
             (query, run_id)
         )
         con.commit()
+    finally:
+        con.close()
+
+
+def cleanup_expired_queries(ttl_hours: int = 48) -> int:
+    """
+    Remove expired query cache entries.
+    
+    Args:
+        ttl_hours: Remove entries older than this many hours
+        
+    Returns:
+        Number of entries removed
+    """
+    from .connection import db
+    
+    con = db()
+    cur = con.cursor()
+    try:
+        cur.execute(
+            """
+            DELETE FROM queries_done 
+            WHERE ts < datetime('now', ? || ' hours')
+            """,
+            (-ttl_hours,)
+        )
+        deleted = cur.rowcount
+        con.commit()
+        logger.info(f"Cleaned up {deleted} expired query cache entries")
+        return deleted
+    finally:
+        con.close()
+
+
+def cleanup_expired_urls(ttl_hours: int = 336) -> int:
+    """
+    Remove expired URL cache entries.
+    
+    Args:
+        ttl_hours: Remove entries older than this many hours (default 336h = 14 days)
+        
+    Returns:
+        Number of entries removed
+    """
+    from .connection import db
+    
+    con = db()
+    cur = con.cursor()
+    try:
+        cur.execute(
+            """
+            DELETE FROM urls_seen 
+            WHERE ts < datetime('now', ? || ' hours')
+            """,
+            (-ttl_hours,)
+        )
+        deleted = cur.rowcount
+        con.commit()
+        logger.info(f"Cleaned up {deleted} expired URL cache entries")
+        return deleted
     finally:
         con.close()
 
@@ -526,6 +614,8 @@ _BASE_EXPORTS = [
     'finish_scraper_run_sqlite',
     'get_lead_count_sqlite',
     'sync_status_to_scraper',
+    'cleanup_expired_queries',
+    'cleanup_expired_urls',
 ]
 
 # When using Django backend, also export Django adapter functions
