@@ -71,15 +71,25 @@ def _get_django_imports():
     # Import Django models and utilities
     from django.db import IntegrityError, transaction as django_transaction
     from django.apps import apps
+    
     if TYPE_CHECKING:
-        from leads.models import Lead
-    from leads.utils.normalization import normalize_email, normalize_phone
-    from leads.field_mapping import (
-        SCRAPER_TO_DJANGO_MAPPING,
-        JSON_ARRAY_FIELDS,
-        INTEGER_FIELDS,
-        BOOLEAN_FIELDS,
-    )
+        # For Pylance/mypy (static analysis)
+        from telis_recruitment.leads.utils.normalization import normalize_email, normalize_phone
+        from telis_recruitment.leads.field_mapping import (
+            SCRAPER_TO_DJANGO_MAPPING,
+            JSON_ARRAY_FIELDS,
+            INTEGER_FIELDS,
+            BOOLEAN_FIELDS,
+        )
+    else:
+        # At runtime (Django resolves paths)
+        from leads.utils.normalization import normalize_email, normalize_phone
+        from leads.field_mapping import (
+            SCRAPER_TO_DJANGO_MAPPING,
+            JSON_ARRAY_FIELDS,
+            INTEGER_FIELDS,
+            BOOLEAN_FIELDS,
+        )
 
     Lead = apps.get_model('leads', 'Lead')
     if Lead is None:
