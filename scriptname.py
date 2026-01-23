@@ -272,9 +272,12 @@ try:
         init_db as _init_db,
         migrate_db_unique_indexes as _migrate_db_unique_indexes,
     )
-    # Import db_router for unified database operations
+    # Import CRM adapter for direct Django CRM integration
+    from luca_scraper.crm_adapter import (
+        upsert_lead_crm as _upsert_lead_router,
+    )
+    # Import db_router for other unified database operations
     from luca_scraper.db_router import (
-        upsert_lead as _upsert_lead_router,
         lead_exists as _lead_exists_router,
         get_lead_count as _get_lead_count_router,
         is_url_seen as _is_url_seen_router,
@@ -2277,7 +2280,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             increment_rejection_stat("No phone")
             continue
         
-        # Use upsert_lead from db_router
+        # Use upsert_lead_crm from CRM adapter (with fallback to SQLite)
         try:
             # DRY RUN MODE: Skip database insert
             if DRY_RUN:
@@ -2285,7 +2288,7 @@ def insert_leads(leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 new_rows.append(r)
                 continue
             
-            from luca_scraper.db_router import upsert_lead as _upsert_lead_fn
+            from luca_scraper.crm_adapter import upsert_lead_crm as _upsert_lead_fn
             lead_id, created = _upsert_lead_fn(r)
             if created:
                 new_rows.append(r)
