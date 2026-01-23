@@ -356,6 +356,15 @@ except ImportError:
         _HAVE_CACHE = False
 
 # =========================
+# Re-export CRM Adapter (Direct Django Integration)
+# =========================
+
+from .crm_adapter import (
+    upsert_lead_crm,
+    sync_sqlite_to_crm,
+)
+
+# =========================
 # __all__ Export
 # =========================
 
@@ -555,6 +564,10 @@ __all__ = [
     "extract_detail_generic",
     "extract_generic_detail_async",  # Backward compatibility alias
     "_mark_url_seen",
+    
+    # CRM Adapter (Direct Django Integration)
+    "upsert_lead_crm",
+    "sync_sqlite_to_crm",
 ]
 
 # Add optional imports to __all__ if available
