@@ -13,20 +13,36 @@ class TTLCache:
     """
     Simple TTL (Time To Live) cache with size limits.
     Items expire after a specified time period.
+    Automatically clears expired entries periodically.
     """
     
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 10000):
+    def __init__(
+        self,
+        ttl_seconds: int = 3600,
+        max_size: int = 10000,
+        cleanup_interval: int = 300,
+    ):
         """
         Initialize TTL cache.
         
         Args:
             ttl_seconds: Time to live for cache entries in seconds
             max_size: Maximum number of entries before eviction
+            cleanup_interval: How often to auto-cleanup expired entries (seconds)
         """
         self.ttl = ttl_seconds
         self.max_size = max_size
+        self.cleanup_interval = cleanup_interval
         # Python 3.7+ dicts maintain insertion order
         self._cache: Dict[str, tuple[Any, float]] = {}
+        self._last_cleanup = time.time()
+    
+    def _maybe_cleanup(self):
+        """Auto-cleanup expired entries if cleanup interval has passed."""
+        now = time.time()
+        if now - self._last_cleanup >= self.cleanup_interval:
+            self.clear_expired()
+            self._last_cleanup = now
     
     def get(self, key: str) -> Optional[Any]:
         """
@@ -38,6 +54,9 @@ class TTLCache:
         Returns:
             Cached value or None if not found/expired
         """
+        # Periodically cleanup expired entries
+        self._maybe_cleanup()
+        
         if key not in self._cache:
             return None
         
@@ -61,6 +80,9 @@ class TTLCache:
             key: Cache key
             value: Value to cache
         """
+        # Periodically cleanup expired entries
+        self._maybe_cleanup()
+        
         # Evict oldest if at capacity
         while len(self._cache) >= self.max_size:
             # Pop the first item (oldest in insertion order)
@@ -106,6 +128,8 @@ class TTLCache:
             "size": len(self._cache),
             "max_size": self.max_size,
             "ttl_seconds": self.ttl,
+            "cleanup_interval": self.cleanup_interval,
+            "seconds_since_cleanup": int(now - self._last_cleanup),
             "expired_entries": expired,
         }
 
@@ -194,16 +218,26 @@ class QueryCache:
     """
     Cache for search query results.
     Stores query results with TTL to avoid redundant searches.
+    Automatically clears expired entries periodically.
     """
     
-    def __init__(self, ttl_seconds: int = 86400):  # 24 hours default
+    def __init__(
+        self,
+        ttl_seconds: int = 86400,  # 24 hours default
+        cleanup_interval: int = 60,  # 1 minute default for query cache
+    ):
         """
         Initialize query cache.
         
         Args:
             ttl_seconds: Time to live for cache entries (default 24 hours)
+            cleanup_interval: How often to auto-cleanup expired entries (default 60 seconds)
         """
-        self._cache = TTLCache(ttl_seconds=ttl_seconds, max_size=1000)
+        self._cache = TTLCache(
+            ttl_seconds=ttl_seconds,
+            max_size=1000,
+            cleanup_interval=cleanup_interval,
+        )
     
     def get_results(self, query: str, source: str = "") -> Optional[List[Dict[str, Any]]]:
         """

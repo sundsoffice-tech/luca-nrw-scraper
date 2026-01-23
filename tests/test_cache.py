@@ -82,6 +82,38 @@ class TestTTLCache:
         assert stats["size"] == 2
         assert stats["max_size"] == 100
         assert stats["ttl_seconds"] == 10
+    
+    def test_auto_cleanup(self):
+        """Test automatic cleanup of expired entries."""
+        # Use a short TTL and very short cleanup interval
+        cache = TTLCache(ttl_seconds=1, max_size=100, cleanup_interval=1)
+        
+        # Add some entries
+        cache.set("key1", "value1")
+        cache.set("key2", "value2")
+        
+        assert cache.size() == 2
+        
+        # Wait for entries to expire
+        time.sleep(1.1)
+        
+        # Force a time-based cleanup by waiting for cleanup interval
+        time.sleep(0.1)
+        
+        # Access cache to trigger auto-cleanup
+        cache.get("any_key")
+        
+        # All expired entries should be cleared
+        assert cache.size() == 0
+    
+    def test_cleanup_interval_stats(self):
+        """Test that cleanup interval is included in stats."""
+        cache = TTLCache(ttl_seconds=10, max_size=100, cleanup_interval=60)
+        
+        stats = cache.stats()
+        
+        assert stats["cleanup_interval"] == 60
+        assert "seconds_since_cleanup" in stats
 
 
 class TestURLSeenSet:
@@ -204,3 +236,25 @@ class TestQueryCache:
         
         assert cache.has_cached("test query", source="google") is False
         assert cache.get_results("test query", source="google") is None
+    
+    def test_auto_cleanup(self):
+        """Test that QueryCache automatically cleans up expired entries."""
+        # Use short TTL and cleanup interval
+        cache = QueryCache(ttl_seconds=1, cleanup_interval=1)
+        
+        results = [{"url": "https://example.com"}]
+        cache.set_results("query1", results, source="google")
+        cache.set_results("query2", results, source="ddg")
+        
+        stats = cache.stats()
+        assert stats["size"] == 2
+        
+        # Wait for entries to expire and cleanup interval to pass
+        time.sleep(1.5)
+        
+        # Access cache to trigger auto-cleanup
+        cache.get_results("nonexistent", "any")
+        
+        # All expired entries should be cleared
+        stats = cache.stats()
+        assert stats["size"] == 0
