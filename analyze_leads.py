@@ -2,14 +2,15 @@
 import os
 import sys
 import django
+from django.apps import apps
 
 os.chdir(r'C:\Users\sunds\Desktop\Luca\telis_recruitment')
 sys.path.insert(0, r'C:\Users\sunds\Desktop\Luca\telis_recruitment')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis. settings')
 django.setup()
 
-from scraper_control.models import ScraperRun
-from leads.models import Lead
+ScraperRun = apps.get_model('scraper_control', 'ScraperRun')
+Lead = apps.get_model('leads', 'Lead')
 
 print('=== LETZTE 5 RUNS ===')
 for run in ScraperRun.objects. order_by('-started_at')[:5]:

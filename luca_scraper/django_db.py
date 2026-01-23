@@ -7,13 +7,18 @@ This module provides the same interface as the SQLite-based database.py,
 but uses the Django ORM to interact with the Lead model in the CRM.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import json
 import time
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
+
+# Allow Django ORM calls from async contexts (scraper runs inside asyncio)
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 # Django setup - must happen before any Django imports
 # Use the same settings module as manage.py (telis.settings), ensuring repo root is on sys.path.
@@ -65,7 +70,9 @@ def _get_django_imports():
     
     # Import Django models and utilities
     from django.db import IntegrityError, transaction as django_transaction
-    from leads.models import Lead
+    from django.apps import apps
+    if TYPE_CHECKING:
+        from leads.models import Lead
     from leads.utils.normalization import normalize_email, normalize_phone
     from leads.field_mapping import (
         SCRAPER_TO_DJANGO_MAPPING,
@@ -73,6 +80,10 @@ def _get_django_imports():
         INTEGER_FIELDS,
         BOOLEAN_FIELDS,
     )
+
+    Lead = apps.get_model('leads', 'Lead')
+    if Lead is None:
+        raise LookupError("Lead model could not be found via Django apps registry")
     
     # Cache the imports for future calls
     _django_imports_cache = {
@@ -445,7 +456,7 @@ def is_url_seen(url: str) -> bool:
     Returns:
         True if URL has been seen, False otherwise
     """
-    from telis_recruitment.scraper_control.models import UrlSeen
+    from scraper_control.models import UrlSeen
     return UrlSeen.objects.filter(url=url).exists()
 
 
@@ -457,7 +468,7 @@ def mark_url_seen(url: str, run_id: Optional[int] = None) -> None:
         url: URL to mark as seen
         run_id: Optional scraper run ID
     """
-    from telis_recruitment.scraper_control.models import UrlSeen, ScraperRun
+    from scraper_control.models import UrlSeen, ScraperRun
     
     defaults = {}
 
@@ -480,7 +491,7 @@ def is_query_done(query: str) -> bool:
     Returns:
         True if query has been executed, False otherwise
     """
-    from telis_recruitment.scraper_control.models import QueryDone
+    from scraper_control.models import QueryDone
     return QueryDone.objects.filter(query=query).exists()
 
 
@@ -492,7 +503,7 @@ def mark_query_done(query: str, run_id: Optional[int] = None) -> None:
         query: Search query to mark as done
         run_id: Optional scraper run ID
     """
-    from telis_recruitment.scraper_control.models import QueryDone
+    from scraper_control.models import QueryDone
     
     # Get or create QueryDone entry
     query_done, _ = QueryDone.objects.get_or_create(query=query)
@@ -511,7 +522,7 @@ def start_scraper_run() -> int:
     Returns:
         ID of the created scraper run
     """
-    from telis_recruitment.scraper_control.models import ScraperRun
+    from scraper_control.models import ScraperRun
     
     run = ScraperRun.objects.create(
         status='running',
@@ -538,7 +549,7 @@ def finish_scraper_run(
         status: Status of the run (completed, failed, stopped, etc.)
         metrics: Optional dictionary of additional metrics
     """
-    from telis_recruitment.scraper_control.models import ScraperRun
+    from scraper_control.models import ScraperRun
     from django.utils import timezone
     
     try:
