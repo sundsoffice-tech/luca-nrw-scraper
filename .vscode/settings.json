@@ -1,5 +1,8 @@
 {
   "python.defaultInterpreterPath": ".venv\\Scripts\\python.exe",
-  "python.analysis.extraPaths": ["."],
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}",
+    "${workspaceFolder}/telis_recruitment"
+  ],
   "python.analysis.diagnosticMode": "workspace"
 }

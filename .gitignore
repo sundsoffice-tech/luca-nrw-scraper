@@ -51,6 +51,21 @@ sessions/
 # Backup files
 *_backup.py
 *_orig_*.py
+*.bak
+*_backup*.py
+scriptname_backup*.py
+scriptname. py.backup2
+scriptname.py. backup
+scriptname.py.backup
+scriptname.py.bak
+
+# Development/fix scripts (not for production)
+fix_*.py
+check_new.py
+repair. py
+scraper. db
+scriptname. py.backup2
+test_d2d. log
 
 # Test files
 test_browser_integration.py
