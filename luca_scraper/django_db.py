@@ -25,13 +25,17 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 if not os.environ.get('DJANGO_SETTINGS_MODULE'):
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telis.settings')
 
-# Ensure repo root is on sys.path so 'telis' and 'leads' packages resolve
+# Ensure repo root is on sys.path so 'telis', 'leads', and 'scraper_control' packages resolve
 repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 project_root = repo_root / "telis_recruitment"
 if project_root.exists() and str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+# Also add parent directory to ensure scraper_control can be found
+parent_dir = Path(__file__).resolve().parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
 import django
 try:
