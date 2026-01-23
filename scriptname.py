@@ -1723,10 +1723,16 @@ def migrate_db_unique_indexes():
     finally:
         con.close()
 
-def is_query_done(q: str) -> bool:
-    """Check if query has been done. Uses db_router for backend abstraction."""
+def is_query_done(q: str, ttl_hours: int = 24) -> bool:
+    """
+    Check if query has been done within TTL. Uses db_router for backend abstraction.
+    
+    Args:
+        q: Query string to check
+        ttl_hours: Time-to-live in hours (default 24h)
+    """
     from luca_scraper.db_router import is_query_done as _is_query_done_fn
-    return _is_query_done_fn(q)
+    return _is_query_done_fn(q, ttl_hours=ttl_hours)
 
 def mark_query_done(q: str, run_id: int):
     """Mark query as done. Uses db_router for backend abstraction."""
@@ -9228,6 +9234,24 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             log("info", msg, **k)
 
     init_db()
+    
+    # Clean up expired cache entries on startup
+    try:
+        from luca_scraper.db_router import cleanup_expired_queries, cleanup_expired_urls
+        from luca_scraper.config.defaults import QUERY_CACHE_TTL_HOURS, URL_SEEN_TTL_HOURS
+        
+        # Clean up queries older than 2x TTL
+        deleted_queries = cleanup_expired_queries(ttl_hours=QUERY_CACHE_TTL_HOURS * 2)
+        if deleted_queries > 0:
+            log("info", f"Cleaned up {deleted_queries} expired query cache entries")
+        
+        # Clean up URLs older than 2x TTL
+        deleted_urls = cleanup_expired_urls(ttl_hours=URL_SEEN_TTL_HOURS * 2)
+        if deleted_urls > 0:
+            log("info", f"Cleaned up {deleted_urls} expired URL cache entries")
+    except Exception as e:
+        log("warning", f"Failed to cleanup cache: {e}")
+    
     # Declare ActiveLearningEngine as global to prevent UnboundLocalError
     # when accessing it in the ACTIVE_MODE_CONFIG learning check below
     global _seen_urls_cache, ActiveLearningEngine
@@ -9396,8 +9420,11 @@ async def run_scrape_once_async(run_flag: Optional[dict] = None, ui_log=None, fo
             if run_flag and not run_flag.get("running", True):
                 _uilog("STOP erkannt â€“ breche ab")
                 break
-            if (not force) and is_query_done(q):
-                log("info", "Query bereits erledigt (skip)", q=q)
+            # Import TTL config for query cache check
+            from luca_scraper.config.defaults import QUERY_CACHE_TTL_HOURS
+            
+            if (not force) and is_query_done(q, ttl_hours=QUERY_CACHE_TTL_HOURS):
+                log("info", "Query bereits erledigt (skip)", q=q, ttl_hours=QUERY_CACHE_TTL_HOURS)
                 await asyncio.sleep(current_request_delay)
                 continue
 

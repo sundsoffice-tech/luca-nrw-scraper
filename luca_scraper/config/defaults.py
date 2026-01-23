@@ -119,6 +119,10 @@ INTERNAL_DEPTH_PER_DOMAIN = int(os.getenv("INTERNAL_DEPTH_PER_DOMAIN", "10"))
 # Seed force
 SEED_FORCE = (os.getenv("SEED_FORCE", "0") == "1")
 
+# Cache TTL settings
+QUERY_CACHE_TTL_HOURS = int(os.getenv("QUERY_CACHE_TTL_HOURS", "24"))  # How long to remember completed queries (hours)
+URL_SEEN_TTL_HOURS = int(os.getenv("URL_SEEN_TTL_HOURS", "168"))  # How long to remember seen URLs (hours, default 7 days)
+
 
 # =========================
 # EXPORT FIELDS
