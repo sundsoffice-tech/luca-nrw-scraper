@@ -143,6 +143,7 @@ def _map_scraper_data_to_django(data: Dict) -> Dict:
     BOOLEAN_FIELDS = imports['BOOLEAN_FIELDS']
     
     mapped_data = {}
+    unmapped_fields = []
     
     for scraper_field, value in data.items():
         # Skip None values and empty strings
@@ -150,7 +151,12 @@ def _map_scraper_data_to_django(data: Dict) -> Dict:
             continue
             
         # Get Django field name from mapping
-        django_field = SCRAPER_TO_DJANGO_MAPPING.get(scraper_field, scraper_field)
+        django_field = SCRAPER_TO_DJANGO_MAPPING.get(scraper_field)
+        
+        if django_field is None:
+            # Field not in mapping - log it for visibility
+            unmapped_fields.append(scraper_field)
+            continue
         
         # Handle JSON fields (tags, skills, qualifications)
         if scraper_field in JSON_ARRAY_FIELDS:
@@ -176,6 +182,14 @@ def _map_scraper_data_to_django(data: Dict) -> Dict:
                 value = bool(value)
         
         mapped_data[django_field] = value
+    
+    # Log unmapped fields for debugging and monitoring
+    if unmapped_fields:
+        logger.info(
+            "Scraper fields not in SCRAPER_TO_DJANGO_MAPPING (skipped): %s. "
+            "Consider adding to field_mapping.py if these should be imported.",
+            unmapped_fields
+        )
     
     return mapped_data
 
@@ -231,7 +245,7 @@ def _map_django_to_scraper(lead: Lead) -> Dict:
         'last_activity': lead.last_activity,
         'name_validated': lead.name_validated,
         'ssl_insecure': lead.ssl_insecure,
-        'crm_status': lead.status,
+        'crm_status': lead.status,  # Map Django status to scraper crm_status
     }
     
     # Remove None values
