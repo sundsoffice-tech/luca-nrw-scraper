@@ -495,38 +495,102 @@ def mark_url_seen(url: str, run_id: Optional[int] = None) -> None:
     UrlSeen.objects.get_or_create(url=url, defaults=defaults)
 
 
-def is_query_done(query: str) -> bool:
+def is_query_done(query: str, ttl_hours: int = 48) -> bool:
     """
-    Check if a query has been executed before.
+    Check if a query has been executed before within TTL window.
     
     Args:
         query: Search query to check
+        ttl_hours: Time-to-live in hours (default: 48)
         
     Returns:
-        True if query has been executed, False otherwise
+        True if query has been executed recently, False otherwise
     """
     from scraper_control.models import QueryDone
-    return QueryDone.objects.filter(query=query).exists()
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Calculate cutoff time
+    cutoff = timezone.now() - timedelta(hours=ttl_hours)
+    
+    # Check if query exists and was executed within TTL window
+    return QueryDone.objects.filter(
+        query=query,
+        last_executed_at__gte=cutoff
+    ).exists()
 
 
 def mark_query_done(query: str, run_id: Optional[int] = None) -> None:
     """
-    Mark a query as executed.
+    Mark a query as executed with current timestamp.
     
     Args:
         query: Search query to mark as done
         run_id: Optional scraper run ID
     """
     from scraper_control.models import QueryDone
+    from django.utils import timezone
     
-    # Get or create QueryDone entry
-    query_done, _ = QueryDone.objects.get_or_create(query=query)
-
+    # Update or create with current timestamp
+    # Note: last_executed_at has auto_now=True, so it updates automatically
+    defaults = {}
     if run_id:
-        try:
-            QueryDone.objects.filter(pk=query_done.pk).update(last_run_id=run_id)
-        except IntegrityError:
-            logger.warning(f"ScraperRun with id {run_id} not found")
+        defaults['last_run_id'] = run_id
+    
+    QueryDone.objects.update_or_create(
+        query=query,
+        defaults=defaults
+    )
+
+
+def cleanup_expired_queries(ttl_hours: int = 48) -> int:
+    """
+    Delete expired query cache entries.
+    
+    Args:
+        ttl_hours: Time-to-live in hours
+        
+    Returns:
+        Number of deleted entries
+    """
+    from scraper_control.models import QueryDone
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    cutoff = timezone.now() - timedelta(hours=ttl_hours)
+    
+    # Delete old queries
+    deleted, _ = QueryDone.objects.filter(
+        last_executed_at__lt=cutoff
+    ).delete()
+    
+    logger.info(f"Cleaned up {deleted} expired query cache entries (older than {ttl_hours}h)")
+    return deleted
+
+
+def cleanup_expired_urls(ttl_hours: int = 168) -> int:
+    """
+    Delete expired URL seen cache entries.
+    
+    Args:
+        ttl_hours: Time-to-live in hours (default: 7 days = 168 hours)
+        
+    Returns:
+        Number of deleted entries
+    """
+    from scraper_control.models import UrlSeen
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    cutoff = timezone.now() - timedelta(hours=ttl_hours)
+    
+    # Delete old URLs
+    deleted, _ = UrlSeen.objects.filter(
+        created_at__lt=cutoff
+    ).delete()
+    
+    logger.info(f"Cleaned up {deleted} expired URL cache entries (older than {ttl_hours}h)")
+    return deleted
 
 
 def start_scraper_run() -> int:
@@ -622,6 +686,8 @@ __all__ = [
     'mark_url_seen',
     'is_query_done',
     'mark_query_done',
+    'cleanup_expired_queries',
+    'cleanup_expired_urls',
     'start_scraper_run',
     'finish_scraper_run',
 ]
