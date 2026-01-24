@@ -205,3 +205,37 @@ class TestBuildLeadData:
         
         # WhatsApp should have higher data quality
         assert lead_whatsapp["data_quality"] >= lead_unknown["data_quality"]
+    
+    def test_build_lead_data_none_values(self):
+        """Test that None values are properly handled and converted to empty strings."""
+        phones = ["+491761234567"]
+        phone_sources = {"+491761234567": "regex_standard"}
+        
+        # Pass None values for optional string parameters
+        lead = build_lead_data(
+            name=None,
+            phones=phones,
+            email=None,
+            location=None,
+            title=None,
+            url="https://example.com/ad/123",
+            phone_sources=phone_sources,
+            portal="kleinanzeigen",
+        )
+        
+        # All None values should be converted to empty strings
+        assert lead["name"] == ""
+        assert lead["email"] == ""
+        assert lead["region"] == ""
+        assert lead["opening_line"] == ""
+        
+        # Ensure no None values in the lead dict that could cause AttributeError
+        # when downstream code tries to call string methods
+        assert lead["name"] is not None
+        assert lead["email"] is not None
+        assert lead["region"] is not None
+        assert lead["opening_line"] is not None
+        
+        # Verify other fields are still correct
+        assert lead["telefon"] == "+491761234567"
+        assert lead["quelle"] == "https://example.com/ad/123"
