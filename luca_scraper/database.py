@@ -355,8 +355,9 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
 
 
 # Define allowed column names for security - whitelist approach
+# This should include ALL columns that exist in the SQLite schema
 ALLOWED_LEAD_COLUMNS = frozenset({
-    'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 'tags', 'region',
+    'id', 'name', 'rolle', 'email', 'telefon', 'quelle', 'score', 'tags', 'region',
     'role_guess', 'lead_type', 'salary_hint', 'commission_hint', 'opening_line',
     'ssl_insecure', 'company_name', 'company_size', 'hiring_volume', 'industry',
     'recency_indicator', 'location_specific', 'confidence_score', 'last_updated',
@@ -544,7 +545,16 @@ def upsert_lead_sqlite(data: Dict) -> Tuple[int, bool]:
         # Validate column names against whitelist to prevent SQL injection
         invalid_columns = set(data.keys()) - ALLOWED_LEAD_COLUMNS
         if invalid_columns:
-            raise ValueError(f"Invalid column names: {invalid_columns}")
+            logger.warning(
+                "Attempted to use invalid column names: %s. "
+                "These fields will cause 'no column named' errors. "
+                "Update ALLOWED_LEAD_COLUMNS in database.py to include these fields.",
+                invalid_columns
+            )
+            raise ValueError(
+                f"Invalid column names not in ALLOWED_LEAD_COLUMNS: {sorted(invalid_columns)}. "
+                f"Valid columns: {sorted(ALLOWED_LEAD_COLUMNS)}"
+            )
         
         # Prepare data for insertion
         columns = list(data.keys())

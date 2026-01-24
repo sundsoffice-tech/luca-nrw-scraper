@@ -105,6 +105,7 @@ def _sanitize_lead_data(data: Dict) -> Dict:
 
     - Renames keys defined in _FIELD_RENAMES.
     - Filters to ALLOWED_LEAD_COLUMNS to avoid 'no column named' errors.
+    - Logs warnings for dropped fields at INFO level to track data loss.
     """
     sanitized: Dict = {}
     dropped = []
@@ -116,8 +117,13 @@ def _sanitize_lead_data(data: Dict) -> Dict:
         else:
             dropped.append(key)
 
-    if dropped and logger.isEnabledFor(logging.DEBUG):
-        logger.debug("Dropping unsupported lead columns", dropped=dropped)
+    if dropped:
+        # Log at INFO level instead of DEBUG to ensure visibility
+        logger.info(
+            "Dropping unsupported lead columns (not in ALLOWED_LEAD_COLUMNS): %s. "
+            "Consider updating ALLOWED_LEAD_COLUMNS in database.py if these fields should be stored.",
+            dropped
+        )
 
     return sanitized
 

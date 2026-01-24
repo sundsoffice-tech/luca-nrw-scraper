@@ -112,6 +112,9 @@ SCRAPER_TO_DJANGO_MAPPING = {
     'last_activity': 'last_activity',
     'name_validated': 'name_validated',
     'ssl_insecure': 'ssl_insecure',
+    
+    # CRM synchronization
+    'crm_status': 'status',  # Maps scraper's crm_status to Django's status field
 }
 
 # Django Model â†’ Scraper DB reverse mapping
