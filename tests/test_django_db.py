@@ -426,3 +426,166 @@ class TestDjangoDBIntegration(TransactionTestCase):
         # Both are acceptable behaviors
         if 'rolle' in lead_data:
             assert lead_data['rolle'] is None or lead_data['rolle'] == ''
+
+
+@pytest.mark.django
+class TestDjangoDBTTLFunctionality(TransactionTestCase):
+    """Tests for TTL and cleanup functionality in Django ORM adapter."""
+    
+    def setUp(self):
+        """Set up test environment."""
+        from telis_recruitment.scraper_control.models import QueryDone, UrlSeen
+        # Clear all queries and URLs before each test
+        QueryDone.objects.all().delete()
+        UrlSeen.objects.all().delete()
+    
+    def test_is_query_done_with_ttl(self):
+        """Test that is_query_done respects TTL parameter."""
+        from luca_scraper.django_db import is_query_done, mark_query_done
+        
+        # Mark a query as done
+        mark_query_done("test query")
+        
+        # Should be found with default TTL (48 hours)
+        assert is_query_done("test query", ttl_hours=48) is True
+        
+        # Should be found with shorter TTL (1 hour)
+        assert is_query_done("test query", ttl_hours=1) is True
+    
+    def test_is_query_done_expired(self):
+        """Test that expired queries are not found."""
+        from luca_scraper.django_db import is_query_done, mark_query_done
+        from telis_recruitment.scraper_control.models import QueryDone
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Mark a query as done
+        mark_query_done("old query")
+        
+        # Backdate the query to make it expired
+        old_query = QueryDone.objects.get(query="old query")
+        old_query.last_executed_at = timezone.now() - timedelta(hours=72)
+        old_query.save()
+        
+        # Should NOT be found with TTL of 48 hours
+        assert is_query_done("old query", ttl_hours=48) is False
+        
+        # Should be found with TTL of 100 hours
+        assert is_query_done("old query", ttl_hours=100) is True
+    
+    def test_mark_query_done_updates_timestamp(self):
+        """Test that mark_query_done updates timestamp on subsequent calls."""
+        from luca_scraper.django_db import mark_query_done
+        from telis_recruitment.scraper_control.models import QueryDone
+        from django.utils import timezone
+        from datetime import timedelta
+        import time
+        
+        # Mark query as done
+        mark_query_done("update test query")
+        
+        # Get first timestamp
+        query = QueryDone.objects.get(query="update test query")
+        first_timestamp = query.last_executed_at
+        
+        # Wait a moment to ensure timestamp difference
+        time.sleep(0.1)
+        
+        # Mark it again
+        mark_query_done("update test query")
+        
+        # Get updated timestamp
+        query.refresh_from_db()
+        second_timestamp = query.last_executed_at
+        
+        # Second timestamp should be newer
+        assert second_timestamp > first_timestamp
+    
+    def test_cleanup_expired_queries(self):
+        """Test cleanup of expired query cache entries."""
+        from luca_scraper.django_db import cleanup_expired_queries, mark_query_done
+        from telis_recruitment.scraper_control.models import QueryDone
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Create recent query
+        mark_query_done("recent query")
+        
+        # Create old query and backdate it
+        mark_query_done("old query")
+        old_query = QueryDone.objects.get(query="old query")
+        old_query.last_executed_at = timezone.now() - timedelta(hours=100)
+        old_query.save()
+        
+        # Verify we have 2 queries
+        assert QueryDone.objects.count() == 2
+        
+        # Cleanup with TTL of 48 hours should remove the old one
+        deleted = cleanup_expired_queries(ttl_hours=48)
+        assert deleted == 1
+        
+        # Verify only recent query remains
+        assert QueryDone.objects.count() == 1
+        assert QueryDone.objects.filter(query="recent query").exists()
+        assert not QueryDone.objects.filter(query="old query").exists()
+    
+    def test_cleanup_expired_urls(self):
+        """Test cleanup of expired URL cache entries."""
+        from luca_scraper.django_db import cleanup_expired_urls, mark_url_seen
+        from telis_recruitment.scraper_control.models import UrlSeen
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Create recent URL
+        mark_url_seen("https://recent.example.com")
+        
+        # Create old URL and backdate it
+        mark_url_seen("https://old.example.com")
+        old_url = UrlSeen.objects.get(url="https://old.example.com")
+        old_url.created_at = timezone.now() - timedelta(hours=200)
+        old_url.save()
+        
+        # Verify we have 2 URLs
+        assert UrlSeen.objects.count() == 2
+        
+        # Cleanup with TTL of 168 hours (7 days) should remove the old one
+        deleted = cleanup_expired_urls(ttl_hours=168)
+        assert deleted == 1
+        
+        # Verify only recent URL remains
+        assert UrlSeen.objects.count() == 1
+        assert UrlSeen.objects.filter(url="https://recent.example.com").exists()
+        assert not UrlSeen.objects.filter(url="https://old.example.com").exists()
+    
+    def test_cleanup_no_expired_entries(self):
+        """Test cleanup when no entries are expired."""
+        from luca_scraper.django_db import cleanup_expired_queries, cleanup_expired_urls, mark_query_done, mark_url_seen
+        
+        # Create recent entries
+        mark_query_done("recent query")
+        mark_url_seen("https://recent.example.com")
+        
+        # Cleanup should not remove anything
+        deleted_queries = cleanup_expired_queries(ttl_hours=48)
+        assert deleted_queries == 0
+        
+        deleted_urls = cleanup_expired_urls(ttl_hours=168)
+        assert deleted_urls == 0
+    
+    def test_is_query_done_with_run_id(self):
+        """Test that mark_query_done can associate with a run ID."""
+        from luca_scraper.django_db import mark_query_done, is_query_done, start_scraper_run
+        from telis_recruitment.scraper_control.models import QueryDone
+        
+        # Start a scraper run
+        run_id = start_scraper_run()
+        
+        # Mark query with run ID
+        mark_query_done("query with run", run_id=run_id)
+        
+        # Verify query was marked
+        assert is_query_done("query with run", ttl_hours=48) is True
+        
+        # Verify run ID was stored
+        query = QueryDone.objects.get(query="query with run")
+        assert query.last_run_id == run_id

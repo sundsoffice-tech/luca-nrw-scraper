@@ -56,18 +56,13 @@ if DATABASE_BACKEND == 'django':
     is_query_done = django_db.is_query_done
     mark_query_done = django_db.mark_query_done
     
+    # Cleanup functions (now properly implemented)
+    cleanup_expired_queries = django_db.cleanup_expired_queries
+    cleanup_expired_urls = django_db.cleanup_expired_urls
+    
     # Scraper run tracking functions
     start_scraper_run = django_db.start_scraper_run
     finish_scraper_run = django_db.finish_scraper_run
-    
-    # Cleanup functions (not implemented for Django backend yet)
-    def cleanup_expired_queries(ttl_hours: int = 48) -> int:
-        logger.warning("cleanup_expired_queries not implemented for Django backend")
-        return 0
-    
-    def cleanup_expired_urls(ttl_hours: int = 336) -> int:
-        logger.warning("cleanup_expired_urls not implemented for Django backend")
-        return 0
 
 else:
     logger.info("db_router: Using SQLite backend")
