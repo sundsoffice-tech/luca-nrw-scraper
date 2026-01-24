@@ -13,11 +13,11 @@ from typing import Any, Dict, List, Optional
 
 
 def build_lead_data(
-    name: str,
+    name: Optional[str],
     phones: List[str],
-    email: str,
-    location: str,
-    title: str,
+    email: Optional[str],
+    location: Optional[str],
+    title: Optional[str],
     url: str,
     phone_sources: Dict[str, str],
     portal: str = "generic",
@@ -33,11 +33,11 @@ def build_lead_data(
     3. Building a complete lead dictionary with all required fields
 
     Args:
-        name: Contact person name
+        name: Contact person name (can be None, will default to empty string)
         phones: List of phone numbers (mobile numbers)
-        email: Email address
-        location: Location/region (Ort)
-        title: Ad title or job title
+        email: Email address (can be None, will default to empty string)
+        location: Location/region (Ort) (can be None, will default to empty string)
+        title: Ad title or job title (can be None, will default to empty string)
         url: Source URL
         phone_sources: Dictionary mapping phone numbers to their extraction source
         portal: Portal/source identifier (e.g., "kleinanzeigen", "markt_de")
@@ -83,18 +83,18 @@ def build_lead_data(
     lead = {
         "name": name or "",
         "rolle": "Vertrieb",
-        "email": email,
+        "email": email or "",
         "telefon": main_phone,
         "quelle": url,
         "score": dynamic_score,
         "tags": tags,
         "lead_type": "candidate",
         "phone_type": "mobile",
-        "opening_line": title[:200] if title else "",
+        "opening_line": (title or "")[:200],
         "firma": "",
         "firma_groesse": "",
         "branche": "",
-        "region": location if location else "",
+        "region": location or "",
         "frische": "neu",
         "confidence": confidence_score,
         "data_quality": data_quality_score,
