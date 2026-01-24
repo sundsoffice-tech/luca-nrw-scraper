@@ -86,3 +86,5 @@ test_ai_config_integration.py
 
 # Docker
 *.log
+test_field_mapping_fix.py
+demo_field_mapping_improvements.py
